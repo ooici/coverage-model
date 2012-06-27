@@ -7,6 +7,8 @@
 @brief 
 """
 
+# http://collabedit.com/kkacp
+
 
 # Notes:
 # cell_map[cell_handle]=(0d_handles,)
@@ -75,92 +77,52 @@ class SimplexCoverage(AbstractCoverage):
         self._temporal_domain = temporal_domain or GridDomain()
 
 
-#    def __init__(self, temporal_topology, spatial_topology, parameters=None, attributes=None, taxonomy=None, crs=None):
-#        AbstractCoverage.__init__(self)
-#        # TODO: promote some (all?) of these fields to AbstractCoverage
-#        if not isinstance(temporal_topology, Topology):
-#            raise TypeError('temporal_topology must be a Topology object')
-#        self.temporal_topology = temporal_topology
-#
-#        if not isinstance(spatial_topology, Topology):
-#            raise TypeError('spatial_topology must be a Topology object')
-#        self.spatial_topology = spatial_topology
-#
-#        self._parameters = {}
-#        self._parameters.update({x.name : x for x in parameters if isinstance(x, Parameter)})
-#        self._attributes = {}
-#        self._parameters.update({x.name : x for x in attributes if isinstance(x, Attribute)})
-#        self.taxonomy = taxonomy #or Taxonomy # TODO import this
-#        self.crs = crs
-#
-#    def add_parameter(self, parameter, overwrite=False):
-#        ret=False
-#        if isinstance(parameter, Parameter):
-#            if parameter.name in self._parameters:
-#                if overwrite:
-#                    ret=True
-#            else:
-#                ret=True
-#
-#        if ret:
-#            self._parameters[parameter.name] = parameter
-#
-#        return ret
-#
-#    def remove_parameter(self, parameter):
-#        del self._parameters[parameter.name]
-#
-#    def get_parameters(self):
-#        return self._parameters.copy()
-#
-#    def add_attribute(self, attribute, overwrite=False):
-#        ret=False
-#        if isinstance(attribute,Attribute):
-#            if attribute.name in self._attributes:
-#                if overwrite:
-#                    ret=True
-#            else:
-#                ret=True
-#
-#        if ret:
-#            self._attributes[attribute.name] = attribute
-#
-#        return ret
-#
-#    def remove_attribute(self, attribute):
-#        del self._attributes[attribute.name]
-#
-#    # TODO: if _parameters is promoted to AbstractCoverage, these can be too
-#    @property
-#    def domain(self):
-#        return [x for x in self._parameters if x.isDomain]
-#
-#    @property
-#    def range(self):
-#        return [x for x in self._parameters if not x.isDomain]
-
 class Parameter():
     """
 
     """
-    def __init__(self, name, type, isDomain=False, atts=None, value=None):
+    def __init__(self, name, param_type, param_value, isCoordinate=False, atts=None, value=None):
         self.name = name
-        self.type = type
-        self.isDomain = isDomain
-        self.atts = {}
-        if isinstance(atts, dict):
-            self.atts.update({x.name : Attribute for x in atts if isinstance(x, Attribute)})
-        self.value = value
+        self.isCoordinate = isCoordinate
+        if not isinstance(param_type, ParameterType):
+            raise TypeError('param_type must be a ParameterType object') # I agree
+        self._type = param_type
+        if not isinstance(param_value, ParameterValue):
+            raise TypeError('param_value must be a ParameterValue object')
+        self._value = param_value
 
-    # TODO: decide on the desired equivalency behavior
-    def __eq__(self, other):
-        return self.name is other.name and \
-               self.type is other.type and \
-               self.isDomain is other.isDomain and \
-               self.atts is other.atts and \
-               self.value is other.value
+
+class ParameterType():
+    """
+
+    """
+    pass
+
+class ParameterValue():
+    """
+
+    """
+    pass
+
+class Range():
+    pass
+
+class RangeType():
+    pass
+
+class RangeDictionary():
+    """
+    Currently known as Taxonomy with respect to the Granule & RecordDictionary
+    """
+    pass
+
+
+
 
 class AbstractDomain():
+    """
+
+    """
     def __init__(self, abstract_shape):
         self.shape = []
         self.shape.append(abstract_shape)
@@ -169,7 +131,9 @@ class AbstractDomain():
         raise NotImplementedError()
 
 class GridDomain(AbstractDomain):
+    """
 
+    """
     def __init__(self, abstract_shape):
         AbstractDomain.__init__(self, abstract_shape)
 
@@ -177,32 +141,25 @@ class GridDomain(AbstractDomain):
         dim_index = dim_index or 0
 
 class TopologicalDomain(AbstractDomain):
+    """
 
+    """
     def __init__(self, abstract_shape):
         AbstractDomain.__init__(self, abstract_shape)
 
 class AbstractShape():
+    """
+
+    """
     pass
 
 class GridShape(AbstractShape):
+    """
 
+    """
     def __init__(self, name, dims):
         self.name = name
         self.dims = dims
-
-
-class Attribute():
-    """
-
-    """
-    def __init__(self, name, value):
-        self.name = name
-        self.value = value
-
-    # TODO: decide on the desired equivalency behavior
-    def __eq__(self, other):
-        return self.name is other.name and \
-               self.value is other.value
 
 class Topology():
     """
@@ -231,11 +188,20 @@ class CoverageConstruction():
         pass
 
 class Filter():
+    """
+
+    """
     pass
 
 class StructureFilter(Filter):
+    """
+
+    """
     pass
 
 class ParameterFilter(Filter):
-    pass
+    """
 
+    """
+    pass
+    
