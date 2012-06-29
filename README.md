@@ -1,4 +1,4 @@
-coverage-model
+OOICI Coverage Model
 ==============
 
 Initial coverage model implementation
