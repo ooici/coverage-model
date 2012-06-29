@@ -23,19 +23,11 @@
 #
 # parameters can be implicitly aligned to cell array
 
-class AbstractBase():
-    """
+from coverage_model.basic_types import *
 
-    """
-    extension = {}
-
-class AbstractIdentifiable(AbstractBase):
-    """
-
-    """
-    identifier = None
-    label = ''
-    description = ''
+#################
+# Coverage Objects
+#################
 
 class AbstractCoverage(AbstractIdentifiable):
     """
@@ -51,87 +43,59 @@ class ViewCoverage(AbstractCoverage):
     """
     References 1 AbstractCoverage and applies a Filter
     """
-    _reference_coverage = AbstractCoverage()
-    _structure_filter = StructureFilter()
-    _parameter_filter = ParameterFilter()
-
-    def __init__(self, reference_coverage, structure_filter=None, parameter_filter=None):
+    def __init__(self):
         AbstractCoverage.__init__(self)
-        self._reference_coverage = reference_coverage
-        self._structure_filter = structure_filter or StructureFilter()
-        self._parameter_filter = parameter_filter or ParameterFilter()
+
+        self.reference_coverage = ''
+        self.structure_filter = StructureFilter()
+        self.parameter_filter = ParameterFilter()
 
 class ComplexCoverage(AbstractCoverage):
     # TODO: Implement
     """
     References 1-n coverages
     """
-    _coverages = []
-    def __init__(self, coverages=None):
+    def __init__(self):
         AbstractCoverage.__init__(self)
-        self._coverages.extend([x for x in coverages if isinstance(x, AbstractCoverage)])
+
+        self.coverages = []
 
 
 class SimplexCoverage(AbstractCoverage):
     """
     
     """
-
-    _range_dictionary = RangeDictionary()
-    _spatial_domain = AbstractDomain(None)
-    _temporal_domain = GridDomain(None)
-    _range_type = RangeType()
-    _range_dictionary =RangeDictionary()
-
-    def __init__(self, range_dictionary, spatial_domain, temporal_domain=None):
+    def __init__(self):
         AbstractCoverage.__init__(self)
 
-        if not isinstance(range_dictionary, RangeDictionary):
-            raise TypeError('record_dictionary must be a RangeDictionary object')
-        self._range_dictionary = range_dictionary
+        self.spatial_domain = AbstractDomain()
+        self.temporal_domain = AbstractDomain()
+        self.range_dictionary = RangeDictionary()
+        self.range_type = {}
+        self.range = {}
 
-        if not isinstance(spatial_domain, AbstractDomain):
-            raise TypeError('spatial_domain must be an AbstractDomain object')
-        self._spatial_domain = spatial_domain
+    @property
+    def spatial_domain(self):
+        return self.__spatial_domain
 
-        if not temporal_domain is None and not isinstance(temporal_domain, AbstractDomain):
-            raise TypeError('spatial_domain must be an AbstractDomain object')
-        self._temporal_domain = temporal_domain or GridDomain(None)
+    @spatial_domain.setter
+    def spatial_domain(self, value):
+        if isinstance(value, AbstractDomain):
+            self.__spatial_domain = value
 
+    @property
+    def temporal_domain(self):
+        return self.__temporal_domain
 
-class Parameter(AbstractIdentifiable):
-    """
-
-    """
-    def __init__(self, name, param_type, param_value, isCoordinate=False):
-        AbstractIdentifiable.__init__(self)
-
-        self.name = name
-        self.isCoordinate = isCoordinate
-        if not isinstance(param_type, AbstractParameterType):
-            raise TypeError('param_type must be a ParameterType object') # I agree
-        self._type = param_type
-        if not isinstance(param_value, AbstractParameterValue):
-            raise TypeError('param_value must be a ParameterValue object')
-        self._value = param_value
+    @temporal_domain.setter
+    def temporal_domain(self, value):
+        if isinstance(value, AbstractDomain):
+            self.__temporal_domain = value
 
 
 #################
-# Range Objects
+# Range Dictionary
 #################
-
-class AbstractRange():
-    """
-    NOT an AbstractIdentifiable!!
-    """
-    pass
-
-class RangeType(AbstractIdentifiable):
-    """
-    May be synonymous with RangeDictionary
-    """
-    def __init__(self):
-        AbstractIdentifiable.__init__(self)
 
 class RangeDictionary(AbstractIdentifiable):
     """
@@ -143,211 +107,55 @@ class RangeDictionary(AbstractIdentifiable):
 
 
 #################
-# Parameter Value Objects
+# Abstract Parameter Value Objects
 #################
 
-class AbstractParameterValue(AbstractRange):
+class AbstractParameterValue(AbstractBase):
     """
 
     """
     def __init__(self):
-        AbstractRange.__init__(self)
+        AbstractBase.__init__(self)
 
-class AbstractSimplexComponent(AbstractParameterValue):
+class AbstractSimplexParameterValue(AbstractParameterValue):
     """
 
     """
     def __init__(self):
         AbstractParameterValue.__init__(self)
 
-class AbstractComplexComponent(AbstractParameterValue):
+class AbstractComplexParameterValue(AbstractParameterValue):
     """
 
     """
     def __init__(self):
         AbstractParameterValue.__init__(self)
 
-class Boolean(AbstractSimplexComponent):
+
+#################
+# Abstract Parameter Type Objects
+#################
+
+class AbstractParameterType(AbstractIdentifiable):
     """
 
     """
     def __init__(self):
-        AbstractSimplexComponent.__init__(self)
+        AbstractIdentifiable.__init__(self)
 
-class Category(AbstractSimplexComponent):
+class AbstractSimplexParameterType(AbstractParameterType):
     """
 
     """
-    pass
+    def __init__(self):
+        AbstractParameterType.__init__(self)
 
-class CategoryRange(AbstractSimplexComponent):
+class AbstractComplexParameterType(AbstractParameterType):
     """
 
     """
-    pass
-
-class Count(AbstractSimplexComponent):
-    """
-
-    """
-    pass
-
-class CountRange(AbstractSimplexComponent):
-    """
-
-    """
-    pass
-
-class Quantity(AbstractSimplexComponent):
-    """
-
-    """
-    pass
-
-class QuantityRange(AbstractSimplexComponent):
-    """
-
-    """
-    pass
-
-class Text(AbstractSimplexComponent):
-    """
-
-    """
-    pass
-
-class Time(AbstractSimplexComponent):
-    """
-
-    """
-    pass
-
-class TimeRange(AbstractSimplexComponent):
-    """
-
-    """
-    pass
-
-class DataRecord(AbstractComplexComponent):
-    """
-    Heterogeneous set of named things (dict)
-    """
-    pass
-
-class Vector(AbstractComplexComponent):
-    """
-    Heterogeneous set of unnamed things (tuple)
-    """
-    pass
-
-class DataArray(AbstractComplexComponent):
-    """
-    Homogeneous set of unnamed things (array)
-    """
-    pass
-
-
-
-#################
-# Parameter Type Objects
-#################
-
-class AbstractParameterType(RangeType):
-    """
-
-    """
-    abstract_data_component = None
-    pass
-
-class AbstractSimplexComponentType(AbstractParameterType):
-    """
-
-    """
-    pass
-
-class AbstractComplexComponentType(AbstractParameterType):
-    """
-
-    """
-    pass
-
-class BooleanType(AbstractSimplexComponentType):
-    """
-
-    """
-    pass
-
-class CategoryType(AbstractSimplexComponentType):
-    """
-
-    """
-    pass
-
-class CategoryRangeType(AbstractSimplexComponentType):
-    """
-
-    """
-    pass
-
-class CountType(AbstractSimplexComponentType):
-    """
-
-    """
-    pass
-
-class CountRangeType(AbstractSimplexComponentType):
-    """
-
-    """
-    pass
-
-class QuantityType(AbstractSimplexComponentType):
-    """
-
-    """
-    pass
-
-class QuantityRangeType(AbstractSimplexComponentType):
-    """
-
-    """
-    pass
-
-class TextType(AbstractSimplexComponentType):
-    """
-
-    """
-    pass
-
-class TimeType(AbstractSimplexComponentType):
-    """
-
-    """
-    pass
-
-class TimeRangeType(AbstractSimplexComponentType):
-    """
-
-    """
-    pass
-
-class DataRecordType(AbstractComplexComponentType):
-    """
-
-    """
-    pass
-
-class VectorType(AbstractComplexComponentType):
-    """
-
-    """
-    pass
-
-class DataArrayType(AbstractComplexComponentType):
-    """
-
-    """
-    pass
+    def __init__(self):
+        AbstractParameterType.__init__(self)
 
 
 #################
@@ -358,50 +166,55 @@ class AbstractDomain(AbstractIdentifiable):
     """
 
     """
-    def __init__(self, abstract_shape):
+    def __init__(self):
         AbstractIdentifiable.__init__(self)
-        self.shape = []
-        self.shape.append(abstract_shape)
-
-    def extend(self, extend_by_count, dim_index=None):
-        raise NotImplementedError()
+        self.shape = AbstractShape()
 
 class GridDomain(AbstractDomain):
     """
 
     """
-    def __init__(self, abstract_shape):
-        AbstractDomain.__init__(self, abstract_shape)
-
-    def extend(self, extend_by_count, dim_index=None):
-        dim_index = dim_index or 0
+    def __init__(self):
+        AbstractDomain.__init__(self)
 
 class TopologicalDomain(AbstractDomain):
     """
 
     """
-    def __init__(self, abstract_shape):
-        AbstractDomain.__init__(self, abstract_shape)
+    def __init__(self):
+        AbstractDomain.__init__(self)
 
-class AbstractShape():
+
+#################
+# Shape Objects
+#################
+
+class AbstractShape(AbstractIdentifiable):
     """
 
     """
-    pass
+    def __init__(self):
+        AbstractIdentifiable.__init__(self)
 
 class GridShape(AbstractShape):
     """
 
     """
     def __init__(self, name, dims):
+        AbstractShape.__init__(self)
         self.name = name
         self.dims = dims
+
+
+#################
+# Filter Objects
+#################
 
 class AbstractFilter(AbstractIdentifiable):
     """
 
     """
-    def __init__(self, abstract_shape):
+    def __init__(self):
         AbstractIdentifiable.__init__(self)
 
 
@@ -425,21 +238,21 @@ class ParameterFilter(AbstractFilter):
 # Possibly OBE ?
 #################
 
-class Topology():
-    """
-    Sets of topological entities
-    Mappings between topological entities
-    """
-    pass
-
-class TopologicalEntity():
-    """
-
-    """
-    pass
-
-class ConstructionType():
-    """
-    Lattice or not (i.e. 'unstructured')
-    """
-    pass
+#class Topology():
+#    """
+#    Sets of topological entities
+#    Mappings between topological entities
+#    """
+#    pass
+#
+#class TopologicalEntity():
+#    """
+#
+#    """
+#    pass
+#
+#class ConstructionType():
+#    """
+#    Lattice or not (i.e. 'unstructured')
+#    """
+#    pass
