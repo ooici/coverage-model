@@ -7,6 +7,19 @@
 @brief 
 """
 
+
+#CBM: see next line
+#TODO: Add type checking throughout all classes as determined appropriate, ala:
+#@property
+#def is_coordinate(self):
+#    return self.__is_coordinate
+#
+#@is_coordinate.setter
+#def is_coordinate(self, value):
+#    if isinstance(value, bool):
+#        self.__is_coordinate = value
+
+
 from coverage_model.basic_types import *
 from coverage_model.coverage import AbstractShape, AbstractParameterType, AbstractParameterValue, AbstractSimplexParameterType, AbstractSimplexParameterValue, AbstractComplexParameterType, AbstractComplexParameterValue
 
@@ -23,51 +36,6 @@ class Parameter(AbstractIdentifiable):
         self.value = AbstractParameterValue()
         self.shape = AbstractShape()
 
-    @property
-    def name(self):
-        return self.__name
-
-    @name.setter
-    def name(self, value):
-        if isinstance(value, str):
-            self.__name = value
-
-    @property
-    def is_coordinate(self):
-        return self.__is_coordinate
-
-    @is_coordinate.setter
-    def is_coordinate(self, value):
-        if isinstance(value, bool):
-            self.__is_coordinate = value
-
-    @property
-    def context(self):
-        return self.__context
-
-    @context.setter
-    def context(self, value):
-        if isinstance(value, ParameterContext):
-            self.__context = value
-
-    @property
-    def value(self):
-        return self.__value
-
-    @value.setter
-    def value(self, value):
-        if isinstance(value, AbstractParameterValue):
-            self.__value = value
-
-    @property
-    def shape(self):
-        return self.__shape
-
-    @shape.setter
-    def shape(self, value):
-        if isinstance(value, AbstractShape):
-            self.__shape = value
-
 
 class ParameterContext(AbstractIdentifiable):
     """
@@ -77,14 +45,6 @@ class ParameterContext(AbstractIdentifiable):
         AbstractIdentifiable.__init__(self)
         self.param_type = AbstractParameterType()
 
-    @property
-    def param_type(self):
-        return self.__param_type
-
-    @param_type.setter
-    def param_type(self, value):
-        if isinstance(value, AbstractParameterType):
-            self.__param_type = value
 
 #################
 # Parameter Type Objects

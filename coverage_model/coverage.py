@@ -23,6 +23,17 @@
 #
 # parameters can be implicitly aligned to cell array
 
+#CBM: see next line
+#TODO: Add type checking throughout all classes as determined appropriate, ala:
+#@property
+#def spatial_domain(self):
+#    return self.__spatial_domain
+#
+#@spatial_domain.setter
+#def spatial_domain(self, value):
+#    if isinstance(value, AbstractDomain):
+#        self.__spatial_domain = value
+
 from coverage_model.basic_types import *
 
 #################
@@ -73,24 +84,6 @@ class SimplexCoverage(AbstractCoverage):
         self.range_dictionary = RangeDictionary()
         self.range_type = {}
         self.range = {}
-
-    @property
-    def spatial_domain(self):
-        return self.__spatial_domain
-
-    @spatial_domain.setter
-    def spatial_domain(self, value):
-        if isinstance(value, AbstractDomain):
-            self.__spatial_domain = value
-
-    @property
-    def temporal_domain(self):
-        return self.__temporal_domain
-
-    @temporal_domain.setter
-    def temporal_domain(self, value):
-        if isinstance(value, AbstractDomain):
-            self.__temporal_domain = value
 
 
 #################
