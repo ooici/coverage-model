@@ -35,6 +35,7 @@
 #        self.__spatial_domain = value
 
 from coverage_model.basic_types import *
+from coverage_model.parameter import ParameterContext
 
 #################
 # Coverage Objects
@@ -76,14 +77,32 @@ class SimplexCoverage(AbstractCoverage):
     """
     
     """
-    def __init__(self):
+    def __init__(self, range_dictionary, spatial_domain, temporal_domain=None):
         AbstractCoverage.__init__(self)
 
-        self.spatial_domain = AbstractDomain()
-        self.temporal_domain = AbstractDomain()
-        self.range_dictionary = RangeDictionary()
+        self.range_dictionary = range_dictionary
+        self.spatial_domain = spatial_domain
+        self.temporal_domain = temporal_domain or GridDomain(GridShape('temporal',[0]), None, None)
         self.range_type = {}
         self.range = {}
+
+    def append_parameter(self, parameter_context):
+        pass
+
+    def insert_timestep(self, count, origin):
+        pass
+
+    def set_time_value(self, time_index, time_value):
+        pass
+
+    def get_time_value(self, time_index):
+        pass
+
+    def set_parameter_values_at_time(self, param_name, time_index, values, doa):
+        pass
+
+    def get_parameter_values_at_time(self, param_name, time_index, doa):# doa?
+        pass
 
 
 #################
@@ -155,20 +174,44 @@ class AbstractComplexParameterType(AbstractParameterType):
 # Domain Objects
 #################
 
+class MutabilityEnum(object):
+    IMMUTABLE = 1
+    EXTENSIBLE = 2
+    MUTABLE = 3
+    _value_map = {'IMMUTABLE': 1, 'EXTENSIBLE': 2, 'MUTABLE': 3,}
+    _str_map = {1: 'IMMUTABLE', 2: 'EXTENSIBLE', 3: 'MUTABLE'}
+
 class AbstractDomain(AbstractIdentifiable):
     """
 
     """
-    def __init__(self):
+    def __init__(self, shape, crs, mutability):
         AbstractIdentifiable.__init__(self)
-        self.shape = AbstractShape()
+        self.shape = shape
+        self.crs = crs
+        self.mutability = mutability or MutabilityEnum.IMMUTABLE
+
+    def get_mutability(self):
+        return self.mutability
+
+    def get_max_dimension(self):
+        pass
+
+    def get_num_elements(self, dim_index):
+        pass
+
+    def get_shape(self):
+        return self.shape
+
+    def insert_elements(self, dim_index, count, doa):
+        pass
 
 class GridDomain(AbstractDomain):
     """
 
     """
-    def __init__(self):
-        AbstractDomain.__init__(self)
+    def __init__(self, shape, crs, mutability=None):
+        AbstractDomain.__init__(self, shape, crs, mutability)
 
 class TopologicalDomain(AbstractDomain):
     """
@@ -186,17 +229,22 @@ class AbstractShape(AbstractIdentifiable):
     """
 
     """
-    def __init__(self):
+    def __init__(self, name, dims):
         AbstractIdentifiable.__init__(self)
+        self.name = name
+        self.dims = dims
+
+    def rank(self):
+        return len(self.dims)
 
 class GridShape(AbstractShape):
     """
 
     """
     def __init__(self, name, dims):
-        AbstractShape.__init__(self)
-        self.name = name
-        self.dims = dims
+        AbstractShape.__init__(self, name, dims)
+
+    #CBM: Make dims type-safe
 
 
 #################
