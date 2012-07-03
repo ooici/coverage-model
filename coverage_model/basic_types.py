@@ -29,7 +29,10 @@ class AbstractIdentifiable(AbstractBase):
     """
     def __init__(self):
         AbstractBase.__init__(self)
-        self.id = create_guid()
+        self._id = create_guid()
         self.label = ''
         self.description = ''
 
+    @property
+    def id(self):
+        return self._id

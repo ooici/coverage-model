@@ -41,9 +41,12 @@ class ParameterContext(AbstractIdentifiable):
     """
 
     """
-    def __init__(self):
+    def __init__(self, name, is_coord=False):
         AbstractIdentifiable.__init__(self)
+        self.name = name
+        self.is_coord = is_coord
         self.param_type = AbstractParameterType()
+        self.axis = None
 
 
 #################
