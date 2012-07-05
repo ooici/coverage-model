@@ -87,7 +87,7 @@ class SimplexCoverage(AbstractCoverage):
         self.range_type = {}
         self.range_ = RangeGroup()
         self._pcmap = {}
-        self._tparam_name = None
+        self._temporal_param_name = None
 
     @classmethod
     def save(cls, cov_obj, file_path, use_ascii=False):
@@ -111,13 +111,21 @@ class SimplexCoverage(AbstractCoverage):
         pname = parameter_context.name
 
         if temporal:
-            if self._tparam_name is None:
-                self._tparam_name = pname
+            if self._temporal_param_name is None:
+                self._temporal_param_name = pname
             else:
                 raise StandardError("temporal_parameter already defined.")
 
-        # Get the correct domain
-        dom = self.temporal_domain if temporal else self.spatial_domain
+        # Get the correct domain and array shape
+        if temporal:
+            dom = self.temporal_domain
+            shp = self.temporal_domain.shape.extents
+        else:
+            dom = self.spatial_domain
+            if len(self.spatial_domain.shape.extents) == 1:
+                shp = self.temporal_domain.shape.extents
+            else:
+                shp = self.temporal_domain.shape.extents + self.spatial_domain.shape.extents
 
         # Assign the pname to the CRS (if applicable)
         if not parameter_context.axis is None:
@@ -126,7 +134,7 @@ class SimplexCoverage(AbstractCoverage):
 
         self._pcmap[pname] = (len(self._pcmap), parameter_context, dom)
         self.range_type[pname] = parameter_context
-        self.range_[pname] = RangeMember(np.zeros(dom.shape.dims, parameter_context.param_type))
+        self.range_[pname] = RangeMember(np.zeros(shp, parameter_context.param_type))
         setattr(self.range_, pname, self.range_[pname])
 
     def get_parameter(self, param_name):
@@ -142,29 +150,59 @@ class SimplexCoverage(AbstractCoverage):
             arr = np.append(arr, np.zeros((count,) + arr.shape[1:]), 0)
             self.range_[n].content = arr
 
-    def set_time_value(self, time_index, time_value):
-        pass
+#    def set_time_value(self, time_index, time_value):
+#        pass
+#
+#    def get_time_value(self, time_index):
+#        pass
 
-    def get_time_value(self, time_index):
-        pass
+    def set_time_values(self, tdoa, values):
+        return self.set_parameter_values(self._temporal_param_name, tdoa, None, values)
 
-    def set_time_values(self, doa, values):
-        pass
+    def get_time_values(self, tdoa=None, return_array=None):
+        return self.get_parameter_values(self._temporal_param_name, tdoa, None, return_array)
 
-    def get_time_values(self, doa, return_array):
-        pass
-
-    def set_parameter_values_at_time(self, param_name, time_index, values, doa):
-        pass
-
-    def get_parameter_values_at_time(self, param_name, time_index, doa):# doa?
-        pass
+#    def set_parameter_values_at_time(self, param_name, time_index, values, doa):
+#        pass
+#
+#    def get_parameter_values_at_time(self, param_name, time_index, doa):# doa?
+#        pass
 
     def set_parameter_values(self, param_name, tdoa, sdoa, values):
-        pass
+        if not param_name in self.range_:
+            raise StandardError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
-    def get_parameter_values(self, param_name, tdoa, sdoa, return_array):
-        pass
+        tdoa = _get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
+        sdoa = _get_valid_DomainOfApplication(sdoa, self.spatial_domain.shape.extents)
+
+        print 'temporal doa: {0}'.format(tdoa.slices)
+        print 'spatial doa: {0}'.format(sdoa.slices)
+
+        slice_ = [tdoa.slices, sdoa.slices]
+
+        print 'Setting slice: {0}'.format(slice_)
+
+        #TODO: Do we need some validation that slice_ is the same rank and/or shape as values?
+        self.range_[param_name][slice_] = values
+
+    def get_parameter_values(self, param_name, tdoa=None, sdoa=None, return_array=None):
+        if not param_name in self.range_:
+            raise StandardError('Parameter \'{0}\' not found in coverage'.format(param_name))
+
+        return_array = return_array or np.zeros([0])
+
+        tdoa = _get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
+        sdoa = _get_valid_DomainOfApplication(sdoa, self.spatial_domain.shape.extents)
+
+        print 'temporal doa: {0}'.format(tdoa.slices)
+        print 'spatial doa: {0}'.format(sdoa.slices)
+
+        slice_ = [tdoa.slices, sdoa.slices]
+
+        print 'Getting slice: {0}'.format(slice_)
+
+        return_array = self.range_[param_name][slice_]
+        return return_array
 
 
 #################
@@ -178,6 +216,9 @@ class DomainOfApplication(object):
     def __init__(self, topoDim, slices):
         self.topoDim = topoDim
         if _is_valid_constraint(slices):
+            if not isinstance(slices, slice) and not np.iterable(slices):
+                slices = [slices]
+
             self.slices = slices
 
     def __iter__(self):
@@ -188,12 +229,32 @@ class DomainOfApplication(object):
 
 def _is_valid_constraint(v):
     ret = False
-    if isinstance(v, slice) or \
-       isinstance(v, int) or \
+    if isinstance(v, (slice, int)) or \
        (isinstance(v, (list,tuple)) and np.array([_is_valid_constraint(e) for e in v]).all()):
             ret = True
 
     return ret
+
+def _get_valid_DomainOfApplication(v, valid_shape):
+    """
+    Takes the value to validate and a tuple representing the valid_shape
+    """
+
+    if v is None:
+        if len(valid_shape) == 1:
+            v = slice(None)
+        else:
+            v = [slice(None) for x in valid_shape]
+
+    if not isinstance(v, DomainOfApplication):
+        if _is_valid_constraint(v):
+            if not isinstance(v, slice) and not np.iterable(v):
+                v = [v,]
+            v = DomainOfApplication(0, v)
+        else:
+            raise StandardError('value must be either a DomainOfApplication or a single, tuple, or list of slice or int objects')
+
+    return v
 
 class RangeGroup(dict):
     """
@@ -342,7 +403,72 @@ class CRS(AbstractIdentifiable):
         AbstractIdentifiable.__init__(self)
         self.axes={}
         for l in axis_labels:
-            self.axes[l]=None
+            if l in AxisTypeEnum._str_map or l in AxisTypeEnum._value_map:
+                self.axes[l]=None
+            else:
+                raise SystemError('Unknown AxisType: {0}'.format(l))
+
+    @classmethod
+    def standard_temporal(cls):
+        return CRS([AxisTypeEnum.TIME])
+
+    @classmethod
+    def lat_lon_height(cls):
+        return CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT, AxisTypeEnum.HEIGHT])
+
+    @classmethod
+    def lat_lon(cls):
+        return CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+    @classmethod
+    def x_y_z(cls):
+        return CRS([AxisTypeEnum.GEO_X, AxisTypeEnum.GEO_Y, AxisTypeEnum.GEO_Z])
+
+class AxisTypeEnum(object):
+    """
+    Temporarily taken from: http://www.unidata.ucar.edu/software/netcdf-java/v4.2/javadoc/ucar/nc2/constants/AxisType.html
+    """
+    # Ensemble represents the ensemble coordinate
+    ENSEMBLE = 0
+
+    # GeoX represents a x coordinate
+    GEO_X = 1
+
+    # GeoY represents a y coordinate
+    GEO_Y = 2
+
+    # GeoZ represents a z coordinate
+    GEO_Z = 3
+
+    # Height represents a vertical height coordinate
+    HEIGHT = 4
+
+    # Lat represents a latitude coordinate
+    LAT = 5
+
+    # Lon represents a longitude coordinate
+    LON = 6
+
+    # Pressure represents a vertical pressure coordinate
+    PRESSURE = 7
+
+    # RadialAzimuth represents a radial azimuth coordinate
+    RADIAL_AZIMUTH = 8
+
+    # RadialDistance represents a radial distance coordinate
+    RADIAL_DISTANCE = 9
+
+    # RadialElevation represents a radial elevation coordinate
+    RADIAL_ELEVATION = 10
+
+    # RunTime represents the runTime coordinate
+    RUNTIME = 11
+
+    # Time represents the time coordinate
+    TIME = 12
+
+    _value_map = {'ENSAMBLE':0, 'GEO_X':1 , 'GEO_Y':2, 'GEO_Z':3, 'HEIGHT':4, 'LAT':5, 'LON':6, 'PRESSURE':7, 'RADIAL_AZIMUTH':8, 'RADIAL_DISTANCE':9, 'RADIAL_ELEVATION':10, 'RUNTIME':11, 'TIME':12, }
+    _str_map = {0:'ENSAMBLE', 1:'GEO_X' , 2:'GEO_Y', 3:'GEO_Z', 4:'HEIGHT', 5:'LAT', 6:'LON', 7:'PRESSURE', 8:'RADIAL_AZIMUTH', 9:'RADIAL_DISTANCE', 10:'RADIAL_ELEVATION', 11:'RUNTIME', 12:'TIME', }
 
 #################
 # Domain Objects
@@ -403,26 +529,26 @@ class AbstractShape(AbstractIdentifiable):
     """
 
     """
-    def __init__(self, name, dims):
+    def __init__(self, name, extents):
         AbstractIdentifiable.__init__(self)
         self.name = name
-        self.dims = dims
+        self.extents = extents
 
     @property
     def rank(self):
-        return len(self.dims)
+        return len(self.extents)
 
 #    def rank(self):
-#        return len(self.dims)
+#        return len(self.extents)
 
 class GridShape(AbstractShape):
     """
 
     """
-    def __init__(self, name, dims):
-        AbstractShape.__init__(self, name, dims)
+    def __init__(self, name, extents):
+        AbstractShape.__init__(self, name, extents)
 
-    #CBM: Make dims type-safe
+    #CBM: Make extents type-safe
 
 
 #################
