@@ -8,8 +8,8 @@
 """
 
 from netCDF4 import Dataset
-from coverage.coverage import *
-from coverage.parameter import *
+from coverage_model.coverage import *
+from coverage_model.parameter import *
 import numpy as np
 
 def ncgrid2cov(save_coverage=True):
@@ -27,14 +27,14 @@ def ncgrid2cov(save_coverage=True):
     tdom = GridDomain(GridShape('temporal', [1]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
     sdom = GridDomain(GridShape('spatial', [34,57,89]), scrs, MutabilityEnum.IMMUTABLE) # 3d spatial topology (grid)
 
-    scov = SimplexCoverage('sample grid coverage', rdict, sdom, tdom)
+    scov = SimplexCoverage('sample grid coverage_model', rdict, sdom, tdom)
 
     # Collect all var names (for convenience)
     all = []
     for x in rdict.items:
         all.extend(rdict.items[x])
 
-    # Iterate over the vars and add them to the coverage
+    # Iterate over the vars and add them to the coverage_model
     for v in all:
         is_time = v is 'time'
         is_coord = v in rdict.items['coords']
@@ -61,7 +61,7 @@ def ncgrid2cov(save_coverage=True):
         var = ds.variables[v]
         var.set_auto_maskandscale(False)
         arr = var[:]
-#        print 'variable = \'{2}\' coverage range shape: {0}  array shape: {1}'.format(scov.range_[v].shape, arr.shape, v)
+#        print 'variable = \'{2}\' coverage_model range shape: {0}  array shape: {1}'.format(scov.range_[v].shape, arr.shape, v)
 
         # TODO: Sort out how to leave these sparse internally and only broadcast during read
         if v is 'depth':
@@ -97,14 +97,14 @@ def ncstation2cov(save_coverage=True):
     #CBM: the leading 0 is for time - need to refine append_parameter to deal with the addition of time so that this is just space
     sdom = GridDomain(GridShape('spatial', [1]), scrs, MutabilityEnum.IMMUTABLE) # 1d spatial topology (station/trajectory)
 
-    scov = SimplexCoverage('sample station coverage', rdict, sdom, tdom)
+    scov = SimplexCoverage('sample station coverage_model', rdict, sdom, tdom)
 
     # Collect all var names (for convenience)
     all = []
     for x in rdict.items:
         all.extend(rdict.items[x])
 
-    # Iterate over the vars and add them to the coverage
+    # Iterate over the vars and add them to the coverage_model
     for v in all:
         is_time = v is 'time'
         is_coord = v in rdict.items['coords']
@@ -131,7 +131,7 @@ def ncstation2cov(save_coverage=True):
         var = ds.variables[v]
         var.set_auto_maskandscale(False)
         arr = var[:]
-#        print 'variable = \'{2}\' coverage range shape: {0}  array shape: {1}'.format(scov.range_[v].shape, arr.shape, v)
+#        print 'variable = \'{2}\' coverage_model range shape: {0}  array shape: {1}'.format(scov.range_[v].shape, arr.shape, v)
 
         # TODO: Sort out how to leave the coordinates sparse internally and only broadcast during read
         scov.range_[v][:] = var[:]
@@ -182,7 +182,7 @@ def direct_read_write():
     print scov.range_['streamflow'][slice_]
 
 def methodized_read_write():
-    from coverage.test.examples import SimplexCoverage
+    from coverage_model.test.examples import SimplexCoverage
     import numpy as np
 
     cov=SimplexCoverage.load('test_data/usgs.cov')
@@ -338,7 +338,7 @@ if __name__ == "__main__":
     #    direct_read_write()
     #    methodized_read_write()
 
-#    from coverage.coverage import AxisTypeEnum
+#    from coverage_model.coverage_model import AxisTypeEnum
 #    axis = 'TIME'
 #    print axis == AxisTypeEnum.TIME
 
@@ -346,7 +346,7 @@ if __name__ == "__main__":
 
 """
 
-from coverage.test.simple_cov import *
+from coverage_model.test.simple_cov import *
 scov, ds = ncstation2cov()
 
 

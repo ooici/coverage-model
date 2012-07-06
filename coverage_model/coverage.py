@@ -2,7 +2,7 @@
 
 """
 @package 
-@file coverage
+@file coverage_model
 @author Christopher Mueller
 @brief 
 """
@@ -35,7 +35,7 @@
 #    if isinstance(value, AbstractDomain):
 #        self.__spatial_domain = value
 
-from coverage.basic_types import *
+from coverage_model.basic_types import *
 import numpy as np
 import pickle
 
@@ -96,14 +96,14 @@ class SimplexCoverage(AbstractCoverage):
         with open(file_path, 'w') as f:
             pickle.dump(cov_obj, f, 0 if use_ascii else 2)
 
-        print 'Saved coverage to \'{0}\''.format(file_path)
+        print 'Saved coverage_model to \'{0}\''.format(file_path)
 
     @classmethod
     def load(cls, file_path):
         with open(file_path, 'r') as f:
             obj = pickle.load(f)
 
-        print 'Loaded coverage from {0}'.format(file_path)
+        print 'Loaded coverage_model from {0}'.format(file_path)
         return obj
 
     # TODO: If we are going to call out separate functions for time, we should have a corresponding way to add the temporal parameter
@@ -157,7 +157,7 @@ class SimplexCoverage(AbstractCoverage):
 
     def set_parameter_values(self, param_name, tdoa, sdoa, values):
         if not param_name in self.range_:
-            raise StandardError('Parameter \'{0}\' not found in coverage'.format(param_name))
+            raise StandardError('Parameter \'{0}\' not found in coverage_model'.format(param_name))
 
         tdoa = _get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
         sdoa = _get_valid_DomainOfApplication(sdoa, self.spatial_domain.shape.extents)
@@ -174,7 +174,7 @@ class SimplexCoverage(AbstractCoverage):
 
     def get_parameter_values(self, param_name, tdoa=None, sdoa=None, return_array=None):
         if not param_name in self.range_:
-            raise StandardError('Parameter \'{0}\' not found in coverage'.format(param_name))
+            raise StandardError('Parameter \'{0}\' not found in coverage_model'.format(param_name))
 
         return_array = return_array or np.zeros([0])
 

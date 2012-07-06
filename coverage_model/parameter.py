@@ -20,8 +20,8 @@
 #        self.__is_coordinate = value
 
 
-from coverage.basic_types import *
-from coverage.coverage import AbstractParameterType, AbstractSimplexParameterType, AbstractSimplexParameterValue, AbstractComplexParameterType, AbstractComplexParameterValue
+from coverage_model.basic_types import *
+from coverage_model.coverage import AbstractParameterType, AbstractSimplexParameterType, AbstractSimplexParameterValue, AbstractComplexParameterType, AbstractComplexParameterValue
 
 class Parameter(AbstractIdentifiable):
     """
