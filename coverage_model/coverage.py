@@ -146,7 +146,10 @@ class SimplexCoverage(AbstractCoverage):
 
         for n in self._pcmap:
             arr = self.range_[n].content
-            arr = np.append(arr, np.zeros((count,) + arr.shape[1:]), 0)
+            pc = self.range_type[n]
+            narr = np.empty((count,) + arr.shape[1:], dtype=pc.param_type)
+            narr.fill(pc.fill_value)
+            arr = np.append(arr, narr, 0)
             self.range_[n].content = arr
 
     def set_time_values(self, tdoa, values):

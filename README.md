@@ -86,3 +86,17 @@ From the ipython prompt, run:
    
     grid_cov, _ = ncgrid2cov() # Generates a coverage from the test_data/ncom.nc file
     print grid_cov
+    
+    
+Coverages can be saved and loaded using the respective classmethods of SimplexCoverage:
+
+    from coverage_model.coverage import SimplexCoverage
+    
+    # Load a saved coverage
+    scov = SimplexCoverage.load('test_data/usgs.cov')
+    
+    # Make some changes, like adding 10 additional timesteps
+    scov.insert_timesteps(10)
+    
+    # Then save the coverage again
+    SimplexCoverage.save(scov, 'test_data/usgs.cov')
