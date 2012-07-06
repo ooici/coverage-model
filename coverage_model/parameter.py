@@ -21,7 +21,7 @@
 
 
 from coverage_model.basic_types import *
-from coverage_model.coverage import AbstractParameterType, AbstractSimplexParameterType, AbstractSimplexParameterValue, AbstractComplexParameterType, AbstractComplexParameterValue
+from coverage_model.coverage import AxisTypeEnum, AbstractParameterType, AbstractSimplexParameterType, AbstractSimplexParameterValue, AbstractComplexParameterType, AbstractComplexParameterValue
 
 class Parameter(AbstractIdentifiable):
     """
@@ -62,7 +62,7 @@ class ParameterContext(AbstractIdentifiable):
         lst.append('{0}ID: {1}'.format(indent, self._id))
         lst.append('{0}Name: {1}'.format(indent, self.name))
         if self.is_coord:
-            lst.append('{0}Is Coordinate: {1}'.format(indent, self.axis))
+            lst.append('{0}Is Coordinate: {1}'.format(indent, AxisTypeEnum._str_map[self.axis]))
         lst.append('{0}Type: {1}'.format(indent, self.param_type))
         lst.append('{0}Fill Value: {1}'.format(indent, self.fill_value))
 
