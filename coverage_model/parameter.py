@@ -21,33 +21,52 @@
 
 
 from coverage_model.basic_types import *
-from coverage_model.coverage import AbstractShape, AbstractParameterType, AbstractParameterValue, AbstractSimplexParameterType, AbstractSimplexParameterValue, AbstractComplexParameterType, AbstractComplexParameterValue
+from coverage_model.coverage import AbstractParameterType, AbstractSimplexParameterType, AbstractSimplexParameterValue, AbstractComplexParameterType, AbstractComplexParameterValue
 
 class Parameter(AbstractIdentifiable):
     """
 
     """
-    def __init__(self):
+    def __init__(self, parameter_context, shape, value):
         AbstractIdentifiable.__init__(self)
+        self.context = parameter_context
+        self.value = value
+        self.shape = shape
 
-        self.name = ''
-        self.is_coordinate = False
-        self.context = ParameterContext()
-        self.value = AbstractParameterValue()
-        self.shape = AbstractShape()
+    # Expose a couple of the context attributes at this level as "read only"
+    @property
+    def name(self):
+        return self.context.name
+
+    @property
+    def is_coordinate(self):
+        return self.context.is_coord
+
 
 
 class ParameterContext(AbstractIdentifiable):
     """
 
     """
-    def __init__(self, name, is_coord=False):
+    def __init__(self, name, is_coord=False, param_type=None, fill_value=None, axis=None):
         AbstractIdentifiable.__init__(self)
         self.name = name
         self.is_coord = is_coord
-        self.param_type = AbstractParameterType()
-        self.axis = None
+        self.param_type = param_type or AbstractParameterType()
+        self.fill_value = fill_value or -999
+        self.axis = axis or None
 
+    def __str__(self, indent=None):
+        indent = indent or ' '
+        lst = []
+        lst.append('{0}ID: {1}'.format(indent, self._id))
+        lst.append('{0}Name: {1}'.format(indent, self.name))
+        if self.is_coord:
+            lst.append('{0}Is Coordinate: {1}'.format(indent, self.axis))
+        lst.append('{0}Type: {1}'.format(indent, self.param_type))
+        lst.append('{0}Fill Value: {1}'.format(indent, self.fill_value))
+
+        return '\n'.join(lst)
 
 #################
 # Parameter Type Objects

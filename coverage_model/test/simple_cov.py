@@ -12,7 +12,7 @@ from coverage_model.coverage import *
 from coverage_model.parameter import *
 import numpy as np
 
-def ncgrid2cov():
+def ncgrid2cov(save_coverage=True):
     ds = Dataset('test_data/ncom.nc')
 
     rdict = RangeDictionary()
@@ -27,7 +27,7 @@ def ncgrid2cov():
     tdom = GridDomain(GridShape('temporal', [1]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
     sdom = GridDomain(GridShape('spatial', [34,57,89]), scrs, MutabilityEnum.IMMUTABLE) # 3d spatial topology (grid)
 
-    scov = SimplexCoverage(rdict, sdom, tdom)
+    scov = SimplexCoverage('sample grid coverage', rdict, sdom, tdom)
 
     # Collect all var names (for convenience)
     all = []
@@ -39,17 +39,18 @@ def ncgrid2cov():
         is_time = v is 'time'
         is_coord = v in rdict.items['coords']
 
-        pcontext = ParameterContext(v, is_coord=is_coord)
+        pcontext = ParameterContext(v, is_coord=is_coord, param_type=ds.variables[v].dtype.type)
         if is_coord:
-            if v is 'lat':
+            if v is 'time':
+                pcontext.axis = AxisTypeEnum.TIME
+            elif v is 'lat':
                 pcontext.axis = AxisTypeEnum.LAT
             elif v is 'lon':
                 pcontext.axis = AxisTypeEnum.LON
             elif v is 'depth':
                 pcontext.axis = AxisTypeEnum.HEIGHT
 
-        pcontext.param_type = ds.variables[v].dtype.type
-        scov.append_parameter(pcontext, is_time)
+        scov.append_parameter(pcontext)
 
     # Insert the timesteps (automatically expands other arrays)
     tvar=ds.variables['time']
@@ -60,7 +61,7 @@ def ncgrid2cov():
         var = ds.variables[v]
         var.set_auto_maskandscale(False)
         arr = var[:]
-        print 'variable = \'{2}\' coverage range shape: {0}  array shape: {1}'.format(scov.range_[v].shape, arr.shape, v)
+#        print 'variable = \'{2}\' coverage range shape: {0}  array shape: {1}'.format(scov.range_[v].shape, arr.shape, v)
 
         # TODO: Sort out how to leave these sparse internally and only broadcast during read
         if v is 'depth':
@@ -75,11 +76,12 @@ def ncgrid2cov():
         else:
             scov.range_[v][:] = var[:]
 
-    SimplexCoverage.save(scov, 'test_data/ncom.cov')
+    if save_coverage:
+        SimplexCoverage.save(scov, 'test_data/ncom.cov')
 
     return scov, ds
 
-def ncstation2cov():
+def ncstation2cov(save_coverage=True):
     ds = Dataset('test_data/usgs.nc')
 
     rdict = RangeDictionary()
@@ -94,9 +96,8 @@ def ncstation2cov():
     tdom = GridDomain(GridShape('temporal', [1]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
     #CBM: the leading 0 is for time - need to refine append_parameter to deal with the addition of time so that this is just space
     sdom = GridDomain(GridShape('spatial', [1]), scrs, MutabilityEnum.IMMUTABLE) # 1d spatial topology (station/trajectory)
-#    sdom = GridDomain(GridShape('spatial', [3,5]), scrs, None) # 2d spatial topology (grid)
 
-    scov = SimplexCoverage(rdict, sdom, tdom)
+    scov = SimplexCoverage('sample station coverage', rdict, sdom, tdom)
 
     # Collect all var names (for convenience)
     all = []
@@ -108,17 +109,18 @@ def ncstation2cov():
         is_time = v is 'time'
         is_coord = v in rdict.items['coords']
 
-        pcontext = ParameterContext(v, is_coord=is_coord)
+        pcontext = ParameterContext(v, is_coord=is_coord, param_type=ds.variables[v].dtype.type)
         if is_coord:
-            if v is 'lat':
+            if v is 'time':
+                pcontext.axis = AxisTypeEnum.TIME
+            elif v is 'lat':
                 pcontext.axis = AxisTypeEnum.LAT
             elif v is 'lon':
                 pcontext.axis = AxisTypeEnum.LON
             elif v is 'z':
                 pcontext.axis = AxisTypeEnum.HEIGHT
 
-        pcontext.param_type = ds.variables[v].dtype.type
-        scov.append_parameter(pcontext, is_time)
+        scov.append_parameter(pcontext)
 
     # Insert the timesteps (automatically expands other arrays)
     tvar=ds.variables['time']
@@ -129,12 +131,13 @@ def ncstation2cov():
         var = ds.variables[v]
         var.set_auto_maskandscale(False)
         arr = var[:]
-        print 'variable = \'{2}\' coverage range shape: {0}  array shape: {1}'.format(scov.range_[v].shape, arr.shape, v)
+#        print 'variable = \'{2}\' coverage range shape: {0}  array shape: {1}'.format(scov.range_[v].shape, arr.shape, v)
 
         # TODO: Sort out how to leave the coordinates sparse internally and only broadcast during read
         scov.range_[v][:] = var[:]
 
-    SimplexCoverage.save(scov, 'test_data/usgs.cov')
+    if save_coverage:
+        SimplexCoverage.save(scov, 'test_data/usgs.cov')
 
     return scov, ds
 
@@ -323,14 +326,22 @@ def my_meshgrid(*xi, **kwargs):
             return np.broadcast_arrays(*output)
 
 
-
 if __name__ == "__main__":
-    ncstation2cov()
+    scov, _ = ncstation2cov(False)
+    print scov
 
-    ncgrid2cov()
+    print '\n=======\n'
+
+    gcov, _ = ncgrid2cov(False)
+    print gcov
 
     #    direct_read_write()
     #    methodized_read_write()
+
+#    from coverage_model.coverage import AxisTypeEnum
+#    axis = 'TIME'
+#    print axis == AxisTypeEnum.TIME
+
     pass
 
 """

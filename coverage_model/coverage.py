@@ -78,13 +78,14 @@ class SimplexCoverage(AbstractCoverage):
     """
     
     """
-    def __init__(self, range_dictionary, spatial_domain, temporal_domain=None):
+    def __init__(self, name, range_dictionary, spatial_domain, temporal_domain=None):
         AbstractCoverage.__init__(self)
 
+        self.name = name
         self.range_dictionary = range_dictionary
         self.spatial_domain = spatial_domain
         self.temporal_domain = temporal_domain or GridDomain(GridShape('temporal',[0]), None, None)
-        self.range_type = {}
+        self.range_type = RangeGroup()
         self.range_ = RangeGroup()
         self._pcmap = {}
         self._temporal_param_name = None
@@ -107,34 +108,33 @@ class SimplexCoverage(AbstractCoverage):
         return obj
 
     # TODO: If we are going to call out separate functions for time, we should have a corresponding way to add the temporal parameter
-    def append_parameter(self, parameter_context, temporal=False):
+    def append_parameter(self, parameter_context):
         pname = parameter_context.name
 
-        if temporal:
+        # Determine the correct array shape (default is the shape of the spatial_domain)
+        # If there is only one extent in the spatial domain and it's size is 1, collapse to time only
+        if len(self.spatial_domain.shape.extents) == 1 and self.spatial_domain.shape.extents[0] == 1:
+            shp = self.temporal_domain.shape.extents
+        else:
+            shp = self.temporal_domain.shape.extents + self.spatial_domain.shape.extents
+
+        # Assign the pname to the CRS (if applicable) and select the appropriate domain (default is the spatial_domain)
+        dom = self.spatial_domain
+        if not parameter_context.axis is None and AxisTypeEnum.is_member(parameter_context.axis, AxisTypeEnum.TIME):
             if self._temporal_param_name is None:
                 self._temporal_param_name = pname
             else:
                 raise StandardError("temporal_parameter already defined.")
-
-        # Get the correct domain and array shape
-        if temporal:
             dom = self.temporal_domain
             shp = self.temporal_domain.shape.extents
-        else:
-            dom = self.spatial_domain
-            if len(self.spatial_domain.shape.extents) == 1:
-                shp = self.temporal_domain.shape.extents
-            else:
-                shp = self.temporal_domain.shape.extents + self.spatial_domain.shape.extents
-
-        # Assign the pname to the CRS (if applicable)
-        if not parameter_context.axis is None:
-            if parameter_context.axis in dom.crs.axes:
-                dom.crs.axes[parameter_context.axis] = parameter_context.name
+            dom.crs.axes[parameter_context.axis] = parameter_context.name
+        elif parameter_context.axis in self.spatial_domain.crs.axes:
+            dom.crs.axes[parameter_context.axis] = parameter_context.name
 
         self._pcmap[pname] = (len(self._pcmap), parameter_context, dom)
         self.range_type[pname] = parameter_context
-        self.range_[pname] = RangeMember(np.zeros(shp, parameter_context.param_type))
+        setattr(self.range_type, pname, self.range_type[pname])
+        self.range_[pname] = RangeMember(shp, parameter_context)
         setattr(self.range_, pname, self.range_[pname])
 
     def get_parameter(self, param_name):
@@ -150,23 +150,11 @@ class SimplexCoverage(AbstractCoverage):
             arr = np.append(arr, np.zeros((count,) + arr.shape[1:]), 0)
             self.range_[n].content = arr
 
-#    def set_time_value(self, time_index, time_value):
-#        pass
-#
-#    def get_time_value(self, time_index):
-#        pass
-
     def set_time_values(self, tdoa, values):
         return self.set_parameter_values(self._temporal_param_name, tdoa, None, values)
 
     def get_time_values(self, tdoa=None, return_array=None):
         return self.get_parameter_values(self._temporal_param_name, tdoa, None, return_array)
-
-#    def set_parameter_values_at_time(self, param_name, time_index, values, doa):
-#        pass
-#
-#    def get_parameter_values_at_time(self, param_name, time_index, doa):# doa?
-#        pass
 
     def set_parameter_values(self, param_name, tdoa, sdoa, values):
         if not param_name in self.range_:
@@ -203,6 +191,24 @@ class SimplexCoverage(AbstractCoverage):
 
         return_array = self.range_[param_name][slice_]
         return return_array
+
+    def __str__(self):
+        indent = ' '
+        lst = []
+        lst.append('ID: {0}'.format(self._id))
+        lst.append('Name: {0}'.format(self.name))
+        lst.append('Temporal Domain:')
+        lst.append('{0}'.format(self.temporal_domain.__str__(indent*2)))
+
+        lst.append('Spatial Domain:')
+        lst.append('{0}'.format(self.spatial_domain.__str__(indent*2)))
+
+        lst.append('Parameters:')
+        for x in self.range_:
+            lst.append('{0}{1} {2}'.format(indent*2,x,self.range_[x].shape))
+            lst.append('{0}'.format(self.range_type[x].__str__(indent*4)))
+
+        return '\n'.join(lst)
 
 
 #################
@@ -258,9 +264,15 @@ def _get_valid_DomainOfApplication(v, valid_shape):
 
 class RangeGroup(dict):
     """
-    All the functionality of a built_in dict, plus the ability to use setattr to allow dynamic addition of params (RangeMember)
+    All the functionality of a built_in dict, plus uses setattr to expose dictionary members as attributes
     """
-    pass
+    def __setitem__(self, key, value):
+        dict.__setitem__(self, key, value)
+        setattr(self, key, self[key])
+
+    def __delitem__(self, key):
+        delattr(self, key)
+        dict.__delitem__(self, key)
 
 class RangeMember(object):
     """
@@ -268,8 +280,9 @@ class RangeMember(object):
     Mapping between the "complete" domain and the storage strategy can happen here
     """
 
-    def __init__(self, arr_obj):
-        self._arr_obj = arr_obj
+    def __init__(self, shape, pcontext):
+        self._arr_obj = np.empty(shape)
+        self._arr_obj.fill(pcontext.fill_value)
 
     @property
     def shape(self):
@@ -316,7 +329,7 @@ class RangeMember(object):
         elif not isinstance(slice_,tuple):
             slice_ = tuple(slice_)
 
-        # Then make it's the correct shape TODO: Should reference the shape of the Domain object
+        # Then make it's the correct rank TODO: Should reference the rank of the Domain object
         alen = len(self._arr_obj.shape)
         slen = len(slice_)
         if not slen == alen:
@@ -329,7 +342,7 @@ class RangeMember(object):
         self._arr_obj[slice_] = value
 
     def __str__(self):
-        print self._arr_obj
+        return '{0}'.format(self._arr_obj.shape)
 
 class RangeDictionary(AbstractIdentifiable):
     """
@@ -401,12 +414,13 @@ class CRS(AbstractIdentifiable):
     """
     def __init__(self, axis_labels):
         AbstractIdentifiable.__init__(self)
-        self.axes={}
+        self.axes=Axes()
         for l in axis_labels:
-            if l in AxisTypeEnum._str_map or l in AxisTypeEnum._value_map:
-                self.axes[l]=None
-            else:
-                raise SystemError('Unknown AxisType: {0}'.format(l))
+            # Add an axis member for the indicated axis
+            try:
+                self.axes[l] = None
+            except KeyError as ke:
+                raise SystemError('Unknown AxisType \'{0}\': {1}'.format(l,ke.message))
 
     @classmethod
     def standard_temporal(cls):
@@ -423,6 +437,45 @@ class CRS(AbstractIdentifiable):
     @classmethod
     def x_y_z(cls):
         return CRS([AxisTypeEnum.GEO_X, AxisTypeEnum.GEO_Y, AxisTypeEnum.GEO_Z])
+
+    def __str__(self, indent=None):
+        indent = indent or ' '
+        lst = []
+        lst.append('{0}ID: {1}'.format(indent, self._id))
+        lst.append('{0}Axes: {1}'.format(indent, self.axes))
+
+        return '\n'.join(lst)
+
+class Axes(dict):
+    """
+    Ensures that the indicated axis exists and that the string representation is used for the key
+    """
+
+    def __getitem__(self, item):
+        if item in AxisTypeEnum._str_map:
+            item = AxisTypeEnum._str_map[item]
+        elif item in AxisTypeEnum._value_map:
+            pass
+        else:
+            raise KeyError('Invalid axis key, must be a member of AxisTypeEnum')
+
+        return dict.__getitem__(self, item)
+
+    def __setitem__(self, key, value):
+        if key in AxisTypeEnum._str_map:
+            key = AxisTypeEnum._str_map[key]
+        elif key in AxisTypeEnum._value_map:
+            pass
+        else:
+            raise KeyError('Invalid axis key, must be a member of AxisTypeEnum')
+
+        dict.__setitem__(self, key, value)
+
+    def __contains__(self, item):
+        if item in AxisTypeEnum._str_map:
+            item = AxisTypeEnum._str_map[item]
+
+        return dict.__contains__(self, item)
 
 class AxisTypeEnum(object):
     """
@@ -470,6 +523,20 @@ class AxisTypeEnum(object):
     _value_map = {'ENSAMBLE':0, 'GEO_X':1 , 'GEO_Y':2, 'GEO_Z':3, 'HEIGHT':4, 'LAT':5, 'LON':6, 'PRESSURE':7, 'RADIAL_AZIMUTH':8, 'RADIAL_DISTANCE':9, 'RADIAL_ELEVATION':10, 'RUNTIME':11, 'TIME':12, }
     _str_map = {0:'ENSAMBLE', 1:'GEO_X' , 2:'GEO_Y', 3:'GEO_Z', 4:'HEIGHT', 5:'LAT', 6:'LON', 7:'PRESSURE', 8:'RADIAL_AZIMUTH', 9:'RADIAL_DISTANCE', 10:'RADIAL_ELEVATION', 11:'RUNTIME', 12:'TIME', }
 
+    @classmethod
+    def get_member(cls, value):
+        if isinstance(value, int):
+            return AxisTypeEnum.__getattribute__(cls, AxisTypeEnum._str_map[value])
+        elif isinstance(value, (str,unicode)):
+            return AxisTypeEnum.__getattribute__(cls, value.upper())
+        else:
+            raise TypeError('AxisTypeEnum has no member: {0}'.format(value))
+
+    @classmethod
+    def is_member(cls, value, want):
+        v=AxisTypeEnum.get_member(value)
+        return v == want
+
 #################
 # Domain Objects
 #################
@@ -480,6 +547,20 @@ class MutabilityEnum(object):
     MUTABLE = 3
     _value_map = {'IMMUTABLE': 1, 'EXTENSIBLE': 2, 'MUTABLE': 3,}
     _str_map = {1: 'IMMUTABLE', 2: 'EXTENSIBLE', 3: 'MUTABLE'}
+
+    @classmethod
+    def get_member(cls, value):
+        if isinstance(value, int):
+            return MutabilityEnum.__getattribute__(cls, MutabilityEnum._str_map[value])
+        elif isinstance(value, (str,unicode)):
+            return MutabilityEnum.__getattribute__(cls, value.upper())
+        else:
+            raise TypeError('AxisTypeEnum has no member: {0}'.format(value))
+
+    @classmethod
+    def is_member(cls, value, want):
+        v=MutabilityEnum.get_member(value)
+        return v == want
 
 class AbstractDomain(AbstractIdentifiable):
     """
@@ -505,6 +586,17 @@ class AbstractDomain(AbstractIdentifiable):
 
     def insert_elements(self, dim_index, count, doa):
         pass
+
+    def __str__(self, indent=None):
+        indent = indent or ' '
+        lst=[]
+        lst.append('{0}ID: {1}'.format(indent, self._id))
+        lst.append('{0}Shape: {1}'.format(indent, self.shape.extents))
+        lst.append('{0}CRS:'.format(indent))
+        lst.append('{0}'.format(self.crs.__str__(indent*2)))
+        lst.append('{0}Mutability: {1}'.format(indent, MutabilityEnum._str_map[self.mutability]))
+
+        return '\n'.join(lst)
 
 class GridDomain(AbstractDomain):
     """
@@ -540,6 +632,13 @@ class AbstractShape(AbstractIdentifiable):
 
 #    def rank(self):
 #        return len(self.extents)
+
+    def __str__(self, indent=None):
+        indent = indent or ' '
+        lst = []
+        lst.append('{0}Extents: {1}'.format(indent, self.extents))
+
+        '\n'.join(lst)
 
 class GridShape(AbstractShape):
     """
