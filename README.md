@@ -11,11 +11,6 @@ Reference Information: https://confluence.oceanobservatories.org/display/CIDev/R
 This assumes basic development environment setup (git, directory structure). Please follow the
 "New Developers Tutorial" for basic steps.
 
-Pyon: The main dependency of this repository is the pyon Capability Container. Follow the listed
-steps to install the minimal needed dependencies to run pyon on a Mac. For more details and Linux
-install instructions, check out the [pyon README](https://github.com/ooici/pyon/blob/master/README)
-
-
 
 **Install the following if not yet present:**
 
@@ -59,9 +54,12 @@ Setup a virtualenv to run coverage-model (use any name you like):
 
     mkvirtualenv --python=python2.7 coverage_model
 
-Use pip to install ipython, numpy and netCDF4:
+Use pip to install numpy, netCDF4, and ipython:
+*Note - numpy can be finicky, needs to be installed 'by itself'*
 
-    pip install ipython numpy netCDF4
+    pip install numpy
+    pip install netCDF4
+    pip install ipython
 
 
 #Source
@@ -73,7 +71,7 @@ Obtain the coverage-model project by running:
 
 #Running the example functions
 
-The *coverage/test/simple_cov.py* module contains 2 functions that can be used to generate 'exemplar' coverages from sample netcdf files (in the *test_data* directory).
+The *coverage/test/examples.py* module contains 2 functions that can be used to generate 'exemplar' coverages from sample netcdf files (in the *test_data* directory).
 
 Start an ipython shell session from the root *coverage-model* directory:
 
