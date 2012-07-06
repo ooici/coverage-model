@@ -69,7 +69,7 @@ Obtain the coverage-model project by running:
 
 #Running the example functions
 
-The *coverage-model/test/simple_cov.py* module contains 2 functions that can be used to generate 'exemplar' coverages from sample netcdf files (in the *test_data* directory).
+The *coverage_model/test/simple_cov.py* module contains 2 functions that can be used to generate 'exemplar' coverages from sample netcdf files (in the *test_data* directory).
 
 Start an ipython shell session from the root *coverage-model* directory:
 
@@ -78,7 +78,7 @@ Start an ipython shell session from the root *coverage-model* directory:
 
 From the ipython prompt, run:
 
-    from coverage-model.test.simple_cov import *
+    from coverage_model.test.simple_cov import *
     stn_cov, _ = ncstation2cov() # Generates a coverage from the test_data/usgs.nc file
     print stn_cov
    
