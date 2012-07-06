@@ -19,32 +19,36 @@ install instructions, check out the [pyon README](https://github.com/ooici/pyon/
 
 **Install the following if not yet present:**
 
-- git 1.7.7: *Download the Mac or Linux installer and run it*
+**Install** git 1.7.7:
+*Download the Mac or Linux installer and run it*
 
-- OS Packages and package management:
+*OS Packages and package management:*
 For Mac, use homebrew
-    > /usr/bin/ruby -e "$(curl -fsSL https://raw.github.com/gist/323731)"
+
+    /usr/bin/ruby -e "$(curl -fsSL https://raw.github.com/gist/323731)"
 
   * python 2.7
   *  hdf5
   * netcdf
 
 
-- **Install** python, hdf5 and netcdf with Homebrew
-    > brew install python hdf5 netcdf
+**Install** python, hdf5 and netcdf with Homebrew
+    
+    brew install python hdf5 netcdf
 
-    You can even reinstall git using brew to clean up your /usr/local directory
-    Be sure to read the pyon README for platform specific guidance to installing
-    dependent libraries and packages.
-    Linux: Note that many installs have much older versions installed by default.
-    You will need to upgrade couchdb to at least 1.1.0.
+You can even reinstall git using brew to clean up your /usr/local directory
+Be sure to read the pyon README for platform specific guidance to installing
+dependent libraries and packages.
+Linux: Note that many installs have much older versions installed by default.
+You will need to upgrade couchdb to at least 1.1.0.
 
 **Python packages and environment management:**
 
-- pip
-    > *easy_install pip*
+**Install** pip
 
-Install virtualenv and virtualenvwrapper modules for your python 2.7 installation
+    easy_install pip
+
+**Install** virtualenv and virtualenvwrapper modules for your python 2.7 installation
 *Note: This may require Mac's XCode (use XCode 3.3 free version*
 
     easy_install --upgrade virtualenv
