@@ -25,8 +25,7 @@
 
 # TODO: All implementation is 'pre-prototype' - only intended to flesh out the API
 
-#CBM: see next line
-#TODO: Add type checking throughout all classes as determined appropriate, ala:
+#CBM:TODO: Add type checking throughout all classes as determined appropriate, ala:
 #@property
 #def spatial_domain(self):
 #    return self.__spatial_domain
@@ -36,7 +35,7 @@
 #    if isinstance(value, AbstractDomain):
 #        self.__spatial_domain = value
 
-from coverage_model.basic_types import *
+from coverage.basic_types import *
 import numpy as np
 import pickle
 

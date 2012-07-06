@@ -8,8 +8,8 @@
 """
 
 from netCDF4 import Dataset
-from coverage_model.coverage import *
-from coverage_model.parameter import *
+from coverage.coverage import *
+from coverage.parameter import *
 import numpy as np
 
 def ncgrid2cov(save_coverage=True):
@@ -182,7 +182,7 @@ def direct_read_write():
     print scov.range_['streamflow'][slice_]
 
 def methodized_read_write():
-    from coverage_model.test.simple_cov import SimplexCoverage
+    from coverage.test.examples import SimplexCoverage
     import numpy as np
 
     cov=SimplexCoverage.load('test_data/usgs.cov')
@@ -338,7 +338,7 @@ if __name__ == "__main__":
     #    direct_read_write()
     #    methodized_read_write()
 
-#    from coverage_model.coverage import AxisTypeEnum
+#    from coverage.coverage import AxisTypeEnum
 #    axis = 'TIME'
 #    print axis == AxisTypeEnum.TIME
 
@@ -346,7 +346,7 @@ if __name__ == "__main__":
 
 """
 
-from coverage_model.test.simple_cov import *
+from coverage.test.simple_cov import *
 scov, ds = ncstation2cov()
 
 
