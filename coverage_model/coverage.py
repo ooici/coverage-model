@@ -120,8 +120,8 @@ class SimplexCoverage(AbstractCoverage):
         self.range_dictionary = range_dictionary
         self.spatial_domain = spatial_domain
         self.temporal_domain = temporal_domain or GridDomain(GridShape('temporal',[0]), None, None)
-        self.range_type = RangeGroup()
-        self.range_ = RangeGroup()
+        self._range_type = RangeGroup()
+        self._range = RangeGroup()
         self._pcmap = {}
         self._temporal_param_name = None
 
@@ -150,25 +150,25 @@ class SimplexCoverage(AbstractCoverage):
             dom.crs.axes[parameter_context.axis] = parameter_context.name
 
         self._pcmap[pname] = (len(self._pcmap), parameter_context, dom)
-        self.range_type[pname] = parameter_context
-        setattr(self.range_type, pname, self.range_type[pname])
-        self.range_[pname] = RangeMember(shp, parameter_context)
-        setattr(self.range_, pname, self.range_[pname])
+        self._range_type[pname] = parameter_context
+        setattr(self._range_type, pname, self._range_type[pname])
+        self._range[pname] = RangeMember(shp, parameter_context)
+        setattr(self._range, pname, self._range[pname])
 
     def get_parameter(self, param_name):
         # TODO: Shouldn't really do this - better to break the classes in to more modules
         from coverage_model.parameter import Parameter
-        if param_name in self.range_type:
-            p = Parameter(self.range_type[param_name], self._pcmap[param_name][2], self.range_[param_name])
+        if param_name in self._range_type:
+            p = Parameter(self._range_type[param_name], self._pcmap[param_name][2], self._range[param_name])
             return p
 
     def list_parameters(self, coords_only=False, data_only=False):
         if coords_only:
-            lst=[x for x, v in self.range_type.iteritems() if v.is_coord]
+            lst=[x for x, v in self._range_type.iteritems() if v.is_coord]
         elif data_only:
-            lst=[x for x, v in self.range_type.iteritems() if not v.is_coord]
+            lst=[x for x, v in self._range_type.iteritems() if not v.is_coord]
         else:
-            lst=self.range_type.keys()
+            lst=self._range_type.keys()
         lst.sort()
         return lst
 
@@ -182,12 +182,12 @@ class SimplexCoverage(AbstractCoverage):
 
         # Expand the temporal dimension of each of the parameters that are temporal TODO: Indicate which are temporal!
         for n in self._pcmap:
-            arr = self.range_[n].content
-            pc = self.range_type[n]
+            arr = self._range[n].content
+            pc = self._range_type[n]
             narr = np.empty((count,) + arr.shape[1:], dtype=pc.param_type)
             narr.fill(pc.fill_value)
             arr = np.append(arr, narr, 0)
-            self.range_[n].content = arr
+            self._range[n].content = arr
 
     def set_time_values(self, tdoa, values):
         return self.set_parameter_values(self._temporal_param_name, tdoa, None, values)
@@ -196,7 +196,7 @@ class SimplexCoverage(AbstractCoverage):
         return self.get_parameter_values(self._temporal_param_name, tdoa, None, return_array)
 
     def set_parameter_values(self, param_name, tdoa, sdoa, values):
-        if not param_name in self.range_:
+        if not param_name in self._range:
             raise StandardError('Parameter \'{0}\' not found in coverage_model'.format(param_name))
 
         tdoa = _get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
@@ -205,16 +205,18 @@ class SimplexCoverage(AbstractCoverage):
         print 'temporal doa: {0}'.format(tdoa.slices)
         print 'spatial doa: {0}'.format(sdoa.slices)
 
-        slice_ = [tdoa.slices, sdoa.slices]
+        slice_ = []
+        slice_.extend(tdoa.slices)
+        slice_.extend(sdoa.slices)
 
         print 'Setting slice: {0}'.format(slice_)
 
         #TODO: Do we need some validation that slice_ is the same rank and/or shape as values?
-        self.range_[param_name][slice_] = values
+        self._range[param_name][slice_] = values
 
     def get_parameter_values(self, param_name, tdoa=None, sdoa=None, return_array=None):
-        if not param_name in self.range_:
-            raise StandardError('Parameter \'{0}\' not found in coverage_model'.format(param_name))
+        if not param_name in self._range:
+            raise StandardError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
         return_array = return_array or np.zeros([0])
 
@@ -230,8 +232,14 @@ class SimplexCoverage(AbstractCoverage):
 
         print 'Getting slice: {0}'.format(slice_)
 
-        return_array = self.range_[param_name][slice_]
+        return_array = self._range[param_name][slice_]
         return return_array
+
+    def get_parameter_context(self, param_name):
+        if not param_name in self._range_type:
+            raise StandardError('Parameter \'{0}\' not found in coverage'.format(param_name))
+
+        return self._range_type[param_name]
 
     def info(self):
         lst = []
@@ -245,9 +253,9 @@ class SimplexCoverage(AbstractCoverage):
         lst.append('{0}'.format(self.spatial_domain.__str__(indent*2)))
 
         lst.append('Parameters:')
-        for x in self.range_:
-            lst.append('{0}{1} {2}'.format(indent*2,x,self.range_[x].shape))
-            lst.append('{0}'.format(self.range_type[x].__str__(indent*4)))
+        for x in self._range:
+            lst.append('{0}{1} {2}'.format(indent*2,x,self._range[x].shape))
+            lst.append('{0}'.format(self._range_type[x].__str__(indent*4)))
 
         return '\n'.join(lst)
 
