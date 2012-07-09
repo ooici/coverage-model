@@ -48,13 +48,14 @@ class ParameterContext(AbstractIdentifiable):
     """
 
     """
-    def __init__(self, name, is_coord=False, param_type=None, fill_value=None, axis=None):
+    def __init__(self, name, is_coord=False, param_type=None, axis=None, fill_value=None, uom=None):
         AbstractIdentifiable.__init__(self)
         self.name = name
         self.is_coord = is_coord
         self.param_type = param_type or AbstractParameterType()
-        self.fill_value = fill_value or -999
         self.axis = axis or None
+        self.fill_value = fill_value or -999
+        self.uom = uom or 'unspecified'
 
     def __str__(self, indent=None):
         indent = indent or ' '
@@ -65,6 +66,7 @@ class ParameterContext(AbstractIdentifiable):
             lst.append('{0}Is Coordinate: {1}'.format(indent, AxisTypeEnum._str_map[self.axis]))
         lst.append('{0}Type: {1}'.format(indent, self.param_type))
         lst.append('{0}Fill Value: {1}'.format(indent, self.fill_value))
+        lst.append('{0}Unit of Measure: {1}'.format(indent, self.uom))
 
         return '\n'.join(lst)
 

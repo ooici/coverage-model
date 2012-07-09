@@ -55,12 +55,15 @@ Setup a virtualenv to run coverage-model (use any name you like):
     mkvirtualenv --python=python2.7 coverage_model
 
 Use pip to install numpy, netCDF4, and ipython:
-*Note - numpy can be finicky, needs to be installed 'by itself'*
+*Note - numpy can be finicky, needs to be installed 'by itself' (on its own line)*
 
     pip install numpy
     pip install netCDF4
     pip install ipython
 
+***Optional:** To run any of the example functions that result in graphical output, you must also install matplotlib*
+
+    pip install matplotlib
 
 #Source
 

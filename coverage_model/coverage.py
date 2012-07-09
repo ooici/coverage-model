@@ -23,9 +23,9 @@
 #
 # parameters can be implicitly aligned to cell array
 
-# TODO: All implementation is 'pre-prototype' - only intended to flesh out the API
+# TODO: All implementation is 'pre-alpha' - intended primarily to flesh out the API (though some may stick around)
 
-#CBM:TODO: Add type checking throughout all classes as determined appropriate, ala:
+#CBM:TODO: Add type checking throughout all classes as determined appropriate, a la:
 #@property
 #def spatial_domain(self):
 #    return self.__spatial_domain
@@ -51,6 +51,42 @@ class AbstractCoverage(AbstractIdentifiable):
     """
     def __init__(self):
         AbstractIdentifiable.__init__(self)
+
+
+    @classmethod
+    def save(cls, cov_obj, file_path, use_ascii=False):
+        if not isinstance(cov_obj, AbstractCoverage):
+            raise StandardError('cov_obj must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(cov_obj)))
+
+        with open(file_path, 'w') as f:
+            pickle.dump(cov_obj, f, 0 if use_ascii else 2)
+
+        print 'Saved coverage_model to \'{0}\''.format(file_path)
+
+    @classmethod
+    def load(cls, file_path):
+        with open(file_path, 'r') as f:
+            obj = pickle.load(f)
+
+        if not isinstance(obj, AbstractCoverage):
+            raise StandardError('loaded object must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(obj)))
+
+        print 'Loaded coverage_model from {0}'.format(file_path)
+        return obj
+
+    @classmethod
+    def copy(cls, cov_obj, *args):
+        if not isinstance(cov_obj, AbstractCoverage):
+            raise StandardError('cov_obj must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(cov_obj)))
+
+        # Args need to have 1-n (ParameterContext, DomainOfApplication,) tuples
+        # Need to pull the range_dictionary, spatial_domain and temporal_domain from cov_obj (TODO: copies!!)
+        # DOA's and PC's used to copy data - TODO: Need way of reshaping PC's?
+        # NTK:
+        ccov = SimplexCoverage(name='', range_dictionary=None, spatial_domain=None, temporal_domain=None)
+
+        return ccov
+
 
 class ViewCoverage(AbstractCoverage):
     # TODO: Implement
@@ -89,23 +125,6 @@ class SimplexCoverage(AbstractCoverage):
         self._pcmap = {}
         self._temporal_param_name = None
 
-    @classmethod
-    def save(cls, cov_obj, file_path, use_ascii=False):
-        if not isinstance(cov_obj, AbstractCoverage):
-            raise StandardError('Object must be an instance or subclass of AbstractCoverage, not {0}'.format(type(cov_obj)))
-        with open(file_path, 'w') as f:
-            pickle.dump(cov_obj, f, 0 if use_ascii else 2)
-
-        print 'Saved coverage_model to \'{0}\''.format(file_path)
-
-    @classmethod
-    def load(cls, file_path):
-        with open(file_path, 'r') as f:
-            obj = pickle.load(f)
-
-        print 'Loaded coverage_model from {0}'.format(file_path)
-        return obj
-
     # TODO: If we are going to call out separate functions for time, we should have a corresponding way to add the temporal parameter
     def append_parameter(self, parameter_context):
         pname = parameter_context.name
@@ -137,13 +156,31 @@ class SimplexCoverage(AbstractCoverage):
         setattr(self.range_, pname, self.range_[pname])
 
     def get_parameter(self, param_name):
-        if param_name in self.range_:
-            return self.range_type[param_name], self.range_[param_name].content
+        # TODO: Shouldn't really do this - better to break the classes in to more modules
+        from coverage_model.parameter import Parameter
+        if param_name in self.range_type:
+            p = Parameter(self.range_type[param_name], self._pcmap[param_name][2], self.range_[param_name])
+            return p
+
+    def list_parameters(self, coords_only=False, data_only=False):
+        if coords_only:
+            lst=[x for x, v in self.range_type.iteritems() if v.is_coord]
+        elif data_only:
+            lst=[x for x, v in self.range_type.iteritems() if not v.is_coord]
+        else:
+            lst=self.range_type.keys()
+        lst.sort()
+        return lst
 
     def insert_timesteps(self, count, origin=None):
         if not origin is None:
             raise SystemError('Only append is currently supported')
 
+        # Expand the shape of the temporal_dimension
+        shp = self.temporal_domain.shape
+        shp.extents[0] += count
+
+        # Expand the temporal dimension of each of the parameters that are temporal TODO: Indicate which are temporal!
         for n in self._pcmap:
             arr = self.range_[n].content
             pc = self.range_type[n]
@@ -187,16 +224,18 @@ class SimplexCoverage(AbstractCoverage):
         print 'temporal doa: {0}'.format(tdoa.slices)
         print 'spatial doa: {0}'.format(sdoa.slices)
 
-        slice_ = [tdoa.slices, sdoa.slices]
+        slice_ = []
+        slice_.extend(tdoa.slices)
+        slice_.extend(sdoa.slices)
 
         print 'Getting slice: {0}'.format(slice_)
 
         return_array = self.range_[param_name][slice_]
         return return_array
 
-    def __str__(self):
-        indent = ' '
+    def info(self):
         lst = []
+        indent = ' '
         lst.append('ID: {0}'.format(self._id))
         lst.append('Name: {0}'.format(self.name))
         lst.append('Temporal Domain:')
@@ -212,6 +251,10 @@ class SimplexCoverage(AbstractCoverage):
 
         return '\n'.join(lst)
 
+    def __str__(self):
+        # CBM: Make this a more concise information block
+        return self.info()
+
 
 #################
 # Range Objects
@@ -221,13 +264,18 @@ class SimplexCoverage(AbstractCoverage):
 
 class DomainOfApplication(object):
 
-    def __init__(self, topoDim, slices):
-        self.topoDim = topoDim
+    def __init__(self, slices, topoDim=None):
+        if slices is None:
+            raise StandardError('\'slices\' cannot be None')
+        self.topoDim = topoDim or 0
+
         if _is_valid_constraint(slices):
-            if not isinstance(slices, slice) and not np.iterable(slices):
+            if not np.iterable(slices):
                 slices = [slices]
 
             self.slices = slices
+        else:
+            raise StandardError('\'slices\' must be either single, tuple, or list of slice or int objects')
 
     def __iter__(self):
         return self.slices.__iter__()
@@ -255,12 +303,7 @@ def _get_valid_DomainOfApplication(v, valid_shape):
             v = [slice(None) for x in valid_shape]
 
     if not isinstance(v, DomainOfApplication):
-        if _is_valid_constraint(v):
-            if not isinstance(v, slice) and not np.iterable(v):
-                v = [v,]
-            v = DomainOfApplication(0, v)
-        else:
-            raise StandardError('value must be either a DomainOfApplication or a single, tuple, or list of slice or int objects')
+        v = DomainOfApplication(v)
 
     return v
 
@@ -623,10 +666,10 @@ class AbstractShape(AbstractIdentifiable):
     """
 
     """
-    def __init__(self, name, extents):
+    def __init__(self, name, extents=None):
         AbstractIdentifiable.__init__(self)
         self.name = name
-        self.extents = extents
+        self.extents = extents or [1]
 
     @property
     def rank(self):
@@ -646,7 +689,7 @@ class GridShape(AbstractShape):
     """
 
     """
-    def __init__(self, name, extents):
+    def __init__(self, name, extents=None):
         AbstractShape.__init__(self, name, extents)
 
     #CBM: Make extents type-safe

@@ -24,7 +24,7 @@ def ncgrid2cov(save_coverage=True):
     tcrs = CRS([AxisTypeEnum.TIME])
     scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT, AxisTypeEnum.HEIGHT])
 
-    tdom = GridDomain(GridShape('temporal', [1]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    tdom = GridDomain(GridShape('temporal'), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
     sdom = GridDomain(GridShape('spatial', [34,57,89]), scrs, MutabilityEnum.IMMUTABLE) # 3d spatial topology (grid)
 
     scov = SimplexCoverage('sample grid coverage_model', rdict, sdom, tdom)
@@ -39,7 +39,16 @@ def ncgrid2cov(save_coverage=True):
         is_time = v is 'time'
         is_coord = v in rdict.items['coords']
 
+        var = ds.variables[v]
+
         pcontext = ParameterContext(v, is_coord=is_coord, param_type=ds.variables[v].dtype.type)
+        if 'units' in var.ncattrs():
+            pcontext.uom = var.getncattr('units')
+        if 'long_name' in var.ncattrs():
+            pcontext.description = var.getncattr('long_name')
+        if '_FillValue' in var.ncattrs():
+            pcontext.fill_value = var.getncattr('_FillValue')
+
         if is_coord:
             if v is 'time':
                 pcontext.axis = AxisTypeEnum.TIME
@@ -109,7 +118,16 @@ def ncstation2cov(save_coverage=True):
         is_time = v is 'time'
         is_coord = v in rdict.items['coords']
 
-        pcontext = ParameterContext(v, is_coord=is_coord, param_type=ds.variables[v].dtype.type)
+        var = ds.variables[v]
+
+        pcontext = ParameterContext(v, is_coord=is_coord, param_type=var.dtype.type)
+        if 'units' in var.ncattrs():
+            pcontext.uom = var.getncattr('units')
+        if 'long_name' in var.ncattrs():
+            pcontext.description = var.getncattr('long_name')
+        if '_FillValue' in var.ncattrs():
+            pcontext.fill_value = var.getncattr('_FillValue')
+
         if is_coord:
             if v is 'time':
                 pcontext.axis = AxisTypeEnum.TIME
@@ -130,6 +148,8 @@ def ncstation2cov(save_coverage=True):
     for v in all:
         var = ds.variables[v]
         var.set_auto_maskandscale(False)
+        # Look for fill_value attr
+
         arr = var[:]
 #        print 'variable = \'{2}\' coverage_model range shape: {0}  array shape: {1}'.format(scov.range_[v].shape, arr.shape, v)
 
@@ -184,17 +204,100 @@ def direct_read_write():
 def methodized_read_write():
     from coverage_model.test.examples import SimplexCoverage
     import numpy as np
+    import os
+
+    print '============ Station ============'
+    pth = 'test_data/usgs.cov'
+    if not os.path.exists(pth):
+        raise SystemError('Cannot proceed, \'{0}\' file must exist.  Run the \'ncstation2cov()\' function to generate the file.'.format(pth))
+
+    cov=SimplexCoverage.load(pth)
+    ra=np.zeros([0])
+    print '\n>> All data for first timestep\n'
+    print cov.get_parameter_values('water_temperature',0,None,ra)
+    print '\n>> All data\n'
+    print cov.get_parameter_values('water_temperature',None,None,None)
+    print '\n>> All data for second, fifth and sixth timesteps\n'
+    print cov.get_parameter_values('water_temperature',[[1,4,5]],None,None)
+    print '\n>> First datapoint (in x) for every 5th timestep\n'
+    print cov.get_parameter_values('water_temperature',slice(0,None,5),0,None)
+    print '\n>> First datapoint for first 10 timesteps, passing DOA objects\n'
+    tdoa = DomainOfApplication(slice(0,10))
+    sdoa = DomainOfApplication(0)
+    print cov.get_parameter_values('water_temperature',tdoa,sdoa,None)
+
+
+    print '\n============ Grid ============'
+    pth = 'test_data/ncom.cov'
+    if not os.path.exists(pth):
+        raise SystemError('Cannot proceed, \'{0}\' file must exist.  Run the \'ncstation2cov()\' function to generate the file.'.format(pth))
+
+    cov=SimplexCoverage.load(pth)
+    ra=np.zeros([0])
+    print '\n>> All data for first timestep\n'
+    print cov.get_parameter_values('water_temp',0,None,ra)
+    print '\n>> All data\n'
+    print cov.get_parameter_values('water_temp',None,None,None)
+    print '\n>> All data for first, fourth, and fifth timesteps\n'
+    print cov.get_parameter_values('water_temp',[[0,3,4]],None,None)
+    print '\n>> Data from z=0, y=10, x=10 for every 2nd timestep\n'
+    print cov.get_parameter_values('water_temp',slice(0,None,2),[0,10,10],None)
+    print '\n>> Data from z=0-10, y=10, x=10 for the first 2 timesteps, passing DOA objects\n'
+    tdoa = DomainOfApplication(slice(0,2))
+    sdoa = DomainOfApplication([slice(0,10),10,10])
+    print cov.get_parameter_values('water_temp',tdoa,sdoa,None)
+
+
+def test_plot_1():
+    from coverage_model.test.examples import SimplexCoverage
+    import matplotlib.pyplot as plt
 
     cov=SimplexCoverage.load('test_data/usgs.cov')
-    ra=np.zeros([0])
-    cov.get_parameter_values('water_temperature',slice(None),slice(None),ra)
-    cov.get_parameter_values('water_temperature',None,None,None)
-    cov.get_parameter_values('water_temperature',[1,4,5],None,None)
-    cov.get_parameter_values('water_temperature',slice(0,None,5),None,None)
-    tdoa = DomainOfApplication(0,slice(0,10))
-    sdoa = DomainOfApplication(0,slice(None))
-    cov.get_parameter_values('water_temperature',tdoa,sdoa,None)
 
+    print 'Plot the \'water_temperature\' and \'streamflow\' for all times'
+    wtemp = cov.get_parameter_values('water_temperature')
+    wtemp_pc = cov.range_type['water_temperature']
+    sflow = cov.get_parameter_values('streamflow')
+    sflow_pc = cov.range_type['streamflow']
+    times = cov.get_parameter_values('time')
+    time_pc = cov.range_type['time']
+
+    fig = plt.figure()
+    ax1 = fig.add_subplot(2,1,1)
+    ax1.plot(times,wtemp)
+    ax1.set_xlabel('{0} ({1})'.format(time_pc.name, time_pc.uom))
+    ax1.set_ylabel('{0} ({1})'.format(wtemp_pc.name, wtemp_pc.uom))
+
+    ax2 = fig.add_subplot(2,1,2)
+    ax2.plot(times,sflow)
+    ax2.set_xlabel('{0} ({1})'.format(time_pc.name, time_pc.uom))
+    ax2.set_ylabel('{0} ({1})'.format(sflow_pc.name, sflow_pc.uom))
+
+    plt.show(0)
+
+def test_plot_2():
+    from coverage_model.test.examples import SimplexCoverage
+    import matplotlib.pyplot as plt
+
+    cov=SimplexCoverage.load('test_data/usgs.cov')
+
+    print 'Plot the \'water_temperature\' and \'streamflow\' for all times'
+    wtemp_param = cov.get_parameter('water_temperature')
+    sflow_param = cov.get_parameter('streamflow')
+    time_param = cov.get_parameter('time')
+
+    fig = plt.figure()
+    ax1 = fig.add_subplot(2,1,1)
+    ax1.plot(time_param.value[:],wtemp_param.value[:])
+    ax1.set_xlabel('{0} ({1})'.format(time_param.name, time_param.context.uom))
+    ax1.set_ylabel('{0} ({1})'.format(wtemp_param.name, wtemp_param.context.uom))
+
+    ax2 = fig.add_subplot(2,1,2)
+    ax2.plot(time_param.value[:],sflow_param.value[:])
+    ax2.set_xlabel('{0} ({1})'.format(time_param.name, time_param.context.uom))
+    ax2.set_ylabel('{0} ({1})'.format(sflow_param.name, sflow_param.context.uom))
+
+    plt.show(0)
 
 # Based on scitools meshgrid
 def my_meshgrid(*xi, **kwargs):
@@ -327,16 +430,16 @@ def my_meshgrid(*xi, **kwargs):
 
 
 if __name__ == "__main__":
-    scov, _ = ncstation2cov(False)
-    print scov
+#    scov, _ = ncstation2cov()
+#    print scov
+#
+#    print '\n=======\n'
+#
+#    gcov, _ = ncgrid2cov()
+#    print gcov
 
-    print '\n=======\n'
-
-    gcov, _ = ncgrid2cov(False)
-    print gcov
-
-    #    direct_read_write()
-    #    methodized_read_write()
+#    direct_read_write()
+    methodized_read_write()
 
 #    from coverage_model.coverage_model import AxisTypeEnum
 #    axis = 'TIME'
