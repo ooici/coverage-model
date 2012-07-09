@@ -61,7 +61,7 @@ Use pip to install numpy, netCDF4, and ipython:
     pip install netCDF4
     pip install ipython
 
-***Optional:** To run any of the example functions that result in graphical output, you must also install matplotlib*
+**Optional:** *To run any of the example functions that result in graphical output, you must also install matplotlib*
 
     pip install matplotlib
 
