@@ -24,6 +24,7 @@ class AbstractBase(object):
         self.extension = {}
 
 class AbstractIdentifiable(AbstractBase):
+    # TODO: Need to decide if identity is assigned on creation or on demand (when asked for)
     """
 
     """

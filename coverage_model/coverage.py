@@ -125,7 +125,6 @@ class SimplexCoverage(AbstractCoverage):
         self._pcmap = {}
         self._temporal_param_name = None
 
-    # TODO: If we are going to call out separate functions for time, we should have a corresponding way to add the temporal parameter
     def append_parameter(self, parameter_context):
         pname = parameter_context.name
 

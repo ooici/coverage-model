@@ -45,6 +45,7 @@ class Parameter(AbstractIdentifiable):
 
 
 class ParameterContext(AbstractIdentifiable):
+    # TODO: Need to incorporate some indication of if the parameter is a function of temporal, spatial, both, or None
     """
 
     """
