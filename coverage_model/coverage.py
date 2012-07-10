@@ -79,7 +79,7 @@ class AbstractCoverage(AbstractIdentifiable):
         if not isinstance(cov_obj, AbstractCoverage):
             raise StandardError('cov_obj must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(cov_obj)))
 
-        # Args need to have 1-n (ParameterContext, DomainOfApplication,) tuples
+        # Args need to have 1-n (ParameterContext, DomainOfApplication, DomainOfApplication,) tuples
         # Need to pull the range_dictionary, spatial_domain and temporal_domain from cov_obj (TODO: copies!!)
         # DOA's and PC's used to copy data - TODO: Need way of reshaping PC's?
         # NTK:
@@ -155,7 +155,7 @@ class SimplexCoverage(AbstractCoverage):
         setattr(self._range, pname, self._range[pname])
 
     def get_parameter(self, param_name):
-        # TODO: Shouldn't really do this - better to break the classes in to more modules
+        # TODO: Shouldn't really import this way - better to break the classes in to more modules
         from coverage_model.parameter import Parameter
         if param_name in self._range_type:
             p = Parameter(self._range_type[param_name], self._pcmap[param_name][2], self._range[param_name])
@@ -191,10 +191,10 @@ class SimplexCoverage(AbstractCoverage):
     def set_time_values(self, tdoa, values):
         return self.set_parameter_values(self._temporal_param_name, tdoa, None, values)
 
-    def get_time_values(self, tdoa=None, return_array=None):
-        return self.get_parameter_values(self._temporal_param_name, tdoa, None, return_array)
+    def get_time_values(self, tdoa=None, return_value=None):
+        return self.get_parameter_values(self._temporal_param_name, tdoa, None, return_value)
 
-    def set_parameter_values(self, param_name, tdoa, sdoa, values):
+    def set_parameter_values(self, param_name, tdoa=None, sdoa=None, value=None):
         if not param_name in self._range:
             raise StandardError('Parameter \'{0}\' not found in coverage_model'.format(param_name))
 
@@ -211,13 +211,13 @@ class SimplexCoverage(AbstractCoverage):
         print 'Setting slice: {0}'.format(slice_)
 
         #TODO: Do we need some validation that slice_ is the same rank and/or shape as values?
-        self._range[param_name][slice_] = values
+        self._range[param_name][slice_] = value
 
-    def get_parameter_values(self, param_name, tdoa=None, sdoa=None, return_array=None):
+    def get_parameter_values(self, param_name, tdoa=None, sdoa=None, return_value=None):
         if not param_name in self._range:
             raise StandardError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
-        return_array = return_array or np.zeros([0])
+        return_value = return_value or np.zeros([0])
 
         tdoa = _get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
         sdoa = _get_valid_DomainOfApplication(sdoa, self.spatial_domain.shape.extents)
@@ -231,8 +231,8 @@ class SimplexCoverage(AbstractCoverage):
 
         print 'Getting slice: {0}'.format(slice_)
 
-        return_array = self._range[param_name][slice_]
-        return return_array
+        return_value = self._range[param_name][slice_]
+        return return_value
 
     def get_parameter_context(self, param_name):
         if not param_name in self._range_type:

@@ -167,23 +167,23 @@ def direct_read():
     shp = scov._range.streamflow.shape
 
     print '<========= Query =========>'
+    print '\n>> All data for first timestep\n'
     slice_ = 0
     print 'sflow <shape {0}> sliced with: {1}'.format(shp,slice_)
     print scov._range['streamflow'][slice_]
 
+    print '\n>> All data\n'
+    slice_ = (slice(None))
+    print 'sflow <shape {0}> sliced with: {1}'.format(shp,slice_)
+    print scov._range['streamflow'][slice_]
+
+    print '\n>> All data for every other timestep from 0 to 10\n'
     slice_ = (slice(0,10,2))
     print 'sflow <shape {0}> sliced with: {1}'.format(shp,slice_)
     print scov._range['streamflow'][slice_]
 
-    slice_ = (slice(0,10,2))
-    print 'sflow <shape {0}> sliced with: {1}'.format(shp,slice_)
-    print scov._range['streamflow'][slice_]
-
-    slice_ = (0,)
-    print 'sflow <shape {0}> sliced with: {1}'.format(shp,slice_)
-    print scov._range['streamflow'][slice_]
-
-    slice_ = [[(1,5,7,)]]
+    print '\n>> All data for first, sixth, eighth, thirteenth, and fifty-sixth timesteps\n'
+    slice_ = [[(0,5,7,12,55)]]
     print 'sflow <shape {0}> sliced with: {1}'.format(shp,slice_)
     print scov._range['streamflow'][slice_]
 
@@ -231,7 +231,6 @@ def methodized_read():
     sdoa = DomainOfApplication(0)
     print cov.get_parameter_values('water_temperature',tdoa,sdoa,None)
 
-
     print '\n============ Grid ============'
     pth = 'test_data/ncom.cov'
     if not os.path.exists(pth):
@@ -253,7 +252,23 @@ def methodized_read():
     print cov.get_parameter_values('water_temp',tdoa,sdoa,None)
 
 def methodized_write():
-    raise NotImplementedError('Example not yet implemented')
+    scov, ds = ncstation2cov()
+    shp = scov._range.streamflow.shape
+
+    print '<========= Assignment =========>'
+
+    slice_ = (slice(None))
+    value = 22
+    print 'sflow <shape {0}> assigned with slice: {1} and value: {2}'.format(shp,slice_,value)
+    scov.set_parameter_values('streamflow',tdoa=slice_,value=value)
+
+    slice_ = [[(1,5,7,)]]
+    value = [10, 20, 30]
+    print 'sflow <shape {0}> assigned with slice: {1} and value: {2}'.format(shp,slice_,value)
+    scov.set_parameter_values('streamflow',tdoa=slice_,value=value)
+
+
+#    raise NotImplementedError('Example not yet implemented')
 
 def test_plot_1():
     from coverage_model.test.examples import SimplexCoverage
