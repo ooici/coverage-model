@@ -9,7 +9,7 @@
 
 from netCDF4 import Dataset
 from coverage_model.coverage import *
-from coverage_model.parameter import *
+from coverage_model.parameter_types import *
 import numpy as np
 
 def ncgrid2cov(save_coverage=True):
@@ -70,20 +70,20 @@ def ncgrid2cov(save_coverage=True):
         var = ds.variables[v]
         var.set_auto_maskandscale(False)
         arr = var[:]
-#        print 'variable = \'{2}\' coverage_model range shape: {0}  array shape: {1}'.format(scov._range[v].shape, arr.shape, v)
+#        print 'variable = \'{2}\' coverage_model range shape: {0}  array shape: {1}'.format(scov._range_value_value[v].shape, arr.shape, v)
 
         # TODO: Sort out how to leave these sparse internally and only broadcast during read
         if v is 'depth':
             z,_,_ = my_meshgrid(arr,np.zeros([57]),np.zeros([89]),indexing='ij',sparse=True)
-            scov._range[v][:] = z
+            scov._range_value[v][:] = z
         elif v is 'lat':
             _,y,_ = my_meshgrid(np.zeros([34]),arr,np.zeros([89]),indexing='ij',sparse=True)
-            scov._range[v][:] = y
+            scov._range_value[v][:] = y
         elif v is 'lon':
             _,_,x = my_meshgrid(np.zeros([34]),np.zeros([57]),arr,indexing='ij',sparse=True)
-            scov._range[v][:] = x
+            scov._range_value[v][:] = x
         else:
-            scov._range[v][:] = var[:]
+            scov._range_value[v][:] = var[:]
 
     if save_coverage:
         SimplexCoverage.save(scov, 'test_data/ncom.cov')
@@ -151,10 +151,10 @@ def ncstation2cov(save_coverage=True):
         # Look for fill_value attr
 
         arr = var[:]
-#        print 'variable = \'{2}\' coverage_model range shape: {0}  array shape: {1}'.format(scov._range[v].shape, arr.shape, v)
+#        print 'variable = \'{2}\' coverage_model range shape: {0}  array shape: {1}'.format(scov._range_value_value[v].shape, arr.shape, v)
 
         # TODO: Sort out how to leave the coordinates sparse internally and only broadcast during read
-        scov._range[v][:] = var[:]
+        scov._range_value[v][:] = var[:]
 
     if save_coverage:
         SimplexCoverage.save(scov, 'test_data/usgs.cov')
@@ -164,47 +164,47 @@ def ncstation2cov(save_coverage=True):
 
 def direct_read():
     scov, ds = ncstation2cov()
-    shp = scov._range.streamflow.shape
+    shp = scov._range_value.streamflow.shape
 
     print '<========= Query =========>'
     print '\n>> All data for first timestep\n'
     slice_ = 0
     print 'sflow <shape {0}> sliced with: {1}'.format(shp,slice_)
-    print scov._range['streamflow'][slice_]
+    print scov._range_value['streamflow'][slice_]
 
     print '\n>> All data\n'
     slice_ = (slice(None))
     print 'sflow <shape {0}> sliced with: {1}'.format(shp,slice_)
-    print scov._range['streamflow'][slice_]
+    print scov._range_value['streamflow'][slice_]
 
     print '\n>> All data for every other timestep from 0 to 10\n'
     slice_ = (slice(0,10,2))
     print 'sflow <shape {0}> sliced with: {1}'.format(shp,slice_)
-    print scov._range['streamflow'][slice_]
+    print scov._range_value['streamflow'][slice_]
 
     print '\n>> All data for first, sixth, eighth, thirteenth, and fifty-sixth timesteps\n'
     slice_ = [[(0,5,7,12,55)]]
     print 'sflow <shape {0}> sliced with: {1}'.format(shp,slice_)
-    print scov._range['streamflow'][slice_]
+    print scov._range_value['streamflow'][slice_]
 
 
 def direct_write():
     scov, ds = ncstation2cov()
-    shp = scov._range.streamflow.shape
+    shp = scov._range_value.streamflow.shape
 
     print '<========= Assignment =========>'
 
     slice_ = (slice(None))
     value = 22
     print 'sflow <shape {0}> assigned with slice: {1} and value: {2}'.format(shp,slice_,value)
-    scov._range['streamflow'][slice_] = value
-    print scov._range['streamflow'][slice_]
+    scov._range_value['streamflow'][slice_] = value
+    print scov._range_value['streamflow'][slice_]
 
     slice_ = [[(1,5,7,)]]
     value = [10, 20, 30]
     print 'sflow <shape {0}> assigned with slice: {1} and value: {2}'.format(shp,slice_,value)
-    scov._range['streamflow'][slice_] = value
-    print scov._range['streamflow'][slice_]
+    scov._range_value['streamflow'][slice_] = value
+    print scov._range_value['streamflow'][slice_]
 
 def methodized_read():
     from coverage_model.test.examples import SimplexCoverage
@@ -253,7 +253,7 @@ def methodized_read():
 
 def methodized_write():
     scov, ds = ncstation2cov()
-    shp = scov._range.streamflow.shape
+    shp = scov._range_value.streamflow.shape
 
     print '<========= Assignment =========>'
 
