@@ -88,7 +88,7 @@ def ncgrid2cov(save_coverage=True):
     if save_coverage:
         SimplexCoverage.save(scov, 'test_data/ncom.cov')
 
-    return scov, ds
+    return scov
 
 def ncstation2cov(save_coverage=True):
     ds = Dataset('test_data/usgs.nc')
@@ -115,7 +115,6 @@ def ncstation2cov(save_coverage=True):
 
     # Iterate over the vars and add them to the coverage_model
     for v in all:
-        is_time = v is 'time'
         is_coord = v in rdict.items['coords']
 
         var = ds.variables[v]
@@ -150,7 +149,7 @@ def ncstation2cov(save_coverage=True):
         var.set_auto_maskandscale(False)
         # Look for fill_value attr
 
-        arr = var[:]
+#        arr = var[:]
 #        print 'variable = \'{2}\' coverage_model range shape: {0}  array shape: {1}'.format(scov._range_value_value[v].shape, arr.shape, v)
 
         # TODO: Sort out how to leave the coordinates sparse internally and only broadcast during read
@@ -159,8 +158,7 @@ def ncstation2cov(save_coverage=True):
     if save_coverage:
         SimplexCoverage.save(scov, 'test_data/usgs.cov')
 
-    return scov, ds
-
+    return scov
 
 def direct_read():
     scov, ds = ncstation2cov()
@@ -186,7 +184,6 @@ def direct_read():
     slice_ = [[(0,5,7,12,55)]]
     print 'sflow <shape {0}> sliced with: {1}'.format(shp,slice_)
     print scov._range_value['streamflow'][slice_]
-
 
 def direct_write():
     scov, ds = ncstation2cov()

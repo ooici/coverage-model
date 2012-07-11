@@ -220,14 +220,14 @@ class SimplexCoverage(AbstractCoverage):
         tdoa = _get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
         sdoa = _get_valid_DomainOfApplication(sdoa, self.spatial_domain.shape.extents)
 
-        print 'temporal doa: {0}'.format(tdoa.slices)
-        print 'spatial doa: {0}'.format(sdoa.slices)
+#        print 'temporal doa: {0}'.format(tdoa.slices)
+#        print 'spatial doa: {0}'.format(sdoa.slices)
 
         slice_ = []
         slice_.extend(tdoa.slices)
         slice_.extend(sdoa.slices)
 
-        print 'Getting slice: {0}'.format(slice_)
+#        print 'Getting slice: {0}'.format(slice_)
 
         return_value = self._range_value[param_name][slice_]
         return return_value
