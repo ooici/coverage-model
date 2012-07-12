@@ -7,6 +7,7 @@
 @brief 
 """
 
+from pyon.public import log
 from netCDF4 import Dataset
 from coverage_model.coverage import *
 from coverage_model.parameter_types import *
@@ -70,7 +71,7 @@ def ncgrid2cov(save_coverage=True):
         var = ds.variables[v]
         var.set_auto_maskandscale(False)
         arr = var[:]
-#        print 'variable = \'{2}\' coverage_model range shape: {0}  array shape: {1}'.format(scov._range_value_value[v].shape, arr.shape, v)
+#        log.debug('variable = \'{2}\' coverage_model range shape: {0}  array shape: {1}'.format(scov._range_value_value[v].shape, arr.shape, v))
 
         # TODO: Sort out how to leave these sparse internally and only broadcast during read
         if v is 'depth':
@@ -150,7 +151,7 @@ def ncstation2cov(save_coverage=True):
         # Look for fill_value attr
 
 #        arr = var[:]
-#        print 'variable = \'{2}\' coverage_model range shape: {0}  array shape: {1}'.format(scov._range_value_value[v].shape, arr.shape, v)
+#        log.debug('variable = \'{2}\' coverage_model range shape: {0}  array shape: {1}'.format(scov._range_value_value[v].shape, arr.shape, v))
 
         # TODO: Sort out how to leave the coordinates sparse internally and only broadcast during read
         scov._range_value[v][:] = var[:]
@@ -164,104 +165,104 @@ def direct_read():
     scov, ds = ncstation2cov()
     shp = scov._range_value.streamflow.shape
 
-    print '<========= Query =========>'
-    print '\n>> All data for first timestep\n'
+    log.debug('<========= Query =========>')
+    log.debug('\n>> All data for first timestep\n')
     slice_ = 0
-    print 'sflow <shape {0}> sliced with: {1}'.format(shp,slice_)
-    print scov._range_value['streamflow'][slice_]
+    log.debug('sflow <shape {0}> sliced with: {1}'.format(shp,slice_))
+    log.debug(scov._range_value['streamflow'][slice_])
 
-    print '\n>> All data\n'
+    log.debug('\n>> All data\n')
     slice_ = (slice(None))
-    print 'sflow <shape {0}> sliced with: {1}'.format(shp,slice_)
-    print scov._range_value['streamflow'][slice_]
+    log.debug('sflow <shape {0}> sliced with: {1}'.format(shp,slice_))
+    log.debug(scov._range_value['streamflow'][slice_])
 
-    print '\n>> All data for every other timestep from 0 to 10\n'
+    log.debug('\n>> All data for every other timestep from 0 to 10\n')
     slice_ = (slice(0,10,2))
-    print 'sflow <shape {0}> sliced with: {1}'.format(shp,slice_)
-    print scov._range_value['streamflow'][slice_]
+    log.debug('sflow <shape {0}> sliced with: {1}'.format(shp,slice_))
+    log.debug(scov._range_value['streamflow'][slice_])
 
-    print '\n>> All data for first, sixth, eighth, thirteenth, and fifty-sixth timesteps\n'
+    log.debug('\n>> All data for first, sixth, eighth, thirteenth, and fifty-sixth timesteps\n')
     slice_ = [[(0,5,7,12,55)]]
-    print 'sflow <shape {0}> sliced with: {1}'.format(shp,slice_)
-    print scov._range_value['streamflow'][slice_]
+    log.debug('sflow <shape {0}> sliced with: {1}'.format(shp,slice_))
+    log.debug(scov._range_value['streamflow'][slice_])
 
 def direct_write():
     scov, ds = ncstation2cov()
     shp = scov._range_value.streamflow.shape
 
-    print '<========= Assignment =========>'
+    log.debug('<========= Assignment =========>')
 
     slice_ = (slice(None))
     value = 22
-    print 'sflow <shape {0}> assigned with slice: {1} and value: {2}'.format(shp,slice_,value)
+    log.debug('sflow <shape {0}> assigned with slice: {1} and value: {2}'.format(shp,slice_,value))
     scov._range_value['streamflow'][slice_] = value
-    print scov._range_value['streamflow'][slice_]
+    log.debug(scov._range_value['streamflow'][slice_])
 
     slice_ = [[(1,5,7,)]]
     value = [10, 20, 30]
-    print 'sflow <shape {0}> assigned with slice: {1} and value: {2}'.format(shp,slice_,value)
+    log.debug('sflow <shape {0}> assigned with slice: {1} and value: {2}'.format(shp,slice_,value))
     scov._range_value['streamflow'][slice_] = value
-    print scov._range_value['streamflow'][slice_]
+    log.debug(scov._range_value['streamflow'][slice_])
 
 def methodized_read():
     from coverage_model.test.examples import SimplexCoverage
     import numpy as np
     import os
 
-    print '============ Station ============'
+    log.debug('============ Station ============')
     pth = 'test_data/usgs.cov'
     if not os.path.exists(pth):
         raise SystemError('Cannot proceed, \'{0}\' file must exist.  Run the \'ncstation2cov()\' function to generate the file.'.format(pth))
 
     cov=SimplexCoverage.load(pth)
     ra=np.zeros([0])
-    print '\n>> All data for first timestep\n'
-    print cov.get_parameter_values('water_temperature',0,None,ra)
-    print '\n>> All data\n'
-    print cov.get_parameter_values('water_temperature',None,None,None)
-    print '\n>> All data for second, fifth and sixth timesteps\n'
-    print cov.get_parameter_values('water_temperature',[[1,4,5]],None,None)
-    print '\n>> First datapoint (in x) for every 5th timestep\n'
-    print cov.get_parameter_values('water_temperature',slice(0,None,5),0,None)
-    print '\n>> First datapoint for first 10 timesteps, passing DOA objects\n'
+    log.debug('\n>> All data for first timestep\n')
+    log.debug(cov.get_parameter_values('water_temperature',0,None,ra))
+    log.debug('\n>> All data\n')
+    log.debug(cov.get_parameter_values('water_temperature',None,None,None))
+    log.debug('\n>> All data for second, fifth and sixth timesteps\n')
+    log.debug(cov.get_parameter_values('water_temperature',[[1,4,5]],None,None))
+    log.debug('\n>> First datapoint (in x) for every 5th timestep\n')
+    log.debug(cov.get_parameter_values('water_temperature',slice(0,None,5),0,None))
+    log.debug('\n>> First datapoint for first 10 timesteps, passing DOA objects\n')
     tdoa = DomainOfApplication(slice(0,10))
     sdoa = DomainOfApplication(0)
-    print cov.get_parameter_values('water_temperature',tdoa,sdoa,None)
+    log.debug(cov.get_parameter_values('water_temperature',tdoa,sdoa,None))
 
-    print '\n============ Grid ============'
+    log.debug('\n============ Grid ============')
     pth = 'test_data/ncom.cov'
     if not os.path.exists(pth):
         raise SystemError('Cannot proceed, \'{0}\' file must exist.  Run the \'ncstation2cov()\' function to generate the file.'.format(pth))
 
     cov=SimplexCoverage.load(pth)
     ra=np.zeros([0])
-    print '\n>> All data for first timestep\n'
-    print cov.get_parameter_values('water_temp',0,None,ra)
-    print '\n>> All data\n'
-    print cov.get_parameter_values('water_temp',None,None,None)
-    print '\n>> All data for first, fourth, and fifth timesteps\n'
-    print cov.get_parameter_values('water_temp',[[0,3,4]],None,None)
-    print '\n>> Data from z=0, y=10, x=10 for every 2nd timestep\n'
-    print cov.get_parameter_values('water_temp',slice(0,None,2),[0,10,10],None)
-    print '\n>> Data from z=0-10, y=10, x=10 for the first 2 timesteps, passing DOA objects\n'
+    log.debug('\n>> All data for first timestep\n')
+    log.debug(cov.get_parameter_values('water_temp',0,None,ra))
+    log.debug('\n>> All data\n')
+    log.debug(cov.get_parameter_values('water_temp',None,None,None))
+    log.debug('\n>> All data for first, fourth, and fifth timesteps\n')
+    log.debug(cov.get_parameter_values('water_temp',[[0,3,4]],None,None))
+    log.debug('\n>> Data from z=0, y=10, x=10 for every 2nd timestep\n')
+    log.debug(cov.get_parameter_values('water_temp',slice(0,None,2),[0,10,10],None))
+    log.debug('\n>> Data from z=0-10, y=10, x=10 for the first 2 timesteps, passing DOA objects\n')
     tdoa = DomainOfApplication(slice(0,2))
     sdoa = DomainOfApplication([slice(0,10),10,10])
-    print cov.get_parameter_values('water_temp',tdoa,sdoa,None)
+    log.debug(cov.get_parameter_values('water_temp',tdoa,sdoa,None))
 
 def methodized_write():
     scov, ds = ncstation2cov()
     shp = scov._range_value.streamflow.shape
 
-    print '<========= Assignment =========>'
+    log.debug('<========= Assignment =========>')
 
     slice_ = (slice(None))
     value = 22
-    print 'sflow <shape {0}> assigned with slice: {1} and value: {2}'.format(shp,slice_,value)
+    log.debug('sflow <shape {0}> assigned with slice: {1} and value: {2}'.format(shp,slice_,value))
     scov.set_parameter_values('streamflow',tdoa=slice_,value=value)
 
     slice_ = [[(1,5,7,)]]
     value = [10, 20, 30]
-    print 'sflow <shape {0}> assigned with slice: {1} and value: {2}'.format(shp,slice_,value)
+    log.debug('sflow <shape {0}> assigned with slice: {1} and value: {2}'.format(shp,slice_,value))
     scov.set_parameter_values('streamflow',tdoa=slice_,value=value)
 
 
@@ -273,7 +274,7 @@ def test_plot_1():
 
     cov=SimplexCoverage.load('test_data/usgs.cov')
 
-    print 'Plot the \'water_temperature\' and \'streamflow\' for all times'
+    log.debug('Plot the \'water_temperature\' and \'streamflow\' for all times')
     wtemp = cov.get_parameter_values('water_temperature')
     wtemp_pc = cov.get_parameter_context('water_temperature')
     sflow = cov.get_parameter_values('streamflow')
@@ -300,7 +301,7 @@ def test_plot_2():
 
     cov=SimplexCoverage.load('test_data/usgs.cov')
 
-    print 'Plot the \'water_temperature\' and \'streamflow\' for all times'
+    log.debug('Plot the \'water_temperature\' and \'streamflow\' for all times')
     wtemp_param = cov.get_parameter('water_temperature')
     sflow_param = cov.get_parameter('streamflow')
     time_param = cov.get_parameter('time')
@@ -450,19 +451,19 @@ def my_meshgrid(*xi, **kwargs):
 
 if __name__ == "__main__":
 #    scov, _ = ncstation2cov()
-#    print scov
+#    log.debug(scov)
 #
-#    print '\n=======\n'
+#    log.debug('\n=======\n')
 #
 #    gcov, _ = ncgrid2cov()
-#    print gcov
+#    log.debug(gcov)
 
 #    direct_read_write()
     methodized_read()
 
 #    from coverage_model.coverage_model import AxisTypeEnum
 #    axis = 'TIME'
-#    print axis == AxisTypeEnum.TIME
+#    log.debug(axis == AxisTypeEnum.TIME)
 
     pass
 

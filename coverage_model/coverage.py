@@ -35,6 +35,8 @@
 #    if isinstance(value, AbstractDomain):
 #        self.__spatial_domain = value
 
+from pyon.public import log
+
 from coverage_model.basic_types import *
 import numpy as np
 import pickle
@@ -61,7 +63,7 @@ class AbstractCoverage(AbstractIdentifiable):
         with open(file_path, 'w') as f:
             pickle.dump(cov_obj, f, 0 if use_ascii else 2)
 
-        print 'Saved coverage_model to \'{0}\''.format(file_path)
+        log.info('Saved coverage_model to \'{0}\''.format(file_path))
 
     @classmethod
     def load(cls, file_path):
@@ -71,7 +73,7 @@ class AbstractCoverage(AbstractIdentifiable):
         if not isinstance(obj, AbstractCoverage):
             raise StandardError('loaded object must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(obj)))
 
-        print 'Loaded coverage_model from {0}'.format(file_path)
+        log.info('Loaded coverage_model from {0}'.format(file_path))
         return obj
 
     @classmethod
@@ -203,14 +205,14 @@ class SimplexCoverage(AbstractCoverage):
         tdoa = _get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
         sdoa = _get_valid_DomainOfApplication(sdoa, self.spatial_domain.shape.extents)
 
-        print 'temporal doa: {0}'.format(tdoa.slices)
-        print 'spatial doa: {0}'.format(sdoa.slices)
+        log.debug('Temporal doa: {0}'.format(tdoa.slices))
+        log.debug('Spatial doa: {0}'.format(sdoa.slices))
 
         slice_ = []
         slice_.extend(tdoa.slices)
         slice_.extend(sdoa.slices)
 
-        print 'Setting slice: {0}'.format(slice_)
+        log.debug('Setting slice: {0}'.format(slice_))
 
         #TODO: Do we need some validation that slice_ is the same rank and/or shape as values?
         self._range_value[param_name][slice_] = value
@@ -224,14 +226,14 @@ class SimplexCoverage(AbstractCoverage):
         tdoa = _get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
         sdoa = _get_valid_DomainOfApplication(sdoa, self.spatial_domain.shape.extents)
 
-#        print 'temporal doa: {0}'.format(tdoa.slices)
-#        print 'spatial doa: {0}'.format(sdoa.slices)
+        log.debug('Temporal doa: {0}'.format(tdoa.slices))
+        log.debug('Spatial doa: {0}'.format(sdoa.slices))
 
         slice_ = []
         slice_.extend(tdoa.slices)
         slice_.extend(sdoa.slices)
 
-#        print 'Getting slice: {0}'.format(slice_)
+        log.debug('Getting slice: {0}'.format(slice_))
 
         return_value = self._range_value[param_name][slice_]
         return return_value
