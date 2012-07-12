@@ -487,7 +487,7 @@ class Parameter(AbstractIdentifiable):
 
     @property
     def is_coordinate(self):
-        return self.context.is_coord
+        return self.context.is_coordinate
 
 
 
@@ -496,21 +496,24 @@ class ParameterContext(AbstractIdentifiable):
     """
 
     """
-    def __init__(self, name, is_coord=False, param_type=None, axis=None, fill_value=None, uom=None):
+    def __init__(self, name, param_type=None, axis=None, fill_value=None, uom=None):
         AbstractIdentifiable.__init__(self)
         self.name = name
-        self.is_coord = is_coord
         self.param_type = param_type or AbstractParameterType()
         self.axis = axis or None
         self.fill_value = fill_value or -999
         self.uom = uom or 'unspecified'
+
+    @property
+    def is_coordinate(self):
+        return not self.axis is None
 
     def __str__(self, indent=None):
         indent = indent or ' '
         lst = []
         lst.append('{0}ID: {1}'.format(indent, self._id))
         lst.append('{0}Name: {1}'.format(indent, self.name))
-        if self.is_coord:
+        if self.is_coordinate:
             lst.append('{0}Is Coordinate: {1}'.format(indent, AxisTypeEnum._str_map[self.axis]))
         lst.append('{0}Type: {1}'.format(indent, self.param_type))
         lst.append('{0}Fill Value: {1}'.format(indent, self.fill_value))

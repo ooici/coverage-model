@@ -42,7 +42,7 @@ def ncgrid2cov(save_coverage=True):
 
         var = ds.variables[v]
 
-        pcontext = ParameterContext(v, is_coord=is_coord, param_type=ds.variables[v].dtype.type)
+        pcontext = ParameterContext(v, param_type=ds.variables[v].dtype.type)
         if 'units' in var.ncattrs():
             pcontext.uom = var.getncattr('units')
         if 'long_name' in var.ncattrs():
@@ -120,7 +120,7 @@ def ncstation2cov(save_coverage=True):
 
         var = ds.variables[v]
 
-        pcontext = ParameterContext(v, is_coord=is_coord, param_type=var.dtype.type)
+        pcontext = ParameterContext(v, param_type=var.dtype.type)
         if 'units' in var.ncattrs():
             pcontext.uom = var.getncattr('units')
         if 'long_name' in var.ncattrs():
