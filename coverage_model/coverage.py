@@ -192,6 +192,10 @@ class SimplexCoverage(AbstractCoverage):
     def get_time_values(self, tdoa=None, return_value=None):
         return self.get_parameter_values(self._temporal_param_name, tdoa, None, return_value)
 
+    @property
+    def num_timesteps(self):
+        return self.temporal_domain.shape.extents[0]
+
     def set_parameter_values(self, param_name, tdoa=None, sdoa=None, value=None):
         if not param_name in self._range_value:
             raise StandardError('Parameter \'{0}\' not found in coverage_model'.format(param_name))

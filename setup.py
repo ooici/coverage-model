@@ -24,7 +24,13 @@ setup(  name = 'coverage-model',
     author_email = 'cmueller@asascience.com',
     keywords = ['ooici','coverage model'],
     packages = find_packages(),
-    dependency_links = [],
+    dependency_links = [
+        'http://ooici.net/releases',
+        'https://github.com/ooici/pyon/tarball/master#egg=pyon',
+    ],
     test_suite = '',
-    install_requires = [],
+    install_requires = [
+        'pyon',
+        'netCDF4>=0.9.8',
+    ],
 )
