@@ -242,27 +242,32 @@ class SimplexCoverage(AbstractCoverage):
 
         return self._range_context[param_name]
 
+    @property
     def info(self):
         lst = []
         indent = ' '
         lst.append('ID: {0}'.format(self._id))
         lst.append('Name: {0}'.format(self.name))
-        lst.append('Temporal Domain:')
-        lst.append('{0}'.format(self.temporal_domain.__str__(indent*2)))
-
-        lst.append('Spatial Domain:')
-        lst.append('{0}'.format(self.spatial_domain.__str__(indent*2)))
+        lst.append('Temporal Domain:\n{0}'.format(self.temporal_domain.__str__(indent*2)))
+        lst.append('Spatial Domain:\n{0}'.format(self.spatial_domain.__str__(indent*2)))
 
         lst.append('Parameters:')
         for x in self._range_value:
-            lst.append('{0}{1} {2}'.format(indent*2,x,self._range_value[x].shape))
-            lst.append('{0}'.format(self._range_context[x].__str__(indent*4)))
+            lst.append('{0}{1} {2}\n{3}'.format(indent*2,x,self._range_value[x].shape,self._range_context[x].__str__(indent*4)))
 
         return '\n'.join(lst)
 
     def __str__(self):
-        # CBM: Make this a more concise information block
-        return self.info()
+        lst = []
+        indent = ' '
+        lst.append('ID: {0}'.format(self._id))
+        lst.append('Name: {0}'.format(self.name))
+        lst.append('TemporalDomain: Shape=>{0} Axes=>{1}'.format(self.temporal_domain.shape.extents, self.temporal_domain.crs.axes))
+        lst.append('SpatialDomain: Shape=>{0} Axes=>{1}'.format(self.spatial_domain.shape.extents, self.spatial_domain.crs.axes))
+        lst.append('Coordinate Parameters: {0}'.format(self.list_parameters(coords_only=True)))
+        lst.append('Data Parameters: {0}'.format(self.list_parameters(coords_only=False, data_only=True)))
+
+        return '\n'.join(lst)
 
 
 #################
@@ -698,9 +703,8 @@ class AbstractDomain(AbstractIdentifiable):
         indent = indent or ' '
         lst=[]
         lst.append('{0}ID: {1}'.format(indent, self._id))
-        lst.append('{0}Shape: {1}'.format(indent, self.shape.extents))
-        lst.append('{0}CRS:'.format(indent))
-        lst.append('{0}'.format(self.crs.__str__(indent*2)))
+        lst.append('{0}Shape:\n{1}'.format(indent, self.shape.__str__(indent*2)))
+        lst.append('{0}CRS:\n{1}'.format(indent, self.crs.__str__(indent*2)))
         lst.append('{0}Mutability: {1}'.format(indent, MutabilityEnum._str_map[self.mutability]))
 
         return '\n'.join(lst)
@@ -745,7 +749,7 @@ class AbstractShape(AbstractIdentifiable):
         lst = []
         lst.append('{0}Extents: {1}'.format(indent, self.extents))
 
-        '\n'.join(lst)
+        return '\n'.join(lst)
 
 class GridShape(AbstractShape):
     """
