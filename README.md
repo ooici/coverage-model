@@ -23,7 +23,7 @@ For Mac, use homebrew
     /usr/bin/ruby -e "$(curl -fsSL https://raw.github.com/gist/323731)"
 
   * python 2.7
-  *  hdf5
+  * hdf5
   * netcdf
 
 
@@ -54,23 +54,35 @@ Setup a virtualenv to run coverage-model (use any name you like):
 
     mkvirtualenv --python=python2.7 coverage_model
 
-Use pip to install numpy, netCDF4, and ipython:
-*Note - numpy can be finicky, needs to be installed 'by itself' (on its own line)*
-
-    pip install numpy
-    pip install netCDF4
-    pip install ipython
-
 **Optional:** *To run any of the example functions that result in graphical output, you must also install matplotlib*
 
     pip install matplotlib
 
 #Source
+*The coverage model requires that the **pyon** project be available locally in the same directory as coverage-model.  If you don't already have the project:*
+
+    git clone git@github.com:ooici/pyon.git
 
 Obtain the coverage-model project by running:  
 
-    git clone git@github.com:blazetopher/coverage-model.git
+    git clone git@github.com:ooici/coverage-model.git
     cd coverage-model
+
+#Installation
+**Ensure you are in a virtualenv prior to running the steps below**
+
+From the *coverage-model* directory, run the following commands:
+
+    git submodule init
+    git submodule update
+    python bootstrap.py
+    bin/buildout
+    bin/generate_interfaces
+
+Once those steps complete, you should be able to import the coverage model from the python shell:
+
+    bin/pycc # or bin/ipython
+    from coverage_model.coverage import SimplexCoverage
 
 #Running the example functions
 
