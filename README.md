@@ -30,6 +30,10 @@ For Mac, use homebrew
 **Install** python, hdf5 and netcdf with Homebrew
     
     brew install python hdf5 netcdf
+    
+You'll also need the various dependencies of the pyon project:
+
+    brew install libevent libyaml zeromq couchdb rabbitmq pkg-config
 
 You can even reinstall git using brew to clean up your /usr/local directory
 Be sure to read the pyon README for platform specific guidance to installing
