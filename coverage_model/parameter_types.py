@@ -20,6 +20,7 @@
 #        self.__is_coordinate = value
 
 from coverage_model.coverage import AbstractSimplexParameterType, AbstractComplexParameterType
+import numpy as np
 
 #################
 # Parameter Type Objects
@@ -57,8 +58,18 @@ class QuantityType(AbstractSimplexParameterType):
     """
 
     """
-    def __init__(self):
+    def __init__(self, value_encoding, uom=None):
         AbstractSimplexParameterType.__init__(self)
+        try:
+            dt = np.dtype(value_encoding)
+            if dt.isbuiltin:
+                self.value_encoding = dt
+            else:
+                raise TypeError()
+        except TypeError:
+            raise TypeError('\'value_encoding\' must be a valid numpy dtype: {0}'.format(value_encoding))
+
+        self.template_attrs['uom'] = uom or 'unspecified'
 
 class TextType(AbstractSimplexParameterType):
     """

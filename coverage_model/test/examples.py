@@ -42,7 +42,7 @@ def ncgrid2cov(save_coverage=True):
 
         var = ds.variables[v]
 
-        pcontext = ParameterContext(v, param_type=ds.variables[v].dtype.type)
+        pcontext = ParameterContext(v, param_type=QuantityType(value_encoding=ds.variables[v].dtype.char))
         if 'units' in var.ncattrs():
             pcontext.uom = var.getncattr('units')
         if 'long_name' in var.ncattrs():
@@ -52,13 +52,13 @@ def ncgrid2cov(save_coverage=True):
 
         if is_coord:
             if v is 'time':
-                pcontext.axis = AxisTypeEnum.TIME
+                pcontext.reference_frame = AxisTypeEnum.TIME
             elif v is 'lat':
-                pcontext.axis = AxisTypeEnum.LAT
+                pcontext.reference_frame = AxisTypeEnum.LAT
             elif v is 'lon':
-                pcontext.axis = AxisTypeEnum.LON
+                pcontext.reference_frame = AxisTypeEnum.LON
             elif v is 'depth':
-                pcontext.axis = AxisTypeEnum.HEIGHT
+                pcontext.reference_frame = AxisTypeEnum.HEIGHT
 
         scov.append_parameter(pcontext)
 
@@ -120,7 +120,7 @@ def ncstation2cov(save_coverage=True):
 
         var = ds.variables[v]
 
-        pcontext = ParameterContext(v, param_type=var.dtype.type)
+        pcontext = ParameterContext(v, param_type=QuantityType(var.dtype.char))
         if 'units' in var.ncattrs():
             pcontext.uom = var.getncattr('units')
         if 'long_name' in var.ncattrs():
@@ -130,13 +130,13 @@ def ncstation2cov(save_coverage=True):
 
         if is_coord:
             if v is 'time':
-                pcontext.axis = AxisTypeEnum.TIME
+                pcontext.reference_frame = AxisTypeEnum.TIME
             elif v is 'lat':
-                pcontext.axis = AxisTypeEnum.LAT
+                pcontext.reference_frame = AxisTypeEnum.LAT
             elif v is 'lon':
-                pcontext.axis = AxisTypeEnum.LON
+                pcontext.reference_frame = AxisTypeEnum.LON
             elif v is 'z':
-                pcontext.axis = AxisTypeEnum.HEIGHT
+                pcontext.reference_frame = AxisTypeEnum.HEIGHT
 
         scov.append_parameter(pcontext)
 

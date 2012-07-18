@@ -139,22 +139,20 @@ class SimplexCoverage(AbstractCoverage):
 
         # Assign the pname to the CRS (if applicable) and select the appropriate domain (default is the spatial_domain)
         dom = self.spatial_domain
-        if not parameter_context.axis is None and AxisTypeEnum.is_member(parameter_context.axis, AxisTypeEnum.TIME):
+        if not parameter_context.reference_frame is None and AxisTypeEnum.is_member(parameter_context.reference_frame, AxisTypeEnum.TIME):
             if self._temporal_param_name is None:
                 self._temporal_param_name = pname
             else:
                 raise StandardError("temporal_parameter already defined.")
             dom = self.temporal_domain
             shp = self.temporal_domain.shape.extents
-            dom.crs.axes[parameter_context.axis] = parameter_context.name
-        elif parameter_context.axis in self.spatial_domain.crs.axes:
-            dom.crs.axes[parameter_context.axis] = parameter_context.name
+            dom.crs.axes[parameter_context.reference_frame] = parameter_context.name
+        elif parameter_context.reference_frame in self.spatial_domain.crs.axes:
+            dom.crs.axes[parameter_context.reference_frame] = parameter_context.name
 
         self._pcmap[pname] = (len(self._pcmap), parameter_context, dom)
         self._range_context[pname] = parameter_context
-        setattr(self._range_context, pname, self._range_context[pname])
         self._range_value[pname] = RangeMember(shp, parameter_context)
-        setattr(self._range_value, pname, self._range_value[pname])
 
     def get_parameter(self, param_name):
         if param_name in self._range_context:
@@ -163,9 +161,9 @@ class SimplexCoverage(AbstractCoverage):
 
     def list_parameters(self, coords_only=False, data_only=False):
         if coords_only:
-            lst=[x for x, v in self._range_context.iteritems() if v.is_coord]
+            lst=[x for x, v in self._range_context.iteritems() if v.is_coordinate]
         elif data_only:
-            lst=[x for x, v in self._range_context.iteritems() if not v.is_coord]
+            lst=[x for x, v in self._range_context.iteritems() if not v.is_coordinate]
         else:
             lst=self._range_context.keys()
         lst.sort()
@@ -183,7 +181,7 @@ class SimplexCoverage(AbstractCoverage):
         for n in self._pcmap:
             arr = self._range_value[n].content
             pc = self._range_context[n]
-            narr = np.empty((count,) + arr.shape[1:], dtype=pc.param_type)
+            narr = np.empty((count,) + arr.shape[1:], dtype=pc.param_type.value_encoding)
             narr.fill(pc.fill_value)
             arr = np.append(arr, narr, 0)
             self._range_value[n].content = arr
@@ -325,24 +323,26 @@ def _get_valid_DomainOfApplication(v, valid_shape):
 
 class RangeGroup(dict):
     """
-    All the functionality of a built_in dict, plus uses setattr to expose dictionary members as attributes
+    All the functionality of a built_in dict, plus makes all keys available as read-only attributes
     """
-    def __setitem__(self, key, value):
-        dict.__setitem__(self, key, value)
-        setattr(self, key, self[key])
+    def __dir__(self):
+        return self.__dict__.keys() + self.keys()
 
-    def __delitem__(self, key):
-        delattr(self, key)
-        dict.__delitem__(self, key)
+    def __getattr__(self, item):
+        return self[item]
+
+    def __setattr__(self, key, value):
+        raise AttributeError('Attributes are read only, assign via dict assignment')
 
 class RangeMember(object):
+    # CBM TODO: Is this really AbstractParameterValue??
     """
     This is what would provide the "abstraction" between the in-memory model and the underlying persistence - all through __getitem__ and __setitem__
     Mapping between the "complete" domain and the storage strategy can happen here
     """
 
     def __init__(self, shape, pcontext):
-        self._arr_obj = np.empty(shape)
+        self._arr_obj = np.empty(shape, dtype=pcontext.param_type.value_encoding)
         self._arr_obj.fill(pcontext.fill_value)
 
     @property
@@ -450,6 +450,7 @@ class AbstractParameterType(AbstractIdentifiable):
     """
     def __init__(self):
         AbstractIdentifiable.__init__(self)
+        self.template_attrs = {}
 
 class AbstractSimplexParameterType(AbstractParameterType):
     """
@@ -496,17 +497,23 @@ class ParameterContext(AbstractIdentifiable):
     """
 
     """
-    def __init__(self, name, param_type=None, axis=None, fill_value=None, uom=None):
+    def __init__(self, name, param_type, reference_frame=None, fill_value=None):
         AbstractIdentifiable.__init__(self)
         self.name = name
-        self.param_type = param_type or AbstractParameterType()
-        self.axis = axis or None
+        if not isinstance(param_type, AbstractParameterType):
+            raise SystemError('\'param_type\' must be a concrete subclass of AbstractParameterType')
+        self.param_type = param_type
+
+        # Expose the template_attrs from the param_type
+        for k,v in self.param_type.template_attrs.iteritems():
+            setattr(self,k,v)
+
+        self.reference_frame = reference_frame or None
         self.fill_value = fill_value or -999
-        self.uom = uom or 'unspecified'
 
     @property
     def is_coordinate(self):
-        return not self.axis is None
+        return not self.reference_frame is None
 
     def __str__(self, indent=None):
         indent = indent or ' '
@@ -514,7 +521,7 @@ class ParameterContext(AbstractIdentifiable):
         lst.append('{0}ID: {1}'.format(indent, self._id))
         lst.append('{0}Name: {1}'.format(indent, self.name))
         if self.is_coordinate:
-            lst.append('{0}Is Coordinate: {1}'.format(indent, AxisTypeEnum._str_map[self.axis]))
+            lst.append('{0}Is Coordinate: {1}'.format(indent, AxisTypeEnum._str_map[self.reference_frame]))
         lst.append('{0}Type: {1}'.format(indent, self.param_type))
         lst.append('{0}Fill Value: {1}'.format(indent, self.fill_value))
         lst.append('{0}Unit of Measure: {1}'.format(indent, self.uom))
