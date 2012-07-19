@@ -11,6 +11,7 @@ from pyon.public import log
 from netCDF4 import Dataset
 from coverage_model.coverage import *
 from coverage_model.parameter_types import *
+from coverage_model.parameter import *
 import numpy as np
 
 def ncgrid2cov(save_coverage=True):

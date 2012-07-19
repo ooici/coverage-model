@@ -19,8 +19,35 @@
 #    if isinstance(value, bool):
 #        self.__is_coordinate = value
 
-from coverage_model.coverage import AbstractSimplexParameterType, AbstractComplexParameterType
+from coverage_model.basic_types import *
 import numpy as np
+
+#################
+# Abstract Parameter Type Objects
+#################
+
+class AbstractParameterType(AbstractIdentifiable):
+    """
+
+    """
+    def __init__(self):
+        AbstractIdentifiable.__init__(self)
+        self.template_attrs = {}
+
+
+class AbstractSimplexParameterType(AbstractParameterType):
+    """
+
+    """
+    def __init__(self):
+        AbstractParameterType.__init__(self)
+
+class AbstractComplexParameterType(AbstractParameterType):
+    """
+
+    """
+    def __init__(self):
+        AbstractParameterType.__init__(self)
 
 #################
 # Parameter Type Objects
