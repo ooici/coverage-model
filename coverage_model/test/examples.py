@@ -54,7 +54,7 @@ def samplecov(save_coverage=True):
     scov = SimplexCoverage('sample coverage_model', pdict, sdom, tdom)
 
     # Insert some timesteps (automatically expands other arrays)
-#    scov.insert_timesteps(10)
+    scov.insert_timesteps(10)
 
     # Add data for each parameter
     scov.set_parameter_values('time', value=np.arange(10))

@@ -115,16 +115,28 @@ class ComplexCoverage(AbstractCoverage):
 
 class SimplexCoverage(AbstractCoverage):
     """
-    
+    A concrete implementation of AbstractCoverage consisting of 2 domains (temporal and spatial)
+    and a collection of parameters associated with one or both of the domains.  Each parameter is defined by a
+    ParameterContext object (provided via the ParameterDictionary) and has content represented by a concrete implementation
+    of the AbstractParameterValue class.
+
     """
     def __init__(self, name, parameter_dictionary, spatial_domain, temporal_domain=None):
+        """
+        Constructor for SimplexCoverage
+
+        @param  name    The name of the coverage
+        @param  parameter_dictionary    a ParameterDictionary object expected to contain one or more valid ParameterContext objects
+        @param  spatial_domain  a concrete instance of AbstractDomain for the spatial domain component
+        @param  temporal_domain a concrete instance of AbstractDomain for the temporal domain component
+        """
         AbstractCoverage.__init__(self)
 
         self.name = name
         self.parameter_dictionary = parameter_dictionary
         self.spatial_domain = spatial_domain
-        self.temporal_domain = temporal_domain or GridDomain(GridShape('temporal',[0]), None, None)
-        self.range_context = DotDict()
+        self.temporal_domain = temporal_domain or GridDomain(GridShape('temporal',[0]), CRS.standard_temporal(), MutabilityEnum.EXTENSIBLE)
+        self.range_dictionary = DotDict()
         self.range_value = DotDict()
         self._pcmap = {}
         self._temporal_param_name = None
@@ -134,14 +146,25 @@ class SimplexCoverage(AbstractCoverage):
                 self._append_parameter(self.parameter_dictionary.get_context(p))
 
     def append_parameter(self, parameter_context):
+        """
+        @deprecated use a ParameterDictionary during construction of the coverage
+        """
         log.warn('SimplexCoverage.append_parameter() is deprecated: use a ParameterDictionary during construction of the coverage')
         self._append_parameter(parameter_context)
 
     def _append_parameter(self, parameter_context):
+        """
+        Appends a ParameterContext object to the internal set for this coverage.
+
+        The supplied ParameterContext is added to self.range_dictionary.  An AbstractParameterValue of the type
+        indicated by ParameterContext.param_type is added to self.range_value.  If the ParameterContext indicates that
+        the parameter is a coordinate parameter, it is associated with the indicated axis of the appropriate CRS.
+        """
         pname = parameter_context.name
 
         # Determine the correct array shape (default is the shape of the spatial_domain)
         # If there is only one extent in the spatial domain and it's size is 0, collapse to time only
+        # CBM TODO: This determination must be made based on the 'variability' of the parameter (temporal, spatial, both), not by assumption
         if len(self.spatial_domain.shape.extents) == 1 and self.spatial_domain.shape.extents[0] == 0:
             shp = self.temporal_domain.shape.extents
         else:
@@ -161,25 +184,46 @@ class SimplexCoverage(AbstractCoverage):
             dom.crs.axes[parameter_context.reference_frame] = parameter_context.name
 
         self._pcmap[pname] = (len(self._pcmap), parameter_context, dom)
-        self.range_context[pname] = parameter_context
+        self.range_dictionary[pname] = parameter_context
         self.range_value[pname] = RangeMember(shp, parameter_context)
 
     def get_parameter(self, param_name):
-        if param_name in self.range_context:
-            p = Parameter(self.range_context[param_name], self._pcmap[param_name][2], self.range_value[param_name])
+        """
+        Get a Parameter object by name
+        @param  param_name  The local name of the parameter to return
+        @returns    A Parameter object containing the context and value for the specified parameter
+        """
+        if param_name in self.range_dictionary:
+            p = Parameter(self.range_dictionary[param_name], self._pcmap[param_name][2], self.range_value[param_name])
             return p
+        else:
+            raise KeyError('Coverage does not contain parameter \'{0}\''.format(param_name))
 
     def list_parameters(self, coords_only=False, data_only=False):
+        """
+        Get a list of the names of the parameters contained in the coverage
+
+        @param  coords_only List only the coordinate parameters
+        @param  data_only   List only the data parameters (non-coordinate) - superseded by coords_only
+        @return A list of parameter names
+        """
         if coords_only:
-            lst=[x for x, v in self.range_context.iteritems() if v.is_coordinate]
+            lst=[x for x, v in self.range_dictionary.iteritems() if v.is_coordinate]
         elif data_only:
-            lst=[x for x, v in self.range_context.iteritems() if not v.is_coordinate]
+            lst=[x for x, v in self.range_dictionary.iteritems() if not v.is_coordinate]
         else:
-            lst=self.range_context.keys()
+            lst=[x for x in self.range_dictionary.iterkeys()]
         lst.sort()
         return lst
 
     def insert_timesteps(self, count, origin=None):
+        """
+        Insert count # of timesteps beginning at the origin
+
+        The specified # of timesteps are inserted into the temporal value array at the indicated origin.  This also
+        expands the temporal dimension of the AbstractParameterValue for each parameters
+
+        """
         if not origin is None:
             raise SystemError('Only append is currently supported')
 
@@ -190,7 +234,7 @@ class SimplexCoverage(AbstractCoverage):
         # Expand the temporal dimension of each of the parameters that are temporal TODO: Indicate which are temporal!
         for n in self._pcmap:
             arr = self.range_value[n].content
-            pc = self.range_context[n]
+            pc = self.range_dictionary[n]
             narr = np.empty((count,) + arr.shape[1:], dtype=pc.param_type.value_encoding)
             narr.fill(pc.fill_value)
             arr = np.append(arr, narr, 0)
@@ -247,10 +291,10 @@ class SimplexCoverage(AbstractCoverage):
         return return_value
 
     def get_parameter_context(self, param_name):
-        if not param_name in self.range_context:
+        if not param_name in self.range_dictionary:
             raise StandardError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
-        return self.range_context[param_name]
+        return self.range_dictionary[param_name]
 
     @property
     def info(self):
@@ -263,7 +307,7 @@ class SimplexCoverage(AbstractCoverage):
 
         lst.append('Parameters:')
         for x in self.range_value:
-            lst.append('{0}{1} {2}\n{3}'.format(indent*2,x,self.range_value[x].shape,self.range_context[x].__str__(indent*4)))
+            lst.append('{0}{1} {2}\n{3}'.format(indent*2,x,self.range_value[x].shape,self.range_dictionary[x].__str__(indent*4)))
 
         return '\n'.join(lst)
 
