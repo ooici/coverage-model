@@ -36,8 +36,10 @@
 #        self.__spatial_domain = value
 
 from pyon.public import log
+from pyon.util.containers import DotDict
 
 from coverage_model.basic_types import *
+from coverage_model.parameter import *
 import numpy as np
 import pickle
 
@@ -82,7 +84,7 @@ class AbstractCoverage(AbstractIdentifiable):
             raise StandardError('cov_obj must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(cov_obj)))
 
         # Args need to have 1-n (ParameterContext, DomainOfApplication, DomainOfApplication,) tuples
-        # Need to pull the range_dictionary, spatial_domain and temporal_domain from cov_obj (TODO: copies!!)
+        # Need to pull the parameter_dictionary, spatial_domain and temporal_domain from cov_obj (TODO: copies!!)
         # DOA's and PC's used to copy data - TODO: Need way of reshaping PC's?
         # NTK:
         ccov = SimplexCoverage(name='', range_dictionary=None, spatial_domain=None, temporal_domain=None)
@@ -115,19 +117,27 @@ class SimplexCoverage(AbstractCoverage):
     """
     
     """
-    def __init__(self, name, range_dictionary, spatial_domain, temporal_domain=None):
+    def __init__(self, name, parameter_dictionary, spatial_domain, temporal_domain=None):
         AbstractCoverage.__init__(self)
 
         self.name = name
-        self.range_dictionary = range_dictionary
+        self.parameter_dictionary = parameter_dictionary
         self.spatial_domain = spatial_domain
         self.temporal_domain = temporal_domain or GridDomain(GridShape('temporal',[0]), None, None)
-        self._range_context = RangeGroup()
-        self._range_value = RangeGroup()
+        self.range_context = DotDict()
+        self.range_value = DotDict()
         self._pcmap = {}
         self._temporal_param_name = None
 
+        if isinstance(self.parameter_dictionary, ParameterDictionary):
+            for p in self.parameter_dictionary:
+                self._append_parameter(self.parameter_dictionary.get_context(p))
+
     def append_parameter(self, parameter_context):
+        log.warn('SimplexCoverage.append_parameter() is deprecated: use a ParameterDictionary during construction of the coverage')
+        self._append_parameter(parameter_context)
+
+    def _append_parameter(self, parameter_context):
         pname = parameter_context.name
 
         # Determine the correct array shape (default is the shape of the spatial_domain)
@@ -151,21 +161,21 @@ class SimplexCoverage(AbstractCoverage):
             dom.crs.axes[parameter_context.reference_frame] = parameter_context.name
 
         self._pcmap[pname] = (len(self._pcmap), parameter_context, dom)
-        self._range_context[pname] = parameter_context
-        self._range_value[pname] = RangeMember(shp, parameter_context)
+        self.range_context[pname] = parameter_context
+        self.range_value[pname] = RangeMember(shp, parameter_context)
 
     def get_parameter(self, param_name):
-        if param_name in self._range_context:
-            p = Parameter(self._range_context[param_name], self._pcmap[param_name][2], self._range_value[param_name])
+        if param_name in self.range_context:
+            p = Parameter(self.range_context[param_name], self._pcmap[param_name][2], self.range_value[param_name])
             return p
 
     def list_parameters(self, coords_only=False, data_only=False):
         if coords_only:
-            lst=[x for x, v in self._range_context.iteritems() if v.is_coordinate]
+            lst=[x for x, v in self.range_context.iteritems() if v.is_coordinate]
         elif data_only:
-            lst=[x for x, v in self._range_context.iteritems() if not v.is_coordinate]
+            lst=[x for x, v in self.range_context.iteritems() if not v.is_coordinate]
         else:
-            lst=self._range_context.keys()
+            lst=self.range_context.keys()
         lst.sort()
         return lst
 
@@ -179,12 +189,12 @@ class SimplexCoverage(AbstractCoverage):
 
         # Expand the temporal dimension of each of the parameters that are temporal TODO: Indicate which are temporal!
         for n in self._pcmap:
-            arr = self._range_value[n].content
-            pc = self._range_context[n]
+            arr = self.range_value[n].content
+            pc = self.range_context[n]
             narr = np.empty((count,) + arr.shape[1:], dtype=pc.param_type.value_encoding)
             narr.fill(pc.fill_value)
             arr = np.append(arr, narr, 0)
-            self._range_value[n].content = arr
+            self.range_value[n].content = arr
 
     def set_time_values(self, tdoa, values):
         return self.set_parameter_values(self._temporal_param_name, tdoa, None, values)
@@ -197,7 +207,7 @@ class SimplexCoverage(AbstractCoverage):
         return self.temporal_domain.shape.extents[0]
 
     def set_parameter_values(self, param_name, tdoa=None, sdoa=None, value=None):
-        if not param_name in self._range_value:
+        if not param_name in self.range_value:
             raise StandardError('Parameter \'{0}\' not found in coverage_model'.format(param_name))
 
         tdoa = _get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
@@ -213,10 +223,10 @@ class SimplexCoverage(AbstractCoverage):
         log.debug('Setting slice: {0}'.format(slice_))
 
         #TODO: Do we need some validation that slice_ is the same rank and/or shape as values?
-        self._range_value[param_name][slice_] = value
+        self.range_value[param_name][slice_] = value
 
     def get_parameter_values(self, param_name, tdoa=None, sdoa=None, return_value=None):
-        if not param_name in self._range_value:
+        if not param_name in self.range_value:
             raise StandardError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
         return_value = return_value or np.zeros([0])
@@ -233,14 +243,14 @@ class SimplexCoverage(AbstractCoverage):
 
         log.debug('Getting slice: {0}'.format(slice_))
 
-        return_value = self._range_value[param_name][slice_]
+        return_value = self.range_value[param_name][slice_]
         return return_value
 
     def get_parameter_context(self, param_name):
-        if not param_name in self._range_context:
+        if not param_name in self.range_context:
             raise StandardError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
-        return self._range_context[param_name]
+        return self.range_context[param_name]
 
     @property
     def info(self):
@@ -252,8 +262,8 @@ class SimplexCoverage(AbstractCoverage):
         lst.append('Spatial Domain:\n{0}'.format(self.spatial_domain.__str__(indent*2)))
 
         lst.append('Parameters:')
-        for x in self._range_value:
-            lst.append('{0}{1} {2}\n{3}'.format(indent*2,x,self._range_value[x].shape,self._range_context[x].__str__(indent*4)))
+        for x in self.range_value:
+            lst.append('{0}{1} {2}\n{3}'.format(indent*2,x,self.range_value[x].shape,self.range_context[x].__str__(indent*4)))
 
         return '\n'.join(lst)
 
@@ -320,19 +330,6 @@ def _get_valid_DomainOfApplication(v, valid_shape):
         v = DomainOfApplication(v)
 
     return v
-
-class RangeGroup(dict):
-    """
-    All the functionality of a built_in dict, plus makes all keys available as read-only attributes
-    """
-    def __dir__(self):
-        return self.__dict__.keys() + self.keys()
-
-    def __getattr__(self, item):
-        return self[item]
-
-    def __setattr__(self, key, value):
-        raise AttributeError('Attributes are read only, assign via dict assignment')
 
 class RangeMember(object):
     # CBM TODO: Is this really AbstractParameterValue??

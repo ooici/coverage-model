@@ -23,13 +23,8 @@ def ncgrid2cov(save_coverage=True):
         'vars':['water_u','water_v','salinity','water_temp',],
         }
 
-    tcrs = CRS([AxisTypeEnum.TIME])
-    scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT, AxisTypeEnum.HEIGHT])
 
-    tdom = GridDomain(GridShape('temporal'), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
-    sdom = GridDomain(GridShape('spatial', [34,57,89]), scrs, MutabilityEnum.IMMUTABLE) # 3d spatial topology (grid)
-
-    scov = SimplexCoverage('sample grid coverage_model', rdict, sdom, tdom)
+    pdict = ParameterDictionary()
 
     # Collect all var names (for convenience)
     all = []
@@ -61,7 +56,15 @@ def ncgrid2cov(save_coverage=True):
             elif v is 'depth':
                 pcontext.reference_frame = AxisTypeEnum.HEIGHT
 
-        scov.append_parameter(pcontext)
+        pdict.add_context(pcontext)
+
+    tcrs = CRS([AxisTypeEnum.TIME])
+    scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT, AxisTypeEnum.HEIGHT])
+
+    tdom = GridDomain(GridShape('temporal'), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    sdom = GridDomain(GridShape('spatial', [34,57,89]), scrs, MutabilityEnum.IMMUTABLE) # 3d spatial topology (grid)
+
+    scov = SimplexCoverage('sample grid coverage_model', pdict, sdom, tdom)
 
     # Insert the timesteps (automatically expands other arrays)
     tvar=ds.variables['time']
@@ -72,20 +75,20 @@ def ncgrid2cov(save_coverage=True):
         var = ds.variables[v]
         var.set_auto_maskandscale(False)
         arr = var[:]
-#        log.debug('variable = \'{2}\' coverage_model range shape: {0}  array shape: {1}'.format(scov._range_value_value[v].shape, arr.shape, v))
+#        log.debug('variable = \'{2}\' coverage_model range shape: {0}  array shape: {1}'.format(scov.range_value_value[v].shape, arr.shape, v))
 
         # TODO: Sort out how to leave these sparse internally and only broadcast during read
         if v is 'depth':
             z,_,_ = my_meshgrid(arr,np.zeros([57]),np.zeros([89]),indexing='ij',sparse=True)
-            scov._range_value[v][:] = z
+            scov.range_value[v][:] = z
         elif v is 'lat':
             _,y,_ = my_meshgrid(np.zeros([34]),arr,np.zeros([89]),indexing='ij',sparse=True)
-            scov._range_value[v][:] = y
+            scov.range_value[v][:] = y
         elif v is 'lon':
             _,_,x = my_meshgrid(np.zeros([34]),np.zeros([57]),arr,indexing='ij',sparse=True)
-            scov._range_value[v][:] = x
+            scov.range_value[v][:] = x
         else:
-            scov._range_value[v][:] = var[:]
+            scov.range_value[v][:] = var[:]
 
     if save_coverage:
         SimplexCoverage.save(scov, 'test_data/ncom.cov')
@@ -99,16 +102,9 @@ def ncstation2cov(save_coverage=True):
     rdict.items = {
         'coords':['time','lat','lon','z',],
         'vars':['streamflow','water_temperature',],
-    }
+        }
 
-    tcrs = CRS.standard_temporal()
-    scrs = CRS.lat_lon_height()
-
-    tdom = GridDomain(GridShape('temporal', [1]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
-    #CBM: the leading 0 is for time - need to refine append_parameter to deal with the addition of time so that this is just space
-    sdom = GridDomain(GridShape('spatial', [1]), scrs, MutabilityEnum.IMMUTABLE) # 1d spatial topology (station/trajectory)
-
-    scov = SimplexCoverage('sample station coverage_model', rdict, sdom, tdom)
+    pdict = ParameterDictionary()
 
     # Collect all var names (for convenience)
     all = []
@@ -139,7 +135,16 @@ def ncstation2cov(save_coverage=True):
             elif v is 'z':
                 pcontext.reference_frame = AxisTypeEnum.HEIGHT
 
-        scov.append_parameter(pcontext)
+        pdict.add_context(pcontext)
+
+    tcrs = CRS.standard_temporal()
+    scrs = CRS.lat_lon_height()
+
+    tdom = GridDomain(GridShape('temporal', [1]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    #CBM: the leading 0 is for time - need to refine _append_parameter to deal with the addition of time so that this is just space
+    sdom = GridDomain(GridShape('spatial', [1]), scrs, MutabilityEnum.IMMUTABLE) # 1d spatial topology (station/trajectory)
+
+    scov = SimplexCoverage('sample station coverage_model', pdict, sdom, tdom)
 
     # Insert the timesteps (automatically expands other arrays)
     tvar=ds.variables['time']
@@ -151,11 +156,11 @@ def ncstation2cov(save_coverage=True):
         var.set_auto_maskandscale(False)
         # Look for fill_value attr
 
-#        arr = var[:]
-#        log.debug('variable = \'{2}\' coverage_model range shape: {0}  array shape: {1}'.format(scov._range_value_value[v].shape, arr.shape, v))
+        #        arr = var[:]
+        #        log.debug('variable = \'{2}\' coverage_model range shape: {0}  array shape: {1}'.format(scov.range_value_value[v].shape, arr.shape, v))
 
         # TODO: Sort out how to leave the coordinates sparse internally and only broadcast during read
-        scov._range_value[v][:] = var[:]
+        scov.range_value[v][:] = var[:]
 
     if save_coverage:
         SimplexCoverage.save(scov, 'test_data/usgs.cov')
@@ -164,46 +169,46 @@ def ncstation2cov(save_coverage=True):
 
 def direct_read():
     scov, ds = ncstation2cov()
-    shp = scov._range_value.streamflow.shape
+    shp = scov.range_value.streamflow.shape
 
     log.debug('<========= Query =========>')
     log.debug('\n>> All data for first timestep\n')
     slice_ = 0
     log.debug('sflow <shape {0}> sliced with: {1}'.format(shp,slice_))
-    log.debug(scov._range_value['streamflow'][slice_])
+    log.debug(scov.range_value['streamflow'][slice_])
 
     log.debug('\n>> All data\n')
     slice_ = (slice(None))
     log.debug('sflow <shape {0}> sliced with: {1}'.format(shp,slice_))
-    log.debug(scov._range_value['streamflow'][slice_])
+    log.debug(scov.range_value['streamflow'][slice_])
 
     log.debug('\n>> All data for every other timestep from 0 to 10\n')
     slice_ = (slice(0,10,2))
     log.debug('sflow <shape {0}> sliced with: {1}'.format(shp,slice_))
-    log.debug(scov._range_value['streamflow'][slice_])
+    log.debug(scov.range_value['streamflow'][slice_])
 
     log.debug('\n>> All data for first, sixth, eighth, thirteenth, and fifty-sixth timesteps\n')
     slice_ = [[(0,5,7,12,55)]]
     log.debug('sflow <shape {0}> sliced with: {1}'.format(shp,slice_))
-    log.debug(scov._range_value['streamflow'][slice_])
+    log.debug(scov.range_value['streamflow'][slice_])
 
 def direct_write():
     scov, ds = ncstation2cov()
-    shp = scov._range_value.streamflow.shape
+    shp = scov.range_value.streamflow.shape
 
     log.debug('<========= Assignment =========>')
 
     slice_ = (slice(None))
     value = 22
     log.debug('sflow <shape {0}> assigned with slice: {1} and value: {2}'.format(shp,slice_,value))
-    scov._range_value['streamflow'][slice_] = value
-    log.debug(scov._range_value['streamflow'][slice_])
+    scov.range_value['streamflow'][slice_] = value
+    log.debug(scov.range_value['streamflow'][slice_])
 
     slice_ = [[(1,5,7,)]]
     value = [10, 20, 30]
     log.debug('sflow <shape {0}> assigned with slice: {1} and value: {2}'.format(shp,slice_,value))
-    scov._range_value['streamflow'][slice_] = value
-    log.debug(scov._range_value['streamflow'][slice_])
+    scov.range_value['streamflow'][slice_] = value
+    log.debug(scov.range_value['streamflow'][slice_])
 
 def methodized_read():
     from coverage_model.test.examples import SimplexCoverage
@@ -252,7 +257,7 @@ def methodized_read():
 
 def methodized_write():
     scov, ds = ncstation2cov()
-    shp = scov._range_value.streamflow.shape
+    shp = scov.range_value.streamflow.shape
 
     log.debug('<========= Assignment =========>')
 
