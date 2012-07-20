@@ -526,7 +526,7 @@ class Axes(dict):
     """
     Ensures that the indicated axis exists and that the string representation is used for the key
     """
-
+    # CBM TODO: Think about if this complexity is really necessary - can it just print Enum names on __str__??
     def __getitem__(self, item):
         if item in AxisTypeEnum._str_map:
             item = AxisTypeEnum._str_map[item]

@@ -105,22 +105,30 @@ class ParameterDictionary(object):
     #        if not param_dict is None and not isinstance(param_dict, dict):
     #            raise TypeError('param_dict must be a ParameterDictionary object')
         self._map = {}
+        self.__count=-1
 
     def add_context(self, param_ctxt):
         if not isinstance(param_ctxt, ParameterContext):
             raise TypeError('param_ctxt must be a ParameterContext object')
 
-        self._map[param_ctxt.name] = param_ctxt
+        self.__count += 1
+        self._map[param_ctxt.name] = (self.__count, param_ctxt)
 
     def get_context(self, param_name):
         if not param_name in self._map:
             raise KeyError('The ParameterDictionary does not contain the specified key \'{0}\''.format(param_name))
 
-        return self._map[param_name]
+        return self._map[param_name][1]
+
+    def get_context_ord(self, param_name):
+        if not param_name in self._map:
+            raise KeyError('The ParameterDictionary does not contain the specified key \'{0}\''.format(param_name))
+
+        return self._map[param_name][0]
 
     def dump(self):
         #TODO: try/except this to inform more pleasantly if it bombs
-        res = dict((k,v._dump()) for k, v in self._map.iteritems())
+        res = dict((k,(v[0],v[1]._dump())) for k, v in self._map.iteritems())
 
         return res
 
@@ -129,7 +137,8 @@ class ParameterDictionary(object):
         ret = ParameterDictionary()
         if isinstance(pdict, dict):
             for k, v in pdict.iteritems():
-                ret.add_context(ParameterContext._load(v))
+                pc = ParameterContext._load(v[1])
+                ret._map[pc.name] = (v[0], pc)
 
         return ret
 
