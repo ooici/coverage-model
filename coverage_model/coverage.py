@@ -141,8 +141,8 @@ class SimplexCoverage(AbstractCoverage):
         pname = parameter_context.name
 
         # Determine the correct array shape (default is the shape of the spatial_domain)
-        # If there is only one extent in the spatial domain and it's size is 1, collapse to time only
-        if len(self.spatial_domain.shape.extents) == 1 and self.spatial_domain.shape.extents[0] == 1:
+        # If there is only one extent in the spatial domain and it's size is 0, collapse to time only
+        if len(self.spatial_domain.shape.extents) == 1 and self.spatial_domain.shape.extents[0] == 0:
             shp = self.temporal_domain.shape.extents
         else:
             shp = self.temporal_domain.shape.extents + self.spatial_domain.shape.extents
@@ -574,7 +574,7 @@ class AbstractShape(AbstractIdentifiable):
     def __init__(self, name, extents=None):
         AbstractIdentifiable.__init__(self)
         self.name = name
-        self.extents = extents or [1]
+        self.extents = extents or [0]
 
     @property
     def rank(self):

@@ -14,28 +14,76 @@ from coverage_model.parameter_types import *
 from coverage_model.parameter import *
 import numpy as np
 
-def ncgrid2cov(save_coverage=True):
-    ds = Dataset('test_data/ncom.nc')
-
-    rdict = RangeDictionary()
-    rdict.items = {
-        'coords':['time','lat','lon','depth',],
-        'vars':['water_u','water_v','salinity','water_temp',],
-        }
-
-
+def samplecov(save_coverage=True):
+    # Instantiate a ParameterDictionary
     pdict = ParameterDictionary()
 
-    # Collect all var names (for convenience)
-    all = []
-    for x in rdict.items:
-        all.extend(rdict.items[x])
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
+    t_ctxt.reference_frame = AxisTypeEnum.TIME
+    t_ctxt.uom = 'seconds since 01-01-1970'
+    pdict.add_context(t_ctxt)
 
-    # Iterate over the vars and add them to the coverage_model
-    for v in all:
-        is_time = v is 'time'
-        is_coord = v in rdict.items['coords']
+    lat_ctxt = ParameterContext('lat', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    lat_ctxt.reference_frame = AxisTypeEnum.LAT
+    lat_ctxt.uom = 'degree_north'
+    pdict.add_context(lat_ctxt)
 
+    lon_ctxt = ParameterContext('lon', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    lon_ctxt.reference_frame = AxisTypeEnum.LON
+    lon_ctxt.uom = 'degree_east'
+    pdict.add_context(lon_ctxt)
+
+    temp_ctxt = ParameterContext('temp', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    temp_ctxt.uom = 'degree_Celsius'
+    pdict.add_context(temp_ctxt)
+
+    cond_ctxt = ParameterContext('conductivity', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    cond_ctxt.uom = 'unknown'
+    pdict.add_context(cond_ctxt)
+
+    # Construct temporal and spatial Coordinate Reference System objects
+    tcrs = CRS([AxisTypeEnum.TIME])
+    scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+    # Construct temporal and spatial Domain objects
+    tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 1d spatial topology (station/trajectory)
+
+    # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+    scov = SimplexCoverage('sample coverage_model', pdict, sdom, tdom)
+
+    # Insert some timesteps (automatically expands other arrays)
+#    scov.insert_timesteps(10)
+
+    # Add data for each parameter
+    scov.set_parameter_values('time', value=np.arange(10))
+    scov.set_parameter_values('lat', value=45)
+    scov.set_parameter_values('lon', value=-71)
+    # make a random sample of 10 values between 23 and 26
+    # Ref: http://docs.scipy.org/doc/numpy/reference/generated/numpy.random.random_sample.html#numpy.random.random_sample
+    # --> To sample  multiply the output of random_sample by (b-a) and add a
+    tvals=np.random.random_sample(10)*(26-23)+23
+    scov.set_parameter_values('temp', value=tvals)
+    scov.set_parameter_values('conductivity', value=np.random.random_sample(10)*(30-20)+20)
+
+    if save_coverage:
+        SimplexCoverage.save(scov, 'test_data/sample.cov')
+
+    return scov
+
+
+def ncgrid2cov(save_coverage=True):
+    # Open the netcdf dataset
+    ds = Dataset('test_data/ncom.nc')
+    # Itemize the variable names that we want to include in the coverage
+    var_names = ['time','lat','lon','depth','water_u','water_v','salinity','water_temp',]
+
+    # Instantiate a ParameterDictionary
+    pdict = ParameterDictionary()
+
+    # Create a ParameterContext object for each of the variables in the dataset and add them to the ParameterDictionary
+    for v in var_names:
         var = ds.variables[v]
 
         pcontext = ParameterContext(v, param_type=QuantityType(value_encoding=ds.variables[v].dtype.char))
@@ -46,37 +94,38 @@ def ncgrid2cov(save_coverage=True):
         if '_FillValue' in var.ncattrs():
             pcontext.fill_value = var.getncattr('_FillValue')
 
-        if is_coord:
-            if v is 'time':
-                pcontext.reference_frame = AxisTypeEnum.TIME
-            elif v is 'lat':
-                pcontext.reference_frame = AxisTypeEnum.LAT
-            elif v is 'lon':
-                pcontext.reference_frame = AxisTypeEnum.LON
-            elif v is 'depth':
-                pcontext.reference_frame = AxisTypeEnum.HEIGHT
+        # Set the reference_frame for the coordinate parameters
+        if v is 'time':
+            pcontext.reference_frame = AxisTypeEnum.TIME
+        elif v is 'lat':
+            pcontext.reference_frame = AxisTypeEnum.LAT
+        elif v is 'lon':
+            pcontext.reference_frame = AxisTypeEnum.LON
+        elif v is 'depth':
+            pcontext.reference_frame = AxisTypeEnum.HEIGHT
 
         pdict.add_context(pcontext)
 
+    # Construct temporal and spatial Coordinate Reference System objects
     tcrs = CRS([AxisTypeEnum.TIME])
     scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT, AxisTypeEnum.HEIGHT])
 
+    # Construct temporal and spatial Domain objects
     tdom = GridDomain(GridShape('temporal'), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
     sdom = GridDomain(GridShape('spatial', [34,57,89]), scrs, MutabilityEnum.IMMUTABLE) # 3d spatial topology (grid)
 
+    # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
     scov = SimplexCoverage('sample grid coverage_model', pdict, sdom, tdom)
 
     # Insert the timesteps (automatically expands other arrays)
     tvar=ds.variables['time']
-    scov.insert_timesteps(tvar.size - 1)
+    scov.insert_timesteps(tvar.size)
 
     # Add data to the parameters - NOT using setters at this point, direct assignment to arrays
-    for v in all:
+    for v in var_names:
         var = ds.variables[v]
         var.set_auto_maskandscale(False)
         arr = var[:]
-#        log.debug('variable = \'{2}\' coverage_model range shape: {0}  array shape: {1}'.format(scov.range_value_value[v].shape, arr.shape, v))
-
         # TODO: Sort out how to leave these sparse internally and only broadcast during read
         if v is 'depth':
             z,_,_ = my_meshgrid(arr,np.zeros([57]),np.zeros([89]),indexing='ij',sparse=True)
@@ -96,25 +145,16 @@ def ncgrid2cov(save_coverage=True):
     return scov
 
 def ncstation2cov(save_coverage=True):
+    # Open the netcdf dataset
     ds = Dataset('test_data/usgs.nc')
+    # Itemize the variable names that we want to include in the coverage
+    var_names = ['time','lat','lon','z','streamflow','water_temperature',]
 
-    rdict = RangeDictionary()
-    rdict.items = {
-        'coords':['time','lat','lon','z',],
-        'vars':['streamflow','water_temperature',],
-        }
-
+    # Instantiate a ParameterDictionary
     pdict = ParameterDictionary()
 
-    # Collect all var names (for convenience)
-    all = []
-    for x in rdict.items:
-        all.extend(rdict.items[x])
-
-    # Iterate over the vars and add them to the coverage_model
-    for v in all:
-        is_coord = v in rdict.items['coords']
-
+    # Create a ParameterContext object for each of the variables in the dataset and add them to the ParameterDictionaryl
+    for v in var_names:
         var = ds.variables[v]
 
         pcontext = ParameterContext(v, param_type=QuantityType(var.dtype.char))
@@ -125,39 +165,37 @@ def ncstation2cov(save_coverage=True):
         if '_FillValue' in var.ncattrs():
             pcontext.fill_value = var.getncattr('_FillValue')
 
-        if is_coord:
-            if v is 'time':
-                pcontext.reference_frame = AxisTypeEnum.TIME
-            elif v is 'lat':
-                pcontext.reference_frame = AxisTypeEnum.LAT
-            elif v is 'lon':
-                pcontext.reference_frame = AxisTypeEnum.LON
-            elif v is 'z':
-                pcontext.reference_frame = AxisTypeEnum.HEIGHT
+        # Set the reference_frame for the coordinate parameters
+        if v is 'time':
+            pcontext.reference_frame = AxisTypeEnum.TIME
+        elif v is 'lat':
+            pcontext.reference_frame = AxisTypeEnum.LAT
+        elif v is 'lon':
+            pcontext.reference_frame = AxisTypeEnum.LON
+        elif v is 'z':
+            pcontext.reference_frame = AxisTypeEnum.HEIGHT
 
         pdict.add_context(pcontext)
 
+    # Construct temporal and spatial Coordinate Reference System objects
     tcrs = CRS.standard_temporal()
     scrs = CRS.lat_lon_height()
 
-    tdom = GridDomain(GridShape('temporal', [1]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
-    #CBM: the leading 0 is for time - need to refine _append_parameter to deal with the addition of time so that this is just space
-    sdom = GridDomain(GridShape('spatial', [1]), scrs, MutabilityEnum.IMMUTABLE) # 1d spatial topology (station/trajectory)
+    # Construct temporal and spatial Domain objects
+    tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 1d spatial topology (station/trajectory)
 
+    # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
     scov = SimplexCoverage('sample station coverage_model', pdict, sdom, tdom)
 
     # Insert the timesteps (automatically expands other arrays)
     tvar=ds.variables['time']
-    scov.insert_timesteps(tvar.size - 1)
+    scov.insert_timesteps(tvar.size)
 
     # Add data to the parameters - NOT using setters at this point, direct assignment to arrays
-    for v in all:
+    for v in var_names:
         var = ds.variables[v]
         var.set_auto_maskandscale(False)
-        # Look for fill_value attr
-
-        #        arr = var[:]
-        #        log.debug('variable = \'{2}\' coverage_model range shape: {0}  array shape: {1}'.format(scov.range_value_value[v].shape, arr.shape, v))
 
         # TODO: Sort out how to leave the coordinates sparse internally and only broadcast during read
         scov.range_value[v][:] = var[:]
