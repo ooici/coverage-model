@@ -32,5 +32,6 @@ setup(  name = 'coverage-model',
     install_requires = [
         'pyon',
         'netCDF4>=0.9.8',
+        'scipy==0.10.1',
     ],
 )

@@ -303,7 +303,7 @@ class SimplexCoverage(AbstractCoverage):
         slice_.extend(tdoa.slices)
         slice_.extend(sdoa.slices)
 
-        log.debug('Setting slice: %s'. slice_)
+        log.debug('Setting slice: %s', slice_)
 
         #TODO: Do we need some validation that slice_ is the same rank and/or shape as values?
         self.range_value[param_name][slice_] = value
