@@ -180,6 +180,20 @@ class ParameterDictionary(AbstractIdentifiable):
 
         return self._map[param_name][0]
 
+    def key_from_ord(self, ordinal):
+        """
+        Retrieve the parameter name for an ordinal
+
+        @returns    The parameter name for the provided ordinal
+        @throws KeyError    A parameter with the provided ordinal does not exist
+        """
+        for k, v in self.iteritems():
+            if v[0] == ordinal:
+                return k
+
+        raise KeyError('Ordinal \'{0}\' not found in ParameterDictionary'.format(ordinal))
+
+
     def dump(self):
         """
         Retrieve a standard dict object representing the ParameterDictionary and all sub-objects
@@ -209,6 +223,10 @@ class ParameterDictionary(AbstractIdentifiable):
 
     def __iter__(self):
         return self._map.__iter__()
+
+    def iteritems(self):
+        return self._map.iteritems()
+
 
 """
 
