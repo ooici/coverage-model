@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 
 """
-@package 
-@file common
+@package coverage_model.basic_types
+@file coverage_model/basic_types.py
 @author Christopher Mueller
-@brief 
+@brief Base classes for Coverage Model and Parameter classes
 """
 
 import uuid
@@ -17,30 +17,54 @@ def create_guid():
 
 class AbstractBase(object):
     """
+    Base class for all coverage model objects
 
+    Provides a mutability and extension attributes
     """
-    def __init__(self):
-        self.mutable = False
+    def __init__(self, mutable=None):
+        """
+        Construct a new AbstractBase object
+
+        @param mutable  The mutability of the object; defaults to False
+        """
+        self.mutable = mutable or False
         self.extension = {}
 
 class AbstractIdentifiable(AbstractBase):
-    # TODO: Need to decide if identity is assigned on creation or on demand (when asked for)
     """
+    Base identifiable class for all coverage model objects
 
+    Provides _id, label and description attributes
     """
-    def __init__(self):
+    def __init__(self, _id=None, label=None, description=None):
+        """
+        Construct a new AbstractIdentifiable object
+
+        @param _id  Can force the _id of the object by providing this
+        @param label    The short description of the object
+        @param description  The full description of the object
+        """
         AbstractBase.__init__(self)
-        self._id = create_guid()
-        self.label = ''
-        self.description = ''
+        # TODO: Need to decide if identity is assigned on creation or on demand (when asked for); using the latter for the time being
+        self._id = _id or None
+        self.label = label or ''
+        self.description = description or ''
 
     @property
     def id(self):
+        """
+        The ID of the object.  Generated on first request.
+        """
+        if self._id is None:
+            self._id = create_guid()
+
         return self._id
 
 
 class AxisTypeEnum(object):
     """
+    Enumeration of Axis Types used when building CRS objects and assigning the ParameterContext.reference_frame
+
     Temporarily taken from: http://www.unidata.ucar.edu/software/netcdf-java/v4.2/javadoc/ucar/nc2/constants/AxisType.html
     """
     # Ensemble represents the ensemble coordinate
@@ -100,8 +124,16 @@ class AxisTypeEnum(object):
         return v == want
 
 class MutabilityEnum(object):
+    """
+    Enumeration of mutability types used in creation of concrete AbstractDomain objects
+    """
+    # NTK: mutable indicates ...
+
+    ## Indicates the domain cannot be changed
     IMMUTABLE = 1
+    ## Indicates the domain can be expanded in any of it's dimensions
     EXTENSIBLE = 2
+    ## NTK: Indicates ...
     MUTABLE = 3
     _value_map = {'IMMUTABLE': 1, 'EXTENSIBLE': 2, 'MUTABLE': 3,}
     _str_map = {1: 'IMMUTABLE', 2: 'EXTENSIBLE', 3: 'MUTABLE'}
@@ -113,9 +145,38 @@ class MutabilityEnum(object):
         elif isinstance(value, (str,unicode)):
             return MutabilityEnum.__getattribute__(cls, value.upper())
         else:
-            raise TypeError('AxisTypeEnum has no member: {0}'.format(value))
+            raise TypeError('MutabilityEnum has no member: {0}'.format(value))
 
     @classmethod
     def is_member(cls, value, want):
         v=MutabilityEnum.get_member(value)
+        return v == want
+
+class VariabilityEnum(object):
+    """
+    Enumeration of Variability used when building ParameterContext objects
+    """
+    ## Indicates that the associated object is variable temporally, but not spatially
+    TEMPORAL = 1
+    ## Indicates that the associated object is variable spatially, but not temporally
+    SPATIAL = 2
+    ## Indicates that the associated object is variable both temporally and spatially
+    BOTH = 3
+    ## Indicates that the associated object has NO variability; is constant in both space and time
+    NONE = 99
+    _value_map = {'TEMPORAL': 1, 'SPATIAL': 2, 'MUTABLE': 3, 'NONE': 99}
+    _str_map = {1: 'TEMPORAL', 2: 'SPATIAL', 3: 'BOTH', 99: 'NONE'}
+
+    @classmethod
+    def get_member(cls, value):
+        if isinstance(value, int):
+            return VariabilityEnum.__getattribute__(cls, VariabilityEnum._str_map[value])
+        elif isinstance(value, (str,unicode)):
+            return VariabilityEnum.__getattribute__(cls, value.upper())
+        else:
+            raise TypeError('VariabilityEnum has no member: {0}'.format(value))
+
+    @classmethod
+    def is_member(cls, value, want):
+        v=VariabilityEnum.get_member(value)
         return v == want

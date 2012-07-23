@@ -1,15 +1,14 @@
 #!/usr/bin/env python
 
 """
-@package 
-@file parameter
+@package coverage_model.parameter_types
+@file coverage_model/parameter_types.py
 @author Christopher Mueller
-@brief 
+@brief Abstract and concrete typing classes for parameters
 """
 
 
-#CBM: see next line
-#TODO: Add type checking throughout all classes as determined appropriate, ala:
+#CBM: TODO: Add type checking throughout all classes as determined appropriate, ala:
 #@property
 #def is_coordinate(self):
 #    return self.__is_coordinate
@@ -19,7 +18,7 @@
 #    if isinstance(value, bool):
 #        self.__is_coordinate = value
 
-from coverage_model.basic_types import *
+from coverage_model.basic_types import AbstractIdentifiable
 import numpy as np
 
 #################
@@ -28,7 +27,9 @@ import numpy as np
 
 class AbstractParameterType(AbstractIdentifiable):
     """
+    Base class for parameter typing
 
+    Provides
     """
     def __init__(self):
         AbstractIdentifiable.__init__(self)
@@ -54,7 +55,7 @@ class AbstractParameterType(AbstractIdentifiable):
 
             ret = ptcls(**kwa)
             for k,v in tdict.iteritems():
-                if not k in kwa.keys() and not k is 'p_type':
+                if not k in kwa.keys() and not k == 'p_type':
                     setattr(ret,k,v)
 
             return ret

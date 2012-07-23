@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 
 """
-@package 
-@file coverage_model
+@package covereage_model.coverage
+@file coverage_model/coverage.py
 @author Christopher Mueller
-@brief 
+@brief The core classes comprising the Coverage Model
 """
 
 # http://collabedit.com/kkacp
@@ -38,14 +38,14 @@
 from pyon.public import log
 from pyon.util.containers import DotDict
 
-from coverage_model.basic_types import *
-from coverage_model.parameter import *
+from coverage_model.basic_types import AbstractIdentifiable, AbstractBase, AxisTypeEnum, MutabilityEnum
+from coverage_model.parameter import Parameter, ParameterDictionary
 import numpy as np
 import pickle
 
-#################
+#=========================
 # Coverage Objects
-#################
+#=========================
 
 class AbstractCoverage(AbstractIdentifiable):
     """
@@ -65,7 +65,7 @@ class AbstractCoverage(AbstractIdentifiable):
         with open(file_path, 'w') as f:
             pickle.dump(cov_obj, f, 0 if use_ascii else 2)
 
-        log.info('Saved coverage_model to \'{0}\''.format(file_path))
+        log.info('Saved coverage_model to \'%s\'', file_path)
 
     @classmethod
     def load(cls, file_path):
@@ -75,18 +75,21 @@ class AbstractCoverage(AbstractIdentifiable):
         if not isinstance(obj, AbstractCoverage):
             raise StandardError('loaded object must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(obj)))
 
-        log.info('Loaded coverage_model from {0}'.format(file_path))
+        log.info('Loaded coverage_model from \'%s\'', file_path)
         return obj
 
     @classmethod
     def copy(cls, cov_obj, *args):
+        raise NotImplementedError('Coverages cannot yet be copied. You can load multiple \'independent\' copies of the same coverage, but be sure to save them to different names.')
+
+
         if not isinstance(cov_obj, AbstractCoverage):
             raise StandardError('cov_obj must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(cov_obj)))
 
+        # NTK:
         # Args need to have 1-n (ParameterContext, DomainOfApplication, DomainOfApplication,) tuples
         # Need to pull the parameter_dictionary, spatial_domain and temporal_domain from cov_obj (TODO: copies!!)
         # DOA's and PC's used to copy data - TODO: Need way of reshaping PC's?
-        # NTK:
         ccov = SimplexCoverage(name='', range_dictionary=None, spatial_domain=None, temporal_domain=None)
 
         return ccov
@@ -125,10 +128,10 @@ class SimplexCoverage(AbstractCoverage):
         """
         Constructor for SimplexCoverage
 
-        @param  name    The name of the coverage
-        @param  parameter_dictionary    a ParameterDictionary object expected to contain one or more valid ParameterContext objects
-        @param  spatial_domain  a concrete instance of AbstractDomain for the spatial domain component
-        @param  temporal_domain a concrete instance of AbstractDomain for the temporal domain component
+        @param name    The name of the coverage
+        @param parameter_dictionary    a ParameterDictionary object expected to contain one or more valid ParameterContext objects
+        @param spatial_domain  a concrete instance of AbstractDomain for the spatial domain component
+        @param temporal_domain a concrete instance of AbstractDomain for the temporal domain component
         """
         AbstractCoverage.__init__(self)
 
@@ -147,6 +150,8 @@ class SimplexCoverage(AbstractCoverage):
 
     def append_parameter(self, parameter_context):
         """
+        Append a ParameterContext to the coverage
+
         @deprecated use a ParameterDictionary during construction of the coverage
         """
         log.warn('SimplexCoverage.append_parameter() is deprecated: use a ParameterDictionary during construction of the coverage')
@@ -159,6 +164,8 @@ class SimplexCoverage(AbstractCoverage):
         The supplied ParameterContext is added to self.range_dictionary.  An AbstractParameterValue of the type
         indicated by ParameterContext.param_type is added to self.range_value.  If the ParameterContext indicates that
         the parameter is a coordinate parameter, it is associated with the indicated axis of the appropriate CRS.
+
+        @param parameter_context    The ParameterContext to append to the coverage
         """
         pname = parameter_context.name
 
@@ -190,8 +197,11 @@ class SimplexCoverage(AbstractCoverage):
     def get_parameter(self, param_name):
         """
         Get a Parameter object by name
-        @param  param_name  The local name of the parameter to return
-        @returns    A Parameter object containing the context and value for the specified parameter
+
+        The Parameter object contains the ParameterContext and AbstractParameterValue associated with the param_name
+
+        @param param_name  The local name of the parameter to return
+        @returns A Parameter object containing the context and value for the specified parameter
         """
         if param_name in self.range_dictionary:
             p = Parameter(self.range_dictionary[param_name], self._pcmap[param_name][2], self.range_value[param_name])
@@ -201,11 +211,11 @@ class SimplexCoverage(AbstractCoverage):
 
     def list_parameters(self, coords_only=False, data_only=False):
         """
-        Get a list of the names of the parameters contained in the coverage
+        List the names of the parameters contained in the coverage
 
-        @param  coords_only List only the coordinate parameters
-        @param  data_only   List only the data parameters (non-coordinate) - superseded by coords_only
-        @return A list of parameter names
+        @param coords_only List only the coordinate parameters
+        @param data_only   List only the data parameters (non-coordinate) - superseded by coords_only
+        @returns A list of parameter names
         """
         if coords_only:
             lst=[x for x, v in self.range_dictionary.iteritems() if v.is_coordinate]
@@ -223,6 +233,8 @@ class SimplexCoverage(AbstractCoverage):
         The specified # of timesteps are inserted into the temporal value array at the indicated origin.  This also
         expands the temporal dimension of the AbstractParameterValue for each parameters
 
+        @param count    The number of timesteps to insert
+        @param origin   The starting location, from which to begin the insertion
         """
         if not origin is None:
             raise SystemError('Only append is currently supported')
@@ -240,36 +252,74 @@ class SimplexCoverage(AbstractCoverage):
             arr = np.append(arr, narr, 0)
             self.range_value[n].content = arr
 
-    def set_time_values(self, tdoa, values):
-        return self.set_parameter_values(self._temporal_param_name, tdoa, None, values)
+    def set_time_values(self, value, tdoa):
+        """
+        Convenience method for setting time values
+
+        @param value    The value to set
+        @param tdoa The temporal DomainOfApplication; default to full Domain
+        """
+        return self.set_parameter_values(self._temporal_param_name, value, tdoa, None)
 
     def get_time_values(self, tdoa=None, return_value=None):
+        """
+        Convenience method for retrieving time values
+
+        Delegates to get_parameter_values, supplying the temporal parameter name and sdoa == None
+        @param tdoa The temporal DomainOfApplication; default to full Domain
+        @param return_value If supplied, filled with response value
+        """
         return self.get_parameter_values(self._temporal_param_name, tdoa, None, return_value)
 
     @property
     def num_timesteps(self):
+        """
+        The current number of timesteps
+        """
         return self.temporal_domain.shape.extents[0]
 
-    def set_parameter_values(self, param_name, tdoa=None, sdoa=None, value=None):
+    def set_parameter_values(self, param_name, value, tdoa=None, sdoa=None):
+        """
+        Assign value to the specified parameter
+
+        Assigns the value to param_name within the coverage.  Temporal and spatial DomainOfApplication objects can be
+        applied to constrain the assignment.  See DomainOfApplication for details
+
+        @param param_name   The name of the parameter
+        @param value    The value to set
+        @param tdoa The temporal DomainOfApplication
+        @param sdoa The spatial DomainOfApplication
+        """
         if not param_name in self.range_value:
             raise StandardError('Parameter \'{0}\' not found in coverage_model'.format(param_name))
 
         tdoa = _get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
         sdoa = _get_valid_DomainOfApplication(sdoa, self.spatial_domain.shape.extents)
 
-        log.debug('Temporal doa: {0}'.format(tdoa.slices))
-        log.debug('Spatial doa: {0}'.format(sdoa.slices))
+        log.debug('Temporal doa: %s', tdoa.slices)
+        log.debug('Spatial doa: %s', sdoa.slices)
 
         slice_ = []
         slice_.extend(tdoa.slices)
         slice_.extend(sdoa.slices)
 
-        log.debug('Setting slice: {0}'.format(slice_))
+        log.debug('Setting slice: %s'. slice_)
 
         #TODO: Do we need some validation that slice_ is the same rank and/or shape as values?
         self.range_value[param_name][slice_] = value
 
     def get_parameter_values(self, param_name, tdoa=None, sdoa=None, return_value=None):
+        """
+        Retrieve the value for a parameter
+
+        Returns the value from param_name.  Temporal and spatial DomainOfApplication objects can be used to
+        constrain the response.  See DomainOfApplication for details.
+
+        @param param_name   The name of the parameter
+        @param tdoa The temporal DomainOfApplication
+        @param sdoa The spatial DomainOfApplication
+        @param return_value If supplied, filled with response value
+        """
         if not param_name in self.range_value:
             raise StandardError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
@@ -278,19 +328,25 @@ class SimplexCoverage(AbstractCoverage):
         tdoa = _get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
         sdoa = _get_valid_DomainOfApplication(sdoa, self.spatial_domain.shape.extents)
 
-        log.debug('Temporal doa: {0}'.format(tdoa.slices))
-        log.debug('Spatial doa: {0}'.format(sdoa.slices))
+        log.debug('Temporal doa: %s', tdoa.slices)
+        log.debug('Spatial doa: %s', sdoa.slices)
 
         slice_ = []
         slice_.extend(tdoa.slices)
         slice_.extend(sdoa.slices)
 
-        log.debug('Getting slice: {0}'.format(slice_))
+        log.debug('Getting slice: %s', slice_)
 
         return_value = self.range_value[param_name][slice_]
         return return_value
 
     def get_parameter_context(self, param_name):
+        """
+        Retrieve the ParameterContext object for the specified parameter
+
+        @param param_name   The name of the parameter for which to retrieve context
+        @returns A ParameterContext object
+        """
         if not param_name in self.range_dictionary:
             raise StandardError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
@@ -298,6 +354,10 @@ class SimplexCoverage(AbstractCoverage):
 
     @property
     def info(self):
+        """
+        Returns a detailed string representation of the coverage contents
+        @returns    string of coverage contents
+        """
         lst = []
         indent = ' '
         lst.append('ID: {0}'.format(self._id))
@@ -324,14 +384,14 @@ class SimplexCoverage(AbstractCoverage):
         return '\n'.join(lst)
 
 
-#################
+#=========================
 # Range Objects
-#################
+#=========================
 
 #TODO: Consider usage of Ellipsis in all this slicing stuff as well
 
 class DomainOfApplication(object):
-
+    # CBM: Document this!!
     def __init__(self, slices, topoDim=None):
         if slices is None:
             raise StandardError('\'slices\' cannot be None')
@@ -376,7 +436,7 @@ def _get_valid_DomainOfApplication(v, valid_shape):
     return v
 
 class RangeMember(object):
-    # CBM TODO: Is this really AbstractParameterValue??
+    # CBM TODO: Is this really AbstractParameterValue?? - I think so...content --> value
     """
     This is what would provide the "abstraction" between the in-memory model and the underlying persistence - all through __getitem__ and __setitem__
     Mapping between the "complete" domain and the storage strategy can happen here
@@ -455,9 +515,9 @@ class RangeDictionary(AbstractIdentifiable):
         AbstractIdentifiable.__init__(self)
 
 
-#################
+#=========================
 # Abstract Parameter Value Objects
-#################
+#=========================
 
 class AbstractParameterValue(AbstractBase):
     """
@@ -481,9 +541,9 @@ class AbstractComplexParameterValue(AbstractParameterValue):
         AbstractParameterValue.__init__(self)
 
 
-#################
+#=========================
 # CRS Objects
-#################
+#=========================
 class CRS(AbstractIdentifiable):
     """
 
@@ -553,9 +613,9 @@ class Axes(dict):
 
         return dict.__contains__(self, item)
 
-#################
+#=========================
 # Domain Objects
-#################
+#=========================
 
 class AbstractDomain(AbstractIdentifiable):
     """
@@ -607,9 +667,9 @@ class TopologicalDomain(AbstractDomain):
         AbstractDomain.__init__(self)
 
 
-#################
+#=========================
 # Shape Objects
-#################
+#=========================
 
 class AbstractShape(AbstractIdentifiable):
     """
@@ -644,9 +704,9 @@ class GridShape(AbstractShape):
     #CBM: Make extents type-safe
 
 
-#################
+#=========================
 # Filter Objects
-#################
+#=========================
 
 class AbstractFilter(AbstractIdentifiable):
     """
@@ -672,9 +732,9 @@ class ParameterFilter(AbstractFilter):
 
 
 
-#################
+#=========================
 # Possibly OBE ?
-#################
+#=========================
 
 #class Topology():
 #    """

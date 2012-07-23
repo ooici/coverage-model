@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 
 """
-@package 
-@file simple_cov
+@package coverage_model.test.examples
+@file coverage_model/test/examples.py
 @author Christopher Mueller
-@brief 
+@brief Exemplar functions for creation, manipulation, and basic visualization of coverages
 """
 
 from pyon.public import log
 from netCDF4 import Dataset
+from coverage_model.basic_types import *
 from coverage_model.coverage import *
 from coverage_model.parameter_types import *
 from coverage_model.parameter import *
@@ -95,13 +96,13 @@ def ncgrid2cov(save_coverage=True):
             pcontext.fill_value = var.getncattr('_FillValue')
 
         # Set the reference_frame for the coordinate parameters
-        if v is 'time':
+        if v == 'time':
             pcontext.reference_frame = AxisTypeEnum.TIME
-        elif v is 'lat':
+        elif v == 'lat':
             pcontext.reference_frame = AxisTypeEnum.LAT
-        elif v is 'lon':
+        elif v == 'lon':
             pcontext.reference_frame = AxisTypeEnum.LON
-        elif v is 'depth':
+        elif v == 'depth':
             pcontext.reference_frame = AxisTypeEnum.HEIGHT
 
         pdict.add_context(pcontext)
@@ -127,13 +128,13 @@ def ncgrid2cov(save_coverage=True):
         var.set_auto_maskandscale(False)
         arr = var[:]
         # TODO: Sort out how to leave these sparse internally and only broadcast during read
-        if v is 'depth':
+        if v == 'depth':
             z,_,_ = my_meshgrid(arr,np.zeros([57]),np.zeros([89]),indexing='ij',sparse=True)
             scov.range_value[v][:] = z
-        elif v is 'lat':
+        elif v == 'lat':
             _,y,_ = my_meshgrid(np.zeros([34]),arr,np.zeros([89]),indexing='ij',sparse=True)
             scov.range_value[v][:] = y
-        elif v is 'lon':
+        elif v == 'lon':
             _,_,x = my_meshgrid(np.zeros([34]),np.zeros([57]),arr,indexing='ij',sparse=True)
             scov.range_value[v][:] = x
         else:
@@ -166,13 +167,13 @@ def ncstation2cov(save_coverage=True):
             pcontext.fill_value = var.getncattr('_FillValue')
 
         # Set the reference_frame for the coordinate parameters
-        if v is 'time':
+        if v == 'time':
             pcontext.reference_frame = AxisTypeEnum.TIME
-        elif v is 'lat':
+        elif v == 'lat':
             pcontext.reference_frame = AxisTypeEnum.LAT
-        elif v is 'lon':
+        elif v == 'lon':
             pcontext.reference_frame = AxisTypeEnum.LON
-        elif v is 'z':
+        elif v == 'z':
             pcontext.reference_frame = AxisTypeEnum.HEIGHT
 
         pdict.add_context(pcontext)
@@ -212,22 +213,22 @@ def direct_read():
     log.debug('<========= Query =========>')
     log.debug('\n>> All data for first timestep\n')
     slice_ = 0
-    log.debug('sflow <shape {0}> sliced with: {1}'.format(shp,slice_))
+    log.debug('sflow <shape %s> sliced with: %s', shp,slice_)
     log.debug(scov.range_value['streamflow'][slice_])
 
     log.debug('\n>> All data\n')
     slice_ = (slice(None))
-    log.debug('sflow <shape {0}> sliced with: {1}'.format(shp,slice_))
+    log.debug('sflow <shape %s> sliced with: %s', shp,slice_)
     log.debug(scov.range_value['streamflow'][slice_])
 
     log.debug('\n>> All data for every other timestep from 0 to 10\n')
     slice_ = (slice(0,10,2))
-    log.debug('sflow <shape {0}> sliced with: {1}'.format(shp,slice_))
+    log.debug('sflow <shape %s> sliced with: %s', shp,slice_)
     log.debug(scov.range_value['streamflow'][slice_])
 
     log.debug('\n>> All data for first, sixth, eighth, thirteenth, and fifty-sixth timesteps\n')
     slice_ = [[(0,5,7,12,55)]]
-    log.debug('sflow <shape {0}> sliced with: {1}'.format(shp,slice_))
+    log.debug('sflow <shape %s> sliced with: %s', shp,slice_)
     log.debug(scov.range_value['streamflow'][slice_])
 
 def direct_write():
@@ -238,13 +239,13 @@ def direct_write():
 
     slice_ = (slice(None))
     value = 22
-    log.debug('sflow <shape {0}> assigned with slice: {1} and value: {2}'.format(shp,slice_,value))
+    log.debug('sflow <shape %s> assigned with slice: %s and value: %s', shp,slice_,value)
     scov.range_value['streamflow'][slice_] = value
     log.debug(scov.range_value['streamflow'][slice_])
 
     slice_ = [[(1,5,7,)]]
     value = [10, 20, 30]
-    log.debug('sflow <shape {0}> assigned with slice: {1} and value: {2}'.format(shp,slice_,value))
+    log.debug('sflow <shape %s> assigned with slice: %s and value: %s', shp,slice_,value)
     scov.range_value['streamflow'][slice_] = value
     log.debug(scov.range_value['streamflow'][slice_])
 
@@ -301,14 +302,13 @@ def methodized_write():
 
     slice_ = (slice(None))
     value = 22
-    log.debug('sflow <shape {0}> assigned with slice: {1} and value: {2}'.format(shp,slice_,value))
-    scov.set_parameter_values('streamflow',tdoa=slice_,value=value)
+    log.debug('sflow <shape %s> assigned with slice: %s and value: %s', shp,slice_,value)
+    scov.set_parameter_values('streamflow',value=value,tdoa=slice_)
 
     slice_ = [[(1,5,7,)]]
     value = [10, 20, 30]
-    log.debug('sflow <shape {0}> assigned with slice: {1} and value: {2}'.format(shp,slice_,value))
-    scov.set_parameter_values('streamflow',tdoa=slice_,value=value)
-
+    log.debug('sflow <shape %s> assigned with slice: %s and value: %s', shp,slice_,value)
+    scov.set_parameter_values('streamflow',value=value,tdoa=slice_)
 
 #    raise NotImplementedError('Example not yet implemented')
 

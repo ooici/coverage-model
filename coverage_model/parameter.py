@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 
 """
-@package 
-@file parameter
+@package coverage_model.parameter
+@file coverage_model/parameter.py
 @author Christopher Mueller
-@brief 
+@brief Concrete parameter classes
 """
 
 from pyon.public import log
-from coverage_model.basic_types import AbstractIdentifiable
-from coverage_model.parameter_types import *
+from coverage_model.basic_types import AbstractIdentifiable, VariabilityEnum
+from coverage_model.parameter_types import AbstractParameterType
 
 #################
 # Parameter Objects
@@ -20,6 +20,12 @@ class Parameter(AbstractIdentifiable):
 
     """
     def __init__(self, parameter_context, shape, value):
+        """
+
+        @param parameter_context The ParameterContext of the parameter
+        @param shape    The shape of the parameter
+        @param value    The AbstractParameterValue of the parameter
+        """
         AbstractIdentifiable.__init__(self)
         self.context = parameter_context
         self.value = value
@@ -35,11 +41,22 @@ class Parameter(AbstractIdentifiable):
         return self.context.is_coordinate
 
 class ParameterContext(AbstractIdentifiable):
-    # TODO: Need to incorporate some indication of if the parameter is a function of temporal, spatial, both, or None
     """
+    Context for a parameter
+
 
     """
-    def __init__(self, name, param_type, reference_frame=None, fill_value=None):
+    # TODO: Need to incorporate some indication of if the parameter is a function of temporal, spatial, both, or None
+    def __init__(self, name, param_type, reference_frame=None, fill_value=None, variability=None):
+        """
+        Construct a new ParameterContext object
+
+        @param name The local name
+        @param param_type   The concrete AbstractParameterType
+        @param reference_frame The reference frame, often a coordinate axis identifier
+        @param fill_value  The default fill value
+        @param variability Indicates if the parameter is a function of time, space, both, or neither
+        """
         # TODO: If additional required constructor parameters are added, make sure they're dealt with in _load
         AbstractIdentifiable.__init__(self)
         self.name = name
@@ -53,6 +70,7 @@ class ParameterContext(AbstractIdentifiable):
 
         self.reference_frame = reference_frame or None
         self.fill_value = fill_value or -999
+        self.variability = variability or VariabilityEnum.TEMPORAL
 
     @property
     def is_coordinate(self):
@@ -99,9 +117,10 @@ class ParameterContext(AbstractIdentifiable):
 
         return '\n'.join(lst)
 
-class ParameterDictionary(object):
+class ParameterDictionary(AbstractIdentifiable):
 
     def __init__(self):
+        AbstractIdentifiable.__init__(self)
     #        if not param_dict is None and not isinstance(param_dict, dict):
     #            raise TypeError('param_dict must be a ParameterDictionary object')
         self._map = {}
@@ -151,6 +170,8 @@ from coverage_model.parameter import *
 from coverage_model.parameter_types import *
 pd=ParameterDictionary()
 pd.add_context(ParameterContext('p1',param_type=QuantityType(value_encoding='f', uom='m/s')))
+pd.add_context(ParameterContext('p2',param_type=QuantityType(value_encoding='d', uom='km')))
+pd.add_context(ParameterContext('p3',param_type=QuantityType(value_encoding='i', uom='s')))
 dout=pd.dump()
 
 pd2=ParameterDictionary.load(dout)
