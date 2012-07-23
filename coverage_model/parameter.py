@@ -11,16 +11,17 @@ from pyon.public import log
 from coverage_model.basic_types import AbstractIdentifiable, VariabilityEnum
 from coverage_model.parameter_types import AbstractParameterType
 
-#################
+#==================
 # Parameter Objects
-#################
+#==================
 
 class Parameter(AbstractIdentifiable):
     """
-
+    Container class to hold a ParameterContext and it's associated value
     """
     def __init__(self, parameter_context, shape, value):
         """
+        Construct a new Parameter
 
         @param parameter_context The ParameterContext of the parameter
         @param shape    The shape of the parameter
@@ -118,15 +119,35 @@ class ParameterContext(AbstractIdentifiable):
         return '\n'.join(lst)
 
 class ParameterDictionary(AbstractIdentifiable):
+    """
+    Contains a set of ParameterContext objects keyed by name
 
-    def __init__(self):
+    The ParameterDictionary is used to compose both Streams (specifically Data or Parameter Streams) as well as the
+    internal Dataset (via the Coverage API).
+    """
+
+
+    def __init__(self, contexts=None):
+        """
+        Construct a new ParameterDictionary
+
+        @param contexts an iterable collection of ParameterContext objects to add to the ParameterDictionary
+        """
         AbstractIdentifiable.__init__(self)
-    #        if not param_dict is None and not isinstance(param_dict, dict):
-    #            raise TypeError('param_dict must be a ParameterDictionary object')
         self._map = {}
         self.__count=-1
 
+        if not contexts is None and hasattr(contexts, '__iter__'):
+            for pc in contexts:
+                if isinstance(pc, ParameterContext):
+                    self.add_context(pc)
+
     def add_context(self, param_ctxt):
+        """
+        Add a ParameterContext
+
+        @param param_ctxt The ParameterContext object to add
+        """
         if not isinstance(param_ctxt, ParameterContext):
             raise TypeError('param_ctxt must be a ParameterContext object')
 
@@ -134,18 +155,37 @@ class ParameterDictionary(AbstractIdentifiable):
         self._map[param_ctxt.name] = (self.__count, param_ctxt)
 
     def get_context(self, param_name):
+        """
+        Retrieve a ParameterContext by name
+
+        @param param_name   The name of the ParameterContext
+        @returns    The ParameterContext at key 'param_name'
+        @throws KeyError    If 'param_name' is not found within the object
+        """
         if not param_name in self._map:
             raise KeyError('The ParameterDictionary does not contain the specified key \'{0}\''.format(param_name))
 
         return self._map[param_name][1]
 
     def get_context_ord(self, param_name):
+        """
+        Retrieve the ordinal for a ParameterContext by name
+
+        @param param_name   The name of the ParameterContext
+        @returns    The ordinal of the ParameterContext at key 'param_name'
+        @throws KeyError    If 'param_name' is not found within the object
+        """
         if not param_name in self._map:
             raise KeyError('The ParameterDictionary does not contain the specified key \'{0}\''.format(param_name))
 
         return self._map[param_name][0]
 
     def dump(self):
+        """
+        Retrieve a standard dict object representing the ParameterDictionary and all sub-objects
+
+        @returns    A dict containing all information in the ParameterDictionary
+        """
         #TODO: try/except this to inform more pleasantly if it bombs
         res = dict((k,(v[0],v[1]._dump())) for k, v in self._map.iteritems())
 
@@ -153,6 +193,12 @@ class ParameterDictionary(AbstractIdentifiable):
 
     @classmethod
     def load(cls, pdict):
+        """
+        Create a ParameterDictionary from a dict
+
+        @param cls  A ParameterDictionary instance
+        @param pdict    A dict object containing valid ParameterDictionary content
+        """
         ret = ParameterDictionary()
         if isinstance(pdict, dict):
             for k, v in pdict.iteritems():

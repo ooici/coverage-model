@@ -166,6 +166,8 @@ class SimplexCoverage(AbstractCoverage):
         the parameter is a coordinate parameter, it is associated with the indicated axis of the appropriate CRS.
 
         @param parameter_context    The ParameterContext to append to the coverage
+        @throws StandardError   If the ParameterContext.axis indicates that it is temporal and a temporal parameter
+        already exists in the coverage
         """
         pname = parameter_context.name
 
@@ -202,6 +204,7 @@ class SimplexCoverage(AbstractCoverage):
 
         @param param_name  The local name of the parameter to return
         @returns A Parameter object containing the context and value for the specified parameter
+        @throws KeyError    The coverage does not contain a parameter with name 'param_name'
         """
         if param_name in self.range_dictionary:
             p = Parameter(self.range_dictionary[param_name], self._pcmap[param_name][2], self.range_value[param_name])
@@ -289,9 +292,10 @@ class SimplexCoverage(AbstractCoverage):
         @param value    The value to set
         @param tdoa The temporal DomainOfApplication
         @param sdoa The spatial DomainOfApplication
+        @throws KeyError    The coverage does not contain a parameter with name 'param_name'
         """
         if not param_name in self.range_value:
-            raise StandardError('Parameter \'{0}\' not found in coverage_model'.format(param_name))
+            raise KeyError('Parameter \'{0}\' not found in coverage_model'.format(param_name))
 
         tdoa = _get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
         sdoa = _get_valid_DomainOfApplication(sdoa, self.spatial_domain.shape.extents)
@@ -319,9 +323,10 @@ class SimplexCoverage(AbstractCoverage):
         @param tdoa The temporal DomainOfApplication
         @param sdoa The spatial DomainOfApplication
         @param return_value If supplied, filled with response value
+        @throws KeyError    The coverage does not contain a parameter with name 'param_name'
         """
         if not param_name in self.range_value:
-            raise StandardError('Parameter \'{0}\' not found in coverage'.format(param_name))
+            raise KeyError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
         return_value = return_value or np.zeros([0])
 
@@ -346,9 +351,10 @@ class SimplexCoverage(AbstractCoverage):
 
         @param param_name   The name of the parameter for which to retrieve context
         @returns A ParameterContext object
+        @throws KeyError    The coverage does not contain a parameter with name 'param_name'
         """
         if not param_name in self.range_dictionary:
-            raise StandardError('Parameter \'{0}\' not found in coverage'.format(param_name))
+            raise KeyError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
         return self.range_dictionary[param_name]
 
@@ -510,6 +516,8 @@ class RangeDictionary(AbstractIdentifiable):
     """
     Currently known as Taxonomy with respect to the Granule & RecordDictionary
     May be synonymous with RangeType
+
+    @deprecated DO NOT USE - Subsumed by ParameterDictionary
     """
     def __init__(self):
         AbstractIdentifiable.__init__(self)

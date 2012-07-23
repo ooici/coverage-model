@@ -21,9 +21,9 @@
 from coverage_model.basic_types import AbstractIdentifiable
 import numpy as np
 
-#################
+#==================
 # Abstract Parameter Type Objects
-#################
+#==================
 
 class AbstractParameterType(AbstractIdentifiable):
     """
@@ -79,9 +79,9 @@ class AbstractComplexParameterType(AbstractParameterType):
     def __init__(self):
         AbstractParameterType.__init__(self)
 
-#################
+#==================
 # Parameter Type Objects
-#################
+#==================
 
 class ReferenceType(AbstractSimplexParameterType):
     """
