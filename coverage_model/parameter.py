@@ -35,17 +35,35 @@ class Parameter(AbstractIdentifiable):
     # Expose a couple of the context attributes at this level as "read only"
     @property
     def name(self):
+        """
+        Retrieve the name of the Parameter (via it's ParameterContext)
+
+        @returns    The string name for the Parameter
+        """
         return self.context.name
 
     @property
     def is_coordinate(self):
+        """
+        Indicates if the Parameter is a coordinate (via it's ParameterContext)
+
+        @returns    True if it is a coordinate; False otherwise
+        """
         return self.context.is_coordinate
 
 class ParameterContext(AbstractIdentifiable):
     """
     Context for a parameter
 
+    The ParameterContext is intended to fully describe a parameter in terms of:
+    - typing: the param_type attribute should be one of the concrete implementations of AbstractParameterType (i.e. QuantityType)
+        - The type may impart certain attributes to the ParameterContext.  For example, a ParameterContext of type QuantityType
+     will have a uom (units of measure) attribute.
+    - structure: from the perspective of the container (coverage-model, granule), this includes things such as reference_frame
+    (a.k.a. 'axis') and variability (one of the VariabilityEnum members).
+    - data-critical-metadata: 'metadata' that is critical to the storage/processing of the data - such as fill_value, nil_value, etc.
 
+    @todo: This will likely undergo moderate to significant changes as things continue to mature
     """
     # TODO: Need to incorporate some indication of if the parameter is a function of temporal, spatial, both, or None
     def __init__(self, name, param_type, reference_frame=None, fill_value=None, variability=None):
@@ -75,9 +93,19 @@ class ParameterContext(AbstractIdentifiable):
 
     @property
     def is_coordinate(self):
+        """
+        Indicates if the ParameterContext is a coordinate
+
+        @returns    True if it is a coordinate; False otherwise
+        """
         return not self.reference_frame is None
 
     def _dump(self):
+        """
+        Get a composable type (dict) representation of the ParameterContext and all internal objects
+
+        @returns    A dict representation of this ParameterContext
+        """
         ret={'cm_type': self.__class__.__name__}
         for k,v in self.__dict__.iteritems():
             #TODO: If additional objects are added to ParameterContext, add their attr name here as well
@@ -90,6 +118,12 @@ class ParameterContext(AbstractIdentifiable):
 
     @classmethod
     def _load(cls, pcdict):
+        """
+        Create a ParameterContext from a dict representation
+
+        @param cls  A ParemeterContext instance
+        @param pcdict   A dict containing ParameterContext information (requires 'cm_type' and 'p_type' keys)
+        """
         if isinstance(pcdict, dict) and 'cm_type' in pcdict and pcdict['cm_type'] == ParameterContext.__name__:
             #TODO: If additional required constructor parameters are added, make sure they're dealt with here
             ptd = AbstractParameterType._load(pcdict['param_type'])
