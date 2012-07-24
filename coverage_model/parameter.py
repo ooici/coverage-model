@@ -167,7 +167,7 @@ class ParameterDictionary(AbstractIdentifiable):
 
         return self._map[param_name][1]
 
-    def get_context_ord(self, param_name):
+    def ord_from_key(self, param_name):
         """
         Retrieve the ordinal for a ParameterContext by name
 
