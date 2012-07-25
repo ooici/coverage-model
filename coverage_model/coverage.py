@@ -154,7 +154,7 @@ class SimplexCoverage(AbstractCoverage):
 
         @deprecated use a ParameterDictionary during construction of the coverage
         """
-        log.warn('SimplexCoverage.append_parameter() is deprecated: use a ParameterDictionary during construction of the coverage')
+        log.warn('SimplexCoverage.append_parameter() is deprecated and will be removed shortly: use a ParameterDictionary during construction of the coverage')
         self._append_parameter(parameter_context)
 
     def _append_parameter(self, parameter_context):
@@ -556,10 +556,10 @@ class CRS(AbstractIdentifiable):
     """
 
     """
-    def __init__(self, axis_labels):
+    def __init__(self, axes):
         AbstractIdentifiable.__init__(self)
         self.axes=Axes()
-        for l in axis_labels:
+        for l in axes:
             # Add an axis member for the indicated axis
             try:
                 self.axes[l] = None
@@ -581,6 +581,33 @@ class CRS(AbstractIdentifiable):
     @classmethod
     def x_y_z(cls):
         return CRS([AxisTypeEnum.GEO_X, AxisTypeEnum.GEO_Y, AxisTypeEnum.GEO_Z])
+
+    def _dump(self):
+        ret = dict((k,v) for k,v in self.__dict__.iteritems())
+        ret['cm_type'] = self.__class__.__name__
+        return ret
+
+    @classmethod
+    def _load(cls, cdict):
+        if isinstance(cdict, dict) and 'cm_type' in cdict and cdict['cm_type']:
+            import inspect
+            mod = inspect.getmodule(cls)
+            ptcls=getattr(mod, cdict['cm_type'])
+
+            args = inspect.getargspec(ptcls.__init__).args
+            del args[0] # get rid of 'self'
+            kwa={}
+            for a in args:
+                kwa[a] = cdict[a] if a in cdict else None
+
+            ret = ptcls(**kwa)
+            for k,v in cdict.iteritems():
+                if not k in kwa.keys() and not k == 'cm_type':
+                    setattr(ret,k,v)
+
+            return ret
+        else:
+            raise TypeError('cdict is not properly formed, must be of type dict and contain a \'cm_type\' key: {0}'.format(cdict))
 
     def __str__(self, indent=None):
         indent = indent or ' '
@@ -629,7 +656,7 @@ class AbstractDomain(AbstractIdentifiable):
     """
 
     """
-    def __init__(self, shape, crs, mutability):
+    def __init__(self, shape, crs, mutability=None):
         AbstractIdentifiable.__init__(self)
         self.shape = shape
         self.crs = crs
@@ -649,6 +676,39 @@ class AbstractDomain(AbstractIdentifiable):
 
     def insert_elements(self, dim_index, count, doa):
         pass
+
+    def dump(self):
+        ret={'cm_type':self.__class__.__name__}
+        for k,v in self.__dict__.iteritems():
+            if hasattr(v, '_dump'):
+                ret[k]=v._dump()
+            else:
+                ret[k]=v
+
+        return ret
+
+    @classmethod
+    def load(cls, ddict):
+        """
+        Create a concrete AbstractDomain from a dict representation
+
+        @param cls  An AbstractDomain instance
+        @param ddict   A dict containing information for a concrete AbstractDomain (requires a 'cm_type' key)
+        """
+        dd=ddict.copy()
+        if isinstance(dd, dict) and 'cm_type' in dd:
+            dd.pop('cm_type')
+            #TODO: If additional required constructor parameters are added, make sure they're dealt with here
+            crs = CRS._load(dd.pop('crs'))
+            shp = AbstractShape._load(dd.pop('shape'))
+
+            pc=AbstractDomain(shp,crs)
+            for k, v in dd.iteritems():
+                setattr(pc,k,v)
+
+            return pc
+        else:
+            raise TypeError('ddict is not properly formed, must be of type dict and contain a \'cm_type\' key: {0}'.format(ddict))
 
     def __str__(self, indent=None):
         indent = indent or ' '
@@ -694,6 +754,33 @@ class AbstractShape(AbstractIdentifiable):
 
 #    def rank(self):
 #        return len(self.extents)
+
+    def _dump(self):
+        ret = dict((k,v) for k,v in self.__dict__.iteritems())
+        ret['cm_type'] = self.__class__.__name__
+        return ret
+
+    @classmethod
+    def _load(cls, sdict):
+        if isinstance(sdict, dict) and 'cm_type' in sdict and sdict['cm_type']:
+            import inspect
+            mod = inspect.getmodule(cls)
+            ptcls=getattr(mod, sdict['cm_type'])
+
+            args = inspect.getargspec(ptcls.__init__).args
+            del args[0] # get rid of 'self'
+            kwa={}
+            for a in args:
+                kwa[a] = sdict[a] if a in sdict else None
+
+            ret = ptcls(**kwa)
+            for k,v in sdict.iteritems():
+                if not k in kwa.keys() and not k == 'cm_type':
+                    setattr(ret,k,v)
+
+            return ret
+        else:
+            raise TypeError('sdict is not properly formed, must be of type dict and contain a \'cm_type\' key: {0}'.format(sdict))
 
     def __str__(self, indent=None):
         indent = indent or ' '

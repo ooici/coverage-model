@@ -124,14 +124,15 @@ class ParameterContext(AbstractIdentifiable):
         @param cls  A ParemeterContext instance
         @param pcdict   A dict containing ParameterContext information (requires 'cm_type' and 'p_type' keys)
         """
-        if isinstance(pcdict, dict) and 'cm_type' in pcdict and pcdict['cm_type'] == ParameterContext.__name__:
+        pcd=pcdict.copy()
+        if isinstance(pcd, dict) and 'cm_type' in pcd and pcd['cm_type'] == ParameterContext.__name__:
+            pcd.pop('cm_type')
             #TODO: If additional required constructor parameters are added, make sure they're dealt with here
-            ptd = AbstractParameterType._load(pcdict['param_type'])
-            n = pcdict['name']
+            ptd = AbstractParameterType._load(pcd.pop('param_type'))
+            n = pcd.pop('name')
             pc=ParameterContext(n,ptd)
-            for k, v in pcdict.iteritems():
-                if not k in ('name','param_type','cm_type'):
-                    setattr(pc,k,v)
+            for k, v in pcd.iteritems():
+                setattr(pc,k,v)
 
             return pc
         else:
