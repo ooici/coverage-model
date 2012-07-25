@@ -8,7 +8,7 @@
 """
 
 from pyon.public import log
-from coverage_model.basic_types import AbstractIdentifiable, VariabilityEnum
+from coverage_model.basic_types import AbstractIdentifiable, VariabilityEnum, AxisTypeEnum
 from coverage_model.parameter_types import AbstractParameterType
 
 #==================
