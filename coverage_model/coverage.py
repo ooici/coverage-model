@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-@package covereage_model.coverage
+@package coverage_model.coverage
 @file coverage_model/coverage.py
 @author Christopher Mueller
 @brief The core classes comprising the Coverage Model
