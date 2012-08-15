@@ -119,8 +119,8 @@ class QuantityType(AbstractSimplexParameterType):
         AbstractSimplexParameterType.__init__(self)
         try:
             dt = np.dtype(value_encoding)
-            if dt.isbuiltin:
-                self.value_encoding = dt.char
+            if dt.isbuiltin in (0,1):
+                self.value_encoding = dt.str
             else:
                 raise TypeError()
         except TypeError:
