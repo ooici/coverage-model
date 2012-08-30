@@ -10,6 +10,8 @@
 from pyon.public import log
 from coverage_model.basic_types import AbstractIdentifiable, VariabilityEnum, AxisTypeEnum
 from coverage_model.parameter_types import AbstractParameterType
+from collections import OrderedDict
+import copy
 
 #==================
 # Parameter Objects
@@ -65,31 +67,81 @@ class ParameterContext(AbstractIdentifiable):
 
     @todo: This will likely undergo moderate to significant changes as things continue to mature
     """
+
+    # Dynamically added attributes - from ObjectType CI Attributes (2480139)
+    ATTRS = ['attributes',
+             'index_key',
+             'ion_name',
+#             'name', # accounted for as 'name'
+#             'units', # accounted for as 'uom'
+             'standard_name',
+             'long_name',
+             'ooi_short_name',
+#             'missing_value', # accounted for as 'fill_value'
+             'cdm_data_type',
+             'variable_reports',
+#             'axis', # accounted for as 'reference_frame'
+             'references_list',
+             'comment',
+             'code_reports',]
+
+
     # TODO: Need to incorporate some indication of if the parameter is a function of temporal, spatial, both, or None
-    def __init__(self, name, param_type, reference_frame=None, fill_value=None, variability=None):
+    def __init__(self, name=None, param_type=None, param_context=None, reference_frame=None, fill_value=None, variability=None, **kwargs):
         """
         Construct a new ParameterContext object
 
+        Must provide either param_context or name & param_type
+
+        When specifying param_context - the provided ParameterContext is utilized as a 'template' and it's attributes are copied into the new
+        ParameterContext.  If additional constructor arguments are provided (i.e. name, reference_frame, etc), they will be used preferrentially
+        over those in the 'template' ParameterContext.  If param_type is specified, it must be compatible (i.e. equivalent) to the param_type
+        in the 'template' ParameterContext.
+
         @param name The local name
         @param param_type   The concrete AbstractParameterType
+        @param param_context    The 'template' ParameterContext.  Provides the _derived_from_name attr.  If None, self._derived_from_name == self.name
         @param reference_frame The reference frame, often a coordinate axis identifier
         @param fill_value  The default fill value
         @param variability Indicates if the parameter is a function of time, space, both, or neither
+        @param **kwargs Keyword arguments matching members of ParameterContext.ATTRS are applied.  Additional keyword arguments are copied and the copy is passed up to AbstractIdentifiable; see documentation for that class for details
         """
         # TODO: If additional required constructor parameters are added, make sure they're dealt with in _load
-        AbstractIdentifiable.__init__(self)
-        self.name = name
-        if not isinstance(param_type, AbstractParameterType):
-            raise SystemError('\'param_type\' must be a concrete subclass of AbstractParameterType')
-        self.param_type = param_type
+        if param_context is None and (name is None or param_type is None):
+            raise SystemError('Must specify either a \'param_context\' or BOTH \'name\' and \'param_type\'')
+        kwc=kwargs.copy()
+        my_kwargs = {x:kwc.pop(x) for x in self.ATTRS if x in kwc}
+        AbstractIdentifiable.__init__(self, **kwc)
+        if not param_context is None:
+            self._derived_from_name = param_context._derived_from_name
+            self.name = name or self._derived_from_name
+            # CBM TODO: Is this right?  If param_type is provided, AND is equivalent to the clone's param_type, use it
+            if not param_type is None and (param_type == param_context.param_type):
+                self.param_type = param_type
+            else:
+                self.param_type = copy.deepcopy(param_context.param_type)
 
-        # Expose the template_attrs from the param_type
-        for k,v in self.param_type.template_attrs.iteritems():
-            setattr(self,k,v)
+            self.reference_frame = reference_frame or param_context.reference_frame
+            self.fill_value = fill_value or param_context.fill_value
+            self.variability = variability or param_context.variability
 
-        self.reference_frame = reference_frame or None
-        self.fill_value = fill_value or -999
-        self.variability = variability or VariabilityEnum.TEMPORAL
+            for a in self.ATTRS:
+                setattr(self, a, kwargs[a] if a in kwargs else getattr(param_context, a))
+
+        else:
+            # TODO: Should this be None?  potential for mismatches if the self-given name happens to match a "blessed" name...
+            self._derived_from_name = name
+            self.name = name
+            if not isinstance(param_type, AbstractParameterType):
+                raise SystemError('\'param_type\' must be a concrete subclass of AbstractParameterType')
+            self.param_type = param_type
+
+            self.reference_frame = reference_frame or None
+            self.fill_value = fill_value or -999
+            self.variability = variability or VariabilityEnum.TEMPORAL
+
+            for a in self.ATTRS:
+                setattr(self, a, kwargs[a] if a in kwargs else None)
 
     @property
     def is_coordinate(self):
@@ -143,6 +195,7 @@ class ParameterContext(AbstractIdentifiable):
         indent = indent or ' '
         lst = []
         lst.append('{0}ID: {1}'.format(indent, self._id))
+        lst.append('{0}Derived from name: {1}'.format(indent, self._derived_from_name))
         lst.append('{0}Name: {1}'.format(indent, self.name))
         if self.is_coordinate:
             lst.append('{0}Is Coordinate: {1}'.format(indent, AxisTypeEnum._str_map[self.reference_frame]))
@@ -152,6 +205,35 @@ class ParameterContext(AbstractIdentifiable):
             lst.append('{0}Unit of Measure: {1}'.format(indent, self.uom))
 
         return '\n'.join(lst)
+
+    def __eq__(self, other):
+        if isinstance(other, ParameterContext):
+            if self._derived_from_name == other._derived_from_name:
+                if self.param_type == other.param_type:
+                    return True
+
+        return False
+
+    def __ne__(self, other):
+        return not self == other
+
+    def __dir__(self):
+        lst = dir(super(ParameterContext))
+        map(lst.append, self.__dict__.keys())
+        map(lst.append, self.param_type._template_attrs.keys())
+        return lst
+
+    def __getattr__(self, name):
+        if 'param_type' in self.__dict__ and name in self.__dict__['param_type']._template_attrs.keys():
+            return getattr(self.__dict__['param_type'], name)
+        else:
+            return super(ParameterContext, self).__getattr__(name)
+
+    def __setattr__(self, key, value):
+        if 'param_type' in self.__dict__ and key in self.__dict__['param_type']._template_attrs.keys():
+            setattr(self.__dict__['param_type'], key, value)
+        else:
+            super(ParameterContext, self).__setattr__(key, value)
 
 class ParameterDictionary(AbstractIdentifiable):
     """
@@ -169,7 +251,7 @@ class ParameterDictionary(AbstractIdentifiable):
         @param contexts an iterable collection of ParameterContext objects to add to the ParameterDictionary
         """
         AbstractIdentifiable.__init__(self)
-        self._map = {}
+        self._map = OrderedDict()
         self.__count=-1
 
         if not contexts is None and hasattr(contexts, '__iter__'):
@@ -202,6 +284,17 @@ class ParameterDictionary(AbstractIdentifiable):
 
         return self._map[param_name][1]
 
+    def get_context_from_ord(self, ordinal):
+        """
+        Retrieve a ParameterContext by ordinal
+
+        @param ordinal   The ordinal of the ParameterContext
+        @returns    The ParameterContext with the ordinal 'ordinal'
+        @throws KeyError    A parameter with the provided ordinal does not exist
+        """
+        key=self.key_from_ord(ordinal)
+
+
     def ord_from_key(self, param_name):
         """
         Retrieve the ordinal for a ParameterContext by name
@@ -219,6 +312,7 @@ class ParameterDictionary(AbstractIdentifiable):
         """
         Retrieve the parameter name for an ordinal
 
+        @param ordinal   The ordinal of the ParameterContext
         @returns    The parameter name for the provided ordinal
         @throws KeyError    A parameter with the provided ordinal does not exist
         """
@@ -262,6 +356,49 @@ class ParameterDictionary(AbstractIdentifiable):
     def iteritems(self):
         return self._map.iteritems()
 
+    def keys(self):
+        return self._map.keys()
+
+    def compare(self, other):
+        """
+        Performs a cross-wise comparison of the two ParameterDictionary objects.  Each member of self is compared to each member of other.
+
+        @param other    A ParameterDictionary instance to compare to self
+        @returns    A dictionary with keys from self and lists of matching keys from other
+        """
+        if not isinstance(other, ParameterDictionary):
+            raise TypeError('\'other\' must be an instance of ParameterDictionary')
+
+        ret = {}
+        other_keys = other.keys()
+        for ks,vs in self.iteritems():
+            ret[ks] = []
+            for ko,vo in other.iteritems():
+                if vs[1] == vo[1]:
+                    ret[ks].append(ko)
+                    del other_keys[other_keys.index(ko)]
+
+        ret[None] = other_keys
+
+        return ret
+
+
+    def __eq__(self, other):
+        try:
+            res = self.compare(other)
+            for k,v in res.iteritems():
+                if k is None:
+                    if len(v) > 0:
+                        return False
+                elif len(v) != 1 or k != v[0]:
+                    return False
+
+            return True
+        except TypeError:
+            return False
+
+    def __ne__(self, other):
+        return not self == other
 
 """
 
