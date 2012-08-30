@@ -19,46 +19,55 @@ class AbstractBase(object):
     """
     Base class for all coverage model objects
 
-    Provides a mutability and extension attributes
+    Provides id, mutability and extension attributes
     """
-    def __init__(self, mutable=None):
+    def __init__(self, id=None, mutable=None, extension=None):
         """
         Construct a new AbstractBase object
 
+        @param id   The ID of this object type
         @param mutable  The mutability of the object; defaults to False
         """
+        self._id = id
         self.mutable = mutable or False
-        self.extension = {}
+        self.extension = extension or {}
+
+    @property
+    def id(self):
+        return self._id
 
 class AbstractIdentifiable(AbstractBase):
     """
     Base identifiable class for all coverage model objects
 
-    Provides _id, label and description attributes
+    Provides identifier, label and description attributes
     """
-    def __init__(self, _id=None, label=None, description=None):
+    def __init__(self, identifier=None, label=None, description=None, **kwargs):
         """
         Construct a new AbstractIdentifiable object
 
-        @param _id  Can force the _id of the object by providing this
+        @param identifier   The UUID of this 'instance'
         @param label    The short description of the object
         @param description  The full description of the object
+        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractBase; see documentation for that class for details
         """
-        AbstractBase.__init__(self)
-        # TODO: Need to decide if identity is assigned on creation or on demand (when asked for); using the latter for the time being
-        self._id = _id or None
+        kwc=kwargs.copy()
+        AbstractBase.__init__(self, **kwc)
+        # TODO: Need to decide if identifier is assigned on creation or on demand (when asked for); using the latter for the time being
+        self._identifier = identifier
         self.label = label or ''
         self.description = description or ''
 
     @property
-    def id(self):
+    def identifier(self):
         """
-        The ID of the object.  Generated on first request.
+        The UUID of the object.  Generated on first request.
         """
-        if self._id is None:
-            self._id = create_guid()
+        if self._identifier is None:
+            self._identifier = create_guid()
 
-        return self._id
+        return self._identifier
+
 
 
 class AxisTypeEnum(object):
