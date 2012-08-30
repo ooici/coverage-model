@@ -239,13 +239,17 @@ class SimplexCoverage(AbstractCoverage):
         @param count    The number of timesteps to insert
         @param origin   The starting location, from which to begin the insertion
         """
-        if origin is None or not isinstance(origin, int):
-            origin = 0
 #        if not origin is None:
 #            raise SystemError('Only append is currently supported')
 
-        # Expand the shape of the temporal_dimension
+        # Get the current shape of the temporal_dimension
         shp = self.temporal_domain.shape
+
+        # If not provided, set the origin to the end of the array
+        if origin is None or not isinstance(origin, int):
+            origin = shp.extents[0]
+
+        # Expand the shape of the temporal_domain
         shp.extents[0] += count
 
         # Expand the temporal dimension of each of the parameters that are temporal TODO: Indicate which are temporal!
