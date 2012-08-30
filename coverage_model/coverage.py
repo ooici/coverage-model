@@ -239,8 +239,10 @@ class SimplexCoverage(AbstractCoverage):
         @param count    The number of timesteps to insert
         @param origin   The starting location, from which to begin the insertion
         """
-        if not origin is None:
-            raise SystemError('Only append is currently supported')
+        if origin is None or not isinstance(origin, int):
+            origin = 0
+#        if not origin is None:
+#            raise SystemError('Only append is currently supported')
 
         # Expand the shape of the temporal_dimension
         shp = self.temporal_domain.shape
@@ -249,10 +251,15 @@ class SimplexCoverage(AbstractCoverage):
         # Expand the temporal dimension of each of the parameters that are temporal TODO: Indicate which are temporal!
         for n in self._pcmap:
             arr = self.range_value[n].content
+            log.debug('orig param shape: %s', arr.shape)
             pc = self.range_dictionary[n]
-            narr = np.empty((count,) + arr.shape[1:], dtype=pc.param_type.value_encoding)
+#            narr = np.empty((count,) + arr.shape[1:], dtype=pc.param_type.value_encoding)
+            narr = np.empty(arr.shape[1:], dtype=pc.param_type.value_encoding)
             narr.fill(pc.fill_value)
-            arr = np.append(arr, narr, 0)
+            log.debug('insert: shape %s %s times at index %s', narr.shape, count, origin)
+            loc=[origin for x in xrange(count)]
+            arr = np.insert(arr, loc, narr, axis=0)
+#            arr = np.append(arr, narr, 0)
             self.range_value[n].content = arr
 
     def set_time_values(self, value, tdoa):
