@@ -227,9 +227,9 @@ class SimplexCoverage(AbstractCoverage):
         @returns A list of parameter names
         """
         if coords_only:
-            lst=[x for x, v in self.range_dictionary.iteritems() if v.is_coordinate]
+            lst=[x for x, v in self.range_dictionary.iteritems() if v[1].is_coordinate]
         elif data_only:
-            lst=[x for x, v in self.range_dictionary.iteritems() if not v.is_coordinate]
+            lst=[x for x, v in self.range_dictionary.iteritems() if not v[1].is_coordinate]
         else:
             lst=[x for x in self.range_dictionary]
         lst.sort()
