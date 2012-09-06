@@ -40,6 +40,7 @@ from pyon.util.containers import DotDict
 
 from coverage_model.basic_types import AbstractIdentifiable, AbstractBase, AxisTypeEnum, MutabilityEnum
 from coverage_model.parameter import Parameter, ParameterDictionary
+from copy import deepcopy
 import numpy as np
 import pickle
 
@@ -136,17 +137,22 @@ class SimplexCoverage(AbstractCoverage):
         AbstractCoverage.__init__(self)
 
         self.name = name
-        self.parameter_dictionary = parameter_dictionary
+#        self.parameter_dictionary = parameter_dictionary
         self.spatial_domain = spatial_domain
         self.temporal_domain = temporal_domain or GridDomain(GridShape('temporal',[0]), CRS.standard_temporal(), MutabilityEnum.EXTENSIBLE)
-        self.range_dictionary = DotDict()
+        if not isinstance(parameter_dictionary, ParameterDictionary):
+            raise TypeError('\'parameter_dictionary\' must be of type ParameterDictionary')
+        self.range_dictionary = deepcopy(parameter_dictionary)
         self.range_value = DotDict()
         self._pcmap = {}
         self._temporal_param_name = None
 
-        if isinstance(self.parameter_dictionary, ParameterDictionary):
-            for p in self.parameter_dictionary:
-                self._append_parameter(self.parameter_dictionary.get_context(p))
+        for pc in self.range_dictionary.itervalues():
+            self._append_parameter(pc[1])
+
+    @property
+    def parameter_dictionary(self):
+        return deepcopy(self.range_dictionary)
 
     def append_parameter(self, parameter_context):
         """
@@ -193,7 +199,7 @@ class SimplexCoverage(AbstractCoverage):
             dom.crs.axes[parameter_context.reference_frame] = parameter_context.name
 
         self._pcmap[pname] = (len(self._pcmap), parameter_context, dom)
-        self.range_dictionary[pname] = parameter_context
+        self.range_dictionary.add_context(parameter_context)
         self.range_value[pname] = RangeMember(shp, parameter_context)
 
     def get_parameter(self, param_name):
@@ -207,7 +213,7 @@ class SimplexCoverage(AbstractCoverage):
         @throws KeyError    The coverage does not contain a parameter with name 'param_name'
         """
         if param_name in self.range_dictionary:
-            p = Parameter(self.range_dictionary[param_name], self._pcmap[param_name][2], self.range_value[param_name])
+            p = Parameter(self.range_dictionary.get_context(param_name), self._pcmap[param_name][2], self.range_value[param_name])
             return p
         else:
             raise KeyError('Coverage does not contain parameter \'{0}\''.format(param_name))
@@ -225,7 +231,7 @@ class SimplexCoverage(AbstractCoverage):
         elif data_only:
             lst=[x for x, v in self.range_dictionary.iteritems() if not v.is_coordinate]
         else:
-            lst=[x for x in self.range_dictionary.iterkeys()]
+            lst=[x for x in self.range_dictionary]
         lst.sort()
         return lst
 
@@ -256,7 +262,7 @@ class SimplexCoverage(AbstractCoverage):
         for n in self._pcmap:
             arr = self.range_value[n].content
             log.debug('orig param shape: %s', arr.shape)
-            pc = self.range_dictionary[n]
+            pc = self.range_dictionary.get_context(n)
 #            narr = np.empty((count,) + arr.shape[1:], dtype=pc.param_type.value_encoding)
             narr = np.empty(arr.shape[1:], dtype=pc.param_type.value_encoding)
             narr.fill(pc.fill_value)
@@ -367,7 +373,7 @@ class SimplexCoverage(AbstractCoverage):
         if not param_name in self.range_dictionary:
             raise KeyError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
-        return self.range_dictionary[param_name]
+        return self.range_dictionary.get_context(param_name)
 
     @property
     def info(self):
@@ -384,7 +390,7 @@ class SimplexCoverage(AbstractCoverage):
 
         lst.append('Parameters:')
         for x in self.range_value:
-            lst.append('{0}{1} {2}\n{3}'.format(indent*2,x,self.range_value[x].shape,self.range_dictionary[x].__str__(indent*4)))
+            lst.append('{0}{1} {2}\n{3}'.format(indent*2,x,self.range_value[x].shape,self.range_dictionary.get_context(x).__str__(indent*4)))
 
         return '\n'.join(lst)
 

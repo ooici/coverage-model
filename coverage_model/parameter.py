@@ -356,6 +356,9 @@ class ParameterDictionary(AbstractIdentifiable):
     def iteritems(self):
         return self._map.iteritems()
 
+    def itervalues(self):
+        return self._map.itervalues()
+
     def keys(self):
         return self._map.keys()
 
