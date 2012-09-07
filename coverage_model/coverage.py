@@ -148,7 +148,7 @@ class SimplexCoverage(AbstractCoverage):
         self._temporal_param_name = None
 
         for pc in self.range_dictionary.itervalues():
-            self._append_parameter(pc[1])
+            self._append_parameter(pc[1], True)
 
     @property
     def parameter_dictionary(self):
@@ -163,7 +163,7 @@ class SimplexCoverage(AbstractCoverage):
         log.warn('SimplexCoverage.append_parameter() is deprecated and will be removed shortly: use a ParameterDictionary during construction of the coverage')
         self._append_parameter(parameter_context)
 
-    def _append_parameter(self, parameter_context):
+    def _append_parameter(self, parameter_context, value_only=False):
         """
         Appends a ParameterContext object to the internal set for this coverage.
 
@@ -199,7 +199,8 @@ class SimplexCoverage(AbstractCoverage):
             dom.crs.axes[parameter_context.reference_frame] = parameter_context.name
 
         self._pcmap[pname] = (len(self._pcmap), parameter_context, dom)
-        self.range_dictionary.add_context(parameter_context)
+        if not value_only:
+            self.range_dictionary.add_context(parameter_context)
         self.range_value[pname] = RangeMember(shp, parameter_context)
 
     def get_parameter(self, param_name):
