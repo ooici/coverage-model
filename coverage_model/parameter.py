@@ -9,7 +9,7 @@
 
 from pyon.public import log
 from coverage_model.basic_types import AbstractIdentifiable, VariabilityEnum, AxisTypeEnum
-from coverage_model.parameter_types import AbstractParameterType
+from coverage_model.parameter_types import AbstractParameterType, QuantityType
 from collections import OrderedDict
 import copy
 
@@ -87,30 +87,38 @@ class ParameterContext(AbstractIdentifiable):
 
 
     # TODO: Need to incorporate some indication of if the parameter is a function of temporal, spatial, both, or None
-    def __init__(self, name=None, param_type=None, param_context=None, reference_frame=None, fill_value=None, variability=None, **kwargs):
+    def __init__(self, name, param_type=None, reference_frame=None, fill_value=None, variability=None, **kwargs):
         """
         Construct a new ParameterContext object
 
-        Must provide either param_context or name & param_type
+        Must provide the 'name' argument.  It can be either a string indicating the name of the parameter, or an exising
+        ParameterContext object that should be used as a template.
+        If 'name' is a ParameterContext, a keyword argument 'new_name' can be provided which will be used as the name for
+        the new ParameterContext.  If 'new_name' is not provided, the name will be the same as the template.
 
-        When specifying param_context - the provided ParameterContext is utilized as a 'template' and it's attributes are copied into the new
-        ParameterContext.  If additional constructor arguments are provided (i.e. name, reference_frame, etc), they will be used preferrentially
+        When 'name' is a ParameterContext - the provided ParameterContext is utilized as a 'template' and it's attributes are copied into the new
+        ParameterContext.  If additional constructor arguments are provided (i.e. reference_frame, fill_value, etc), they will be used preferrentially
         over those in the 'template' ParameterContext.  If param_type is specified, it must be compatible (i.e. equivalent) to the param_type
         in the 'template' ParameterContext.
 
-        @param name The local name
-        @param param_type   The concrete AbstractParameterType
-        @param param_context    The 'template' ParameterContext.  Provides the _derived_from_name attr.  If None, self._derived_from_name == self.name
+        @param name The local name OR a 'template' ParameterContext.
+        @param param_type   The concrete AbstractParameterType; defaults to QuantityType if not provided
         @param reference_frame The reference frame, often a coordinate axis identifier
         @param fill_value  The default fill value
-        @param variability Indicates if the parameter is a function of time, space, both, or neither
+        @param variability Indicates if the parameter is a function of time, space, both, or neither; Default is VariabilityEnum.BOTH
         @param **kwargs Keyword arguments matching members of ParameterContext.ATTRS are applied.  Additional keyword arguments are copied and the copy is passed up to AbstractIdentifiable; see documentation for that class for details
         """
-        # TODO: If additional required constructor parameters are added, make sure they're dealt with in _load
-        if param_context is None and (name is None or param_type is None):
-            raise SystemError('Must specify either a \'param_context\' or BOTH \'name\' and \'param_type\'')
         kwc=kwargs.copy()
         my_kwargs = {x:kwc.pop(x) for x in self.ATTRS if x in kwc}
+        new_name = kwc.pop('new_name') if 'new_name' in kwc else None
+        param_context = None
+        if isinstance(name, ParameterContext):
+            param_context = name
+            name = new_name or param_context.name
+
+        # TODO: If additional required constructor parameters are added, make sure they're dealt with in _load
+        if param_context is None and name is None:
+            raise SystemError('Must specify \'name\', which can be either a string or ParameterContext.')
         AbstractIdentifiable.__init__(self, **kwc)
         if not param_context is None:
             self._derived_from_name = param_context._derived_from_name
@@ -126,22 +134,23 @@ class ParameterContext(AbstractIdentifiable):
             self.variability = variability or param_context.variability
 
             for a in self.ATTRS:
-                setattr(self, a, kwargs[a] if a in kwargs else getattr(param_context, a))
+                setattr(self, a, kwargs[a] if a in my_kwargs else getattr(param_context, a))
 
         else:
             # TODO: Should this be None?  potential for mismatches if the self-given name happens to match a "blessed" name...
             self._derived_from_name = name
             self.name = name
-            if not isinstance(param_type, AbstractParameterType):
+            if param_type and not isinstance(param_type, AbstractParameterType):
                 raise SystemError('\'param_type\' must be a concrete subclass of AbstractParameterType')
-            self.param_type = param_type
+            self.param_type = param_type or QuantityType()
 
             self.reference_frame = reference_frame or None
-            self.fill_value = fill_value or -999
-            self.variability = variability or VariabilityEnum.TEMPORAL
+            if fill_value is not None: # Provided by ParameterType
+                self.fill_value = fill_value
+            self.variability = variability or VariabilityEnum.BOTH
 
             for a in self.ATTRS:
-                setattr(self, a, kwargs[a] if a in kwargs else None)
+                setattr(self, a, kwargs[a] if a in my_kwargs else None)
 
     @property
     def is_coordinate(self):
@@ -188,7 +197,7 @@ class ParameterContext(AbstractIdentifiable):
         if 'param_type' in self.__dict__ and name in self.__dict__['param_type']._template_attrs.keys():
             return getattr(self.__dict__['param_type'], name)
         else:
-            return super(ParameterContext, self).__getattr__(name)
+            return getattr(super(ParameterContext, self), name)
 
     def __setattr__(self, key, value):
         if 'param_type' in self.__dict__ and key in self.__dict__['param_type']._template_attrs.keys():
