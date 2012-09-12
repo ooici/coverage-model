@@ -15,7 +15,62 @@ def create_guid():
     # guids seem to be more readable if they are UPPERCASE
     return str(uuid.uuid4()).upper()
 
-class AbstractBase(object):
+class Dictable(object):
+    def _todict(self):
+        ret = dict((k,v._todict() if hasattr(v, '_todict') else v) for k, v in self.__dict__.iteritems())
+
+        ret['cm_type'] = (self.__module__, self.__class__.__name__)
+        return ret
+
+    @classmethod
+    def _fromdict(cls, cmdict, arg_masks=None):
+        arg_masks = arg_masks or {}
+        log.debug('_fromdict: cls=%s',cls)
+        if isinstance(cmdict, dict) and 'cm_type' in cmdict and cmdict['cm_type']:
+            import inspect
+            mod = inspect.getmodule(cls)
+            ptmod_s, ptcls_s=cmdict.pop('cm_type')
+            ptcls=getattr(mod, ptcls_s)
+
+            # Get the argument specification for the initializer
+            spec = inspect.getargspec(ptcls.__init__)
+            args = spec.args[1:] # get rid of 'self'
+            # Remove any optional arguments
+            if spec.defaults: # if None, all are required
+                for i in spec.defaults:
+                    args.remove(args[-1])
+            kwa={}
+            for a in args:
+                # Apply any argument masking
+                am = arg_masks[a] if a in arg_masks else a
+                if am in cmdict:
+                    val = cmdict.pop(am)
+                    if isinstance(val, dict) and 'cm_type' in val:
+                        ms, cs = val['cm_type']
+                        module = __import__(ms, fromlist=[cs])
+                        classobj = getattr(module, cs)
+                        kwa[a] = classobj._fromdict(val)
+                    else:
+                        kwa[a] = val
+                else:
+                    kwa[a] = None
+
+            ret = ptcls(**kwa)
+            for k,v in cmdict.iteritems():
+                if isinstance(v, dict) and 'cm_type' in v:
+                    ms, cs = v['cm_type']
+                    module = __import__(ms, fromlist=[cs])
+                    classobj = getattr(module, cs)
+                    setattr(ret,k,classobj._fromdict(v))
+                else:
+                    setattr(ret,k,v)
+
+
+            return ret
+        else:
+            raise TypeError('cmdict is not properly formed, must be of type dict and contain a \'cm_type\' key: {0}'.format(cmdict))
+
+class AbstractBase(Dictable):
     """
     Base class for all coverage model objects
 

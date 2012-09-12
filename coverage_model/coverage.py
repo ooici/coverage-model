@@ -149,6 +149,9 @@ class SimplexCoverage(AbstractCoverage):
 
         for pc in self.range_dictionary.itervalues():
             self._append_parameter(pc[1], True)
+    @classmethod
+    def _fromdict(cls, cmdict, arg_masks=None):
+        return super(SimplexCoverage, cls)._fromdict(cmdict, {'parameter_dictionary':'_range_dictionary'})
 
     @property
     def parameter_dictionary(self):

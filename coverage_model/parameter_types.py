@@ -40,34 +40,6 @@ class AbstractParameterType(AbstractIdentifiable):
         AbstractIdentifiable.__init__(self, **kwc)
         self._template_attrs = {}
 
-    def _dump(self):
-        ret = dict((k,v) for k,v in self.__dict__.iteritems())
-        ret['p_type'] = self.__class__.__name__
-        return ret
-
-    @classmethod
-    def _load(cls, tdict):
-        if isinstance(tdict, dict) and 'p_type' in tdict and tdict['p_type']:
-            import inspect
-            mod = inspect.getmodule(cls)
-            ptcls=getattr(mod, tdict['p_type'])
-
-            args = inspect.getargspec(ptcls.__init__).args
-            del args[0] # get rid of 'self'
-            kwa={}
-            for a in args:
-                kwa[a] = tdict[a] if a in tdict else None
-
-            ret = ptcls(**kwa)
-            for k,v in tdict.iteritems():
-                if not k in kwa.keys() and not k == 'p_type':
-                    setattr(ret,k,v)
-
-            return ret
-        else:
-            raise TypeError('tdict is not properly formed, must be of type dict and contain a \'p_type\' key: {0}'.format(tdict))
-
-
     def is_valid_value(self, value):
         raise NotImplementedError('Function not implemented by abstract class')
 

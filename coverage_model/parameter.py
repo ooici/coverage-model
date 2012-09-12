@@ -152,45 +152,6 @@ class ParameterContext(AbstractIdentifiable):
         """
         return not self.reference_frame is None
 
-    def _dump(self):
-        """
-        Get a composable type (dict) representation of the ParameterContext and all internal objects
-
-        @returns    A dict representation of this ParameterContext
-        """
-        ret={'cm_type': self.__class__.__name__}
-        for k,v in self.__dict__.iteritems():
-            #TODO: If additional objects are added to ParameterContext, add their attr name here as well
-            if isinstance(v, (AbstractParameterType,)):
-                ret[k] = v._dump()
-            else:
-                ret[k] = v
-
-        return ret
-
-    @classmethod
-    def _load(cls, pcdict):
-        """
-        Create a ParameterContext from a dict representation
-
-        @param cls  A ParemeterContext instance
-        @param pcdict   A dict containing ParameterContext information (requires 'cm_type' and 'p_type' keys)
-        """
-        pcd=pcdict.copy()
-        if isinstance(pcd, dict) and 'cm_type' in pcd and pcd['cm_type'] == ParameterContext.__name__:
-            pcd.pop('cm_type')
-            #TODO: If additional required constructor parameters are added, make sure they're dealt with here
-            ptd = AbstractParameterType._load(pcd.pop('param_type'))
-            n = pcd.pop('name')
-            pc=ParameterContext(n,ptd)
-            for k, v in pcd.iteritems():
-                setattr(pc,k,v)
-
-            return pc
-        else:
-            raise TypeError('pcdict is not properly formed, must be of type dict and contain ' \
-                            'a \'cm_type\' key with the value \'{0}\': {1}'.format(ParameterContext.__name__, pcdict))
-
     def __str__(self, indent=None):
         indent = indent or ' '
         lst = []
@@ -322,30 +283,57 @@ class ParameterDictionary(AbstractIdentifiable):
 
         raise KeyError('Ordinal \'{0}\' not found in ParameterDictionary'.format(ordinal))
 
-
     def dump(self):
         """
-        Retrieve a standard dict object representing the ParameterDictionary and all sub-objects
+        Retrieve a standard dict object representing the ParameterDictionary and all sub-objects.
+
+        Delegates to ParameterDictionary._todict()
 
         @returns    A dict containing all information in the ParameterDictionary
         """
-        #TODO: try/except this to inform more pleasantly if it bombs
-        res = dict((k,(v[0],v[1]._dump())) for k, v in self._map.iteritems())
+        return self._todict()
 
+    def _todict(self):
+        """
+        Retrieve a standard dict object representing the ParameterDictionary and all sub-objects
+
+        Overrides Dictable._todict() to properly handle ordinals
+
+        @returns    A dict containing all information in the ParameterDictionary
+        """
+        #CBM TODO: try/except this to inform more pleasantly if it bombs
+        res = dict((k,(v[0],v[1]._todict())) for k, v in self._map.iteritems())
+        res['cm_type'] = (self.__module__, self.__class__.__name__)
         return res
 
     @classmethod
     def load(cls, pdict):
         """
-        Create a ParameterDictionary from a dict
+        Create a ParameterDictionary from a dict.
+
+        Delegates to ParameterDictionary._fromdict()
 
         @param cls  A ParameterDictionary instance
         @param pdict    A dict object containing valid ParameterDictionary content
         """
+        return cls._fromdict(pdict)
+
+    @classmethod
+    def _fromdict(cls, cmdict, arg_masks=None):
+        """
+        Create a ParameterDictionary from a dict
+
+        Overrides Dictable._fromdict() to properly handle ordinals
+
+        @param cls  A ParameterDictionary instance
+        @param pdict    A dict object containing valid ParameterDictionary content
+        """
+        #CBM TODO: try/except this to inform more pleasantly if it bombs
         ret = ParameterDictionary()
-        if isinstance(pdict, dict):
-            for k, v in pdict.iteritems():
-                pc = ParameterContext._load(v[1])
+        if isinstance(cmdict, dict):
+            _=cmdict.pop('cm_type')
+            for k, v in cmdict.iteritems():
+                pc = ParameterContext._fromdict(v[1])
                 ret._map[pc.name] = (v[0], pc)
 
         return ret
