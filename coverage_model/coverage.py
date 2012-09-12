@@ -38,7 +38,7 @@
 from pyon.public import log
 from pyon.util.containers import DotDict
 
-from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_DomainOfApplication, is_valid_constraint, Dictable
+from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_DomainOfApplication, is_valid_constraint, Dictable, create_guid
 from coverage_model.parameter import Parameter, ParameterDictionary, ParameterContext
 from coverage_model.parameter_values import get_value_class, AbstractParameterValue
 from copy import deepcopy
@@ -48,6 +48,7 @@ import pickle
 #=========================
 # Coverage Objects
 #=========================
+from coverage_model.persistence import PersistenceLayer
 
 class AbstractCoverage(AbstractIdentifiable):
     """
@@ -145,6 +146,7 @@ class SimplexCoverage(AbstractCoverage):
         self._range_dictionary = ParameterDictionary()
         self._range_value = RangeValues()
         self._temporal_param_name = None
+        self._persistence_layer = PersistenceLayer('test_data', create_guid())
 
         for pc in parameter_dictionary.itervalues():
             self._append_parameter(pc[1])
@@ -235,6 +237,8 @@ class SimplexCoverage(AbstractCoverage):
 
         self._range_dictionary.add_context(pcontext)
         self._range_value[pname] = get_value_class(param_type=pcontext.param_type, domain_set=pcontext.dom)
+        v = self._persistence_layer.init_parameter(pcontext)
+        self._range_value[pname] = get_value_class(pcontext.param_type, plvalue=v, parameter_context=pcontext)
 
     def get_parameter(self, param_name):
         """
@@ -292,6 +296,7 @@ class SimplexCoverage(AbstractCoverage):
 
         # Expand the temporal dimension of each of the parameters - the parameter determines how to apply the change
         for n in self._range_dictionary:
+            self._persistence_layer.expand_domain(self._range_dictionary.get_context(n))
             self._range_value[n].expand_content(self.temporal_domain, origin, count)
 
     def set_time_values(self, value, tdoa):
