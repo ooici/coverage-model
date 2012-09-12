@@ -9,20 +9,16 @@
 
 from pyon.public import log
 from coverage_model.basic_types import *
-#from coverage_model.parameter_types import *
 from coverage_model.parameter import ParameterDictionary
 import sys, traceback
-#import tables
 import numpy as np
 import h5py
 import os
 import rtree
 import itertools
-#import subprocess
-#import cStringIO
 
 class PersistenceLayer():
-    def __init__(self, root, guid, parameter_dictionary, tdom, sdom=None, *kwargs):
+    def __init__(self, root, guid, parameter_dictionary, tdom, sdom=None, **kwargs):
         """
         Constructor for PersistenceLayer
         """
@@ -34,12 +30,10 @@ class PersistenceLayer():
 
         brickTree = rtree.Rtree()
         self.brickTreeDict = {}
-        self.brickCount = 0
         self.brickList = {}
-
         self.parameterDomainDict = {}
 
-        self.param_dtype = np.empty((1,), dtype='f').dtype
+        #self.param_dtype = np.empty((1,), dtype='f').dtype
 
         # TODO: Loop through parameter_dictionary
         if isinstance(self.parameter_dictionary, ParameterDictionary):
@@ -47,17 +41,17 @@ class PersistenceLayer():
             for param in self.parameter_dictionary:
                 pc = self.parameter_dictionary.get_context(param)
 
-                if self.sdom==None:
+                if self.sdom is None:
                     tD = list(self.tdom)
                 else:
                     tD = list(self.tdom+self.sdom) #can increase
                 bD,cD = self.calculate_brick_size(64) #remains same for each parameter
-                self.parameterDomainDict[pc.name] = [tD,bD,cD]
+                self.parameterDomainDict[pc.name] = [tD,bD,cD,pc.param_type._value_encoding]
                 self.init_parameter(tD, bD, cD, pc.name, pc.param_type._value_encoding)
         elif isinstance(self.parameter_dictionary, list):
             log.debug('Found a list of parameters, assuming all have the same total domain')
         elif isinstance(self.parameter_dictionary, dict):
-            log.debug('Found a dictionary of parameters, assuming parameter name is key and has value of total domain')
+            log.debug('Found a dictionary of parameters, assuming parameter name is key and has value of total domain,dtype')
             for pname,tD in self.parameter_dictionary:
                 tD = list(self.tdom+self.sdom) #can increase
                 bD,cD = self.calculate_brick_size(64) #remains same for each parameter
@@ -67,11 +61,11 @@ class PersistenceLayer():
                     p = rtree.index.Property()
                     p.dimension = len(bD)
                     brickTree = rtree.index.Index(properties=p)
-                    self.brickTreeDict[pname] = [brickTree,self.tD]
-                self.init_parameter(tD,bD,cD,pname,self.param_dtype)
+                    self.brickTreeDict[pname] = [brickTree,tD]
+                self.init_parameter(tD,bD,cD,pname,'f')
         else:
             log.debug('No parameter_dictionary defined.  Running a test script...')
-            if self.sdom==None:
+            if self.sdom is None:
                 tD = list(self.tdom)
             else:
                 tD = list(self.tdom+self.sdom) #can increase
@@ -84,7 +78,7 @@ class PersistenceLayer():
                 p.dimension = len(bD)
                 brickTree = rtree.index.Index(properties=p)
                 self.brickTreeDict['Test Parameter'] = [brickTree,tD]
-            self.init_parameter(tD,bD,cD,'Test Parameter',self.param_dtype)
+            self.init_parameter(tD,bD,cD,'Test Parameter','f')
 
     # Calculate brick domain size given a target file system brick size (Mbytes) and dtype
     def calculate_brick_size(self, target_fs_size):
@@ -120,7 +114,6 @@ class PersistenceLayer():
                 # TODO: Loop over self.parameter_dictionary
                 map(lambda origin: self.write_brick(origin,bD,cD,parameterName,dataType), vertices)
 
-                log.debug('Created {0} Bricks'.format(self.brickCount))
                 log.info('Persistence Layer Successfully Initialized')
             else:
                 log.debug('No bricks to create yet since the total domain in empty...')
@@ -163,7 +156,10 @@ class PersistenceLayer():
         brickExtents = list(origin)+brickMax
         log.debug('Brick extents (rtree format): {0}'.format(brickExtents))
 
-        self.brickCount = self.brickCount+1
+        if len(self.brickList)>0:
+            brickCount = max(k[1] for k, v in self.brickList.items() if k[0]==parameterName)+1
+        else:
+            brickCount = 1
 
         log.debug('Writing brick for parameter {0}'.format(parameterName))
         log.debug('Brick origin: {0}'.format(origin))
@@ -196,29 +192,38 @@ class PersistenceLayer():
 
         # Verify domain is Rtree friendly
         if len(bD) > 1:
-            log.debug('Inserting into Rtree {0}:{1}:{2}'.format(self.brickCount,brickExtents,brickGUID))
-            self.brickTreeDict[parameterName][0].insert(self.brickCount,brickExtents,obj=brickGUID)
+            log.debug('Inserting into Rtree {0}:{1}:{2}'.format(brickCount,brickExtents,brickGUID))
+            self.brickTreeDict[parameterName][0].insert(brickCount,brickExtents,obj=brickGUID)
 
         # Update the brick listing
-        self.brickList[self.brickCount]=[brickGUID,brickExtents]
+        self.brickList[parameterName,brickCount]=[brickGUID, brickExtents]
 
     # Expand the domain
     # TODO: Verify brick and chunk sizes are still valid????
     # TODO: Only expands in first (time) dimension at the moment
-    def expand_domain(self, parameterName, newDomain):
+    def expand_domain(self, parameterName, new_tdom, new_sdom=None):
         log.debug('Expanding domain (n-dimension)')
 
-        tD = self.parameterDomainDict[parameterName][0]
-        bD = self.parameterDomainDict[parameterName][1]
-        cD = self.parameterDomainDict[parameterName][2]
+        # Check if the number of dimensions of the total domain has changed
+        # TODO: Will this ever happen???  If so, how to handle?
+        if len(new_tdom+new_sdom)!=len(self.parameterDomainDict[parameterName][0]):
+            log.error('Number of dimensions for parameter cannot change, only expand in size! No action performed.')
+        else:
+            tD = self.parameterDomainDict[parameterName][0]
+            bD = self.parameterDomainDict[parameterName][1]
+            cD = self.parameterDomainDict[parameterName][2]
+            newDomain = new_tdom+new_sdom
 
-        deltaDomain = [(x - y) for x, y in zip(newDomain, tD)]
-        log.debug('delta domain: {0}'.format(deltaDomain))
+            deltaDomain = [(x - y) for x, y in zip(newDomain, tD)]
+            log.debug('delta domain: {0}'.format(deltaDomain))
 
-        tD = [(x + y) for x, y in zip(tD, deltaDomain)]
-        self.parameterDomainDict[parameterName][0] = tD
+            tD = [(x + y) for x, y in zip(tD, deltaDomain)]
+            self.parameterDomainDict[parameterName][0] = tD
+            self.tdom = new_tdom
+            self.sdom = new_sdom
 
-        self.init_parameter(tD, bD, cD, parameterName, self.param_dtype)
+            # TODO: Handle parameter dtype based
+            self.init_parameter(tD, bD, cD, parameterName, self.parameterDomainDict[parameterName][3])
 
     # Retrieve all or subset of data from HDF5 bricks
     def get_values(self, parameterName, minExtents, maxExtents):
@@ -261,3 +266,10 @@ class PersistenceLayer():
         log.debug('Placeholder for listing bricks based on a domain range...')
         hits = list(self.brickTreeDict[parameterName][0].intersection(tuple(start+end), objects=True))
         return [(h.id,h.object) for h in hits]
+
+    # Returns a count of bricks for a parameter
+    def count_bricks(self, parameterName):
+        try:
+            return max(k[1] for k, v in self.brickList.items() if k[0]==parameterName)
+        except:
+            return 'No bricks found for parameter: {0}'.format(parameterName)
