@@ -40,6 +40,8 @@ from pyon.util.containers import DotDict
 
 from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_DomainOfApplication, is_valid_constraint, Dictable
 from coverage_model.parameter import Parameter, ParameterDictionary, ParameterContext
+from coverage_model.parameter_values import get_value_class, AbstractParameterValue
+from coverage_model.parameter_types import FunctionType
 from copy import deepcopy
 import numpy as np
 import pickle
@@ -125,7 +127,7 @@ class SimplexCoverage(AbstractCoverage):
     of the AbstractParameterValue class.
 
     """
-    def __init__(self, name, parameter_dictionary, spatial_domain, temporal_domain=None):
+    def __init__(self, name, parameter_dictionary, spatial_domain=None, temporal_domain=None):
         """
         Constructor for SimplexCoverage
 
@@ -137,25 +139,24 @@ class SimplexCoverage(AbstractCoverage):
         AbstractCoverage.__init__(self)
 
         self.name = name
-#        self.parameter_dictionary = parameter_dictionary
-        self.spatial_domain = spatial_domain
-        self.temporal_domain = temporal_domain or GridDomain(GridShape('temporal',[0]), CRS.standard_temporal(), MutabilityEnum.EXTENSIBLE)
+        self.spatial_domain = deepcopy(spatial_domain)
+        self.temporal_domain = deepcopy(temporal_domain) or GridDomain(GridShape('temporal',[0]), CRS.standard_temporal(), MutabilityEnum.EXTENSIBLE)
         if not isinstance(parameter_dictionary, ParameterDictionary):
             raise TypeError('\'parameter_dictionary\' must be of type ParameterDictionary')
-        self.range_dictionary = deepcopy(parameter_dictionary)
-        self.range_value = DotDict()
-        self._pcmap = {}
+        self._range_dictionary = ParameterDictionary()
+        self._range_value = RangeValues()
         self._temporal_param_name = None
 
-        for pc in self.range_dictionary.itervalues():
-            self._append_parameter(pc[1], True)
+        for pc in parameter_dictionary.itervalues():
+            self._append_parameter(pc[1])
+
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
         return super(SimplexCoverage, cls)._fromdict(cmdict, {'parameter_dictionary':'_range_dictionary'})
 
     @property
     def parameter_dictionary(self):
-        return deepcopy(self.range_dictionary)
+        return deepcopy(self._range_dictionary)
 
     def append_parameter(self, parameter_context):
         """
@@ -163,48 +164,77 @@ class SimplexCoverage(AbstractCoverage):
 
         @deprecated use a ParameterDictionary during construction of the coverage
         """
-        log.warn('SimplexCoverage.append_parameter() is deprecated and will be removed shortly: use a ParameterDictionary during construction of the coverage')
+        log.warn('SimplexCoverage.append_parameter() is deprecated: use a ParameterDictionary during construction of the coverage')
         self._append_parameter(parameter_context)
 
-    def _append_parameter(self, parameter_context, value_only=False):
+    def _append_parameter(self, parameter_context):
         """
         Appends a ParameterContext object to the internal set for this coverage.
 
-        The supplied ParameterContext is added to self.range_dictionary.  An AbstractParameterValue of the type
-        indicated by ParameterContext.param_type is added to self.range_value.  If the ParameterContext indicates that
+        A <b>deep copy</b> of the supplied ParameterContext is added to self._range_dictionary.  An AbstractParameterValue of the type
+        indicated by ParameterContext.param_type is added to self._range_value.  If the ParameterContext indicates that
         the parameter is a coordinate parameter, it is associated with the indicated axis of the appropriate CRS.
 
-        @param parameter_context    The ParameterContext to append to the coverage
+        @param parameter_context    The ParameterContext to append to the coverage <b>as a copy</b>
         @throws StandardError   If the ParameterContext.axis indicates that it is temporal and a temporal parameter
         already exists in the coverage
         """
-        pname = parameter_context.name
+        if not isinstance(parameter_context, ParameterContext):
+            raise TypeError('\'parameter_context\' must be an instance of ParameterContext')
 
-        # Determine the correct array shape (default is the shape of the spatial_domain)
-        # If there is only one extent in the spatial domain and it's size is 0, collapse to time only
-        # CBM TODO: This determination must be made based on the 'variability' of the parameter (temporal, spatial, both), not by assumption
-        if len(self.spatial_domain.shape.extents) == 1 and self.spatial_domain.shape.extents[0] == 0:
-            shp = self.temporal_domain.shape.extents
+        # Create a deep copy of the ParameterContext
+        pcontext = deepcopy(parameter_context)
+
+        pname = pcontext.name
+
+        no_sdom = self.spatial_domain is None
+
+        ## Determine the correct array shape
+
+        # Get the parameter variability; assign to VariabilityEnum.NONE if None
+        pv=pcontext.variability or VariabilityEnum.NONE
+        if no_sdom and pv in (VariabilityEnum.SPATIAL, VariabilityEnum.BOTH):
+            log.warn('Provided \'parameter_context\' indicates Spatial variability, but coverage has no Spatial Domain')
+
+        if pv == VariabilityEnum.TEMPORAL: # Only varies in the Temporal Domain
+            pcontext.dom = DomainSet(self.temporal_domain, None)
+        elif pv == VariabilityEnum.SPATIAL: # Only varies in the Spatial Domain
+            pcontext.dom = DomainSet(None, self.spatial_domain)
+        elif pv == VariabilityEnum.BOTH: # Varies in both domains
+            # If the Spatial Domain is only a single point on a 0d Topology, the parameter's shape is that of the Temporal Domain only
+            if not no_sdom and (len(self.spatial_domain.shape.extents) == 1 and self.spatial_domain.shape.extents[0] == 0):
+                pcontext.dom = DomainSet(self.temporal_domain, None)
+            else:
+                pcontext.dom = DomainSet(self.temporal_domain, self.spatial_domain)
+        elif pv == VariabilityEnum.NONE: # No variance; constant
+            # This is a constant - if the ParameterContext is not a FunctionType, make it one with the default 'x' expr
+            if not isinstance(pcontext.param_type, FunctionType):
+                pcontext.param_type = FunctionType(pcontext.param_type)
+
+            # The domain is the total domain - same value everywhere!!
+            # If the Spatial Domain is only a single point on a 0d Topology, the parameter's shape is that of the Temporal Domain only
+            if not no_sdom and (len(self.spatial_domain.shape.extents) == 1 and self.spatial_domain.shape.extents[0] == 0):
+                pcontext.dom = DomainSet(self.temporal_domain, None)
+            else:
+                pcontext.dom = DomainSet(self.temporal_domain, self.spatial_domain)
         else:
-            shp = self.temporal_domain.shape.extents + self.spatial_domain.shape.extents
+            # Should never get here...but...
+            raise SystemError('Must define the variability of the ParameterContext: a member of VariabilityEnum')
 
         # Assign the pname to the CRS (if applicable) and select the appropriate domain (default is the spatial_domain)
         dom = self.spatial_domain
-        if not parameter_context.reference_frame is None and AxisTypeEnum.is_member(parameter_context.reference_frame, AxisTypeEnum.TIME):
+        if not pcontext.reference_frame is None and AxisTypeEnum.is_member(pcontext.reference_frame, AxisTypeEnum.TIME):
             if self._temporal_param_name is None:
                 self._temporal_param_name = pname
             else:
                 raise StandardError("temporal_parameter already defined.")
             dom = self.temporal_domain
-            shp = self.temporal_domain.shape.extents
-            dom.crs.axes[parameter_context.reference_frame] = parameter_context.name
-        elif parameter_context.reference_frame in self.spatial_domain.crs.axes:
-            dom.crs.axes[parameter_context.reference_frame] = parameter_context.name
+            dom.crs.axes[pcontext.reference_frame] = pcontext.name
+        elif not no_sdom and (pcontext.reference_frame in self.spatial_domain.crs.axes):
+            dom.crs.axes[pcontext.reference_frame] = pcontext.name
 
-        self._pcmap[pname] = (len(self._pcmap), parameter_context, dom)
-        if not value_only:
-            self.range_dictionary.add_context(parameter_context)
-        self.range_value[pname] = RangeMember(shp, parameter_context)
+        self._range_dictionary.add_context(pcontext)
+        self._range_value[pname] = get_value_class(pcontext.param_type, parameter_context=pcontext)
 
     def get_parameter(self, param_name):
         """
@@ -216,8 +246,8 @@ class SimplexCoverage(AbstractCoverage):
         @returns A Parameter object containing the context and value for the specified parameter
         @throws KeyError    The coverage does not contain a parameter with name 'param_name'
         """
-        if param_name in self.range_dictionary:
-            p = Parameter(self.range_dictionary.get_context(param_name), self._pcmap[param_name][2], self.range_value[param_name])
+        if param_name in self._range_dictionary:
+            p = Parameter(self._range_dictionary.get_context(param_name), self._range_value[param_name].shape, self._range_value[param_name])
             return p
         else:
             raise KeyError('Coverage does not contain parameter \'{0}\''.format(param_name))
@@ -231,11 +261,11 @@ class SimplexCoverage(AbstractCoverage):
         @returns A list of parameter names
         """
         if coords_only:
-            lst=[x for x, v in self.range_dictionary.iteritems() if v[1].is_coordinate]
+            lst=[x for x, v in self._range_dictionary.iteritems() if v[1].is_coordinate]
         elif data_only:
-            lst=[x for x, v in self.range_dictionary.iteritems() if not v[1].is_coordinate]
+            lst=[x for x, v in self._range_dictionary.iteritems() if not v[1].is_coordinate]
         else:
-            lst=[x for x in self.range_dictionary]
+            lst=[x for x in self._range_dictionary]
         lst.sort()
         return lst
 
@@ -249,8 +279,6 @@ class SimplexCoverage(AbstractCoverage):
         @param count    The number of timesteps to insert
         @param origin   The starting location, from which to begin the insertion
         """
-#        if not origin is None:
-#            raise SystemError('Only append is currently supported')
 
         # Get the current shape of the temporal_dimension
         shp = self.temporal_domain.shape
@@ -262,19 +290,9 @@ class SimplexCoverage(AbstractCoverage):
         # Expand the shape of the temporal_domain
         shp.extents[0] += count
 
-        # Expand the temporal dimension of each of the parameters that are temporal TODO: Indicate which are temporal!
-        for n in self._pcmap:
-            arr = self.range_value[n].content
-            log.debug('orig param shape: %s', arr.shape)
-            pc = self.range_dictionary.get_context(n)
-#            narr = np.empty((count,) + arr.shape[1:], dtype=pc.param_type.value_encoding)
-            narr = np.empty(arr.shape[1:], dtype=pc.param_type.value_encoding)
-            narr.fill(pc.fill_value)
-            log.debug('insert: shape %s %s times at index %s', narr.shape, count, origin)
-            loc=[origin for x in xrange(count)]
-            arr = np.insert(arr, loc, narr, axis=0)
-#            arr = np.append(arr, narr, 0)
-            self.range_value[n].content = arr
+        # Expand the temporal dimension of each of the parameters - the parameter determines how to apply the change
+        for n in self._range_dictionary:
+            self._range_value[n].expand_content(self.temporal_domain, origin, count)
 
     def set_time_values(self, value, tdoa):
         """
@@ -315,7 +333,7 @@ class SimplexCoverage(AbstractCoverage):
         @param sdoa The spatial DomainOfApplication
         @throws KeyError    The coverage does not contain a parameter with name 'param_name'
         """
-        if not param_name in self.range_value:
+        if not param_name in self._range_value:
             raise KeyError('Parameter \'{0}\' not found in coverage_model'.format(param_name))
 
         tdoa = get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
@@ -331,7 +349,7 @@ class SimplexCoverage(AbstractCoverage):
         log.debug('Setting slice: %s', slice_)
 
         #TODO: Do we need some validation that slice_ is the same rank and/or shape as values?
-        self.range_value[param_name][slice_] = value
+        self._range_value[param_name][slice_] = value
 
     def get_parameter_values(self, param_name, tdoa=None, sdoa=None, return_value=None):
         """
@@ -346,7 +364,7 @@ class SimplexCoverage(AbstractCoverage):
         @param return_value If supplied, filled with response value
         @throws KeyError    The coverage does not contain a parameter with name 'param_name'
         """
-        if not param_name in self.range_value:
+        if not param_name in self._range_value:
             raise KeyError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
         return_value = return_value or np.zeros([0])
@@ -363,7 +381,7 @@ class SimplexCoverage(AbstractCoverage):
 
         log.debug('Getting slice: %s', slice_)
 
-        return_value = self.range_value[param_name][slice_]
+        return_value = self._range_value[param_name][slice_]
         return return_value
 
     def get_parameter_context(self, param_name):
@@ -374,10 +392,10 @@ class SimplexCoverage(AbstractCoverage):
         @returns A ParameterContext object
         @throws KeyError    The coverage does not contain a parameter with name 'param_name'
         """
-        if not param_name in self.range_dictionary:
+        if not param_name in self._range_dictionary:
             raise KeyError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
-        return self.range_dictionary.get_context(param_name)
+        return self._range_dictionary.get_context(param_name)
 
     @property
     def info(self):
@@ -393,8 +411,8 @@ class SimplexCoverage(AbstractCoverage):
         lst.append('Spatial Domain:\n{0}'.format(self.spatial_domain.__str__(indent*2)))
 
         lst.append('Parameters:')
-        for x in self.range_value:
-            lst.append('{0}{1} {2}\n{3}'.format(indent*2,x,self.range_value[x].shape,self.range_dictionary.get_context(x).__str__(indent*4)))
+        for x in self._range_value:
+            lst.append('{0}{1} {2}\n{3}'.format(indent*2,x,self._range_value[x].shape,self._range_dictionary.get_context(x).__str__(indent*4)))
 
         return '\n'.join(lst)
 
@@ -415,52 +433,36 @@ class SimplexCoverage(AbstractCoverage):
 # Range Objects
 #=========================
 
-#TODO: Consider usage of Ellipsis in all this slicing stuff as well
+class RangeValues(Dictable):
+    """
+    A simple storage object for the range value objects in the coverage
 
-class DomainOfApplication(object):
-    # CBM: Document this!!
-    def __init__(self, slices, topoDim=None):
-        if slices is None:
-            raise StandardError('\'slices\' cannot be None')
-        self.topoDim = topoDim or 0
+    Inherits from Dictable.
+    """
 
-        if _is_valid_constraint(slices):
-            if not np.iterable(slices):
-                slices = [slices]
+    def __init__(self):
+        Dictable.__init__(self)
 
-            self.slices = slices
-        else:
-            raise StandardError('\'slices\' must be either single, tuple, or list of slice or int objects')
+    def __getitem__(self, item):
+        return getattr(self, item)
+
+    def __setitem__(self, key, value):
+        if not isinstance(value, AbstractParameterValue):
+            raise TypeError('Can only assign objects inheriting from AbstractParameterValue')
+
+        setattr(self, key, value)
+
+    def __delitem__(self, key):
+        delattr(self, key)
+
+    def __contains__(self, item):
+        return hasattr(self, item)
 
     def __iter__(self):
-        return self.slices.__iter__()
+        return self.__dict__.__iter__()
 
-    def __len__(self):
-        return len(self.slices)
-
-def _is_valid_constraint(v):
-    ret = False
-    if isinstance(v, (slice, int)) or \
-       (isinstance(v, (list,tuple)) and np.array([_is_valid_constraint(e) for e in v]).all()):
-            ret = True
-
-    return ret
-
-def _get_valid_DomainOfApplication(v, valid_shape):
-    """
-    Takes the value to validate and a tuple representing the valid_shape
-    """
-
-    if v is None:
-        if len(valid_shape) == 1:
-            v = slice(None)
-        else:
-            v = [slice(None) for x in valid_shape]
-
-    if not isinstance(v, DomainOfApplication):
-        v = DomainOfApplication(v)
-
-    return v
+    def __dir__(self):
+        return self.__dict__.keys()
 
 class RangeMember(object):
     # CBM TODO: Is this really AbstractParameterValue?? - I think so...content --> value
@@ -518,7 +520,7 @@ class RangeMember(object):
         elif not isinstance(slice_,tuple):
             slice_ = tuple(slice_)
 
-        # Then make it's the correct rank TODO: Should reference the rank of the Domain object
+        # Then make it's the correct rank TODO: Should reference the rank of the Domain object(s)
         alen = len(self._arr_obj.shape)
         slen = len(slice_)
         if not slen == alen:
@@ -542,33 +544,6 @@ class RangeDictionary(AbstractIdentifiable):
     """
     def __init__(self):
         AbstractIdentifiable.__init__(self)
-
-
-#=========================
-# Abstract Parameter Value Objects
-#=========================
-
-class AbstractParameterValue(AbstractBase):
-    """
-
-    """
-    def __init__(self):
-        AbstractBase.__init__(self)
-
-class AbstractSimplexParameterValue(AbstractParameterValue):
-    """
-
-    """
-    def __init__(self):
-        AbstractParameterValue.__init__(self)
-
-class AbstractComplexParameterValue(AbstractParameterValue):
-    """
-
-    """
-    def __init__(self):
-        AbstractParameterValue.__init__(self)
-
 
 #=========================
 # CRS Objects
@@ -755,6 +730,28 @@ class TopologicalDomain(AbstractDomain):
     def __init__(self):
         AbstractDomain.__init__(self)
 
+class DomainSet(AbstractIdentifiable):
+
+    def __init__(self, tdom=None, sdom=None, **kwargs):
+        kwc=kwargs.copy()
+        AbstractIdentifiable.__init__(self, **kwc)
+        if tdom and not isinstance(tdom, AbstractDomain):
+            raise TypeError('\'tdom\' must inherit from AbstractDomain')
+        if sdom and not isinstance(sdom, AbstractDomain):
+            raise TypeError('\'sdom\' must inherit from AbstractDomain')
+
+        self.tdom = tdom
+        self.sdom = sdom
+
+    @property
+    def total_extents(self):
+        ret=[]
+        if self.tdom:
+            ret += self.tdom.shape.extents
+        if self.sdom:
+            ret += self.sdom.shape.extents
+
+        return tuple(ret)
 
 #=========================
 # Shape Objects
