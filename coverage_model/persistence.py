@@ -18,11 +18,11 @@ import rtree
 import itertools
 
 class PersistenceLayer():
-    def __init__(self, root, guid, parameter_dictionary, tdom, sdom=None, **kwargs):
+    def __init__(self, root, guid, parameter_dictionary=None, tdom=None, sdom=None, **kwargs):
         """
         Constructor for PersistenceLayer
         """
-        self.root = root
+        self.root = '.' if root is ('' or None) else root
         self.guid = guid
         self.parameter_dictionary = parameter_dictionary
         self.tdom = tdom
@@ -32,6 +32,8 @@ class PersistenceLayer():
         self.brickTreeDict = {}
         self.brickList = {}
         self.parameterDomainDict = {}
+
+        self.value_list = {}
 
         #self.param_dtype = np.empty((1,), dtype='f').dtype
 
@@ -64,21 +66,23 @@ class PersistenceLayer():
                     self.brickTreeDict[pname] = [brickTree,tD]
                 self.init_parameter(tD,bD,cD,pname,'f')
         else:
-            log.debug('No parameter_dictionary defined.  Running a test script...')
-            if self.sdom is None:
-                tD = list(self.tdom)
-            else:
-                tD = list(self.tdom+self.sdom) #can increase
-            bD,cD = self.calculate_brick_size(64) #remains same for each parameter
-            self.parameterDomainDict['Test Parameter'] = [tD,bD,cD]
+            pass
 
-            # Verify domain is Rtree friendly
-            if len(bD) > 1:
-                p = rtree.index.Property()
-                p.dimension = len(bD)
-                brickTree = rtree.index.Index(properties=p)
-                self.brickTreeDict['Test Parameter'] = [brickTree,tD]
-            self.init_parameter(tD,bD,cD,'Test Parameter','f')
+#            log.debug('No parameter_dictionary defined.  Running a test script...')
+#            if self.sdom is None:
+#                tD = list(self.tdom)
+#            else:
+#                tD = list(self.tdom+self.sdom) #can increase
+#            bD,cD = self.calculate_brick_size(64) #remains same for each parameter
+#            self.parameterDomainDict['Test Parameter'] = [tD,bD,cD]
+#
+#            # Verify domain is Rtree friendly
+#            if len(bD) > 1:
+#                p = rtree.index.Property()
+#                p.dimension = len(bD)
+#                brickTree = rtree.index.Index(properties=p)
+#                self.brickTreeDict['Test Parameter'] = [brickTree,tD]
+#            self.init_parameter(tD,bD,cD,'Test Parameter','f')
 
     # Calculate brick domain size given a target file system brick size (Mbytes) and dtype
     def calculate_brick_size(self, target_fs_size):
@@ -93,9 +97,48 @@ class PersistenceLayer():
             cD = tuple([5]+list(self.sdom))
 
         return bD,cD
+
+    def init_parameter(self, parameter_context):
+#        log.debug('parameter_context: %s', parameter_context)
+#
+#        tD = parameter_context.dom.total_extents
+#        bD = [10] # TODO: Make this calculated based on tD and file system constraints
+#        cD = [5]
+#
+#        try:
+#            # Gather block list
+#            lst = [range(d)[::bD[i]] for i,d in enumerate(tD)]
+#
+#            # Gather brick vertices
+#            vertices = list(itertools.product(*lst))
+#
+#            if len(vertices)>0:
+#                log.debug('Number of Bricks to Create: {0}'.format(len(vertices)))
+#
+#                # Write brick to HDF5 file
+#                # TODO: Loop over self.parameter_dictionary
+#                # TODO: This is where we'll need to deal with objects and unsupported numpy types :(
+#                map(lambda origin: self.write_brick(origin,bD,cD,parameter_context.name,parameter_context.param_type.value_encoding), vertices)
+#
+#                log.info('Persistence Layer Successfully Initialized')
+#            else:
+#                log.debug('No bricks to create yet since the total domain in empty...')
+
+            v = PLValue()
+            self.value_list[parameter_context.name] = v
+            self.parameterDomainDict[parameter_context.name] = [None, None, None]
+
+            self.expand_domain(parameter_context)
+
+            return v
+#        except Exception as ex:
+#            log.error('Failed to Initialize Persistence Layer: %s', ex)
+#            log.debug('Cleaning up bricks (not ;))')
+#            # TODO: Add brick cleanup routine
+
     # Generate empty bricks
     # Input: totalDomain, brickDomain, chunkDomain, parameterName, parameter data type
-    def init_parameter(self, tD, bD, cD, parameterName, dataType):
+    def init_parameter_o(self, tD, bD, cD, parameterName, dataType):
         log.debug('Total Domain: {0}'.format(tD))
         log.debug('Brick Domain: {0}'.format(bD))
         log.debug('Chunk Domain: {0}'.format(cD))
@@ -201,7 +244,61 @@ class PersistenceLayer():
     # Expand the domain
     # TODO: Verify brick and chunk sizes are still valid????
     # TODO: Only expands in first (time) dimension at the moment
-    def expand_domain(self, parameterName, new_tdom, new_sdom=None):
+    def expand_domain(self, parameter_context):
+        parameter_name = parameter_context.name
+        log.debug('parameter_context: %s', parameter_name)
+
+        if self.parameterDomainDict[parameter_context.name][0] is not None:
+            log.debug('Expanding domain (n-dimension)')
+
+            # Check if the number of dimensions of the total domain has changed
+            # TODO: Will this ever happen???  If so, how to handle?
+            if len(parameter_context.dom.total_extents) != len(self.parameterDomainDict[parameter_name][0]):
+                raise SystemError('Number of dimensions for parameter cannot change, only expand in size! No action performed.')
+            else:
+                tD = self.parameterDomainDict[parameter_name][0]
+                bD = self.parameterDomainDict[parameter_name][1]
+                cD = self.parameterDomainDict[parameter_name][2]
+                newDomain = parameter_context.dom.total_extents
+
+                deltaDomain = [(x - y) for x, y in zip(newDomain, tD)]
+                log.debug('delta domain: {0}'.format(deltaDomain))
+
+                tD = [(x + y) for x, y in zip(tD, deltaDomain)]
+                self.parameterDomainDict[parameter_name][0] = tD
+        else:
+            tD = parameter_context.dom.total_extents
+            bD = (5,) # TODO: Make this calculated based on tD and file system constraints
+            cD = (2,)
+            self.parameterDomainDict[parameter_name] = [tD, bD, cD]
+
+        try:
+            # Gather block list
+            lst = [range(d)[::bD[i]] for i,d in enumerate(tD)]
+
+            # Gather brick vertices
+            vertices = list(itertools.product(*lst))
+
+            if len(vertices)>0:
+                log.debug('Number of Bricks to Create: {0}'.format(len(vertices)))
+
+                # Write brick to HDF5 file
+                # TODO: Loop over self.parameter_dictionary
+                # TODO: This is where we'll need to deal with objects and unsupported numpy types :(
+                map(lambda origin: self.write_brick(origin,bD,cD,parameter_name,parameter_context.param_type.value_encoding), vertices)
+
+                log.info('Persistence Layer Successfully Initialized')
+            else:
+                log.debug('No bricks to create yet since the total domain in empty...')
+        except Exception as ex:
+            log.error('Failed to Initialize Persistence Layer: %s', ex)
+            log.debug('Cleaning up bricks (not ;))')
+            # TODO: Add brick cleanup routine
+
+        # TODO: Setup your bricking for the first time based on the parameter_context.dom - the logic from init_parameter
+        # TODO: Call something to actually write the bricks - a.k.a what used to be in init_parameter
+
+    def expand_domain_o(self, parameterName, new_tdom, new_sdom=None):
         log.debug('Expanding domain (n-dimension)')
 
         # Check if the number of dimensions of the total domain has changed
@@ -273,3 +370,29 @@ class PersistenceLayer():
             return max(k[1] for k, v in self.brickList.items() if k[0]==parameterName)
         except:
             return 'No bricks found for parameter: {0}'.format(parameterName)
+
+class PLValue():
+
+    def __init__(self):
+        self._storage = np.empty((0,))
+
+    def __getitem__(self, item):
+        return self._storage.__getitem__(item)
+
+    def __setitem__(self, key, value):
+        self._storage.__setitem__(key, value)
+
+    def reinit(self, storage):
+        self._storage = storage.copy()
+        log.error('me=%s  you=%s',self._storage, storage)
+
+    def fill(self, value):
+        self._storage.fill(value)
+
+    @property
+    def shape(self):
+        return self._storage.shape
+
+    @property
+    def dtype(self):
+        return self._storage.dtype
