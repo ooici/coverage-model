@@ -7,7 +7,10 @@
 @brief Base classes for Coverage Model and Parameter classes
 """
 
+from pyon.public import log
+import numpy as np
 import uuid
+
 def create_guid():
     """
     @retval Return global unique id string
@@ -123,7 +126,50 @@ class AbstractIdentifiable(AbstractBase):
 
         return self._identifier
 
+class DomainOfApplication(object):
+    # CBM: Document this!!
+    def __init__(self, slices, topoDim=None):
+        if slices is None:
+            raise StandardError('\'slices\' cannot be None')
+        self.topoDim = topoDim or 0
 
+        if is_valid_constraint(slices):
+            if not np.iterable(slices):
+                slices = [slices]
+
+            self.slices = slices
+        else:
+            raise StandardError('\'slices\' must be either single, tuple, or list of slice or int objects')
+
+    def __iter__(self):
+        return self.slices.__iter__()
+
+    def __len__(self):
+        return len(self.slices)
+
+def is_valid_constraint(v):
+    ret = False
+    if isinstance(v, (slice, int)) or\
+       (isinstance(v, (list,tuple)) and np.array([is_valid_constraint(e) for e in v]).all()):
+        ret = True
+
+    return ret
+
+def get_valid_DomainOfApplication(v, valid_shape):
+    """
+    Takes the value to validate and a tuple representing the valid_shape
+    """
+
+    if v is None:
+        if len(valid_shape) == 1:
+            v = slice(None)
+        else:
+            v = [slice(None) for x in valid_shape]
+
+    if not isinstance(v, DomainOfApplication):
+        v = DomainOfApplication(v)
+
+    return v
 
 class AxisTypeEnum(object):
     """

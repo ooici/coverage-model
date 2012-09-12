@@ -38,8 +38,8 @@
 from pyon.public import log
 from pyon.util.containers import DotDict
 
-from coverage_model.basic_types import AbstractIdentifiable, AbstractBase, AxisTypeEnum, MutabilityEnum
-from coverage_model.parameter import Parameter, ParameterDictionary
+from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_DomainOfApplication, is_valid_constraint, Dictable
+from coverage_model.parameter import Parameter, ParameterDictionary, ParameterContext
 from copy import deepcopy
 import numpy as np
 import pickle
@@ -84,16 +84,16 @@ class AbstractCoverage(AbstractIdentifiable):
         raise NotImplementedError('Coverages cannot yet be copied. You can load multiple \'independent\' copies of the same coverage, but be sure to save them to different names.')
 
 
-        if not isinstance(cov_obj, AbstractCoverage):
-            raise StandardError('cov_obj must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(cov_obj)))
-
-        # NTK:
-        # Args need to have 1-n (ParameterContext, DomainOfApplication, DomainOfApplication,) tuples
-        # Need to pull the parameter_dictionary, spatial_domain and temporal_domain from cov_obj (TODO: copies!!)
-        # DOA's and PC's used to copy data - TODO: Need way of reshaping PC's?
-        ccov = SimplexCoverage(name='', range_dictionary=None, spatial_domain=None, temporal_domain=None)
-
-        return ccov
+#        if not isinstance(cov_obj, AbstractCoverage):
+#            raise StandardError('cov_obj must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(cov_obj)))
+#
+#        # NTK:
+#        # Args need to have 1-n (ParameterContext, DomainOfApplication, DomainOfApplication,) tuples
+#        # Need to pull the parameter_dictionary, spatial_domain and temporal_domain from cov_obj (TODO: copies!!)
+#        # DOA's and PC's used to copy data - TODO: Need way of reshaping PC's?
+#        ccov = SimplexCoverage(name='', _range_dictionary=None, spatial_domain=None, temporal_domain=None)
+#
+#        return ccov
 
 
 class ViewCoverage(AbstractCoverage):
@@ -318,8 +318,8 @@ class SimplexCoverage(AbstractCoverage):
         if not param_name in self.range_value:
             raise KeyError('Parameter \'{0}\' not found in coverage_model'.format(param_name))
 
-        tdoa = _get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
-        sdoa = _get_valid_DomainOfApplication(sdoa, self.spatial_domain.shape.extents)
+        tdoa = get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
+        sdoa = get_valid_DomainOfApplication(sdoa, self.spatial_domain.shape.extents)
 
         log.debug('Temporal doa: %s', tdoa.slices)
         log.debug('Spatial doa: %s', sdoa.slices)
@@ -351,8 +351,8 @@ class SimplexCoverage(AbstractCoverage):
 
         return_value = return_value or np.zeros([0])
 
-        tdoa = _get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
-        sdoa = _get_valid_DomainOfApplication(sdoa, self.spatial_domain.shape.extents)
+        tdoa = get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
+        sdoa = get_valid_DomainOfApplication(sdoa, self.spatial_domain.shape.extents)
 
         log.debug('Temporal doa: %s', tdoa.slices)
         log.debug('Spatial doa: %s', sdoa.slices)
@@ -487,7 +487,7 @@ class RangeMember(object):
 
     # CBM: First swack - see this for more possible checks: http://code.google.com/p/netcdf4-python/source/browse/trunk/netCDF4_utils.py
     def __getitem__(self, slice_):
-        if not _is_valid_constraint(slice_):
+        if not is_valid_constraint(slice_):
             raise SystemError('invalid constraint supplied: {0}'.format(slice_))
 
         # First, ensure we're working with a tuple
@@ -509,7 +509,7 @@ class RangeMember(object):
         return self._arr_obj[slice_]
 
     def __setitem__(self, slice_, value):
-        if not _is_valid_constraint(slice_):
+        if not is_valid_constraint(slice_):
             raise SystemError('invalid constraint supplied: {0}'.format(slice_))
 
         # First, ensure we're working with a tuple
