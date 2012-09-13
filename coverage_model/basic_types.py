@@ -19,7 +19,37 @@ def create_guid():
     return str(uuid.uuid4()).upper()
 
 class Dictable(object):
+
+    def dump(self):
+        """
+        Retrieve a standard python dict representing the Dictable object and any Dictable sub-objects.
+
+        Delegates to self._todict()
+
+        @returns    A python dictionary representation of the object
+        """
+        return self._todict()
+
+    @classmethod
+    def load(cls, fromdict):
+        """
+        Create an object of type cls from a properly formed dict (i.e. one created from cls.dump)
+
+        Delegates to cls._fromdict()
+
+        @param cls  An object inheriting from Dictable
+        @param fromdict    A python dict representation of a valid Dictable; may contain other Dictable objects
+        """
+        return cls._fromdict(fromdict)
+
     def _todict(self):
+        """
+        Retrieve a standard python dict representing the Dictable object and any Dictable sub-objects.
+
+        This function may be overridden in subclasses to handle special functionality
+
+        @returns    A python dictionary representation of the object
+        """
         ret = dict((k,v._todict() if hasattr(v, '_todict') else v) for k, v in self.__dict__.iteritems())
 
         ret['cm_type'] = (self.__module__, self.__class__.__name__)
@@ -27,12 +57,28 @@ class Dictable(object):
 
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
+        """
+        Create an object of type cls from a properly formed dict (i.e. one created from cls._todict)
+
+        This function may be overridden in subclasses to handle special functionality
+
+        MASKING:
+            To provide for required constructor arguments that are different name from the corresponding attribute
+            within the object, a dict of str:str members may be provided where the key is the name of the constructor
+            argument and the value is the corresponding class attribute
+            See SimplexCoverage.__init__ and SimplexCoverage._fromdict for an example
+
+        @param cls  An object inheriting from Dictable
+        @param cmdict    A python dict representation of a valid Dictable; may contain other Dictable objects
+        @param arg_masks    Allows masking of required constructor arguments - see MASKING above
+        """
         arg_masks = arg_masks or {}
         log.debug('_fromdict: cls=%s',cls)
         if isinstance(cmdict, dict) and 'cm_type' in cmdict and cmdict['cm_type']:
+            cmd = cmdict.copy()
             import inspect
             mod = inspect.getmodule(cls)
-            ptmod_s, ptcls_s=cmdict.pop('cm_type')
+            ptmod_s, ptcls_s=cmd.pop('cm_type')
             ptcls=getattr(mod, ptcls_s)
 
             # Get the argument specification for the initializer
@@ -46,8 +92,8 @@ class Dictable(object):
             for a in args:
                 # Apply any argument masking
                 am = arg_masks[a] if a in arg_masks else a
-                if am in cmdict:
-                    val = cmdict.pop(am)
+                if am in cmd:
+                    val = cmd.pop(am)
                     if isinstance(val, dict) and 'cm_type' in val:
                         ms, cs = val['cm_type']
                         module = __import__(ms, fromlist=[cs])
@@ -59,7 +105,7 @@ class Dictable(object):
                     kwa[a] = None
 
             ret = ptcls(**kwa)
-            for k,v in cmdict.iteritems():
+            for k,v in cmd.iteritems():
                 if isinstance(v, dict) and 'cm_type' in v:
                     ms, cs = v['cm_type']
                     module = __import__(ms, fromlist=[cs])

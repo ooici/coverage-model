@@ -292,23 +292,9 @@ class ParameterDictionary(AbstractIdentifiable):
 
         raise KeyError('Ordinal \'{0}\' not found in ParameterDictionary'.format(ordinal))
 
-    def dump(self):
-        """
-        Retrieve a standard dict object representing the ParameterDictionary and all sub-objects.
-
-        Delegates to ParameterDictionary._todict()
-
-        @returns    A dict containing all information in the ParameterDictionary
-        """
-        return self._todict()
-
     def _todict(self):
         """
-        Retrieve a standard dict object representing the ParameterDictionary and all sub-objects
-
         Overrides Dictable._todict() to properly handle ordinals
-
-        @returns    A dict containing all information in the ParameterDictionary
         """
         #CBM TODO: try/except this to inform more pleasantly if it bombs
         res = dict((k,(v[0],v[1]._todict())) for k, v in self._map.iteritems())
@@ -316,32 +302,16 @@ class ParameterDictionary(AbstractIdentifiable):
         return res
 
     @classmethod
-    def load(cls, pdict):
-        """
-        Create a ParameterDictionary from a dict.
-
-        Delegates to ParameterDictionary._fromdict()
-
-        @param cls  A ParameterDictionary instance
-        @param pdict    A dict object containing valid ParameterDictionary content
-        """
-        return cls._fromdict(pdict)
-
-    @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
         """
-        Create a ParameterDictionary from a dict
-
         Overrides Dictable._fromdict() to properly handle ordinals
-
-        @param cls  A ParameterDictionary instance
-        @param pdict    A dict object containing valid ParameterDictionary content
         """
         #CBM TODO: try/except this to inform more pleasantly if it bombs
         ret = ParameterDictionary()
         if isinstance(cmdict, dict):
-            _=cmdict.pop('cm_type')
-            for k, v in cmdict.iteritems():
+            d=cmdict.copy()
+            _=d.pop('cm_type')
+            for k, v in d.iteritems():
                 pc = ParameterContext._fromdict(v[1])
                 ret._map[pc.name] = (v[0], pc)
 
