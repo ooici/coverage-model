@@ -8,7 +8,7 @@
 """
 
 from pyon.public import log
-from coverage_model.basic_types import *
+from coverage_model.basic_types import create_guid
 from coverage_model.parameter import ParameterDictionary
 import sys, traceback
 import numpy as np
@@ -24,6 +24,7 @@ class PersistenceLayer():
         """
         self.root = '.' if root is ('' or None) else root
         self.guid = guid
+        log.debug('Persistence GUID: %s', self.guid)
         self.parameter_dictionary = parameter_dictionary
         self.tdom = tdom
         self.sdom = sdom
@@ -99,42 +100,15 @@ class PersistenceLayer():
         return bD,cD
 
     def init_parameter(self, parameter_context):
-#        log.debug('parameter_context: %s', parameter_context)
-#
-#        tD = parameter_context.dom.total_extents
-#        bD = [10] # TODO: Make this calculated based on tD and file system constraints
-#        cD = [5]
-#
-#        try:
-#            # Gather block list
-#            lst = [range(d)[::bD[i]] for i,d in enumerate(tD)]
-#
-#            # Gather brick vertices
-#            vertices = list(itertools.product(*lst))
-#
-#            if len(vertices)>0:
-#                log.debug('Number of Bricks to Create: {0}'.format(len(vertices)))
-#
-#                # Write brick to HDF5 file
-#                # TODO: Loop over self.parameter_dictionary
-#                # TODO: This is where we'll need to deal with objects and unsupported numpy types :(
-#                map(lambda origin: self.write_brick(origin,bD,cD,parameter_context.name,parameter_context.param_type.value_encoding), vertices)
-#
-#                log.info('Persistence Layer Successfully Initialized')
-#            else:
-#                log.debug('No bricks to create yet since the total domain in empty...')
+        log.debug('Initialize %s', parameter_context.name)
 
-            v = PLValue()
-            self.value_list[parameter_context.name] = v
-            self.parameterDomainDict[parameter_context.name] = [None, None, None]
+        v = PLValue()
+        self.value_list[parameter_context.name] = v
+        self.parameterDomainDict[parameter_context.name] = [None, None, None]
 
-            self.expand_domain(parameter_context)
+        self.expand_domain(parameter_context)
 
-            return v
-#        except Exception as ex:
-#            log.error('Failed to Initialize Persistence Layer: %s', ex)
-#            log.debug('Cleaning up bricks (not ;))')
-#            # TODO: Add brick cleanup routine
+        return v
 
     # Generate empty bricks
     # Input: totalDomain, brickDomain, chunkDomain, parameterName, parameter data type
@@ -246,7 +220,7 @@ class PersistenceLayer():
     # TODO: Only expands in first (time) dimension at the moment
     def expand_domain(self, parameter_context):
         parameter_name = parameter_context.name
-        log.debug('parameter_context: %s', parameter_name)
+        log.debug('Expand %s', parameter_name)
 
         if self.parameterDomainDict[parameter_context.name][0] is not None:
             log.debug('Expanding domain (n-dimension)')
@@ -384,7 +358,6 @@ class PLValue():
 
     def reinit(self, storage):
         self._storage = storage.copy()
-        log.error('me=%s  you=%s',self._storage, storage)
 
     def fill(self, value):
         self._storage.fill(value)
