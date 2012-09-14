@@ -21,6 +21,7 @@
 from pyon.public import log
 from coverage_model.basic_types import AbstractIdentifiable
 import numpy as np
+import re
 
 #==================
 # Abstract Parameter Type Objects
@@ -95,6 +96,9 @@ class AbstractComplexParameterType(AbstractParameterType):
         """
         kwc=kwargs.copy()
         AbstractParameterType.__init__(self, **kwc)
+
+        self._template_attrs['value_encoding'] = np.dtype(object)
+        self._template_attrs['fill_value'] = None
 
 #==================
 # Parameter Type Objects
@@ -291,8 +295,8 @@ class FunctionType(AbstractComplexParameterType):
         """
         kwc=kwargs.copy()
         AbstractComplexParameterType.__init__(self, value_class='FunctionValue', **kwc)
-        if not base_type is None and not isinstance(base_type, AbstractParameterType):
-            raise TypeError('\'base_type\' must be a subclass of AbstractParameterType')
+        if base_type is not None and not isinstance(base_type, QuantityType):
+            raise TypeError('\'base_type\' must be an instance of QuantityType')
 
         self.base_type = base_type or QuantityType()
 
@@ -301,11 +305,42 @@ class FunctionType(AbstractComplexParameterType):
         self._template_attrs.update(self.base_type._template_attrs)
         self._gen_template_attrs()
 
-    def is_valid_value(self, value):
-        raise NotImplementedError('not yet')
-
     def __eq__(self, other):
         if super(FunctionType, self).__eq__(other):
+            if self.base_type == other.base_type:
+                return True
+
+        return False
+
+class ConstantType(AbstractComplexParameterType):
+
+    _rematch='^(c\*)?[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?$'
+
+    def __init__(self, base_type=None, **kwargs):
+        """
+
+        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterType; see documentation for that class for details
+        """
+        kwc=kwargs.copy()
+        AbstractComplexParameterType.__init__(self, value_class='ConstantValue', **kwc)
+        if base_type is not None and not isinstance(base_type, QuantityType):
+            raise TypeError('\'base_type\' must be an instance of QuantityType')
+
+        self.base_type = base_type or QuantityType()
+
+        self._template_attrs['value_encoding'] = self.base_type.value_encoding
+
+        self._template_attrs.update(self.base_type._template_attrs)
+        self._gen_template_attrs()
+
+    def is_valid_value(self, value):
+        if re.match(self._rematch, value) is None:
+            raise ValueError('\'value\' must be a string matching the form: \'{0}\' ; for example, \'43.2\', \'c*12\', or \'-12.2e4\''.format(self._rematch))
+
+        return True
+
+    def __eq__(self, other):
+        if super(ConstantType, self).__eq__(other):
             if self.base_type == other.base_type:
                 return True
 
@@ -343,28 +378,12 @@ class ArrayType(AbstractComplexParameterType):
     """
     Homogeneous set of unnamed things (array)
     """
-    def __init__(self, base_type=None, **kwargs):
+    def __init__(self, **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterType; see documentation for that class for details
         """
         kwc=kwargs.copy()
         AbstractComplexParameterType.__init__(self, value_class='ArrayValue', **kwc)
-#        if not base_type is None and not isinstance(base_type, AbstractParameterType):
-#            raise TypeError('\'base_type\' must be a subclass of AbstractParameterType')
-
-        self.base_type = base_type or object
-
-        self._template_attrs['fill_value'] = None
-
-        if hasattr(self.base_type, '_template_attrs'):
-            self._template_attrs.update(self.base_type._template_attrs)
 
         self._gen_template_attrs()
-
-    def __eq__(self, other):
-        if super(ArrayType, self).__eq__(other):
-            if self.base_type == other.base_type:
-                return True
-
-        return False

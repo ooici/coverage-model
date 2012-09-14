@@ -10,7 +10,6 @@ from pyon.public import log
 from coverage_model.basic_types import AbstractBase, is_valid_constraint
 import numpy as np
 import numexpr as ne
-from coverage_model.parameter_types import AbstractParameterType, QuantityType
 
 def get_value_class(param_type, **kwargs):
     module = __import__(param_type._value_module, fromlist=[param_type._value_class])
@@ -152,15 +151,16 @@ class FunctionValue(AbstractComplexParameterValue):
         kwc=kwargs.copy()
         AbstractComplexParameterValue.__init__(self, parameter_context, **kwc)
 
-        self._value = np.empty([0], dtype=object)
+        self._value = np.empty([0], dtype=parameter_context.param_type.value_encoding)
 
     @property
     def content(self):
-        if len(self._value) > 1:
-            # CBM TODO: Add logic to deal with this - need to check the value on teh way in to see if it's a 'where'?
-            raise NotImplementedError('Not there yet')
-        else:
-            return self._value[0]
+        return self._value[-1]
+#        if len(self._value) > 1:
+#            # CBM TODO: Add logic to deal with this - need to check the value on teh way in to see if it's a 'where'?
+#            raise NotImplementedError('Not there yet')
+#        else:
+#            return self._value[0]
 
     def expand_content(self, domain, origin, expansion):
         # No op - appropriate domain applied during retrieval of data
@@ -178,10 +178,44 @@ class FunctionValue(AbstractComplexParameterValue):
             #            x = np.arange(sum(slice_)).reshape(slice_)
             raise NotImplementedError('Not there yet')
 
-        return ne.evaluate(self.content).astype(self.parameter_context.param_type.base_type.value_encoding)
+        return ne.evaluate(self.content).astype(self.parameter_context.param_type.value_encoding)
 
     def __setitem__(self, slice_, value):
         self._value = np.append(self._value, value)
+
+class ConstantValue(AbstractComplexParameterValue):
+
+    def __init__(self, parameter_context, **kwargs):
+        """
+
+        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterValue; see documentation for that class for details
+        """
+        kwc=kwargs.copy()
+        AbstractComplexParameterValue.__init__(self, parameter_context, **kwc)
+
+        self._value = None
+
+    @property
+    def content(self):
+        return self._value
+
+    def expand_content(self, domain, origin, expansion):
+        # No op - constant over any domain
+        pass
+
+    def __getitem__(self, slice_):
+        slice_ = self._fix_slice(slice_, len(self.shape))
+
+        c = np.ones(self.shape)[slice_] # Make an array of ones of the appropriate shape and slice it as desired
+
+        return ne.evaluate(self._value).astype(self.parameter_context.param_type.value_encoding)
+
+    def __setitem__(self, slice_, value):
+        value = str(value) # Ensure we're dealing with a str
+        if self.parameter_context.param_type.is_valid_value(value):
+            if not value.startswith('c*'):
+                value = 'c*'+str(value)
+            self._value = value
 
 class RecordValue(AbstractComplexParameterValue):
 
@@ -192,6 +226,29 @@ class RecordValue(AbstractComplexParameterValue):
         """
         kwc=kwargs.copy()
         AbstractComplexParameterValue.__init__(self, parameter_context, **kwc)
+
+        self._value = np.empty(self.shape, dtype=object)
+
+    def expand_content(self, domain, origin, expansion):
+        if domain == self.parameter_context.dom.tdom: # Temporal
+            narr = np.empty(self._value.shape[1:], dtype=self._value.dtype)
+            narr.fill(self.parameter_context.fill_value)
+            loc=[origin for x in xrange(expansion)]
+            self._value = np.insert(self._value, loc, narr, axis=0)
+        elif domain == self.parameter_context.dom.sdom: # Spatial
+            raise NotImplementedError('Expansion of the Spatial Domain is not yet supported')
+
+    def __getitem__(self, slice_):
+        slice_ = self._fix_slice(slice_, len(self.shape))
+
+        ret = self._value[slice_]
+
+        return ret
+
+    def __setitem__(self, slice_, value):
+        slice_ = self._fix_slice(slice_, len(self.shape))
+
+        self._value[slice_] = value
 
 class VectorValue(AbstractComplexParameterValue):
 
@@ -213,7 +270,7 @@ class ArrayValue(AbstractComplexParameterValue):
         kwc=kwargs.copy()
         AbstractComplexParameterValue.__init__(self, parameter_context, **kwc)
 
-        self._value = np.empty([0], dtype=object)
+        self._value = np.empty(self.shape, dtype=object)
 
     def expand_content(self, domain, origin, expansion):
         if domain == self.parameter_context.dom.tdom: # Temporal
@@ -227,7 +284,9 @@ class ArrayValue(AbstractComplexParameterValue):
     def __getitem__(self, slice_):
         slice_ = self._fix_slice(slice_, len(self.shape))
 
-        return self._value[slice_]
+        ret = self._value[slice_]
+
+        return ret
 
     def __setitem__(self, slice_, value):
         slice_ = self._fix_slice(slice_, len(self.shape))

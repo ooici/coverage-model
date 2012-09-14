@@ -150,12 +150,14 @@ def ptypescov(save_coverage=True):
     t_ctxt.uom = 'seconds since 01-01-1970'
     pdict.add_context(t_ctxt)
 
-    lat_ctxt = ParameterContext('function_lat', param_type=FunctionType(), variability=VariabilityEnum.NONE)
+    lat_ctxt = ParameterContext('const_int', param_type=ConstantType(QuantityType(value_encoding=np.dtype('int32'))), variability=VariabilityEnum.NONE)
+    lat_ctxt.long_name = 'example of a parameter of type ConstantType, base_type int32'
     lat_ctxt.reference_frame = AxisTypeEnum.LAT
     lat_ctxt.uom = 'degree_north'
     pdict.add_context(lat_ctxt)
 
-    lon_ctxt = ParameterContext('function_lon', param_type=FunctionType(), variability=VariabilityEnum.NONE)
+    lon_ctxt = ParameterContext('const_float', param_type=ConstantType(), variability=VariabilityEnum.NONE)
+    lon_ctxt.long_name = 'example of a parameter of type QuantityType, base_type float (default)'
     lon_ctxt.reference_frame = AxisTypeEnum.LON
     lon_ctxt.uom = 'degree_east'
     pdict.add_context(lon_ctxt)
@@ -165,12 +167,12 @@ def ptypescov(save_coverage=True):
     quant_ctxt.uom = 'degree_Celsius'
     pdict.add_context(quant_ctxt)
 
-    arr_ctxt = ParameterContext('array', param_type=ArrayType(np.ndarray))
-    arr_ctxt.long_name = 'example of a parameter of type ArrayType with base_type ndarray (resolves to \'object\')'
+    arr_ctxt = ParameterContext('array', param_type=ArrayType())
+    arr_ctxt.long_name = 'example of a parameter of type ArrayType, will be filled with variable-length \'byte-string\' data'
     pdict.add_context(arr_ctxt)
 
-    arr2_ctxt = ParameterContext('array2', param_type=ArrayType())
-    arr2_ctxt.long_name = 'example of a parameter of type ArrayType with base_type object'
+    arr2_ctxt = ParameterContext('record', param_type=RecordType())
+    arr2_ctxt.long_name = 'example of a parameter of type RecordType, will be filled with dictionaries'
     pdict.add_context(arr2_ctxt)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
@@ -181,17 +183,19 @@ def ptypescov(save_coverage=True):
 
     # Add data for each parameter
     scov.set_parameter_values('quantity_time', value=np.arange(10))
-    scov.set_parameter_values('function_lat', value=make_range_expr(45.32))
-    scov.set_parameter_values('function_lon', value=make_range_expr(-71.11))
+    scov.set_parameter_values('const_int', value=45.32) # Set a constant directly, with incorrect data type (fixed under the hood)
+    scov.set_parameter_values('const_float', value=make_range_expr(-71.11)) # Set with a properly formed constant expression
     scov.set_parameter_values('quantity', value=np.random.random_sample(10)*(26-23)+23)
 
     arrval = []
-    arr2val = []
-    for x in xrange(scov.num_timesteps): # One value (which IS an array) for each member of the domain
-        arrval.append(np.random.bytes(np.random.randint(1,20)))
-        arr2val.append(np.random.random_sample(np.random.randint(1,10)))
+    recval = []
+    letts='abcdefghij'
+    for x in xrange(scov.num_timesteps):
+        arrval.append(np.random.bytes(np.random.randint(1,20))) # One value (which is a byte string) for each member of the domain
+        d = {letts[x]: letts[x:]}
+        recval.append(d) # One value (which is a dict) for each member of the domain
     scov.set_parameter_values('array', value=arrval)
-    scov.set_parameter_values('array2', value=arr2val)
+    scov.set_parameter_values('record', value=recval)
 
     if save_coverage:
         SimplexCoverage.save(scov, 'test_data/ptypes.cov')

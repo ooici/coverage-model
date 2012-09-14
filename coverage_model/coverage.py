@@ -41,7 +41,6 @@ from pyon.util.containers import DotDict
 from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_DomainOfApplication, is_valid_constraint, Dictable
 from coverage_model.parameter import Parameter, ParameterDictionary, ParameterContext
 from coverage_model.parameter_values import get_value_class, AbstractParameterValue
-from coverage_model.parameter_types import FunctionType
 from copy import deepcopy
 import numpy as np
 import pickle
@@ -207,9 +206,10 @@ class SimplexCoverage(AbstractCoverage):
             else:
                 pcontext.dom = DomainSet(self.temporal_domain, self.spatial_domain)
         elif pv == VariabilityEnum.NONE: # No variance; constant
-            # This is a constant - if the ParameterContext is not a FunctionType, make it one with the default 'x' expr
-            if not isinstance(pcontext.param_type, FunctionType):
-                pcontext.param_type = FunctionType(pcontext.param_type)
+            # CBM TODO: Not sure we can have this constraint - precludes situations like a TextType with Variablity==None...
+#            # This is a constant - if the ParameterContext is not a ConstantType, make it one with the default 'x' expr
+#            if not isinstance(pcontext.param_type, ConstantType):
+#                pcontext.param_type = ConstantType(pcontext.param_type)
 
             # The domain is the total domain - same value everywhere!!
             # If the Spatial Domain is only a single point on a 0d Topology, the parameter's shape is that of the Temporal Domain only
