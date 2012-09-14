@@ -44,13 +44,14 @@ class PersistenceLayer():
             for param in self.parameter_dictionary:
                 pc = self.parameter_dictionary.get_context(param)
 
-                if self.sdom is None:
-                    tD = list(self.tdom)
-                else:
-                    tD = list(self.tdom+self.sdom) #can increase
+                #if self.sdom is None:
+                #    tD = list(self.tdom)
+                #else:
+                #    tD = list(self.tdom+self.sdom) #can increase
+                tD = pc.dom.total_extents
                 bD,cD = self.calculate_brick_size(64) #remains same for each parameter
                 self.parameterDomainDict[pc.name] = [tD,bD,cD,pc.param_type._value_encoding]
-                self.init_parameter(tD, bD, cD, pc.name, pc.param_type._value_encoding)
+                self.init_parameter(pc)
         elif isinstance(self.parameter_dictionary, list):
             log.debug('Found a list of parameters, assuming all have the same total domain')
         elif isinstance(self.parameter_dictionary, dict):
@@ -155,8 +156,8 @@ class PersistenceLayer():
         log.debug('Brick extents (rtree format): {0}'.format(brickExtents))
 
         # Make sure the brick doesn't already exist if we already have some bricks
-        if len(self.brickList)>0:
-            check = [(brickExtents==val) for guid,val in self.brickList.values()]
+        if len([(k[0]) for k,v in self.brickList.items() if parameterName in k])>0:
+            check = [(brickExtents==v[1]) for k,v in self.brickList.items() if parameterName in k]
             if True in check:
                 log.debug('Brick already exists!')
             else:
@@ -173,7 +174,7 @@ class PersistenceLayer():
         brickExtents = list(origin)+brickMax
         log.debug('Brick extents (rtree format): {0}'.format(brickExtents))
 
-        if len(self.brickList)>0:
+        if len([(k[0]) for k,v in self.brickList.items() if parameterName in k])>0:
             brickCount = max(k[1] for k, v in self.brickList.items() if k[0]==parameterName)+1
         else:
             brickCount = 1
