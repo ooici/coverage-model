@@ -30,28 +30,39 @@ class PersistenceLayer():
         self.sdom = sdom
 
         brickTree = rtree.Rtree()
-        self.brickTreeDict = {}
-        self.brickList = {}
-        self.parameterDomainDict = {}
+        self.brick_tree_dict = {}
+        self.brick_list = {}
+
+        self.parameter_domain_dict = {}
+
+        # Setup Master HDF5 File
+        self.master_file_path = '{0}/{1}_master.hdf5'.format(self.root,self.guid)
+        # Make sure the root path exists, if not, make it
+        if not os.path.exists(self.root):
+            os.makedirs(self.root)
+
+        # Check if the master file already exists, if not, create it
+        if not os.path.exists(self.master_file_path):
+            master_file = h5py.File(self.master_file_path, 'w')
+            master_file.close()
+
+        self.master_groups = []
+        self.master_links = {}
+        # Peek inside the master file and populate master_groups and master_links
+        self._inspect_master()
 
         self.value_list = {}
-
-        #self.param_dtype = np.empty((1,), dtype='f').dtype
 
         # TODO: Loop through parameter_dictionary
         if isinstance(self.parameter_dictionary, ParameterDictionary):
             log.debug('Using a ParameterDictionary!')
             for param in self.parameter_dictionary:
                 pc = self.parameter_dictionary.get_context(param)
-
-                #if self.sdom is None:
-                #    tD = list(self.tdom)
-                #else:
-                #    tD = list(self.tdom+self.sdom) #can increase
                 tD = pc.dom.total_extents
                 bD,cD = self.calculate_brick_size(64) #remains same for each parameter
-                self.parameterDomainDict[pc.name] = [tD,bD,cD,pc.param_type._value_encoding]
+                self.parameter_domain_dict[pc.name] = [tD,bD,cD,pc.param_type._value_encoding]
                 self.init_parameter(pc)
+                self._inspect_master()
         elif isinstance(self.parameter_dictionary, list):
             log.debug('Found a list of parameters, assuming all have the same total domain')
         elif isinstance(self.parameter_dictionary, dict):
@@ -59,13 +70,13 @@ class PersistenceLayer():
             for pname,tD in self.parameter_dictionary:
                 tD = list(self.tdom+self.sdom) #can increase
                 bD,cD = self.calculate_brick_size(64) #remains same for each parameter
-                self.parameterDomainDict[pname] = [tD,bD,cD]
+                self.parameter_domain_dict[pname] = [tD,bD,cD]
                 # Verify domain is Rtree friendly
                 if len(bD) > 1:
                     p = rtree.index.Property()
                     p.dimension = len(bD)
-                    brickTree = rtree.index.Index(properties=p)
-                    self.brickTreeDict[pname] = [brickTree,tD]
+                    brick_tree = rtree.index.Index(properties=p)
+                    self.brick_tree_dict[pname] = [brick_tree,tD]
                 self.init_parameter(tD,bD,cD,pname,'f')
         else:
             pass
@@ -105,116 +116,91 @@ class PersistenceLayer():
 
         v = PLValue()
         self.value_list[parameter_context.name] = v
-        self.parameterDomainDict[parameter_context.name] = [None, None, None]
+        self.parameter_domain_dict[parameter_context.name] = [None, None, None]
 
         self.expand_domain(parameter_context)
 
         return v
 
-    # Generate empty bricks
-    # Input: totalDomain, brickDomain, chunkDomain, parameterName, parameter data type
-    def init_parameter_o(self, tD, bD, cD, parameterName, dataType):
-        log.debug('Total Domain: {0}'.format(tD))
-        log.debug('Brick Domain: {0}'.format(bD))
-        log.debug('Chunk Domain: {0}'.format(cD))
-
-        try:
-            # Gather block list
-            lst = [range(d)[::bD[i]] for i,d in enumerate(tD)]
-
-            # Gather brick vertices
-            vertices = list(itertools.product(*lst))
-
-            if len(vertices)>0:
-                log.debug('Number of Bricks to Create: {0}'.format(len(vertices)))
-
-                # Write brick to HDF5 file
-                # TODO: Loop over self.parameter_dictionary
-                map(lambda origin: self.write_brick(origin,bD,cD,parameterName,dataType), vertices)
-
-                log.info('Persistence Layer Successfully Initialized')
-            else:
-                log.debug('No bricks to create yet since the total domain in empty...')
-        except:
-            log.error('Failed to Initialize Persistence Layer')
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            log.error('{0}'.format(repr(traceback.format_exception(exc_type, exc_value, exc_traceback))))
-
-            log.debug('Cleaning up bricks.')
-            # TODO: Add brick cleanup routine
-
     # Write empty HDF5 brick to the filesystem
     # Input: Brick origin , brick dimensions (topological), chunk dimensions, coverage GUID, parameterName
     # TODO: ParameterContext (for HDF attributes)
-    def write_brick(self,origin,bD,cD,parameterName,dataType):
+    def write_brick(self,origin,bD,cD,parameter_name,data_type):
         # Calculate the brick extents
-        brickMax = []
+        brick_max = []
         for idx,val in enumerate(origin):
-            brickMax.append(bD[idx]+val)
+            brick_max.append(bD[idx]+val)
 
-        brickExtents = list(origin)+brickMax
-        log.debug('Brick extents (rtree format): {0}'.format(brickExtents))
+        brick_extents = list(origin)+brick_max
+        log.debug('Brick extents (rtree format): %s', brick_extents)
 
         # Make sure the brick doesn't already exist if we already have some bricks
-        if len([(k[0]) for k,v in self.brickList.items() if parameterName in k])>0:
-            check = [(brickExtents==v[1]) for k,v in self.brickList.items() if parameterName in k]
+        if len([(k[0]) for k,v in self.brick_list.items() if parameter_name in k])>0:
+            check = [(brick_extents==v[1]) for k,v in self.brick_list.items() if parameter_name in k]
             if True in check:
                 log.debug('Brick already exists!')
             else:
-                self._write_brick(origin,bD,cD,parameterName,dataType)
+                self._write_brick(origin,bD,cD,parameter_name,data_type)
         else:
-            self._write_brick(origin,bD,cD,parameterName,dataType)
+            self._write_brick(origin,bD,cD,parameter_name,data_type)
 
-    def _write_brick(self,origin,bD,cD,parameterName,dataType):
+    def _write_brick(self,origin,bD,cD,parameter_name,data_type):
         # Calculate the brick extents
-        brickMax = []
+        brick_max = []
         for idx,val in enumerate(origin):
-            brickMax.append(bD[idx]+val)
+            brick_max.append(bD[idx]+val)
 
-        brickExtents = list(origin)+brickMax
-        log.debug('Brick extents (rtree format): {0}'.format(brickExtents))
+        brick_extents = list(origin)+brick_max
 
-        if len([(k[0]) for k,v in self.brickList.items() if parameterName in k])>0:
-            brickCount = max(k[1] for k, v in self.brickList.items() if k[0]==parameterName)+1
+        if len([(k[0]) for k,v in self.brick_list.items() if parameter_name in k])>0:
+            brick_count = max(k[1] for k, v in self.brick_list.items() if k[0]==parameter_name)+1
         else:
-            brickCount = 1
+            brick_count = 1
 
-        log.debug('Writing brick for parameter {0}'.format(parameterName))
-        log.debug('Brick origin: {0}'.format(origin))
+        log.debug('Writing brick for parameter %s', parameter_name)
+        log.debug('Brick origin: %s', origin)
 
-        rootPath = '{0}/{1}/{2}'.format(self.root,self.guid,parameterName)
+        root_path = '{0}/{1}/{2}'.format(self.root,self.guid,parameter_name)
 
         # Create the root path if it does not exist
         # TODO: Eliminate possible race condition
-        if not os.path.exists(rootPath):
-            os.makedirs(rootPath)
+        if not os.path.exists(root_path):
+            os.makedirs(root_path)
 
         # Create a GUID for the brick
         brickGUID = create_guid()
 
         # Set HDF5 file and group
-        sugarFileName = '{0}.hdf5'.format(brickGUID)
-        sugarFilePath = '{0}/{1}'.format(rootPath,sugarFileName)
-        sugarFile = h5py.File(sugarFilePath, 'w')
+        sugar_file_name = '{0}.hdf5'.format(brickGUID)
+        sugar_file_path = '{0}/{1}'.format(root_path,sugar_file_name)
+        sugar_file = h5py.File(sugar_file_path, 'w')
 
-        sugarGroupPath = '/{0}/{1}'.format(self.guid,parameterName)
-        sugarGroup = sugarFile.create_group(sugarGroupPath)
+        sugar_group_path = '/{0}/{1}'.format(self.guid,parameter_name)
+        sugar_group = sugar_file.create_group(sugar_group_path)
 
         # Create the HDF5 dataset that represents one brick
-        sugarCubes = sugarGroup.create_dataset('{0}'.format(brickGUID), bD, dtype=dataType, chunks=cD)
+        sugarCubes = sugar_group.create_dataset('{0}'.format(brickGUID), bD, dtype=data_type, chunks=cD)
 
         # Close the HDF5 file that represents one brick
-        log.debug('Size Before Close: {0}'.format(os.path.getsize(sugarFilePath)))
-        sugarFile.close()
-        log.debug('Size After Close: {0}'.format(os.path.getsize(sugarFilePath)))
+        log.debug('Size Before Close: %s', os.path.getsize(sugar_file_path))
+        sugar_file.close()
+        log.debug('Size After Close: %s', os.path.getsize(sugar_file_path))
+
+        # Add brick to Master HDF file
+        log.debug('Adding %s external link to %s.', sugar_file_path, self.master_file_path)
+        _master_file = h5py.File(self.master_file_path, 'r+')
+        _master_file['{0}/{1}'.format(sugar_group_path, brickGUID)] = h5py.ExternalLink('./{0}/{1}/{2}'.format(self.guid, parameter_name, sugar_file_name), '{0}/{1}'.format(sugar_group_path, brickGUID))
+        # Sets the initial state of the External Link's "dirty" bit
+        _master_file['{0}/{1}'.format(sugar_group_path, brickGUID)].attrs['dirty'] = 0
+        _master_file.close()
 
         # Verify domain is Rtree friendly
         if len(bD) > 1:
-            log.debug('Inserting into Rtree {0}:{1}:{2}'.format(brickCount,brickExtents,brickGUID))
-            self.brickTreeDict[parameterName][0].insert(brickCount,brickExtents,obj=brickGUID)
+            log.debug('Inserting into Rtree %s:%s:%s', brick_count, brick_extents, brickGUID)
+            self.brick_tree_dict[parameter_name][0].insert(brick_count,brick_extents,obj=brickGUID)
 
         # Update the brick listing
-        self.brickList[parameterName,brickCount]=[brickGUID, brickExtents]
+        self.brick_list[parameter_name,brick_count]=[brickGUID, brick_extents]
 
     # Expand the domain
     # TODO: Verify brick and chunk sizes are still valid????
@@ -223,29 +209,29 @@ class PersistenceLayer():
         parameter_name = parameter_context.name
         log.debug('Expand %s', parameter_name)
 
-        if self.parameterDomainDict[parameter_context.name][0] is not None:
+        if self.parameter_domain_dict[parameter_context.name][0] is not None:
             log.debug('Expanding domain (n-dimension)')
 
             # Check if the number of dimensions of the total domain has changed
             # TODO: Will this ever happen???  If so, how to handle?
-            if len(parameter_context.dom.total_extents) != len(self.parameterDomainDict[parameter_name][0]):
+            if len(parameter_context.dom.total_extents) != len(self.parameter_domain_dict[parameter_name][0]):
                 raise SystemError('Number of dimensions for parameter cannot change, only expand in size! No action performed.')
             else:
-                tD = self.parameterDomainDict[parameter_name][0]
-                bD = self.parameterDomainDict[parameter_name][1]
-                cD = self.parameterDomainDict[parameter_name][2]
-                newDomain = parameter_context.dom.total_extents
+                tD = self.parameter_domain_dict[parameter_name][0]
+                bD = self.parameter_domain_dict[parameter_name][1]
+                cD = self.parameter_domain_dict[parameter_name][2]
+                new_domain = parameter_context.dom.total_extents
 
-                deltaDomain = [(x - y) for x, y in zip(newDomain, tD)]
-                log.debug('delta domain: {0}'.format(deltaDomain))
+                delta_domain = [(x - y) for x, y in zip(new_domain, tD)]
+                log.debug('delta domain: %s', delta_domain)
 
-                tD = [(x + y) for x, y in zip(tD, deltaDomain)]
-                self.parameterDomainDict[parameter_name][0] = tD
+                tD = [(x + y) for x, y in zip(tD, delta_domain)]
+                self.parameter_domain_dict[parameter_name][0] = tD
         else:
             tD = parameter_context.dom.total_extents
             bD = (5,) # TODO: Make this calculated based on tD and file system constraints
             cD = (2,)
-            self.parameterDomainDict[parameter_name] = [tD, bD, cD]
+            self.parameter_domain_dict[parameter_name] = [tD, bD, cD]
 
         try:
             # Gather block list
@@ -255,12 +241,15 @@ class PersistenceLayer():
             vertices = list(itertools.product(*lst))
 
             if len(vertices)>0:
-                log.debug('Number of Bricks to Create: {0}'.format(len(vertices)))
+                log.debug('Number of Bricks to Create: %s', len(vertices))
 
                 # Write brick to HDF5 file
                 # TODO: Loop over self.parameter_dictionary
                 # TODO: This is where we'll need to deal with objects and unsupported numpy types :(
                 map(lambda origin: self.write_brick(origin,bD,cD,parameter_name,parameter_context.param_type.value_encoding), vertices)
+
+                # Refresh master file object data
+                self._inspect_master()
 
                 log.info('Persistence Layer Successfully Initialized')
             else:
@@ -270,35 +259,9 @@ class PersistenceLayer():
             log.debug('Cleaning up bricks (not ;))')
             # TODO: Add brick cleanup routine
 
-        # TODO: Setup your bricking for the first time based on the parameter_context.dom - the logic from init_parameter
-        # TODO: Call something to actually write the bricks - a.k.a what used to be in init_parameter
-
-    def expand_domain_o(self, parameterName, new_tdom, new_sdom=None):
-        log.debug('Expanding domain (n-dimension)')
-
-        # Check if the number of dimensions of the total domain has changed
-        # TODO: Will this ever happen???  If so, how to handle?
-        if len(new_tdom+new_sdom)!=len(self.parameterDomainDict[parameterName][0]):
-            log.error('Number of dimensions for parameter cannot change, only expand in size! No action performed.')
-        else:
-            tD = self.parameterDomainDict[parameterName][0]
-            bD = self.parameterDomainDict[parameterName][1]
-            cD = self.parameterDomainDict[parameterName][2]
-            newDomain = new_tdom+new_sdom
-
-            deltaDomain = [(x - y) for x, y in zip(newDomain, tD)]
-            log.debug('delta domain: {0}'.format(deltaDomain))
-
-            tD = [(x + y) for x, y in zip(tD, deltaDomain)]
-            self.parameterDomainDict[parameterName][0] = tD
-            self.tdom = new_tdom
-            self.sdom = new_sdom
-
-            # TODO: Handle parameter dtype based
-            self.init_parameter(tD, bD, cD, parameterName, self.parameterDomainDict[parameterName][3])
-
     # Retrieve all or subset of data from HDF5 bricks
     def get_values(self, parameterName, minExtents, maxExtents):
+
         log.debug('Getting value(s) from brick(s)...')
 
         # Find bricks for given extents
@@ -314,37 +277,57 @@ class PersistenceLayer():
         # Pass back to coverage layer
 
     # Write all or subset of Coverage's data to HDF5 brick(s)
-    def set_values(self, parameterName, payload, minExtents, maxExtents):
+    def set_values(self, parameter_name, payload, min_extents, max_extents):
         log.debug('Setting value(s) of payload to brick(s)...')
 
         # TODO:  Make sure the content's domain has a brick available, otherwise make more bricks (expand)
-        brickSearchList = self.list_bricks(parameterName, minExtents, maxExtents)
+        brick_search_list = self.list_bricks(parameter_name, min_extents, max_extents)
 
-        if len(brickSearchList)==0:
+        if len(brick_search_list)==0:
             log.debug('No existing bricks found, creating now...')
-            self.expand_domain(maxExtents)
-            brickSearchList = self.list_bricks(parameterName, minExtents, maxExtents)
+            self.expand_domain(max_extents)
+            brickSearchList = self.list_bricks(parameter_name, min_extents, max_extents)
 
-        if len(brickSearchList) > 1:
-            log.debug('Splitting data across multiple bricks: {0}'.format(brickSearchList))
+        if len(brick_search_list) > 1:
+            log.debug('Splitting data across multiple bricks: %s', brick_search_list)
             # TODO: have to split data across multiple bricks
         else:
-            log.debug('Writing all data to one brick: {0}'.format(brickSearchList))
+            log.debug('Writing all data to one brick: %s', brick_search_list)
             # TODO: all data goes in one brick
             # TODO: open brick and place the data in the dataset
 
     # List bricks for a parameter based on domain range
-    def list_bricks(self, parameterName, start, end):
+    def list_bricks(self, parameter_name, start, end):
         log.debug('Placeholder for listing bricks based on a domain range...')
-        hits = list(self.brickTreeDict[parameterName][0].intersection(tuple(start+end), objects=True))
+        hits = list(self.brick_tree_dict[parameter_name][0].intersection(tuple(start+end), objects=True))
         return [(h.id,h.object) for h in hits]
 
     # Returns a count of bricks for a parameter
-    def count_bricks(self, parameterName):
+    def count_bricks(self, parameter_name):
         try:
-            return max(k[1] for k, v in self.brickList.items() if k[0]==parameterName)
+            return max(k[1] for k, v in self.brick_list.items() if k[0]==parameter_name)
         except:
-            return 'No bricks found for parameter: {0}'.format(parameterName)
+            return 'No bricks found for parameter: %s', parameter_name
+
+    def _inspect_master(self):
+        # Open the master file
+        _master_file = h5py.File(self.master_file_path, 'r+')
+
+        # Get all the groups
+        self.master_groups = []
+        _master_file.visit(self.master_groups.append)
+
+        # Get all parameter's external links to datasets
+        self.master_links = {}
+        for g in self.master_groups:
+            grp = _master_file[g]
+            for v in grp.values():
+                if isinstance(v,h5py.Dataset):
+                    self.master_links[v.name] = v.file.filename
+                    v.file.close()
+
+        # Close the master file
+        _master_file.close()
 
 class PLValue():
 
