@@ -172,6 +172,51 @@ class AbstractIdentifiable(AbstractBase):
 
         return self._identifier
 
+class AbstractStorage(AbstractBase):
+
+    def __init__(self, **kwargs):
+        """
+
+        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractBase; see documentation for that class for details
+        """
+        kwc=kwargs.copy()
+        AbstractBase.__init__(self, **kwargs)
+
+    def __getitem__(self, slice_):
+        raise NotImplementedError('Not implemented in abstract class')
+
+    def __setitem__(self, slice_, value):
+        raise NotImplementedError('Not implemented in abstract class')
+
+    def reinit(self, storage):
+        raise NotImplementedError('Not implemented in abstract class')
+
+    def fill(self, value):
+        raise NotImplementedError('Not implemented in abstract class')
+
+class InMemoryStorage(AbstractStorage):
+
+    def __init__(self, **kwargs):
+        """
+
+        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractStorage; see documentation for that class for details
+        """
+        kwc=kwargs.copy()
+        AbstractStorage.__init__(self, **kwc)
+        self._storage = np.empty((0,))
+
+    def __getitem__(self, slice_):
+        return self._storage.__getitem__(slice_)
+
+    def __setitem__(self, slice_, value):
+        self._storage.__setitem__(slice_, value)
+
+    def reinit(self, storage):
+        self._storage = storage.copy()
+
+    def fill(self, value):
+        self._storage.fill(value)
+
 class DomainOfApplication(object):
     # CBM: Document this!!
     def __init__(self, slices, topoDim=None):

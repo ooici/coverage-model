@@ -20,6 +20,7 @@
 
 from pyon.public import log
 from coverage_model.basic_types import AbstractIdentifiable
+from coverage_model.numexpr_utils import digit_match
 import numpy as np
 import re
 
@@ -315,7 +316,7 @@ class FunctionType(AbstractComplexParameterType):
 
 class ConstantType(AbstractComplexParameterType):
 
-    _rematch='^(c\*)?[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?$'
+    _rematch='^(c\*)?{0}$'.format(digit_match)
 
     def __init__(self, base_type=None, **kwargs):
         """

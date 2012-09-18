@@ -11,6 +11,7 @@ import re
 import numpy as np
 import numexpr as ne
 
+digit_match = r'[-+]?[0-9]*\.?[0-9]+?([eE][-+]?[0-9]+)?'
 def nest_wheres(*args):
     """
     Generates a 'nested' numexpr expression that is the sum of the provided where expressions.
