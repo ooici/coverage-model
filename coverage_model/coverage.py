@@ -234,7 +234,7 @@ class SimplexCoverage(AbstractCoverage):
             dom.crs.axes[pcontext.reference_frame] = pcontext.name
 
         self._range_dictionary.add_context(pcontext)
-        self._range_value[pname] = get_value_class(pcontext.param_type, parameter_context=pcontext)
+        self._range_value[pname] = get_value_class(param_type=pcontext.param_type, domain_set=pcontext.dom)
 
     def get_parameter(self, param_name):
         """
@@ -756,6 +756,16 @@ class DomainSet(AbstractIdentifiable):
             ret += self.sdom.shape.extents
 
         return tuple(ret)
+
+class SimpleDomainSet(AbstractIdentifiable):
+    def __init__(self, shape, **kwargs):
+        kwc=kwargs.copy()
+        AbstractIdentifiable.__init__(self, **kwc)
+        self.shape = shape
+
+    @property
+    def total_extents(self):
+        return self.shape
 
 #=========================
 # Shape Objects

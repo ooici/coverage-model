@@ -16,6 +16,107 @@ from coverage_model.parameter_types import *
 from coverage_model.parameter import *
 import numpy as np
 
+def values_outside_coverage():
+    num_rec = 10
+    dom = SimpleDomainSet((num_rec,))
+
+    # QuantityType example
+    qtype = QuantityType(value_encoding=np.dtype('float32'))
+    qval = get_value_class(qtype, domain_set=dom)
+
+    # ArrayType example
+    atype = ArrayType()
+    aval = get_value_class(atype, domain_set=dom)
+
+    # RecordType example
+    rtype = RecordType()
+    rval = get_value_class(rtype, domain_set=dom)
+
+    # ConstantType example
+    ctype = ConstantType(QuantityType(value_encoding=np.dtype('int32')))
+    cval = get_value_class(ctype, domain_set=dom)
+
+    # FunctionType example
+#    ftype = FunctionType(QuantityType(value_encoding=np.dtype('float32')))
+#    fval = get_value_class(ftype, domain_set=dom)
+
+    # Add data to the values
+    qval[:] = np.random.random_sample(num_rec)*(50-20)+20 # array of 10 random values between 20 & 50
+
+    letts='abcdefghij'
+    for x in xrange(num_rec):
+        aval[x] = np.random.bytes(np.random.randint(1,20)) # One value (which is a byte string) for each member of the domain
+        rval[x] = {letts[x]: letts[x:]} # One value (which is a dict) for each member of the domain
+
+    cval[0] = 200 # Doesn't matter what index (or indices) you assign this to - it's used everywhere!!
+
+    if not (aval.shape == rval.shape == cval.shape):# == fval.shape):
+        raise SystemError('Shapes are not equal!!')
+
+    print "Returning: qval, aval, rval, cval"
+    return qval, aval, rval, cval
+
+def param_dict_compare():
+# Instantiate a ParameterDictionary
+    pdict_1 = ParameterDictionary()
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    pdict_1.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')))
+    pdict_1.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
+    pdict_1.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
+    pdict_1.add_context(ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius')))
+
+
+    # Instantiate a ParameterDictionary
+    pdict_2 = ParameterDictionary()
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    pdict_2.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')))
+    pdict_2.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
+    pdict_2.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
+    pdict_2.add_context(ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius')))
+
+
+    # Instantiate a ParameterDictionary
+    pdict_3 = ParameterDictionary()
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    pdict_3.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')))
+    pdict_3.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
+    pdict_3.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
+    pdict_3.add_context(ParameterContext('temp2', param_type=QuantityType(uom='degree_Celsius')))
+
+
+    # Instantiate a ParameterDictionary
+    pdict_4 = ParameterDictionary()
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    pdict_4.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')))
+    pdict_4.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
+    pdict_4.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
+
+    temp_ctxt = ParameterContext('temp', param_type=QuantityType(uom = 'degree_Celsius'))
+    pdict_4.add_context(temp_ctxt)
+
+    temp2_ctxt = ParameterContext(name=temp_ctxt, new_name='temp2')
+    pdict_4.add_context(temp2_ctxt)
+
+
+    print 'Should be equal and compare \'one-to-one\' with nothing in the None list'
+    print pdict_1 == pdict_2
+    print pdict_1.compare(pdict_2)
+
+    print '\nShould be unequal and compare with an empty list for \'temp\' and \'temp2\' in the None list'
+    print pdict_1 == pdict_3
+    print pdict_1.compare(pdict_3)
+
+    print '\nShould be unequal and compare with both \'temp\' and \'temp2\' in \'temp\' and nothing in the None list'
+    print pdict_1 == pdict_4
+    print pdict_1.compare(pdict_4)
+
+    print "Returning: pdict_1, pdict_2, pdict_3, pdict_4"
+    return pdict_1, pdict_2, pdict_3, pdict_4
+
 def samplecov(save_coverage=True):
     # Instantiate a ParameterDictionary
     pdict = ParameterDictionary()

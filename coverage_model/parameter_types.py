@@ -84,6 +84,7 @@ class AbstractSimplexParameterType(AbstractParameterType):
         AbstractParameterType.__init__(self, **kwc)
         self._template_attrs['quality'] = quality
         self._template_attrs['nilValues'] = nilValues
+        self._template_attrs['fill_value'] = -9999
 
 class AbstractComplexParameterType(AbstractParameterType):
     """
