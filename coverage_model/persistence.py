@@ -8,7 +8,7 @@
 """
 
 from pyon.public import log
-from coverage_model.basic_types import create_guid
+from coverage_model.basic_types import create_guid, AbstractStorage, InMemoryStorage
 from coverage_model.parameter import ParameterDictionary
 import sys, traceback
 import numpy as np
@@ -114,7 +114,8 @@ class PersistenceLayer():
     def init_parameter(self, parameter_context):
         log.debug('Initialize %s', parameter_context.name)
 
-        v = PLValue()
+        # TODO: Check the flag to see which kind of storage this should be
+        v = InMemoryStorage()
         self.value_list[parameter_context.name] = v
         self.parameter_domain_dict[parameter_context.name] = [None, None, None]
 
@@ -329,27 +330,37 @@ class PersistenceLayer():
         # Close the master file
         _master_file.close()
 
-class PLValue():
+class PersistedStorage(AbstractStorage):
+    # TODO: THIS IS CURRENTLY THE IN MEMORY REPRESENTATION!!!!
 
-    def __init__(self):
+    def __init__(self, **kwargs):
+        """
+
+        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractStorage; see documentation for that class for details
+        """
+        kwc=kwargs.copy()
+        AbstractStorage.__init__(self, **kwc)
         self._storage = np.empty((0,))
 
-    def __getitem__(self, item):
-        return self._storage.__getitem__(item)
+    def __getitem__(self, slice_):
+        return self._storage.__getitem__(slice_)
 
-    def __setitem__(self, key, value):
-        self._storage.__setitem__(key, value)
+    def __setitem__(self, slice_, value):
+        self._storage.__setitem__(slice_, value)
 
     def reinit(self, storage):
         self._storage = storage.copy()
 
     def fill(self, value):
-        self._storage.fill(value)
+        pass # No op
+#        self._storage.fill(value)
 
     @property
     def shape(self):
+        # TODO: Will be removed shortly
         return self._storage.shape
 
     @property
     def dtype(self):
+        # TODO: Will be removed shortly
         return self._storage.dtype
