@@ -20,7 +20,7 @@
 
 from pyon.public import log
 from coverage_model.basic_types import AbstractIdentifiable
-from coverage_model.numexpr_utils import digit_match
+from coverage_model.numexpr_utils import digit_match, is_well_formed_where, single_where_match
 import numpy as np
 import re
 
@@ -289,7 +289,10 @@ class TimeRangeType(AbstractSimplexParameterType):
         AbstractSimplexParameterType.__init__(self, **kwc)
 
 class FunctionType(AbstractComplexParameterType):
+    """
 
+    """
+    # CBM TODO: There are 2 'classes' of Function - those that operate against an INDEX, and those that operate against a VALUE
     def __init__(self, base_type=None, **kwargs):
         """
 
@@ -302,10 +305,14 @@ class FunctionType(AbstractComplexParameterType):
 
         self.base_type = base_type or QuantityType()
 
-        self._template_attrs['fill_value'] = 'c*1'
+        self._template_attrs['fill_value'] = None
 
         self._template_attrs.update(self.base_type._template_attrs)
         self._gen_template_attrs()
+
+    def is_valid_value(self, value):
+        if not is_well_formed_where(value):
+            raise ValueError('\value\' must be a string matching the form (may be nested): \'{0}\' ; for example, \'where(x > 99, 8, -999)\', \'where((x > 0) & (x <= 100), 55, 100)\', or \'where(x <= 10, 10, where(x <= 30, 100, where(x < 50, 150, nan)))\''.format(single_where_match))
 
     def __eq__(self, other):
         if super(FunctionType, self).__eq__(other):

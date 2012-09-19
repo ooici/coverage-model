@@ -194,6 +194,12 @@ class AbstractStorage(AbstractBase):
     def fill(self, value):
         raise NotImplementedError('Not implemented in abstract class')
 
+    def __len__(self):
+        raise NotImplementedError('Not implemented in abstract class')
+
+    def __iter__(self):
+        raise NotImplementedError('Not implemented in abstract class')
+
 class InMemoryStorage(AbstractStorage):
 
     def __init__(self, **kwargs):
@@ -216,6 +222,12 @@ class InMemoryStorage(AbstractStorage):
 
     def fill(self, value):
         self._storage.fill(value)
+
+    def __len__(self):
+        return self._storage.__len__()
+
+    def __iter__(self):
+        return self._storage.__iter__()
 
 class DomainOfApplication(object):
     # CBM: Document this!!

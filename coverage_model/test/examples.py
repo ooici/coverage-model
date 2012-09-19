@@ -37,8 +37,8 @@ def values_outside_coverage():
     cval = get_value_class(ctype, domain_set=dom)
 
     # FunctionType example
-#    ftype = FunctionType(QuantityType(value_encoding=np.dtype('float32')))
-#    fval = get_value_class(ftype, domain_set=dom)
+    ftype = FunctionType(QuantityType(value_encoding=np.dtype('float32')))
+    fval = get_value_class(ftype, domain_set=dom)
 
     # Add data to the values
     qval[:] = np.random.random_sample(num_rec)*(50-20)+20 # array of 10 random values between 20 & 50
@@ -50,11 +50,22 @@ def values_outside_coverage():
 
     cval[0] = 200 # Doesn't matter what index (or indices) you assign this to - it's used everywhere!!
 
+    fval[:] = make_range_expr(100, min=0, max=4, min_incl=True, max_incl=False, else_val=-9999)
+    fval[:] = make_range_expr(200, min=4, max=6, min_incl=True, else_val=-9999)
+    fval[:] = make_range_expr(300, min=6, else_val=-9999)
+
     if not (aval.shape == rval.shape == cval.shape):# == fval.shape):
         raise SystemError('Shapes are not equal!!')
 
-    print "Returning: qval, aval, rval, cval"
-    return qval, aval, rval, cval
+    types = (qtype, atype, rtype, ctype, ftype)
+    vals = (qval, aval, rval, cval, fval)
+    for i in xrange(len(vals)):
+        log.info('Type: %s', types[i])
+        log.info('\tContent: %s', vals[i].content)
+        log.info('\tVals: %s', vals[i][:])
+
+    log.info('Returning: qval, aval, rval, cval, fval')
+    return vals
 
 def param_dict_compare():
 # Instantiate a ParameterDictionary

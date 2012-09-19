@@ -7,11 +7,58 @@
 @brief 
 """
 
+from ooi.logging import log
 import re
 import numpy as np
 import numexpr as ne
 
 digit_match = r'[-+]?[0-9]*\.?[0-9]+?([eE][-+]?[0-9]+)?'
+digit_or_nan = r'(?:{0}|(?:nan))'.format(digit_match)
+single_where_match = r'^where\(\(?x ?[><=]+ ?{0}\)?( ?&? ?\(?x ?[><=]+ ?{0}\)?)?, ?{0}, ?{0}\)$'.format(digit_or_nan)
+where_match_noelse = r'where\(\(?x ?[><=]+ ?{0}\)?( ?&? ?\(?x ?[><=]+ ?{0}?\)?)?, ?{0}, ?'.format(digit_or_nan)
+
+def is_well_formed_where(value):
+    ret = False
+    if is_nested_where(value):
+        ret = is_well_formed_nested(value)
+    elif re.match(single_where_match, value) is not None:
+        ret = True
+
+    return ret
+
+def is_nested_where(value):
+    return len(re.findall('where', value)) > 1
+
+def is_well_formed_nested(value):
+    ret = False
+    where_count = len(re.findall('where', value))
+    if where_count == len(re.findall(where_match_noelse, value)):
+        expr = r'.*{0}{1}$'.format(digit_or_nan, ('\)'*where_count))
+        if re.match(expr, value) is not None:
+            ret = True
+        else:
+            log.warn('\'value\' does not end as expected: \'%s\' does not match \'%s\'', value, expr)
+    else:
+        log.warn('\'value\' appears to have malformed where clauses')
+
+    return ret
+
+def denest_wheres(where_expr, else_val=None):
+    if not is_well_formed_where(where_expr):
+        raise ValueError('\'where_expr\' does not pass is_well_formed_where: {0}'.format(where_expr))
+    else_val = else_val or -9999
+
+    expr=where_expr
+    where_count = len(re.findall('where', expr))
+    ret=[]
+    for x in range(where_count):
+        m=re.match(where_match_noelse, expr)
+        if m is not None:
+            ret.append('{0}{1})'.format(expr[m.start():m.end()], else_val))
+            expr=expr[m.end():]
+
+    return ret
+
 def nest_wheres(*args):
     """
     Generates a 'nested' numexpr expression that is the sum of the provided where expressions.
@@ -23,7 +70,7 @@ def nest_wheres(*args):
 
     Example:
     \code{.py}
-        In [1]: from scratch.numexpr_utils import nest_wheres
+        In [1]: from coverage_model.numexpr_utils import nest_wheres
         In [2]: expr1 = 'where(x <= 10, 10, nan)'
         In [3]: expr2 = 'where(x <= 30, 100, nan)'
         In [4]: expr3 = 'where(x < 50, 150, nan)'
@@ -31,9 +78,9 @@ def nest_wheres(*args):
         Out[5]: 'where(x <= 10, 10, where(x <= 30, 100, where(x < 50, 150, nan)))'
     \endcode
 
-    @param *args    One or more str or unicode expressions matching the form: 'where(.*,.*,.*)'
+    @param *args    One or more str or unicode expressions that pass the is_well_formed_where function
     """
-    where_list = [w for w in args if isinstance(w, (str, unicode)) and re.match('where(.*,.*,.*)', w)]
+    where_list = [w for w in args if isinstance(w, (str, unicode)) and is_well_formed_where(w)]
     if not where_list:
         raise IndexError('There are no appropriate arguments; each argument must be a str/unicode matching \'where(.*,.*,.*)\'')
 
@@ -53,7 +100,7 @@ def make_range_expr(val, min=None, max=None, min_incl=False, max_incl=True, else
 
     Examples:
     \code{.py}
-        In [1]: from scratch.numexpr_utils import make_range_expr
+        In [1]: from coverage_model.numexpr_utils import make_range_expr
 
         In [2]: make_range_expr(10)
         Out[2]: 'c*10'
