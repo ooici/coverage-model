@@ -20,7 +20,14 @@ import itertools
 class PersistenceLayer():
     def __init__(self, root, guid, parameter_dictionary=None, tdom=None, sdom=None, **kwargs):
         """
-        Constructor for PersistenceLayer
+        Constructor for Persistence Layer
+        @param root: Where to save/look for HDF5 files
+        @param guid: CoverageModel GUID
+        @param parameter_dictionary: CoverageModel ParameterDictionary
+        @param tdom: Temporal Domain
+        @param sdom: Spatial Domain
+        @param kwargs:
+        @return:
         """
         self.root = '.' if root is ('' or None) else root
         self.guid = guid
@@ -29,8 +36,8 @@ class PersistenceLayer():
         self.tdom = tdom
         self.sdom = sdom
 
-        brickTree = rtree.Rtree()
         self.brick_tree_dict = {}
+
         self.brick_list = {}
 
         self.parameter_domain_dict = {}
@@ -63,21 +70,27 @@ class PersistenceLayer():
                 self.parameter_domain_dict[pc.name] = [tD,bD,cD,pc.param_type._value_encoding]
                 self.init_parameter(pc)
                 self._inspect_master()
-        elif isinstance(self.parameter_dictionary, list):
-            log.debug('Found a list of parameters, assuming all have the same total domain')
-        elif isinstance(self.parameter_dictionary, dict):
-            log.debug('Found a dictionary of parameters, assuming parameter name is key and has value of total domain,dtype')
-            for pname,tD in self.parameter_dictionary:
-                tD = list(self.tdom+self.sdom) #can increase
-                bD,cD = self.calculate_brick_size(64) #remains same for each parameter
-                self.parameter_domain_dict[pname] = [tD,bD,cD]
-                # Verify domain is Rtree friendly
-                if len(bD) > 1:
-                    p = rtree.index.Property()
-                    p.dimension = len(bD)
-                    brick_tree = rtree.index.Index(properties=p)
-                    self.brick_tree_dict[pname] = [brick_tree,tD]
-                self.init_parameter(tD,bD,cD,pname,'f')
+#                log.debug('Performing Rtree dict setup')
+#                # Verify domain is Rtree friendly
+#                tree_rank = len(bD)
+#                log.debug('tree_rank: %s', tree_rank)
+#                if tree_rank == 1:
+#                    tree_rank += 1
+#                log.debug('tree_rank: %s', tree_rank)
+#                p = rtree.index.Property()
+#                p.dimension = tree_rank
+#                brick_tree = rtree.index.Index(properties=p)
+#                self.brick_tree_dict[pc.name] = [brick_tree,bD]
+#        elif isinstance(self.parameter_dictionary, list):
+#            log.debug('Found a list of parameters, assuming all have the same total domain')
+#        elif isinstance(self.parameter_dictionary, dict):
+#            log.debug('Found a dictionary of parameters, assuming parameter name is key and has value of total domain,dtype')
+#            for pname,tD in self.parameter_dictionary:
+#                tD = list(self.tdom+self.sdom) #can increase
+#                bD,cD = self.calculate_brick_size(64) #remains same for each parameter
+#                self.parameter_domain_dict[pname] = [tD,bD,cD]
+#
+#                self.init_parameter(tD,bD,cD,pname,'f')
         else:
             pass
 
@@ -119,6 +132,20 @@ class PersistenceLayer():
         self.value_list[parameter_context.name] = v
         self.parameter_domain_dict[parameter_context.name] = [None, None, None]
 
+        log.debug('Performing Rtree dict setup')
+        tD = parameter_context.dom.total_extents
+        bD,cD = self.calculate_brick_size(64) #remains same for each parameter
+        # Verify domain is Rtree friendly
+        tree_rank = len(bD)
+        log.debug('tree_rank: %s', tree_rank)
+        if tree_rank == 1:
+            tree_rank += 1
+        log.debug('tree_rank: %s', tree_rank)
+        p = rtree.index.Property()
+        p.dimension = tree_rank
+        brick_tree = rtree.index.Index(properties=p)
+        self.brick_tree_dict[parameter_context.name] = [brick_tree,bD]
+
         self.expand_domain(parameter_context)
 
         return v
@@ -146,12 +173,18 @@ class PersistenceLayer():
             self._write_brick(origin,bD,cD,parameter_name,data_type)
 
     def _write_brick(self,origin,bD,cD,parameter_name,data_type):
+        log.debug('origin: %s', origin)
         # Calculate the brick extents
         brick_max = []
+
         for idx,val in enumerate(origin):
             brick_max.append(bD[idx]+val)
+        log.debug('brick_max: %s', brick_max)
 
         brick_extents = list(origin)+brick_max
+#        if len(bD) == 1:
+#            brick_extents = [0,0] + brick_max + [0]
+        log.debug('brick_extents: %s', brick_extents)
 
         if len([(k[0]) for k,v in self.brick_list.items() if parameter_name in k])>0:
             brick_count = max(k[1] for k, v in self.brick_list.items() if k[0]==parameter_name)+1
@@ -191,17 +224,31 @@ class PersistenceLayer():
         log.debug('Adding %s external link to %s.', sugar_file_path, self.master_file_path)
         _master_file = h5py.File(self.master_file_path, 'r+')
         _master_file['{0}/{1}'.format(sugar_group_path, brickGUID)] = h5py.ExternalLink('./{0}/{1}/{2}'.format(self.guid, parameter_name, sugar_file_name), '{0}/{1}'.format(sugar_group_path, brickGUID))
-        # Sets the initial state of the External Link's "dirty" bit
-        _master_file['{0}/{1}'.format(sugar_group_path, brickGUID)].attrs['dirty'] = 0
-        _master_file.close()
 
-        # Verify domain is Rtree friendly
-        if len(bD) > 1:
-            log.debug('Inserting into Rtree %s:%s:%s', brick_count, brick_extents, brickGUID)
-            self.brick_tree_dict[parameter_name][0].insert(brick_count,brick_extents,obj=brickGUID)
+        # Insert into Rtree
+        log.debug('Inserting into Rtree %s:%s:%s', brick_count, brick_extents, brickGUID)
+        self.brick_tree_dict[parameter_name][0].insert(brick_count, brick_extents, obj=brickGUID)
+        log.debug('Rtree inserted successfully.')
 
         # Update the brick listing
+        log.debug('Updating brick list[%s, %s]=[%s, %s]',parameter_name, brick_count, brickGUID, brick_extents)
         self.brick_list[parameter_name,brick_count]=[brickGUID, brick_extents]
+
+        # Brick metadata
+        # Sets the initial state of the External Link's "dirty" bit
+        _master_file['{0}/{1}'.format(sugar_group_path, brickGUID)].attrs['dirty'] = 0
+        _master_file['{0}/{1}'.format(sugar_group_path, brickGUID)].attrs['brick_domain'] = str(tuple(bD))
+
+        # TODO: This is a really ugly way to store the brick_list for a parameter
+#        brick_list_attrs_filtered = [(k,v) for k, v in self.brick_list.items() if k[0]==parameter_name]
+#        str_size = 'S'+str(len(str(brick_list_attrs_filtered[0])))
+#        brick_list_attrs = np.ndarray(tuple([len(brick_list_attrs_filtered)]), str_size)
+#        for i,v in enumerate(brick_list_attrs_filtered):
+#            brick_list_attrs[i] = str(v)
+#        _master_file[sugar_group_path].attrs['brick_list'] = brick_list_attrs
+
+        # Close the master file
+        _master_file.close()
 
     # Expand the domain
     # TODO: Verify brick and chunk sizes are still valid????
@@ -254,7 +301,7 @@ class PersistenceLayer():
 
                 log.info('Persistence Layer Successfully Initialized')
             else:
-                log.debug('No bricks to create yet since the total domain in empty...')
+                log.debug('No bricks to create yet since the total domain is empty...')
         except Exception as ex:
             log.error('Failed to Initialize Persistence Layer: %s', ex)
             log.debug('Cleaning up bricks (not ;))')
@@ -327,13 +374,13 @@ class PersistenceLayer():
                     self.master_links[v.name] = v.file.filename
                     v.file.close()
 
+        # TODO: Get the brick list for each parameter from the parameter's group brick_list attribute and combine
         # Close the master file
         _master_file.close()
 
 class PersistedStorage(AbstractStorage):
-    # TODO: THIS IS CURRENTLY THE IN MEMORY REPRESENTATION!!!!
 
-    def __init__(self, **kwargs):
+    def __init__(self, master_file, parameter_name, brick_tree, **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractStorage; see documentation for that class for details
@@ -342,18 +389,28 @@ class PersistedStorage(AbstractStorage):
         AbstractStorage.__init__(self, **kwc)
         self._storage = np.empty((0,))
 
+        self.master_file = master_file
+        self.parameter_name = parameter_name
+        self.brick_tree = brick_tree
+
+        # We just need to know which brick(s) to save to and their slice(s)
+        self.storage_bricks = {}
+
+    # TODO: After getting slice_'s data remember to fill nulls with fill value for the parameter before passing back
     def __getitem__(self, slice_):
+        log.debug('getitem slice_: %s', slice_)
         return self._storage.__getitem__(slice_)
 
     def __setitem__(self, slice_, value):
+        log.debug('setitem slice_: %s', slice_)
+        # TODO: Populate storage_bricks dict based on
         self._storage.__setitem__(slice_, value)
 
     def reinit(self, storage):
-        self._storage = storage.copy()
+        pass # No op
 
     def fill(self, value):
         pass # No op
-#        self._storage.fill(value)
 
     @property
     def shape(self):
@@ -364,3 +421,6 @@ class PersistedStorage(AbstractStorage):
     def dtype(self):
         # TODO: Will be removed shortly
         return self._storage.dtype
+
+    def calculate_storage_bricks(self, slice_):
+        pass
