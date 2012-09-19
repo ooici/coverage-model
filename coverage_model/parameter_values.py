@@ -60,6 +60,9 @@ class AbstractParameterValue(AbstractBase):
                 for n in range(slen, rank):
                     slice_ += (slice(None,None,None),)
 
+        # Remove the tuple if it's len==1
+        if len(slice_):
+            slice_ = slice_[0]
         return slice_
 
     @property
@@ -130,7 +133,6 @@ class NumericValue(AbstractSimplexParameterValue):
         """
         kwc=kwargs.copy()
         AbstractSimplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
-        log.warn(self.value_encoding)
         self._storage.reinit(np.empty(self.shape, dtype=self.value_encoding))
         self._storage.fill(self.parameter_type.fill_value)
 
@@ -189,8 +191,10 @@ class FunctionValue(AbstractComplexParameterValue):
     def __setitem__(self, slice_, value):
         if is_well_formed_where(value):
             slice_ = self._fix_slice(slice_, len(self.shape))
-            # CBM TODO: Address case where slice_ is a single index - if within the current range, replace the value at that index
-            self._storage.reinit(np.append(self._storage[:], np.array([value],dtype=object), axis=0))
+            if isinstance(slice_, int) and slice_ < len(self._storage):
+                self._storage[slice_] = value
+            else:
+                self._storage.reinit(np.append(self._storage[:], np.array([value],dtype=object), axis=0))
 
 class ConstantValue(AbstractComplexParameterValue):
 
