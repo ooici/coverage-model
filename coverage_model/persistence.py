@@ -126,12 +126,8 @@ class PersistenceLayer():
         return bD,cD
 
     def init_parameter(self, parameter_context):
-        log.debug('Initialize %s', parameter_context.name)
-
-        # TODO: Check the flag to see which kind of storage this should be
-        v = InMemoryStorage()
-        self.value_list[parameter_context.name] = v
-        self.parameter_domain_dict[parameter_context.name] = [None, None, None]
+        parameter_name = parameter_context.name
+        log.debug('Initialize %s', parameter_name)
 
         log.debug('Performing Rtree dict setup')
         tD = parameter_context.dom.total_extents
@@ -145,54 +141,65 @@ class PersistenceLayer():
         p = rtree.index.Property()
         p.dimension = tree_rank
         brick_tree = rtree.index.Index(properties=p)
-        self.brick_tree_dict[parameter_context.name] = [brick_tree, bD]
+        self.brick_tree_dict[parameter_name] = [brick_tree, bD]
+
+        # TODO: Sort out the path to the bricks for this parameter
+        brick_path = '{0}/{1}/{2}'.format(self.root, self.guid, parameter_name)
+        v = PersistedStorage(brick_path, self.brick_tree_dict[parameter_name][0])
+        self.value_list[parameter_name] = v
+        self.parameter_domain_dict[parameter_name] = [None, None, None]
 
         self.expand_domain(parameter_context)
 
         return v
 
-    def calculate_brick_extents(self, origin, bD):
+    def calculate_extents(self, origin, bD):
         log.debug('origin: %s', origin)
         # Calculate the brick extents
         brick_max = []
         brick_extents = []
 
-        for idx,val in enumerate(origin):
-            brick_max.append(bD[idx]+val)
-        log.debug('brick_max: %s', brick_max)
 
+        origin=list(origin)
+#        if len(origin) == 1:
+#            origin = origin + [0]
+#            bD = bD + [0]
+
+        rtree_extents = origin + map(lambda o,s: o+s-1,origin,bD)
+        brick_extents = zip(origin,map(lambda o,s: o+s-1, origin,bD))
+
+        # Fake out the rtree if rank == 1
         if len(origin) == 1:
-            brick_extents = list(origin)+[0] + brick_max+[0]
+            rtree_extents = [e for ext in zip(rtree_extents,[0 for x in rtree_extents]) for e in ext]
+
+        log.debug('Rtree extents: %s', rtree_extents)
+        log.debug('Brick extents: %s', brick_extents)
+
+        return rtree_extents, brick_extents
+
+    def _brick_exists(self,parameter_name, brick_extents):
+        # Make sure the brick doesn't already exist if we already have some bricks
+        do_write = True
+        log.error(parameter_name)
+        log.error(self.brick_list)
+        if parameter_name in self.brick_list:
+            for x in self.brick_list[parameter_name]:
+                if brick_extents == x[1]:
+                    do_write = False
+                    break
         else:
-            brick_extents = list(origin)+brick_max
+            self.brick_list[parameter_name] = []
 
-        log.debug('Brick extents (rtree format): %s', brick_extents)
-
-        return brick_extents
+        return do_write
 
     # Write empty HDF5 brick to the filesystem
     # Input: Brick origin , brick dimensions (topological), chunk dimensions, coverage GUID, parameterName
-    # TODO: ParameterContext (for HDF attributes)
     def write_brick(self,origin,bD,cD,parameter_name,data_type):
-        brick_extents = self.calculate_brick_extents(origin, bD)
+        rtree_extents, brick_extents = self.calculate_extents(origin, bD)
 
-        # Make sure the brick doesn't already exist if we already have some bricks
-        if len([(k[0]) for k,v in self.brick_list.items() if parameter_name in k])>0:
-            check = [(brick_extents==v[1]) for k,v in self.brick_list.items() if parameter_name in k]
-            if True in check:
-                log.debug('Brick already exists!')
-            else:
-                self._write_brick(origin,bD,cD,parameter_name,data_type)
-        else:
-            self._write_brick(origin,bD,cD,parameter_name,data_type)
-
-    def _write_brick(self,origin,bD,cD,parameter_name,data_type):
-        brick_extents = self.calculate_brick_extents(origin, bD)
-
-        if len([(k[0]) for k,v in self.brick_list.items() if parameter_name in k])>0:
-            brick_count = max(k[1] for k, v in self.brick_list.items() if k[0]==parameter_name)+1
-        else:
-            brick_count = 1
+        if not self._brick_exists(parameter_name, brick_extents):
+            log.debug('Brick already exists!  Do not write')
+            return
 
         log.debug('Writing brick for parameter %s', parameter_name)
 
@@ -227,20 +234,23 @@ class PersistenceLayer():
         _master_file = h5py.File(self.master_file_path, 'r+')
         _master_file['{0}/{1}'.format(sugar_group_path, brickGUID)] = h5py.ExternalLink('./{0}/{1}/{2}'.format(self.guid, parameter_name, sugar_file_name), '{0}/{1}'.format(sugar_group_path, brickGUID))
 
-        # Insert into Rtree
-        log.debug('Inserting into Rtree %s:%s:%s', brick_count, brick_extents, brickGUID)
-        self.brick_tree_dict[parameter_name][0].insert(brick_count, brick_extents, obj=brickGUID)
-        log.debug('Rtree inserted successfully.')
-
-        # TODO: The brick_extents are not correct and messing up things, ie [0,5] is now [0,5,0,5]
         # Update the brick listing
-        log.debug('Updating brick list[%s, %s]=[%s, %s]',parameter_name, brick_count, brickGUID, brick_extents)
-        self.brick_list[parameter_name,brick_count]=[brickGUID, brick_extents]
+        log.debug('Updating brick list[%s] with (%s, %s)',parameter_name, brickGUID, brick_extents)
+        self.brick_list[parameter_name].append((brickGUID, brick_extents))
+        brick_count = len(self.brick_list[parameter_name])
+        log.debug('Brick count for %s is %s', parameter_name, brick_count)
+
+        # Insert into Rtree
+        log.debug('Inserting into Rtree %s:%s:%s', brick_count - 1, rtree_extents, brickGUID)
+        self.brick_tree_dict[parameter_name][0].insert(brick_count - 1, rtree_extents, obj=brickGUID)
+        log.debug('Rtree inserted successfully.')
 
         # Brick metadata
         # Sets the initial state of the External Link's "dirty" bit
         _master_file['{0}/{1}'.format(sugar_group_path, brickGUID)].attrs['dirty'] = 0
-        _master_file['{0}/{1}'.format(sugar_group_path, brickGUID)].attrs['brick_domain'] = str(tuple(bD))
+        _master_file['{0}/{1}'.format(sugar_group_path, brickGUID)].attrs['brick_origin'] = str(origin)
+        _master_file['{0}/{1}'.format(sugar_group_path, brickGUID)].attrs['brick_size'] = str(tuple(bD))
+        log.debug('Sugar Size At End: %s', os.path.getsize(sugar_file_path))
 
         # TODO: This is a really ugly way to store the brick_list for a parameter
 #        brick_list_attrs_filtered = [(k,v) for k, v in self.brick_list.items() if k[0]==parameter_name]
@@ -260,7 +270,7 @@ class PersistenceLayer():
         parameter_name = parameter_context.name
         log.debug('Expand %s', parameter_name)
 
-        if self.parameter_domain_dict[parameter_context.name][0] is not None:
+        if self.parameter_domain_dict[parameter_name][0] is not None:
             log.debug('Expanding domain (n-dimension)')
 
             # Check if the number of dimensions of the total domain has changed
@@ -306,8 +316,9 @@ class PersistenceLayer():
             else:
                 log.debug('No bricks to create yet since the total domain is empty...')
         except Exception as ex:
-            log.error('Failed to Initialize Persistence Layer: %s', ex)
-            log.debug('Cleaning up bricks (not ;))')
+            raise ex
+#            log.error('Failed to Initialize Persistence Layer: %s', ex)
+#            log.debug('Cleaning up bricks (not ;))')
             # TODO: Add brick cleanup routine
 
     # Retrieve all or subset of data from HDF5 bricks
@@ -330,13 +341,7 @@ class PersistenceLayer():
     # Write all or subset of Coverage's data to HDF5 brick(s)
     def set_values(self, parameter_name, payload, slice_):
         log.debug('Setting value(s) of payload to brick(s)...')
-        #parameter_context = self.parameter_dictionary.get_context(parameter_name)
-
-        # TODO: Sort out the path to the bricks for this parameter
-        brick_path = '{0}/{1}/{2}'.format(self.root, self.guid, parameter_name)
-        ps = PersistedStorage(brick_path, self.brick_tree_dict[parameter_name][0])
-
-        ps.__setitem__(slice_,payload)
+        self.value_list[parameter_name][slice_] = payload
 
     # List bricks for a parameter based on domain range
     def list_bricks(self, parameter_name, start, end):
@@ -393,38 +398,79 @@ class PersistedStorage(AbstractStorage):
         # We just need to know which brick(s) to save to and their slice(s)
         self.storage_bricks = {}
 
+    def _bricks_from_slice(self, slice_):
+        if not isinstance(slice_, tuple):
+            raise ValueError('slice_ must be a tuple')
+
+        rank = len(slice_)
+        if rank == 1:
+            rank += 1
+            slice_ += (0,)
+
+        if self.brick_tree.properties.dimension != rank:
+            raise ValueError('slice_ is of incorrect rank: is {0}, must be {1}'.format(rank, self.brick_tree.properties.dimension))
+
+        bnds = self.brick_tree.bounds
+
+        start = []
+        end = []
+        for x in xrange(rank):
+            sx=slice_[x]
+            if isinstance(sx, slice):
+                si=sx.start if sx.start is not None else bnds[x::rank][0]
+                start.append(si)
+                ei=sx.stop if sx.stop is not None else bnds[x::rank][1]
+                end.append(ei)
+            elif isinstance(sx, (list, tuple)):
+                start.append(min(sx))
+                end.append(max(sx))
+            elif isinstance(sx, int):
+                start.append(sx)
+                end.append(sx)
+
+        hits = list(self.brick_tree.intersection(tuple(start+end), objects=True))
+        return [(h.id,h.object) for h in hits]
+
+    def _find_slice_in_brick(self, slice_):
+        pass
+
     # TODO: After getting slice_'s data remember to fill nulls with fill value for the parameter before passing back
     def __getitem__(self, slice_):
         log.debug('getitem slice_: %s', slice_)
-        return self._storage.__getitem__(slice_)
+        raise NotImplementedError('Not yet, be patient...')
+#        return self._storage.__getitem__(slice_)
 
     def __setitem__(self, slice_, value):
         log.debug('setitem slice_: %s', slice_)
 
-        # TODO: Populate storage_bricks
-        #self._storage.__setitem__(slice_, value)
+        bricks = self._bricks_from_slice(slice_)
+        log.debug('Slice %s indicates bricks: %s', slice_, bricks)
 
-        # TODO:  Make sure the content's domain has a brick available, otherwise make more bricks (expand)
-        min_extents = [4,0]
-        max_extents = [8,0]
-        brick_search_list = self.list_bricks(min_extents, max_extents)
-
-        for idx,brick_guid in brick_search_list:
-            brick_file = '{0}/{1}.hdf5'.format(self.brick_path,brick_guid)
+        for idx, brick_guid in bricks:
+            brick_file = '{0}/{1}.hdf5'.format(self.brick_path, brick_guid)
             if os.path.exists(brick_file):
-                log.error('Found brick file: %s', brick_file)
+                log.debug('Found brick file: %s', brick_file)
+                bf = h5py.File(brick_file, 'r+')
 
-        if len(brick_search_list)==0:
-            log.debug('No existing bricks found, creating now...')
-            # TODO: Problem!  No bricks found.  How do we make them from here?
 
-        if len(brick_search_list) > 1:
-            log.debug('Splitting data across multiple bricks: %s', brick_search_list)
-            # TODO: Have to split data across multiple bricks
-        else:
-            log.debug('Writing all data to one brick: %s', brick_search_list)
-            # TODO: All data goes in one brick
-            # TODO: Open brick and place the data in the dataset
+            else:
+                raise SystemError('Can\'t find brick: %s', brick_file)
+
+
+
+
+
+#        if len(brick_search_list)==0:
+#            log.debug('No existing bricks found, creating now...')
+#            # TODO: Problem!  No bricks found.  How do we make them from here?
+#
+#        if len(brick_search_list) > 1:
+#            log.debug('Splitting data across multiple bricks: %s', brick_search_list)
+#            # TODO: Have to split data across multiple bricks
+#        else:
+#            log.debug('Writing all data to one brick: %s', brick_search_list)
+#            # TODO: All data goes in one brick
+#            # TODO: Open brick and place the data in the dataset
 
     def reinit(self, storage):
         pass # No op
@@ -432,15 +478,13 @@ class PersistedStorage(AbstractStorage):
     def fill(self, value):
         pass # No op
 
-    @property
-    def shape(self):
-        # TODO: Will be removed shortly
-        return self._storage.shape
+    def __len__(self):
+        # TODO: THIS IS NOT CORRECT
+        return 1
 
-    @property
-    def dtype(self):
-        # TODO: Will be removed shortly
-        return self._storage.dtype
+    def __iter__(self):
+        # TODO: THIS IS NOT CORRECT
+        return [1,1].__iter__()
 
     def calculate_storage_bricks(self, slice_):
         pass
