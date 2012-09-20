@@ -128,7 +128,7 @@ def param_dict_compare():
     print "Returning: pdict_1, pdict_2, pdict_3, pdict_4"
     return pdict_1, pdict_2, pdict_3, pdict_4
 
-def samplecov(save_coverage=True):
+def samplecov(save_coverage=True, in_memory=True):
     # Instantiate a ParameterDictionary
     pdict = ParameterDictionary()
 
@@ -165,7 +165,7 @@ def samplecov(save_coverage=True):
     sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('sample coverage_model', pdict, tdom, sdom)
+    scov = SimplexCoverage('sample coverage_model', pdict, tdom, sdom, in_memory)
 
     # Insert some timesteps (automatically expands other arrays)
     scov.insert_timesteps(10)
@@ -186,7 +186,7 @@ def samplecov(save_coverage=True):
 
     return scov
 
-def samplecov2(save_coverage=True):
+def samplecov2(save_coverage=True, in_memory=True):
     # Instantiate a ParameterDictionary
     pdict = ParameterDictionary()
 
@@ -223,7 +223,7 @@ def samplecov2(save_coverage=True):
     sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('sample coverage_model', pdict, tdom, sdom)
+    scov = SimplexCoverage('sample coverage_model', pdict, tdom, sdom, in_memory)
 
     # Insert some timesteps (automatically expands other arrays)
     scov.insert_timesteps(10)
@@ -244,7 +244,7 @@ def samplecov2(save_coverage=True):
 
     return scov
 
-def ptypescov(save_coverage=True):
+def ptypescov(save_coverage=True, in_memory=True):
     # Construct temporal and spatial Coordinate Reference System objects
     tcrs = CRS([AxisTypeEnum.TIME])
     scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
@@ -292,7 +292,7 @@ def ptypescov(save_coverage=True):
     pdict.add_context(rec_ctxt)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('sample coverage_model', pdict, tdom, sdom)
+    scov = SimplexCoverage('sample coverage_model', pdict, tdom, sdom, in_memory)
 
     # Insert some timesteps (automatically expands other arrays)
     scov.insert_timesteps(10)
@@ -380,7 +380,7 @@ def nospatialcov(save_coverage=True):
 
     return scov
 
-def ncgrid2cov(save_coverage=True):
+def ncgrid2cov(save_coverage=True, in_memory=True):
     # Open the netcdf dataset
     ds = Dataset('test_data/ncom.nc')
     # Itemize the variable names that we want to include in the coverage
@@ -423,7 +423,7 @@ def ncgrid2cov(save_coverage=True):
     sdom = GridDomain(GridShape('spatial', [34,57,89]), scrs, MutabilityEnum.IMMUTABLE) # 3d spatial topology (grid)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('sample grid coverage_model', pdict, tdom, sdom)
+    scov = SimplexCoverage('sample grid coverage_model', pdict, tdom, sdom, in_memory)
 
     # Insert the timesteps (automatically expands other arrays)
     tvar=ds.variables['time']
@@ -453,7 +453,7 @@ def ncgrid2cov(save_coverage=True):
 
     return scov
 
-def ncstation2cov(save_coverage=True):
+def ncstation2cov(save_coverage=True, in_memory=True):
     # Open the netcdf dataset
     ds = Dataset('test_data/usgs.nc')
     # Itemize the variable names that we want to include in the coverage
@@ -500,7 +500,7 @@ def ncstation2cov(save_coverage=True):
     sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 1d spatial topology (station/trajectory)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('sample station coverage_model', pdict, tdom, sdom)
+    scov = SimplexCoverage('sample station coverage_model', pdict, tdom, sdom, in_memory)
 
     # Insert the timesteps (automatically expands other arrays)
     tvar=ds.variables['time']

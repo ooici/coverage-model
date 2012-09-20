@@ -455,3 +455,13 @@ class PersistedStorage(AbstractStorage):
         """
         hits = list(self.brick_tree.intersection(tuple(start+end), objects=True))
         return [(h.id,h.object) for h in hits]
+
+class InMemoryPersistenceLayer():
+
+    def expand_domain(self, parameter_context):
+        # No Op - storage expanded by *Value classes
+        pass
+
+    def init_parameter(self, parameter_context):
+        return InMemoryStorage()
+
