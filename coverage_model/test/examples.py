@@ -161,14 +161,14 @@ def samplecov(save_coverage=True, in_memory=True):
     scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
 
     # Construct temporal and spatial Domain objects
-    tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    tdom = GridDomain(GridShape('temporal', [10]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
     sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
     scov = SimplexCoverage('sample coverage_model', pdict, tdom, sdom, in_memory)
 
     # Insert some timesteps (automatically expands other arrays)
-    scov.insert_timesteps(10)
+#    scov.insert_timesteps(10)
 
     # Add data for each parameter
     scov.set_parameter_values('time', value=np.arange(10))
