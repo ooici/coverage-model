@@ -60,9 +60,9 @@ class AbstractParameterValue(AbstractBase):
                 for n in range(slen, rank):
                     slice_ += (slice(None,None,None),)
 
-        # Remove the tuple if it's len==1
-        if len(slice_):
-            slice_ = slice_[0]
+        # Remove the tuple if it's len==1, Don't do this you stupid bastard
+#        if len(slice_):
+#            slice_ = slice_[0]
         return slice_
 
     @property
@@ -191,7 +191,7 @@ class FunctionValue(AbstractComplexParameterValue):
     def __setitem__(self, slice_, value):
         if is_well_formed_where(value):
             slice_ = self._fix_slice(slice_, len(self.shape))
-            if isinstance(slice_, int) and slice_ < len(self._storage):
+            if len(slice_) == 1 and isinstance(slice_[0], int) and slice_ < len(self._storage):
                 self._storage[slice_] = value
             else:
                 self._storage.reinit(np.append(self._storage[:], np.array([value],dtype=object), axis=0))
