@@ -38,9 +38,10 @@
 from pyon.public import log
 from pyon.util.containers import DotDict
 
-from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_DomainOfApplication, is_valid_constraint, Dictable, create_guid
+from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_DomainOfApplication, is_valid_constraint, Dictable, create_guid, InMemoryStorage
 from coverage_model.parameter import Parameter, ParameterDictionary, ParameterContext
 from coverage_model.parameter_values import get_value_class, AbstractParameterValue
+from coverage_model.persistence import PersistenceLayer, InMemoryPersistenceLayer
 from copy import deepcopy
 import numpy as np
 import pickle
@@ -48,7 +49,6 @@ import pickle
 #=========================
 # Coverage Objects
 #=========================
-from coverage_model.persistence import PersistenceLayer
 
 class AbstractCoverage(AbstractIdentifiable):
     """
@@ -127,7 +127,7 @@ class SimplexCoverage(AbstractCoverage):
     of the AbstractParameterValue class.
 
     """
-    def __init__(self, name, parameter_dictionary, temporal_domain=None, spatial_domain=None):
+    def __init__(self, name, parameter_dictionary, temporal_domain=None, spatial_domain=None, in_memory_storage=False):
         """
         Constructor for SimplexCoverage
 
@@ -146,7 +146,11 @@ class SimplexCoverage(AbstractCoverage):
         self._range_dictionary = ParameterDictionary()
         self._range_value = RangeValues()
         self._temporal_param_name = None
-        self._persistence_layer = PersistenceLayer('test_data', create_guid())
+        self._in_memory_storage = in_memory_storage
+        if self._in_memory_storage:
+            self._persistence_layer = InMemoryPersistenceLayer()
+        else:
+            self._persistence_layer = PersistenceLayer('test_data', create_guid())
 
         for pc in parameter_dictionary.itervalues():
             self._append_parameter(pc[1])
@@ -236,9 +240,8 @@ class SimplexCoverage(AbstractCoverage):
             dom.crs.axes[pcontext.reference_frame] = pcontext.name
 
         self._range_dictionary.add_context(pcontext)
-        self._range_value[pname] = get_value_class(param_type=pcontext.param_type, domain_set=pcontext.dom)
-        v = self._persistence_layer.init_parameter(pcontext)
-        self._range_value[pname] = get_value_class(pcontext.param_type, plvalue=v, parameter_context=pcontext)
+        s = self._persistence_layer.init_parameter(pcontext)
+        self._range_value[pname] = get_value_class(param_type=pcontext.param_type, domain_set=pcontext.dom, storage=s)
 
     def get_parameter(self, param_name):
         """
