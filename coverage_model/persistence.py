@@ -159,11 +159,7 @@ class PersistenceLayer():
         brick_max = []
         brick_extents = []
 
-
         origin=list(origin)
-#        if len(origin) == 1:
-#            origin = origin + [0]
-#            bD = bD + [0]
 
         rtree_extents = origin + map(lambda o,s: o+s-1,origin,bD)
         brick_extents = zip(origin,map(lambda o,s: o+s-1, origin,bD))
@@ -193,7 +189,6 @@ class PersistenceLayer():
         return do_write
 
     # Write empty HDF5 brick to the filesystem
-    # Input: Brick origin , brick dimensions (topological), chunk dimensions, coverage GUID, parameterName
     def write_brick(self,origin,bD,cD,parameter_name,data_type):
         rtree_extents, brick_extents = self.calculate_extents(origin, bD)
 
@@ -211,46 +206,50 @@ class PersistenceLayer():
             os.makedirs(root_path)
 
         # Create a GUID for the brick
-        brickGUID = create_guid()
+        brick_guid = create_guid()
 
         # Set HDF5 file and group
-        sugar_file_name = '{0}.hdf5'.format(brickGUID)
-        sugar_file_path = '{0}/{1}'.format(root_path,sugar_file_name)
-        sugar_file = h5py.File(sugar_file_path, 'w')
+        brick_file_name = '{0}.hdf5'.format(brick_guid)
+        brick_file_path = '{0}/{1}'.format(root_path,brick_file_name)
+        brick_file = h5py.File(brick_file_path, 'w')
 
-        sugar_group_path = '/{0}/{1}'.format(self.guid,parameter_name)
-        sugar_group = sugar_file.create_group(sugar_group_path)
+        brick_group_path = '/{0}/{1}'.format(self.guid,parameter_name)
+        #brick_group = brick_file.create_group(brick_group_path)
+        #brick_group = brick_file.create_group('/')
 
-        # Create the HDF5 dataset that represents one brick
-        sugarCubes = sugar_group.create_dataset('{0}'.format(brickGUID), bD, dtype=data_type, chunks=cD)
+    # Create the HDF5 dataset that represents one brick
+        #brick_cubes = brick_group.create_dataset('{0}'.format(brick_guid), bD, dtype=data_type, chunks=cD)
+        brick_cubes = brick_file.create_dataset('{0}'.format(brick_guid), bD, dtype=data_type, chunks=cD)
 
-        # Close the HDF5 file that represents one brick
-        log.debug('Size Before Close: %s', os.path.getsize(sugar_file_path))
-        sugar_file.close()
-        log.debug('Size After Close: %s', os.path.getsize(sugar_file_path))
+    # Close the HDF5 file that represents one brick
+        log.debug('Size Before Close: %s', os.path.getsize(brick_file_path))
+        brick_file.close()
+        log.debug('Size After Close: %s', os.path.getsize(brick_file_path))
 
         # Add brick to Master HDF file
-        log.debug('Adding %s external link to %s.', sugar_file_path, self.master_file_path)
+        log.debug('Adding %s external link to %s.', brick_file_path, self.master_file_path)
         _master_file = h5py.File(self.master_file_path, 'r+')
-        _master_file['{0}/{1}'.format(sugar_group_path, brickGUID)] = h5py.ExternalLink('./{0}/{1}/{2}'.format(self.guid, parameter_name, sugar_file_name), '{0}/{1}'.format(sugar_group_path, brickGUID))
+#        _master_file['{0}/{1}'.format(brick_group_path, brick_guid)] = h5py.ExternalLink('./{0}/{1}/{2}'.format(self.guid, parameter_name, brick_file_name), '{0}/{1}'.format(brick_group_path, brick_guid))
+        _master_file['/{0}/{1}'.format(parameter_name, brick_guid)] = h5py.ExternalLink('./{0}/{1}/{2}'.format(self.guid, parameter_name, brick_file_name), brick_guid)
 
-        # Update the brick listing
-        log.debug('Updating brick list[%s] with (%s, %s)',parameter_name, brickGUID, brick_extents)
-        self.brick_list[parameter_name].append((brickGUID, brick_extents))
+
+    # Update the brick listing
+        log.debug('Updating brick list[%s] with (%s, %s)',parameter_name, brick_guid, brick_extents)
+        self.brick_list[parameter_name].append((brick_guid, brick_extents))
         brick_count = len(self.brick_list[parameter_name])
         log.debug('Brick count for %s is %s', parameter_name, brick_count)
 
         # Insert into Rtree
-        log.debug('Inserting into Rtree %s:%s:%s', brick_count - 1, rtree_extents, brickGUID)
-        self.brick_tree_dict[parameter_name][0].insert(brick_count - 1, rtree_extents, obj=brickGUID)
+        log.debug('Inserting into Rtree %s:%s:%s', brick_count - 1, rtree_extents, brick_guid)
+        self.brick_tree_dict[parameter_name][0].insert(brick_count - 1, rtree_extents, obj=brick_guid)
         log.debug('Rtree inserted successfully.')
 
         # Brick metadata
-        # Sets the initial state of the External Link's "dirty" bit
-        _master_file['{0}/{1}'.format(sugar_group_path, brickGUID)].attrs['dirty'] = 0
-        _master_file['{0}/{1}'.format(sugar_group_path, brickGUID)].attrs['brick_origin'] = str(origin)
-        _master_file['{0}/{1}'.format(sugar_group_path, brickGUID)].attrs['brick_size'] = str(tuple(bD))
-        log.debug('Sugar Size At End: %s', os.path.getsize(sugar_file_path))
+        _master_file['{0}/{1}'.format(parameter_name, brick_guid)].attrs['dirty'] = 0
+        _master_file['{0}/{1}'.format(parameter_name, brick_guid)].attrs['brick_origin'] = str(origin)
+        _master_file['{0}/{1}'.format(parameter_name, brick_guid)].attrs['brick_size'] = str(tuple(bD))
+
+        log.debug('Brick Size At End: %s', os.path.getsize(brick_file_path))
 
         # TODO: This is a really ugly way to store the brick_list for a parameter
 #        brick_list_attrs_filtered = [(k,v) for k, v in self.brick_list.items() if k[0]==parameter_name]
@@ -258,7 +257,7 @@ class PersistenceLayer():
 #        brick_list_attrs = np.ndarray(tuple([len(brick_list_attrs_filtered)]), str_size)
 #        for i,v in enumerate(brick_list_attrs_filtered):
 #            brick_list_attrs[i] = str(v)
-#        _master_file[sugar_group_path].attrs['brick_list'] = brick_list_attrs
+#        _master_file[brick_group_path].attrs['brick_list'] = brick_list_attrs
 
         # Close the master file
         _master_file.close()
@@ -437,7 +436,8 @@ class PersistedStorage(AbstractStorage):
     # TODO: After getting slice_'s data remember to fill nulls with fill value for the parameter before passing back
     def __getitem__(self, slice_):
         log.debug('getitem slice_: %s', slice_)
-        raise NotImplementedError('Not yet, be patient...')
+        #raise NotImplementedError('Not yet, be patient...')
+        np.ones(5,)
 #        return self._storage.__getitem__(slice_)
 
     def __setitem__(self, slice_, value):
@@ -452,6 +452,15 @@ class PersistedStorage(AbstractStorage):
                 log.debug('Found brick file: %s', brick_file)
                 bf = h5py.File(brick_file, 'r+')
 
+                log.debug(bf['/{0}'.format(brick_guid)][:])
+
+                ds = bf['/{0}'.format(brick_guid)]
+                ds[:] = value
+
+                bf.flush()
+                log.debug(bf['/{0}'.format(brick_guid)][:])
+
+                bf.close()
 
             else:
                 raise SystemError('Can\'t find brick: %s', brick_file)
