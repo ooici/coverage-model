@@ -452,6 +452,16 @@ class PersistedStorage(AbstractStorage):
                 log.debug('Found brick file: %s', brick_file)
                 bf = h5py.File(brick_file, 'r+')
 
+                brick_origin = bf['/{0}'.format(brick_guid)].attrs['brick_origin']
+                brick_size = bf['/{0}'.format(brick_guid)].attrs['brick_size']
+
+                log.debug('origin %s, size: %s', brick_origin, brick_size)
+
+                # Figuring out which part of brick to set values
+                brick_fill_indices = self._get_brick_indices(slice_, brick_origin, brick_size)
+                log.debug('Brick indices to fill: %s', brick_fill_indices)
+
+                # Setting payload values to brick
                 log.debug(bf['/{0}'.format(brick_guid)][:])
 
                 ds = bf['/{0}'.format(brick_guid)]
@@ -465,21 +475,16 @@ class PersistedStorage(AbstractStorage):
             else:
                 raise SystemError('Can\'t find brick: %s', brick_file)
 
+    def _get_brick_indices(self, slice_, brick_origin, brick_size):
+        # TODO: Calc max, hardcoded to 10
+        slice_indices = range(*slice_.indices(brick_origin + brick_size))
 
+        brick_fill_indices = []
+        for i in slice_indices:
+            if 0 <= i-brick_size < brick_origin + brick_size:
+                brick_fill_indices.append(i - brick_size)
 
-
-
-#        if len(brick_search_list)==0:
-#            log.debug('No existing bricks found, creating now...')
-#            # TODO: Problem!  No bricks found.  How do we make them from here?
-#
-#        if len(brick_search_list) > 1:
-#            log.debug('Splitting data across multiple bricks: %s', brick_search_list)
-#            # TODO: Have to split data across multiple bricks
-#        else:
-#            log.debug('Writing all data to one brick: %s', brick_search_list)
-#            # TODO: All data goes in one brick
-#            # TODO: Open brick and place the data in the dataset
+        return brick_fill_indices
 
     def reinit(self, storage):
         pass # No op
