@@ -99,7 +99,7 @@ class AbstractComplexParameterType(AbstractParameterType):
         kwc=kwargs.copy()
         AbstractParameterType.__init__(self, **kwc)
 
-        self._template_attrs['value_encoding'] = np.dtype(object)
+        self._template_attrs['value_encoding'] = np.dtype(object).str
         self._template_attrs['fill_value'] = None
 
 #==================
@@ -176,7 +176,7 @@ class QuantityType(AbstractSimplexParameterType):
         kwc=kwargs.copy()
         AbstractSimplexParameterType.__init__(self, value_class='NumericValue', **kwc)
         if value_encoding is None:
-            self._value_encoding = '<f4'
+            self._value_encoding = np.dtype('float32').str
         else:
             try:
                 dt = np.dtype(value_encoding)
