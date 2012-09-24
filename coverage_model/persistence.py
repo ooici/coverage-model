@@ -486,6 +486,8 @@ class PersistedStorage(AbstractStorage):
             outy = bf[ds_path].__getitem__(*b_slice)
             log.error('OUT: %s',outy)
 
+            v_slice = self._fix_assignment_slice(v_slice, outy)
+
             ret_arr[v_slice] = outy
             bf.close()
 
@@ -495,6 +497,7 @@ class PersistedStorage(AbstractStorage):
 
     def __setitem__(self, slice_, value):
         log.debug('setitem slice_: %s', slice_)
+        val = np.asanyarray(value)
 
         bricks = self._bricks_from_slice(slice_)
         log.debug('Slice %s indicates bricks: %s', slice_, bricks)
@@ -518,13 +521,15 @@ class PersistedStorage(AbstractStorage):
                 log.error('BEFORE: %s', bf[ds_path][:])
 
                 # Setting payload values to brick
-                if hasattr(value, '__iter__'):
-                    val = value[value_slice]
+                if val.ndim > 0:
+                    v = val[value_slice]
                 else:
-                    val = value
-                log.error('value: %s', val)
+                    v = val
+                log.error('value: %s', v)
 
-                bf[ds_path].__setitem__(*brick_slice, val=val)
+                brick_slice = self._fix_assignment_slice(brick_slice, v)
+
+                bf[ds_path].__setitem__(*brick_slice, val=v)
 
                 bf.flush()
 
@@ -534,6 +539,33 @@ class PersistedStorage(AbstractStorage):
 
             else:
                 raise SystemError('Can\'t find brick: %s', brick_file)
+
+    def _fix_assignment_slice(self, slice_, value):
+        val = np.asanyarray(value)
+
+        vshp=val.shape
+        if len(vshp) == 0:
+            return slice_
+
+        for i, sl in enumerate(slice_):
+            log.error('sl = %s', sl)
+            log.error('vshp[%s] = %s', i, vshp[i])
+            if isinstance(sl, int):
+                log.warn('int')
+                # TODO: check the int against the length of vshp[i]...raise exception or set to 'last'??
+                pass
+            elif isinstance(sl, (list,tuple)):
+                log.warn('list/tuple')
+                # TODO: check each member as above...
+                pass
+            elif isinstance(sl, slice):
+                log.warn('slice')
+                sl=slice(sl.start, min(sl.stop, sl.start + vshp[i]), sl.step)
+
+            slice_[i] = sl
+
+        log.warn('ret slice_ = %s', slice_)
+        return slice_
 
     def _get_array_shape_from_slice(self, slice_):
         shp = []
@@ -601,11 +633,12 @@ class PersistedStorage(AbstractStorage):
                 brick_slice.append(slice(start, stop, s.step))
                 vs = slice(astart, astop, s.step)
                 vsi = range(*vs.indices(astop))
-                log.warn('vs: %s', vs)
-                log.warn('vsi: %s', vsi)
-                inds = [x+ao for x in range(len(vsi))]
-                log.warn('inds: %s',inds)
-                value_slice.append(inds)
+#                log.warn('vs: %s', vs)
+#                log.warn('vsi: %s', vsi)
+#                inds = [x+ao for x in range(len(vsi))]
+#                log.warn('inds: %s',inds)
+#                value_slice.append(inds)
+                value_slice.append(vs)
                 arr_origin[i] = ao+len(vsi)
 
         return brick_slice, value_slice
@@ -649,8 +682,8 @@ class PersistedStorage(AbstractStorage):
                 else:
                     stop = s.stop if o <= s.stop < n else n
                 log.debug('new start/stop: %s %s', start, stop)
-#                brick_slice.append(slice(start-o, stop-o, s.step))
-                brick_slice.append(range(*slice(start-o, stop-o, s.step).indices(stop)))
+                brick_slice.append(slice(start-o, stop-o, s.step))
+#                brick_slice.append(range(*slice(start-o, stop-o, s.step).indices(stop)))
                 value_slice.append(slice(start, stop, s.step))
 
         return brick_slice, value_slice
