@@ -341,10 +341,33 @@ class ParameterDictionary(AbstractIdentifiable):
 
         ret = {}
         other_keys = other.keys()
-        for ks,vs in self.iteritems():
+        for ks, vs in self.iteritems():
+            log.debug('Checking self key \'%s\'', ks)
+            loop = True
             ret[ks] = []
-            for ko,vo in other.iteritems():
-                if vs[1] == vo[1]:
+            if ks in other_keys:
+                log.debug('Found key \'%s\' in other, comparing values', ks)
+                vo = other.get_context(ks)
+                if vs[1] == vo:
+                    log.debug('Value of \'%s\' in self == value of \'%s\' in other', ks, ks)
+                    ret[ks].append(ks)
+                    del other_keys[other_keys.index(ks)]
+                    loop=False
+            if loop:
+                for ko in list(other_keys):
+                    vo=other.get_context(ko)
+                    if vs[1] == vo:
+                        log.debug('Value of \'%s\' in self == value of \'%s\' in other', ks, ko)
+                        ret[ks].append(ks)
+                        del other_keys[other_keys.index(ks)]
+
+        # Back-check any leftover keys
+        log.debug('Back-checking leftover keys from other')
+        for ko in list(other_keys):
+            for ks, vs in self.iteritems():
+                vo=other.get_context(ko)
+                if vs[1] == vo:
+                    log.debug('Value of \'%s\' in self == value of \'%s\' in other', ks, ko)
                     ret[ks].append(ko)
                     del other_keys[other_keys.index(ko)]
 
