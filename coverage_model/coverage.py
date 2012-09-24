@@ -126,7 +126,7 @@ class SimplexCoverage(AbstractCoverage):
     of the AbstractParameterValue class.
 
     """
-    def __init__(self, name, parameter_dictionary, spatial_domain=None, temporal_domain=None):
+    def __init__(self, name, parameter_dictionary, temporal_domain=None, spatial_domain=None):
         """
         Constructor for SimplexCoverage
 
@@ -336,15 +336,16 @@ class SimplexCoverage(AbstractCoverage):
         if not param_name in self._range_value:
             raise KeyError('Parameter \'{0}\' not found in coverage_model'.format(param_name))
 
-        tdoa = get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
-        sdoa = get_valid_DomainOfApplication(sdoa, self.spatial_domain.shape.extents)
-
-        log.debug('Temporal doa: %s', tdoa.slices)
-        log.debug('Spatial doa: %s', sdoa.slices)
-
         slice_ = []
+
+        tdoa = get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
+        log.debug('Temporal doa: %s', tdoa.slices)
         slice_.extend(tdoa.slices)
-        slice_.extend(sdoa.slices)
+
+        if self.spatial_domain is not None:
+            sdoa = get_valid_DomainOfApplication(sdoa, self.spatial_domain.shape.extents)
+            log.debug('Spatial doa: %s', sdoa.slices)
+            slice_.extend(sdoa.slices)
 
         log.debug('Setting slice: %s', slice_)
 
@@ -369,15 +370,16 @@ class SimplexCoverage(AbstractCoverage):
 
         return_value = return_value or np.zeros([0])
 
-        tdoa = get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
-        sdoa = get_valid_DomainOfApplication(sdoa, self.spatial_domain.shape.extents)
-
-        log.debug('Temporal doa: %s', tdoa.slices)
-        log.debug('Spatial doa: %s', sdoa.slices)
-
         slice_ = []
+
+        tdoa = get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
+        log.debug('Temporal doa: %s', tdoa.slices)
         slice_.extend(tdoa.slices)
-        slice_.extend(sdoa.slices)
+
+        if self.spatial_domain is not None:
+            sdoa = get_valid_DomainOfApplication(sdoa, self.spatial_domain.shape.extents)
+            log.debug('Spatial doa: %s', sdoa.slices)
+            slice_.extend(sdoa.slices)
 
         log.debug('Getting slice: %s', slice_)
 
