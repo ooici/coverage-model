@@ -33,6 +33,7 @@ setup(  name = 'coverage-model',
         'pyon',
         'netCDF4>=0.9.8',
         'numexpr==2.0.1',
+        'h5py==2.0.1',
 #        'scipy==0.10.1',
     ],
 )
