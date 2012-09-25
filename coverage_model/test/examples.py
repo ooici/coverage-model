@@ -196,12 +196,12 @@ def samplecov2(save_coverage=True, in_memory=True):
     t_ctxt.uom = 'seconds since 01-01-1970'
     pdict.add_context(t_ctxt)
 
-    lat_ctxt = ParameterContext('lat', param_type=FunctionType(), variability=VariabilityEnum.NONE)
+    lat_ctxt = ParameterContext('lat', param_type=ConstantType(), variability=VariabilityEnum.NONE)
     lat_ctxt.reference_frame = AxisTypeEnum.LAT
     lat_ctxt.uom = 'degree_north'
     pdict.add_context(lat_ctxt)
 
-    lon_ctxt = ParameterContext('lon', param_type=FunctionType(), variability=VariabilityEnum.NONE)
+    lon_ctxt = ParameterContext('lon', param_type=ConstantType(), variability=VariabilityEnum.NONE)
     lon_ctxt.reference_frame = AxisTypeEnum.LON
     lon_ctxt.uom = 'degree_east'
     pdict.add_context(lon_ctxt)
@@ -219,14 +219,14 @@ def samplecov2(save_coverage=True, in_memory=True):
     scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
 
     # Construct temporal and spatial Domain objects
-    tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    tdom = GridDomain(GridShape('temporal', [10]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
     sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
     scov = SimplexCoverage('sample coverage_model', pdict, tdom, sdom, in_memory)
 
     # Insert some timesteps (automatically expands other arrays)
-    scov.insert_timesteps(10)
+#    scov.insert_timesteps(10)
 
     # Add data for each parameter
     scov.set_parameter_values('time', value=np.arange(10))
