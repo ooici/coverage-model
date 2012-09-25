@@ -10,13 +10,11 @@
 from pyon.public import log
 from coverage_model.basic_types import create_guid, AbstractStorage, InMemoryStorage
 from coverage_model.parameter import ParameterDictionary
-import sys, traceback
 import numpy as np
 import h5py
 import os
 import rtree
 import itertools
-import msgpack
 
 class PersistenceError(Exception):
     pass
@@ -38,7 +36,7 @@ class PersistenceLayer():
         self.root = '.' if root is ('' or None) else root
         self.guid = guid
         log.debug('Persistence GUID: %s', self.guid)
-        self.parameter_dictionary = parameter_dictionary
+        self.parameter_dictionary = ParameterDictionary()
         self.tdom = tdom
         self.sdom = sdom
 
@@ -134,6 +132,8 @@ class PersistenceLayer():
         parameter_name = parameter_context.name
         log.debug('Initialize %s', parameter_name)
 
+        self.parameter_dictionary.add_context(parameter_context)
+
         log.debug('Performing Rtree dict setup')
         tD = parameter_context.dom.total_extents
         bD,cD = self.calculate_brick_size(tD, 64) #remains same for each parameter
@@ -159,25 +159,32 @@ class PersistenceLayer():
 
         return v
 
-    def calculate_extents(self, origin, bD):
+    def calculate_extents(self, origin, bD, parameter_name):
         log.debug('origin: %s', origin)
+        log.debug('bD: %s', bD)
+        log.debug('parameter_name: %s', parameter_name)
+
         # Calculate the brick extents
-        brick_max = []
-        brick_extents = []
+        origin = list(origin)
 
-        origin=list(origin)
+        pc = self.parameter_dictionary.get_context(parameter_name)
+        total_extents = pc.dom.total_extents # index space
+        log.debug('Total extents for parameter %s: %s', parameter_name, total_extents)
 
-        rtree_extents = origin + map(lambda o,s: o+s-1,origin,bD)
-        brick_extents = zip(origin,map(lambda o,s: o+s-1, origin,bD))
-
+        rtree_extents = origin + map(lambda o,s: o+s-1, origin, bD)
         # Fake out the rtree if rank == 1
         if len(origin) == 1:
             rtree_extents = [e for ext in zip(rtree_extents,[0 for x in rtree_extents]) for e in ext]
-
         log.debug('Rtree extents: %s', rtree_extents)
+
+        brick_extents = zip(origin,map(lambda o,s: o+s-1, origin, bD))
         log.debug('Brick extents: %s', brick_extents)
 
-        return rtree_extents, brick_extents
+        #brick_active_size = (min(total_extents[0],brick_extents[0][1]+1) - brick_extents[0][0],)
+        brick_active_size = map(lambda o,s: (min(o,s[1]+1)-s[0],), total_extents, brick_extents)[0]
+        log.debug('Brick active size: %s', brick_active_size)
+
+        return rtree_extents, brick_extents, brick_active_size
 
     def _brick_exists(self, parameter_name, brick_extents):
         # Make sure the brick doesn't already exist if we already have some bricks
@@ -194,7 +201,7 @@ class PersistenceLayer():
 
     # Write empty HDF5 brick to the filesystem
     def write_brick(self,origin,bD,cD,parameter_name,data_type):
-        rtree_extents, brick_extents = self.calculate_extents(origin, bD)
+        rtree_extents, brick_extents, brick_active_size = self.calculate_extents(origin, bD, parameter_name)
 
         if not self._brick_exists(parameter_name, brick_extents):
             log.debug('Brick already exists!  Do not write')
@@ -217,12 +224,9 @@ class PersistenceLayer():
         brick_file_path = '{0}/{1}'.format(root_path,brick_file_name)
         brick_file = h5py.File(brick_file_path, 'w')
 
-        brick_group_path = '/{0}/{1}'.format(self.guid,parameter_name)
-        #brick_group = brick_file.create_group(brick_group_path)
-        #brick_group = brick_file.create_group('/')
+#        brick_group_path = '/{0}/{1}'.format(self.guid,parameter_name)
 
     # Create the HDF5 dataset that represents one brick
-        #brick_cubes = brick_group.create_dataset('{0}'.format(brick_guid), bD, dtype=data_type, chunks=cD)
         brick_cubes = brick_file.create_dataset('{0}'.format(brick_guid), bD, dtype=data_type, chunks=cD)
 
     # Close the HDF5 file that represents one brick
@@ -233,13 +237,12 @@ class PersistenceLayer():
         # Add brick to Master HDF file
         log.debug('Adding %s external link to %s.', brick_file_path, self.master_file_path)
         _master_file = h5py.File(self.master_file_path, 'r+')
-#        _master_file['{0}/{1}'.format(brick_group_path, brick_guid)] = h5py.ExternalLink('./{0}/{1}/{2}'.format(self.guid, parameter_name, brick_file_name), '{0}/{1}'.format(brick_group_path, brick_guid))
         _master_file['/{0}/{1}'.format(parameter_name, brick_guid)] = h5py.ExternalLink('./{0}/{1}/{2}'.format(self.guid, parameter_name, brick_file_name), brick_guid)
 
 
     # Update the brick listing
         log.debug('Updating brick list[%s] with (%s, %s)',parameter_name, brick_guid, brick_extents)
-        self.brick_list[parameter_name][brick_guid] = [brick_extents, origin, tuple(bD)]
+        self.brick_list[parameter_name][brick_guid] = [brick_extents, origin, tuple(bD), brick_active_size]
         brick_count = self.parameter_brick_count(parameter_name)
         log.debug('Brick count for %s is %s', parameter_name, brick_count)
 
@@ -318,33 +321,33 @@ class PersistenceLayer():
                 log.info('Persistence Layer Successfully Initialized')
             else:
                 log.debug('No bricks to create yet since the total domain is empty...')
-        except Exception as ex:
-            raise ex
+        except Exception:
+            raise
 #            log.error('Failed to Initialize Persistence Layer: %s', ex)
 #            log.debug('Cleaning up bricks (not ;))')
             # TODO: Add brick cleanup routine
 
-    # Retrieve all or subset of data from HDF5 bricks
-    def get_values(self, parameterName, minExtents, maxExtents):
-
-        log.debug('Getting value(s) from brick(s)...')
-
-        # Find bricks for given extents
-        brickSearchList = self.list_bricks(parameterName, minExtents, maxExtents)
-        log.debug('Found bricks that may contain data: {0}'.format(brickSearchList))
-
-        # Figure out slices for each brick
-
-        # Get the data (if it exists, jagged?) for each sliced brick
-
-        # Combine the data into one numpy array and set fill value to null values
-
-        # Pass back to coverage layer
-
-    # Write all or subset of Coverage's data to HDF5 brick(s)
-    def set_values(self, parameter_name, payload, slice_):
-        log.debug('Setting value(s) of payload to brick(s)...')
-        self.value_list[parameter_name][slice_] = payload
+#    # Retrieve all or subset of data from HDF5 bricks
+#    def get_values(self, parameterName, minExtents, maxExtents):
+#
+#        log.debug('Getting value(s) from brick(s)...')
+#
+#        # Find bricks for given extents
+#        brickSearchList = self.list_bricks(parameterName, minExtents, maxExtents)
+#        log.debug('Found bricks that may contain data: {0}'.format(brickSearchList))
+#
+#        # Figure out slices for each brick
+#
+#        # Get the data (if it exists, jagged?) for each sliced brick
+#
+#        # Combine the data into one numpy array and set fill value to null values
+#
+#        # Pass back to coverage layer
+#
+#    # Write all or subset of Coverage's data to HDF5 brick(s)
+#    def set_values(self, parameter_name, payload, slice_):
+#        log.debug('Setting value(s) of payload to brick(s)...')
+#        self.value_list[parameter_name][slice_] = payload
 
     # List bricks for a parameter based on domain range
     def list_bricks(self, parameter_name, start, end):
@@ -448,7 +451,6 @@ class PersistedStorage(AbstractStorage):
         hits = list(self.brick_tree.intersection(tuple(start+end), objects=True))
         return [(h.id,h.object) for h in hits]
 
-    # TODO: After getting slice_'s data remember to fill nulls with fill value for the parameter before passing back
     def __getitem__(self, slice_):
         if not isinstance(slice_, (list,tuple)):
             slice_ = [slice_]
@@ -527,7 +529,7 @@ class PersistedStorage(AbstractStorage):
                 raise SystemError('Can\'t find brick: %s', brick_file)
 
     def _calc_slices(self, slice_, brick_guid, value, val_origin):
-        brick_origin, brick_size = self.brick_list[brick_guid][1:]
+        brick_origin, _, brick_size = self.brick_list[brick_guid][1:]
         log.warn('Brick %s:  origin=%s, size=%s', brick_guid, brick_origin, brick_size)
         log.warn('Slice set: %s', slice_)
 
@@ -557,11 +559,11 @@ class PersistedStorage(AbstractStorage):
                     brick_slice.append(sl-bo) # brick_slice is the given index minus the brick origin
                     value_slice.append(0 + vo)
                     val_ori[i] = vo + 1
-                else:
+                else: # TODO: If you specify a brick boundary this occurs [10] or [6]
                     raise ValueError('Specified index is not within the brick: %s', sl)
             elif isinstance(sl, (list,tuple)):
                 lb = [x - bo for x in sl if bo <= x < bn]
-                if len(lb) == 0:
+                if len(lb) == 0: # TODO: In a list the last brick boundary seems to break it [1,3,10]
                     raise ValueError('None of the specified indices are within the brick: %s', sl)
                 brick_slice.append(lb)
                 value_slice.append(slice(vo, vo+len(lb), None)) # Everything from the appropriate index to the size needed
@@ -575,20 +577,17 @@ class PersistedStorage(AbstractStorage):
                     elif bo > sl.start:
                         start = 0
                     else: #  sl.start > bn
-                        raise ValueError('The slice is not contained in this brick')
+                        raise ValueError('The slice is not contained in this brick (sl.start > bn)')
 
                 if sl.stop is None:
                     stop = bs
-                else:
+                else: # TODO: Error in here when the slice end coincides with the brick end [1:6] or [4:10]
                     if bo <= sl.stop < bn:
                         stop = sl.stop - bo
                     elif sl.stop > bn:
                         stop = bs
                     else: #  bo > sl.stop
-                        raise ValueError('The slice is not contained in this brick')
-
-                if vs is not None:
-                    stop = min(stop, (vs-vo)) # issue
+                        raise ValueError('The slice is not contained in this brick (bo > sl.stop)')
 
                 log.debug('start=%s, stop=%s', start, stop)
                 nbs = slice(start, stop, sl.step)
@@ -598,7 +597,7 @@ class PersistedStorage(AbstractStorage):
                 vstp = vo+nbsl
                 log.debug('vstp=%s',vstp)
                 if vs is not None and vstp > vs: # Don't think this will ever happen, caught by 'if vs is not None:' above
-                    log.debug('vstp > vs!')
+                    log.warn('vstp > vs!')
                     vstp = vs
 
                 value_slice.append(slice(vo, vstp, None))
@@ -611,7 +610,25 @@ class PersistedStorage(AbstractStorage):
 
         return brick_slice, value_slice
 
+    # TODO: Fix end of max to be the max of the brick_active_size
     def _get_array_shape_from_slice(self, slice_):
+        log.debug('slice_: %s', slice_)
+        shp = []
+        dim = self.brick_tree.properties.dimension
+        maxes = self.brick_tree.bounds[dim:]
+        maxes = [int(x)+1 for x in maxes]
+
+        for i, s in enumerate(slice_):
+            if isinstance(s, int):
+                shp.append(1)
+            elif isinstance(s, (list,tuple)):
+                shp.append(len(s))
+            elif isinstance(s, slice):
+                shp.append(len(range(*s.indices(maxes[i]))))
+
+        return tuple(shp)
+
+    def OLD_get_array_shape_from_slice(self, slice_):
         shp = []
         dim = self.brick_tree.properties.dimension
         maxes = self.brick_tree.bounds[dim:]
