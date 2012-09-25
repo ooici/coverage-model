@@ -179,14 +179,14 @@ class PersistenceLayer():
 
         return rtree_extents, brick_extents
 
-    def _brick_exists(self,parameter_name, brick_extents):
+    def _brick_exists(self, parameter_name, brick_extents):
         # Make sure the brick doesn't already exist if we already have some bricks
         do_write = True
-        log.error(parameter_name)
-        log.error(self.brick_list)
+        log.debug('Check bricks for parameter \'%s\'',parameter_name)
         if parameter_name in self.brick_list:
             for x,v in self.brick_list[parameter_name].iteritems():
                 if brick_extents == v[0]:
+                    log.debug('Brick found with matching extents: guid=%s', x)
                     do_write = False
                     break
 
@@ -416,8 +416,8 @@ class PersistedStorage(AbstractStorage):
         self.storage_bricks = {}
 
     def _bricks_from_slice(self, slice_):
-        if not isinstance(slice_, tuple):
-            raise ValueError('slice_ must be a tuple')
+        if not isinstance(slice_, (list,tuple)):
+            slice_ = [slice_]
 
         rank = len(slice_)
         if rank == 1:
@@ -450,18 +450,15 @@ class PersistedStorage(AbstractStorage):
 
     # TODO: After getting slice_'s data remember to fill nulls with fill value for the parameter before passing back
     def __getitem__(self, slice_):
+        if not isinstance(slice_, (list,tuple)):
+            slice_ = [slice_]
         log.debug('getitem slice_: %s', slice_)
 
         arr_shp = self._get_array_shape_from_slice(slice_)
-        arr_origin = []
-        for x in slice_:
-            if isinstance(x, int):
-                arr_origin.append(x)
-            elif isinstance(x, (list, tuple, slice)):
-                arr_origin.append(0)
 
         ret_arr = np.empty(arr_shp, dtype=self.dtype)
         ret_arr.fill(-1)
+        ret_origin = [0 for x in range(ret_arr.ndim)]
         log.debug('Shape of returned array: %s', ret_arr.shape)
 
         bricks = self._bricks_from_slice(slice_)
@@ -474,21 +471,15 @@ class PersistedStorage(AbstractStorage):
             log.debug('Found brick file: %s', brick_file)
 
             # Figuring out which part of brick to set values
-            log.error('Return array origin: %s', arr_origin)
-            b_slice, v_slice = self._calc_brick_getter_slices(slice_, brick_guid, arr_origin)
-            log.debug('Brick slice to extract: %s', b_slice)
-            log.debug('Value slice to fill: %s', v_slice)
+            log.error('Return array origin: %s', ret_origin)
+            brick_slice, value_slice = self._calc_slices(slice_, brick_guid, ret_arr, ret_origin)
+            log.debug('Brick slice to extract: %s', brick_slice)
+            log.debug('Value slice to fill: %s', value_slice)
 
             bf = h5py.File(brick_file, 'r+')
             ds_path = '/{0}'.format(brick_guid)
 
-
-            outy = bf[ds_path].__getitem__(*b_slice)
-            log.error('OUT: %s',outy)
-
-            v_slice = self._fix_assignment_slice(v_slice, outy)
-
-            ret_arr[v_slice] = outy
+            ret_arr[value_slice] = bf[ds_path].__getitem__(*brick_slice)
             bf.close()
 
             log.error(ret_arr)
@@ -496,8 +487,11 @@ class PersistedStorage(AbstractStorage):
         return ret_arr
 
     def __setitem__(self, slice_, value):
+        if not isinstance(slice_, (list,tuple)):
+            slice_ = [slice_]
         log.debug('setitem slice_: %s', slice_)
         val = np.asanyarray(value)
+        val_origin = [0 for x in range(val.ndim)]
 
         bricks = self._bricks_from_slice(slice_)
         log.debug('Slice %s indicates bricks: %s', slice_, bricks)
@@ -508,7 +502,7 @@ class PersistedStorage(AbstractStorage):
                 log.debug('Found brick file: %s', brick_file)
 
                 # Figuring out which part of brick to set values
-                brick_slice, value_slice = self._calc_brick_setter_slices(slice_, brick_guid)
+                brick_slice, value_slice = self._calc_slices(slice_, brick_guid, val, val_origin)
                 log.debug('Brick slice to fill: %s', brick_slice)
                 log.debug('Value slice to extract: %s', value_slice)
 
@@ -520,15 +514,7 @@ class PersistedStorage(AbstractStorage):
 
                 log.error('BEFORE: %s', bf[ds_path][:])
 
-                # Setting payload values to brick
-                if val.ndim > 0:
-                    v = val[value_slice]
-                else:
-                    v = val
-                log.error('value: %s', v)
-
-                brick_slice = self._fix_assignment_slice(brick_slice, v)
-
+                v = val if value_slice is None else val[value_slice]
                 bf[ds_path].__setitem__(*brick_slice, val=v)
 
                 bf.flush()
@@ -540,32 +526,90 @@ class PersistedStorage(AbstractStorage):
             else:
                 raise SystemError('Can\'t find brick: %s', brick_file)
 
-    def _fix_assignment_slice(self, slice_, value):
-        val = np.asanyarray(value)
+    def _calc_slices(self, slice_, brick_guid, value, val_origin):
+        brick_origin, brick_size = self.brick_list[brick_guid][1:]
+        log.warn('Brick %s:  origin=%s, size=%s', brick_guid, brick_origin, brick_size)
+        log.warn('Slice set: %s', slice_)
 
-        vshp=val.shape
-        if len(vshp) == 0:
-            return slice_
+        brick_slice = []
+        value_slice = []
+
+        # Get the value into a numpy array - should do all the heavy lifting of sorting out what's what!!!
+        val_arr = np.asanyarray(value)
+        val_shp = val_arr.shape
+        val_rank = val_arr.ndim
+        log.debug('Value asanyarray: rank=%s, shape=%s', val_rank, val_shp)
+
+        if val_origin is None or len(val_origin) == 0:
+            val_ori = [0 for x in range(len(slice_))]
+        else:
+            val_ori = val_origin
 
         for i, sl in enumerate(slice_):
-            log.error('sl = %s', sl)
-            log.error('vshp[%s] = %s', i, vshp[i])
+            bo=brick_origin[i]
+            bs=brick_size[i]
+            bn=bo+bs
+            vo=val_ori[i]
+            vs=val_shp[i] if len(val_shp) > 0 else None
+            log.debug('i=%s, sl=%s, bo=%s, bs=%s, bn=%s, vo=%s, vs=%s',i,sl,bo,bs,bn,vo,vs)
             if isinstance(sl, int):
-                log.warn('int')
-                # TODO: check the int against the length of vshp[i]...raise exception or set to 'last'??
-                pass
+                if bo <= sl < bn: # The slice is within the bounds of the brick
+                    brick_slice.append(sl-bo) # brick_slice is the given index minus the brick origin
+                    value_slice.append(0 + vo)
+                    val_ori[i] = vo + 1
+                else:
+                    raise ValueError('Specified index is not within the brick: %s', sl)
             elif isinstance(sl, (list,tuple)):
-                log.warn('list/tuple')
-                # TODO: check each member as above...
-                pass
+                lb = [x - bo for x in sl if bo <= x < bn]
+                if len(lb) == 0:
+                    raise ValueError('None of the specified indices are within the brick: %s', sl)
+                brick_slice.append(lb)
+                value_slice.append(slice(vo, vo+len(lb), None)) # Everything from the appropriate index to the size needed
+                val_ori[i] = len(lb) + vo
             elif isinstance(sl, slice):
-                log.warn('slice')
-                sl=slice(sl.start, min(sl.stop, sl.start + vshp[i]), sl.step)
+                if sl.start is None:
+                    start = 0
+                else:
+                    if bo <= sl.start < bn:
+                        start = sl.start - bo
+                    elif bo > sl.start:
+                        start = 0
+                    else: #  sl.start > bn
+                        raise ValueError('The slice is not contained in this brick')
 
-            slice_[i] = sl
+                if sl.stop is None:
+                    stop = bs
+                else:
+                    if bo <= sl.stop < bn:
+                        stop = sl.stop - bo
+                    elif sl.stop > bn:
+                        stop = bs
+                    else: #  bo > sl.stop
+                        raise ValueError('The slice is not contained in this brick')
 
-        log.warn('ret slice_ = %s', slice_)
-        return slice_
+                if vs is not None:
+                    stop = min(stop, (vs-vo)) # issue
+
+                log.debug('start=%s, stop=%s', start, stop)
+                nbs = slice(start, stop, sl.step)
+                brick_slice.append(nbs)
+                nbsl = len(range(*nbs.indices(stop)))
+                log.debug('nbsl=%s',nbsl)
+                vstp = vo+nbsl
+                log.debug('vstp=%s',vstp)
+                if vs is not None and vstp > vs: # Don't think this will ever happen, caught by 'if vs is not None:' above
+                    log.debug('vstp > vs!')
+                    vstp = vs
+
+                value_slice.append(slice(vo, vstp, None))
+                val_ori[i] = vo + nbsl
+
+        if val_origin is not None and len(val_origin) != 0:
+            val_origin = val_ori
+        else:
+            value_slice = None
+
+        return brick_slice, value_slice
 
     def _get_array_shape_from_slice(self, slice_):
         shp = []
@@ -582,111 +626,6 @@ class PersistedStorage(AbstractStorage):
                 shp.append(len(range(*s.indices(maxes[i]))))
 
         return tuple(shp)
-
-    def _calc_brick_getter_slices(self, slice_, brick_guid, arr_origin):
-        brick_origin, brick_size = self.brick_list[brick_guid][1:]
-        log.debug('brick %s:  origin=%s, size=%s', brick_guid, brick_origin, brick_size)
-        log.debug('slice_: %s', slice_)
-
-        brick_slice = []
-        value_slice = []
-
-        for i, s in enumerate(slice_):
-            o=brick_origin[i]
-            sz=brick_size[i]
-            n=sz+o
-            ao = arr_origin[i]
-            log.debug('o=%s  sz=%s  n=%s, ao=%s',o,sz,n,ao)
-            if isinstance(s, int):
-                log.debug('is int')
-                if o <= s < n:
-                    brick_slice.append(s-o)
-                    value_slice.append(s-ao)
-                    arr_origin[i] = ao+1
-                else:
-                    raise ValueError('Specified index is not within the brick: %s', s)
-            elif isinstance(s, (list, tuple)):
-                log.debug('is list/tuple')
-                lb = [x-o for x in s if o <= x < n]
-                lv = [xi + ao for xi,x in enumerate(lb)]
-                if len(lb) == 0:
-                    raise ValueError('None of the specified indices are within the brick: %s', s)
-                brick_slice.append(lb)
-                value_slice.append(lv)
-                arr_origin[i] = ao+len(lb)
-            elif isinstance(s, slice):
-                log.debug('is slice')
-                if s.start is None:
-                    start = 0
-                    astart=ao
-                else:
-                    start = s.start - o if o <= s.start < n else 0
-                    astart = ao
-                if s.stop is None:
-                    stop = n - o
-                    astop = stop - start + ao
-                else:
-                    stop = s.stop - o if o <= s.stop < n else n - o
-                    astop = stop - start + ao
-                log.debug('new start/stop: %s %s', start, stop)
-                log.debug('astart/astop: %s %s', astart, astop)
-                brick_slice.append(slice(start, stop, s.step))
-                vs = slice(astart, astop, s.step)
-                vsi = range(*vs.indices(astop))
-#                log.warn('vs: %s', vs)
-#                log.warn('vsi: %s', vsi)
-#                inds = [x+ao for x in range(len(vsi))]
-#                log.warn('inds: %s',inds)
-#                value_slice.append(inds)
-                value_slice.append(vs)
-                arr_origin[i] = ao+len(vsi)
-
-        return brick_slice, value_slice
-
-    def _calc_brick_setter_slices(self, slice_, brick_guid):
-        brick_origin, brick_size = self.brick_list[brick_guid][1:]
-        log.debug('brick %s:  origin=%s, size=%s', brick_guid, brick_origin, brick_size)
-        log.debug('slice_: %s', slice_)
-
-        brick_slice = []
-        value_slice = []
-
-        for i, s in enumerate(slice_):
-            o=brick_origin[i]
-            sz=brick_size[i]
-            n=sz+o
-            log.debug('o=%s  sz=%s  n=%s',o,sz,n)
-            if isinstance(s, int):
-                log.debug('is int')
-                if o <= s < n:
-                    brick_slice.append(s-o)
-                    value_slice.append(s)
-                else:
-                    raise ValueError('Specified index is not within the brick: %s', s)
-            elif isinstance(s, (list, tuple)):
-                log.debug('is list/tuple')
-                lb = [x-o for x in s if o <= x < n]
-                lv = [x for x in s if o <= x < n]
-                if len(lb) == 0:
-                    raise ValueError('None of the specified indices are within the brick: %s', s)
-                brick_slice.append(lb)
-                value_slice.append(lv)
-            elif isinstance(s, slice):
-                log.debug('is slice')
-                if s.start is None:
-                    start = o
-                else:
-                    start = s.start if o <= s.start < n else o
-                if s.stop is None:
-                    stop = n
-                else:
-                    stop = s.stop if o <= s.stop < n else n
-                log.debug('new start/stop: %s %s', start, stop)
-                brick_slice.append(slice(start-o, stop-o, s.step))
-#                brick_slice.append(range(*slice(start-o, stop-o, s.step).indices(stop)))
-                value_slice.append(slice(start, stop, s.step))
-
-        return brick_slice, value_slice
 
     def reinit(self, storage):
         pass # No op
