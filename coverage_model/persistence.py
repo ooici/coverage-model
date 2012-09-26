@@ -46,6 +46,8 @@ class PersistenceLayer():
 
         self.parameter_domain_dict = {}
 
+        self.brick_maxes = []
+
         # Setup Master HDF5 File
         self.master_file_path = '{0}/{1}_master.hdf5'.format(self.root,self.guid)
         # Make sure the root path exists, if not, make it
@@ -151,7 +153,7 @@ class PersistenceLayer():
         # TODO: Sort out the path to the bricks for this parameter
         brick_path = '{0}/{1}/{2}'.format(self.root, self.guid, parameter_name)
         self.brick_list[parameter_name] = {}
-        v = PersistedStorage(brick_path=brick_path, brick_tree=self.brick_tree_dict[parameter_name][0], brick_list=self.brick_list[parameter_name], dtype=parameter_context.param_type.value_encoding)
+        v = PersistedStorage(brick_path=brick_path, brick_tree=self.brick_tree_dict[parameter_name][0], brick_list=self.brick_list[parameter_name], dtype=parameter_context.param_type.value_encoding, brick_maxes=self.brick_maxes)
         self.value_list[parameter_name] = v
         self.parameter_domain_dict[parameter_name] = [None, None, None]
 
@@ -224,12 +226,10 @@ class PersistenceLayer():
         brick_file_path = '{0}/{1}'.format(root_path,brick_file_name)
         brick_file = h5py.File(brick_file_path, 'w')
 
-#        brick_group_path = '/{0}/{1}'.format(self.guid,parameter_name)
-
-    # Create the HDF5 dataset that represents one brick
+        # Create the HDF5 dataset that represents one brick
         brick_cubes = brick_file.create_dataset('{0}'.format(brick_guid), bD, dtype=data_type, chunks=cD)
 
-    # Close the HDF5 file that represents one brick
+        # Close the HDF5 file that represents one brick
         log.debug('Size Before Close: %s', os.path.getsize(brick_file_path))
         brick_file.close()
         log.debug('Size After Close: %s', os.path.getsize(brick_file_path))
@@ -239,8 +239,7 @@ class PersistenceLayer():
         _master_file = h5py.File(self.master_file_path, 'r+')
         _master_file['/{0}/{1}'.format(parameter_name, brick_guid)] = h5py.ExternalLink('./{0}/{1}/{2}'.format(self.guid, parameter_name, brick_file_name), brick_guid)
 
-
-    # Update the brick listing
+        # Update the brick listing
         log.debug('Updating brick list[%s] with (%s, %s)',parameter_name, brick_guid, brick_extents)
         self.brick_list[parameter_name][brick_guid] = [brick_extents, origin, tuple(bD), brick_active_size]
         brick_count = self.parameter_brick_count(parameter_name)
@@ -271,7 +270,6 @@ class PersistenceLayer():
 
     # Expand the domain
     # TODO: Verify brick and chunk sizes are still valid????
-    # TODO: Only expands in first (time) dimension at the moment
     def expand_domain(self, parameter_context):
         parameter_name = parameter_context.name
         log.debug('Expand %s', parameter_name)
@@ -323,31 +321,6 @@ class PersistenceLayer():
                 log.debug('No bricks to create yet since the total domain is empty...')
         except Exception:
             raise
-#            log.error('Failed to Initialize Persistence Layer: %s', ex)
-#            log.debug('Cleaning up bricks (not ;))')
-            # TODO: Add brick cleanup routine
-
-#    # Retrieve all or subset of data from HDF5 bricks
-#    def get_values(self, parameterName, minExtents, maxExtents):
-#
-#        log.debug('Getting value(s) from brick(s)...')
-#
-#        # Find bricks for given extents
-#        brickSearchList = self.list_bricks(parameterName, minExtents, maxExtents)
-#        log.debug('Found bricks that may contain data: {0}'.format(brickSearchList))
-#
-#        # Figure out slices for each brick
-#
-#        # Get the data (if it exists, jagged?) for each sliced brick
-#
-#        # Combine the data into one numpy array and set fill value to null values
-#
-#        # Pass back to coverage layer
-#
-#    # Write all or subset of Coverage's data to HDF5 brick(s)
-#    def set_values(self, parameter_name, payload, slice_):
-#        log.debug('Setting value(s) of payload to brick(s)...')
-#        self.value_list[parameter_name][slice_] = payload
 
     # List bricks for a parameter based on domain range
     def list_bricks(self, parameter_name, start, end):
@@ -398,7 +371,7 @@ class PersistenceLayer():
 
 class PersistedStorage(AbstractStorage):
 
-    def __init__(self, brick_path, brick_tree, brick_list, dtype, **kwargs):
+    def __init__(self, brick_path, brick_tree, brick_list, dtype, brick_maxes, **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractStorage; see documentation for that class for details
@@ -414,6 +387,8 @@ class PersistedStorage(AbstractStorage):
         self.brick_list = brick_list
 
         self.dtype = dtype
+
+        self.brick_maxes = brick_maxes
 
         # We just need to know which brick(s) to save to and their slice(s)
         self.storage_bricks = {}
@@ -614,25 +589,13 @@ class PersistedStorage(AbstractStorage):
     def _get_array_shape_from_slice(self, slice_):
         log.debug('slice_: %s', slice_)
         shp = []
-        dim = self.brick_tree.properties.dimension
-        maxes = self.brick_tree.bounds[dim:]
-        maxes = [int(x)+1 for x in maxes]
 
-        for i, s in enumerate(slice_):
-            if isinstance(s, int):
-                shp.append(1)
-            elif isinstance(s, (list,tuple)):
-                shp.append(len(s))
-            elif isinstance(s, slice):
-                shp.append(len(range(*s.indices(maxes[i]))))
-
-        return tuple(shp)
-
-    def OLD_get_array_shape_from_slice(self, slice_):
-        shp = []
-        dim = self.brick_tree.properties.dimension
-        maxes = self.brick_tree.bounds[dim:]
-        maxes = [int(x)+1 for x in maxes]
+        log.debug('brick_list: %s', self.brick_list)
+        vals = self.brick_list.values()
+        min_len = min([min(*x[0])+1 for x in vals])
+        max_len = max([min(*x[0])+min(x[3]) for x in vals])
+        maxes = [max_len, min_len]
+        log.debug('maxes1: %s', maxes)
 
         for i, s in enumerate(slice_):
             if isinstance(s, int):
