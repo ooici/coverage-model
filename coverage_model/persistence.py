@@ -15,6 +15,7 @@ import h5py
 import os
 import rtree
 import itertools
+import msgpack
 from copy import deepcopy
 
 class PersistenceError(Exception):
@@ -226,6 +227,10 @@ class PersistenceLayer():
         brick_file_name = '{0}.hdf5'.format(brick_guid)
         brick_file_path = '{0}/{1}'.format(root_path,brick_file_name)
         brick_file = h5py.File(brick_file_path, 'w')
+
+        # Check for object type
+        if data_type == '|O8':
+            data_type = h5py.new_vlen(str)
 
         # Create the HDF5 dataset that represents one brick
         brick_cubes = brick_file.create_dataset('{0}'.format(brick_guid), bD, dtype=data_type, chunks=cD)
@@ -458,7 +463,16 @@ class PersistedStorage(AbstractStorage):
             bf = h5py.File(brick_file, 'r+')
             ds_path = '/{0}'.format(brick_guid)
 
-            ret_arr[value_slice] = bf[ds_path].__getitem__(*brick_slice)
+            v = bf[ds_path].__getitem__(*brick_slice)
+
+            # Check if object type
+            if self.dtype == '|O8':
+                if not hasattr(v, '__iter__'):
+                    v = [v]
+                v = [msgpack.unpackb(x) for x in v]
+
+            ret_arr[value_slice] = v
+
             bf.close()
 
             log.error(ret_arr)
@@ -494,6 +508,13 @@ class PersistedStorage(AbstractStorage):
                 log.error('BEFORE: %s', bf[ds_path][:])
 
                 v = val if value_slice is None else val[value_slice]
+
+                # Check for object type
+                if self.dtype == '|O8':
+                    if not hasattr(v, '__iter__'):
+                        v = [v]
+                    v = [msgpack.packb(x) for x in v]
+
                 bf[ds_path].__setitem__(*brick_slice, val=v)
 
                 bf.flush()
