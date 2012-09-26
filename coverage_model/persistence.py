@@ -15,6 +15,7 @@ import h5py
 import os
 import rtree
 import itertools
+from copy import deepcopy
 
 class PersistenceError(Exception):
     pass
@@ -394,13 +395,14 @@ class PersistedStorage(AbstractStorage):
         self.storage_bricks = {}
 
     def _bricks_from_slice(self, slice_):
-        if not isinstance(slice_, (list,tuple)):
-            slice_ = [slice_]
+        sl = deepcopy(slice_)
+        if not isinstance(sl, (list,tuple)):
+            sl = [sl]
 
-        rank = len(slice_)
+        rank = len(sl)
         if rank == 1:
             rank += 1
-            slice_ += (0,)
+            sl += (0,)
 
         if self.brick_tree.properties.dimension != rank:
             raise ValueError('slice_ is of incorrect rank: is {0}, must be {1}'.format(rank, self.brick_tree.properties.dimension))
@@ -410,11 +412,11 @@ class PersistedStorage(AbstractStorage):
         start = []
         end = []
         for x in xrange(rank):
-            sx=slice_[x]
+            sx=sl[x]
             if isinstance(sx, slice):
                 si=sx.start if sx.start is not None else bnds[x::rank][0]
                 start.append(si)
-                ei=sx.stop if sx.stop is not None else bnds[x::rank][1]
+                ei=sx.stop-1 if sx.stop is not None else bnds[x::rank][1]
                 end.append(ei)
             elif isinstance(sx, (list, tuple)):
                 start.append(min(sx))
@@ -556,8 +558,8 @@ class PersistedStorage(AbstractStorage):
 
                 if sl.stop is None:
                     stop = bs
-                else: # TODO: Error in here when the slice end coincides with the brick end [1:6] or [4:10]
-                    if bo <= sl.stop < bn:
+                else:
+                    if bo < sl.stop <= bn:
                         stop = sl.stop - bo
                     elif sl.stop > bn:
                         stop = bs
