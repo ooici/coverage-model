@@ -16,7 +16,6 @@ import os
 import rtree
 import itertools
 import msgpack
-import math
 from copy import deepcopy
 
 # TODO: Make persistence-specific error classes
@@ -39,9 +38,10 @@ class PersistenceLayer():
         self.guid = guid
         log.debug('Persistence GUID: %s', self.guid)
 
-        self.brick_tree_dict = {}
-        self.brick_list = {}
+#        self.brick_tree_dict = {}
+#        self.brick_list = {}
         self.parameter_domain_dict = {}
+        self.parameter_metadata = {} # {parameter_name: [brick_list, parameter_domains, rtree]}
         self.parameter_dictionary = ParameterDictionary()
 
         # Setup Master HDF5 File using the root path and the supplied coverage guid
@@ -64,8 +64,13 @@ class PersistenceLayer():
 
         self.value_list = {}
 
-    # Calculate brick domain size given a target file system brick size (Mbytes) and dtype
     def calculate_brick_size(self, tD, bricking_scheme):
+        """
+        Calculate brick domain size given a target file system brick size (Mbytes) and dtype
+        @param tD:
+        @param bricking_scheme:
+        @return:
+        """
         log.debug('Calculating the size of a brick...')
         log.debug('Bricking scheme: %s', bricking_scheme)
         log.debug('tD: %s', tD)
@@ -77,6 +82,7 @@ class PersistenceLayer():
 
     def init_parameter(self, parameter_context, bricking_scheme):
         parameter_name = parameter_context.name
+        self.parameter_metadata[parameter_name] = {}
         log.debug('Initialize %s', parameter_name)
 
         self.parameter_dictionary.add_context(parameter_context)
@@ -93,12 +99,16 @@ class PersistenceLayer():
         p = rtree.index.Property()
         p.dimension = tree_rank
         brick_tree = rtree.index.Index(properties=p)
-        self.brick_tree_dict[parameter_name] = [brick_tree, bD]
+#        self.brick_tree_dict[parameter_name] = [brick_tree, bD]
+
+        self.parameter_metadata[parameter_name][0] = {} # brick_list {brick_guid: [brick_extents, origin, tuple(bD), brick_active_size]
+        self.parameter_metadata[parameter_name][1] = [tD, bD, cD, bricking_scheme] # brick_domain_dict [tD, bD, cD, bricking_scheme]
+        self.parameter_metadata[parameter_name][2] = brick_tree # brick_tree
 
         # TODO: Sort out the path to the bricks for this parameter
         brick_path = '{0}/{1}/{2}'.format(self.root, self.guid, parameter_name)
-        self.brick_list[parameter_name] = {}
-        v = PersistedStorage(brick_path=brick_path, brick_tree=self.brick_tree_dict[parameter_name][0], brick_list=self.brick_list[parameter_name], dtype=parameter_context.param_type.value_encoding)
+#        self.brick_list[parameter_name] = {}
+        v = PersistedStorage(brick_path=brick_path, brick_tree=self.parameter_metadata[parameter_name][2], brick_list=self.parameter_metadata[parameter_name][0], dtype=parameter_context.param_type.value_encoding)
         self.value_list[parameter_name] = v
         self.parameter_domain_dict[parameter_name] = [None, None, None, bricking_scheme]
 
@@ -107,6 +117,13 @@ class PersistenceLayer():
         return v
 
     def calculate_extents(self, origin, bD, parameter_name):
+        """
+        Calculates the Rtree extents, brick extents and active brick size for the parameter
+        @param origin:
+        @param bD:
+        @param parameter_name:
+        @return:
+        """
         log.debug('origin: %s', origin)
         log.debug('bD: %s', bD)
         log.debug('parameter_name: %s', parameter_name)
@@ -118,19 +135,18 @@ class PersistenceLayer():
         total_extents = pc.dom.total_extents # index space
         log.debug('Total extents for parameter %s: %s', parameter_name, total_extents)
 
+        # Calculate the extents for the Rtree (index space)
         rtree_extents = origin + map(lambda o,s: o+s-1, origin, bD)
         # Fake out the rtree if rank == 1
         if len(origin) == 1:
             rtree_extents = [e for ext in zip(rtree_extents,[0 for x in rtree_extents]) for e in ext]
         log.debug('Rtree extents: %s', rtree_extents)
 
+        # Calculate the extents of the brick (index space)
         brick_extents = zip(origin,map(lambda o,s: o+s-1, origin, bD))
         log.debug('Brick extents: %s', brick_extents)
 
-        #brick_active_size = (min(total_extents[0],brick_extents[0][1]+1) - brick_extents[0][0],)
-#        8] Total extents for parameter lat: (10, 34, 57, 89)
-#        [11:40:33 DEBUG   coverage_model.persistence:144] Rtree extents: [0, 30, 50, 80, 9, 39, 59, 89]
-#        [11:40:33 DEBUG   coverage_model.persistence:147] Brick extents: [(0, 9), (30, 39), (50, 59), (80, 89)]
+        # Calculate active size using the inner extent of the domain within a brick (value space)
         brick_active_size = map(lambda o,s: min(o,s[1]+1)-s[0], total_extents, brick_extents)
         log.debug('Brick active size: %s', brick_active_size)
 
@@ -141,8 +157,8 @@ class PersistenceLayer():
         do_write = True
         brick_guid = ''
         log.debug('Check bricks for parameter \'%s\'',parameter_name)
-        if parameter_name in self.brick_list:
-            for x,v in self.brick_list[parameter_name].iteritems():
+        if parameter_name in self.parameter_metadata:
+            for x,v in self.parameter_metadata[parameter_name][0].iteritems():
                 if brick_extents == v[0]:
                     log.debug('Brick found with matching extents: guid=%s', x)
                     do_write = False
@@ -159,7 +175,7 @@ class PersistenceLayer():
         if not do_write:
             log.debug('Brick already exists!  Do not write')
             # TODO: We need to update the brick_list's brick_active_size here
-            self.brick_list[parameter_name][bguid] = [brick_extents, origin, tuple(bD), brick_active_size]
+            self.parameter_metadata[parameter_name][0][bguid] = [brick_extents, origin, tuple(bD), brick_active_size]
             return
 
         log.debug('Writing brick for parameter %s', parameter_name)
@@ -197,14 +213,16 @@ class PersistenceLayer():
         _master_file['/{0}/{1}'.format(parameter_name, brick_guid)] = h5py.ExternalLink('./{0}/{1}/{2}'.format(self.guid, parameter_name, brick_file_name), brick_guid)
 
         # Update the brick listing
-        log.debug('Updating brick list[%s] with (%s, %s)',parameter_name, brick_guid, brick_extents)
-        self.brick_list[parameter_name][brick_guid] = [brick_extents, origin, tuple(bD), brick_active_size]
+        log.debug('Updating brick list[%s] with (%s, %s)', parameter_name, brick_guid, brick_extents)
+#        self.brick_list[parameter_name][brick_guid] = [brick_extents, origin, tuple(bD), brick_active_size]
         brick_count = self.parameter_brick_count(parameter_name)
+        self.parameter_metadata[parameter_name][0][brick_guid] = [brick_extents, origin, tuple(bD), brick_active_size]
         log.debug('Brick count for %s is %s', parameter_name, brick_count)
-
+        
         # Insert into Rtree
-        log.debug('Inserting into Rtree %s:%s:%s', brick_count - 1, rtree_extents, brick_guid)
-        self.brick_tree_dict[parameter_name][0].insert(brick_count - 1, rtree_extents, obj=brick_guid)
+        log.debug('Inserting into Rtree %s:%s:%s', brick_count, rtree_extents, brick_guid)
+#        self.brick_tree_dict[parameter_name][0].insert(brick_count - 1, rtree_extents, obj=brick_guid)
+        self.parameter_metadata[parameter_name][2].insert(brick_count, rtree_extents, obj=brick_guid)
         log.debug('Rtree inserted successfully.')
 
         # Brick metadata
@@ -280,8 +298,8 @@ class PersistenceLayer():
     # Returns a count of bricks for a parameter
     def parameter_brick_count(self, parameter_name):
         ret = 0
-        if parameter_name in self.brick_list:
-            ret = len(self.brick_list[parameter_name])
+        if parameter_name in self.parameter_metadata:
+            ret = len(self.parameter_metadata[parameter_name][0])
         else:
             log.debug('No bricks found for parameter: %s', parameter_name)
 
@@ -547,7 +565,7 @@ class PersistedStorage(AbstractStorage):
             value_slice = None
 
         return brick_slice, value_slice
-
+    # TODO: Does not support n-dimensional
     def _get_array_shape_from_slice(self, slice_):
         log.debug('Getting array shape for slice_: %s', slice_)
 
@@ -560,6 +578,7 @@ class PersistedStorage(AbstractStorage):
         else:
             min_len = min([min(*x[0])+1 for i,x in enumerate(vals)])
             max_len = max([min(*x[0])+min(x[3]) for i,x in enumerate(vals)])
+
         maxes = [max_len, min_len]
 
         # Calculate the shape base on the type of slice_
@@ -570,7 +589,7 @@ class PersistedStorage(AbstractStorage):
             elif isinstance(s, (list,tuple)):
                 shp.append(len(s))
             elif isinstance(s, slice):
-                shp.append(len(range(*s.indices(maxes[i]))))
+                shp.append(len(range(*s.indices(maxes[i])))) # TODO: Does not support n-dimensional
 
         return tuple(shp)
 
