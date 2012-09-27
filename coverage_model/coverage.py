@@ -127,7 +127,7 @@ class SimplexCoverage(AbstractCoverage):
     of the AbstractParameterValue class.
 
     """
-    def __init__(self, name, parameter_dictionary, temporal_domain=None, spatial_domain=None, in_memory_storage=False):
+    def __init__(self, name, parameter_dictionary, temporal_domain=None, spatial_domain=None, in_memory_storage=False, bricking_scheme=None):
         """
         Constructor for SimplexCoverage
 
@@ -151,6 +151,8 @@ class SimplexCoverage(AbstractCoverage):
             self._persistence_layer = InMemoryPersistenceLayer()
         else:
             self._persistence_layer = PersistenceLayer('test_data', create_guid())
+
+        self._bricking_scheme = bricking_scheme or {'brick_size':10,'chunk_size':5}
 
         for pc in parameter_dictionary.itervalues():
             self._append_parameter(pc[1])
@@ -240,7 +242,7 @@ class SimplexCoverage(AbstractCoverage):
             dom.crs.axes[pcontext.reference_frame] = pcontext.name
 
         self._range_dictionary.add_context(pcontext)
-        s = self._persistence_layer.init_parameter(pcontext)
+        s = self._persistence_layer.init_parameter(pcontext, self._bricking_scheme)
         self._range_value[pname] = get_value_class(param_type=pcontext.param_type, domain_set=pcontext.dom, storage=s)
 
     def get_parameter(self, param_name):
