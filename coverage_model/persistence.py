@@ -19,13 +19,12 @@ import msgpack
 import math
 from copy import deepcopy
 
+# TODO: Make persistence-specific error classes
 class PersistenceError(Exception):
     pass
 
-# TODO: Make error classes for persistence crap
-
 class PersistenceLayer():
-    def __init__(self, root, guid, parameter_dictionary=None, tdom=None, sdom=None, **kwargs):
+    def __init__(self, root, guid, **kwargs):
         """
         Constructor for Persistence Layer
         @param root: Where to save/look for HDF5 files
@@ -39,18 +38,15 @@ class PersistenceLayer():
         self.root = '.' if root is ('' or None) else root
         self.guid = guid
         log.debug('Persistence GUID: %s', self.guid)
-        self.parameter_dictionary = ParameterDictionary()
-        self.tdom = tdom
-        self.sdom = sdom
 
         self.brick_tree_dict = {}
-
         self.brick_list = {}
-
         self.parameter_domain_dict = {}
+        self.parameter_dictionary = ParameterDictionary()
 
-        # Setup Master HDF5 File
+        # Setup Master HDF5 File using the root path and the supplied coverage guid
         self.master_file_path = '{0}/{1}_master.hdf5'.format(self.root,self.guid)
+
         # Make sure the root path exists, if not, make it
         if not os.path.exists(self.root):
             os.makedirs(self.root)
@@ -60,95 +56,23 @@ class PersistenceLayer():
             master_file = h5py.File(self.master_file_path, 'w')
             master_file.close()
 
+        # Peek inside the master file and populate master_groups and master_links
+        # TODO:  This is where the brick_list and brick_tree_dict will be populated if the master file exists
         self.master_groups = []
         self.master_links = {}
-        # Peek inside the master file and populate master_groups and master_links
         self._inspect_master()
 
         self.value_list = {}
 
-        # TODO: Loop through parameter_dictionary
-        if isinstance(self.parameter_dictionary, ParameterDictionary):
-            log.debug('Using a ParameterDictionary!')
-            for param in self.parameter_dictionary:
-                pc = self.parameter_dictionary.get_context(param)
-                tD = pc.dom.total_extents
-                bD,cD = self.calculate_brick_size(64) #remains same for each parameter
-                self.parameter_domain_dict[pc.name] = [tD,bD,cD,pc.param_type._value_encoding]
-                self.init_parameter(pc)
-                self._inspect_master()
-#                log.debug('Performing Rtree dict setup')
-#                # Verify domain is Rtree friendly
-#                tree_rank = len(bD)
-#                log.debug('tree_rank: %s', tree_rank)
-#                if tree_rank == 1:
-#                    tree_rank += 1
-#                log.debug('tree_rank: %s', tree_rank)
-#                p = rtree.index.Property()
-#                p.dimension = tree_rank
-#                brick_tree = rtree.index.Index(properties=p)
-#                self.brick_tree_dict[pc.name] = [brick_tree,bD]
-#        elif isinstance(self.parameter_dictionary, list):
-#            log.debug('Found a list of parameters, assuming all have the same total domain')
-#        elif isinstance(self.parameter_dictionary, dict):
-#            log.debug('Found a dictionary of parameters, assuming parameter name is key and has value of total domain,dtype')
-#            for pname,tD in self.parameter_dictionary:
-#                tD = list(self.tdom+self.sdom) #can increase
-#                bD,cD = self.calculate_brick_size(64) #remains same for each parameter
-#                self.parameter_domain_dict[pname] = [tD,bD,cD]
-#
-#                self.init_parameter(tD,bD,cD,pname,'f')
-        else:
-            pass
-
-#            log.debug('No parameter_dictionary defined.  Running a test script...')
-#            if self.sdom is None:
-#                tD = list(self.tdom)
-#            else:
-#                tD = list(self.tdom+self.sdom) #can increase
-#            bD,cD = self.calculate_brick_size(64) #remains same for each parameter
-#            self.parameterDomainDict['Test Parameter'] = [tD,bD,cD]
-#
-#            # Verify domain is Rtree friendly
-#            if len(bD) > 1:
-#                p = rtree.index.Property()
-#                p.dimension = len(bD)
-#                brickTree = rtree.index.Index(properties=p)
-#                self.brickTreeDict['Test Parameter'] = [brickTree,tD]
-#            self.init_parameter(tD,bD,cD,'Test Parameter','f')
-
     # Calculate brick domain size given a target file system brick size (Mbytes) and dtype
-    def calculate_brick_size(self, tD, target_fs_size):
+    def calculate_brick_size(self, tD, bricking_scheme):
         log.debug('Calculating the size of a brick...')
+        log.debug('Bricking scheme: %s', bricking_scheme)
         log.debug('tD: %s', tD)
-
-        target_size = 100
-
-        # TODO: Keep all dimensions except the time component constant for now
-        bD = list(tD)
-        bD[0] = target_size
-
-
-#        TODO: Calculate bD dimension sizes based on target max filsesystem file size and parameter type
-#        bD = []
-        cD = []
-#        ext = list(tD)
-#        for dim in ext:
-#            if dim == 0:
-#                bD.append(5)
-#            elif 0 < dim <= 10:
-#                bD.append(int(math.ceil(dim/2.0)))
-#            else:
-#                bD.append(int(math.ceil(dim/(dim/10.0))))
+        bD = [bricking_scheme['brick_size'] for x in tD]
+        cD = [bricking_scheme['chunk_size'] for x in tD]
         log.debug('bD: %s', bD)
-        # TODO: Calculate the chunk size based on published performance specs for HDF
-        for dim in bD:
-            if dim <= 10:
-                cD.append(int(math.ceil(dim/2.0)))
-            else:
-                cD.append(int(math.ceil(dim/(dim/10.0))))
         log.debug('cD: %s', cD)
-
         return bD,tuple(cD)
 
     def init_parameter(self, parameter_context, bricking_scheme):
@@ -159,7 +83,7 @@ class PersistenceLayer():
 
         log.debug('Performing Rtree dict setup')
         tD = parameter_context.dom.total_extents
-        bD,cD = self.calculate_brick_size(tD, 64) #remains same for each parameter
+        bD,cD = self.calculate_brick_size(tD, bricking_scheme) #remains same for each parameter
         # Verify domain is Rtree friendly
         tree_rank = len(bD)
         log.debug('tree_rank: %s', tree_rank)
@@ -176,7 +100,7 @@ class PersistenceLayer():
         self.brick_list[parameter_name] = {}
         v = PersistedStorage(brick_path=brick_path, brick_tree=self.brick_tree_dict[parameter_name][0], brick_list=self.brick_list[parameter_name], dtype=parameter_context.param_type.value_encoding)
         self.value_list[parameter_name] = v
-        self.parameter_domain_dict[parameter_name] = [None, None, None]
+        self.parameter_domain_dict[parameter_name] = [None, None, None, bricking_scheme]
 
         self.expand_domain(parameter_context)
 
@@ -204,7 +128,10 @@ class PersistenceLayer():
         log.debug('Brick extents: %s', brick_extents)
 
         #brick_active_size = (min(total_extents[0],brick_extents[0][1]+1) - brick_extents[0][0],)
-        brick_active_size = map(lambda o,s: (min(o,s[1]+1)-s[0],), total_extents, brick_extents)[0]
+#        8] Total extents for parameter lat: (10, 34, 57, 89)
+#        [11:40:33 DEBUG   coverage_model.persistence:144] Rtree extents: [0, 30, 50, 80, 9, 39, 59, 89]
+#        [11:40:33 DEBUG   coverage_model.persistence:147] Brick extents: [(0, 9), (30, 39), (50, 59), (80, 89)]
+        brick_active_size = map(lambda o,s: min(o,s[1]+1)-s[0], total_extents, brick_extents)
         log.debug('Brick active size: %s', brick_active_size)
 
         return rtree_extents, brick_extents, brick_active_size
@@ -324,7 +251,7 @@ class PersistenceLayer():
                 self.parameter_domain_dict[parameter_name][0] = tD
         else:
             tD = parameter_context.dom.total_extents
-            bD,cD = self.calculate_brick_size(tD, 64)
+            bD,cD = self.calculate_brick_size(tD, self.parameter_domain_dict[parameter_name][3])
             self.parameter_domain_dict[parameter_name] = [tD, bD, cD]
 
         try:
@@ -571,11 +498,11 @@ class PersistedStorage(AbstractStorage):
                     value_slice.append(0 + vo)
                     val_ori[i] = vo + 1
                 else: # TODO: If you specify a brick boundary this occurs [10] or [6]
-                    raise ValueError('Specified index is not within the brick: %s', sl)
+                    raise ValueError('Specified index is not within the brick: {0}'.format(sl))
             elif isinstance(sl, (list,tuple)):
                 lb = [x - bo for x in sl if bo <= x < bn]
                 if len(lb) == 0: # TODO: In a list the last brick boundary seems to break it [1,3,10]
-                    raise ValueError('None of the specified indices are within the brick: %s', sl)
+                    raise ValueError('None of the specified indices are within the brick: {0}'.format(sl))
                 brick_slice.append(lb)
                 value_slice.append(slice(vo, vo+len(lb), None)) # Everything from the appropriate index to the size needed
                 val_ori[i] = len(lb) + vo
