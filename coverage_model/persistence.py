@@ -151,7 +151,7 @@ class PersistenceLayer():
 
         return bD,tuple(cD)
 
-    def init_parameter(self, parameter_context):
+    def init_parameter(self, parameter_context, bricking_scheme):
         parameter_name = parameter_context.name
         log.debug('Initialize %s', parameter_name)
 
@@ -663,10 +663,10 @@ class PersistedStorage(AbstractStorage):
 
 class InMemoryPersistenceLayer():
 
-    def expand_domain(self, parameter_context):
+    def expand_domain(self, *args, **kwargs):
         # No Op - storage expanded by *Value classes
         pass
 
-    def init_parameter(self, parameter_context):
+    def init_parameter(self, *args, **kwargs):
         return InMemoryStorage()
 
