@@ -38,9 +38,6 @@ class PersistenceLayer():
         self.guid = guid
         log.debug('Persistence GUID: %s', self.guid)
 
-#        self.brick_tree_dict = {}
-#        self.brick_list = {}
-        self.parameter_domain_dict = {}
         self.parameter_metadata = {} # {parameter_name: [brick_list, parameter_domains, rtree]}
         self.parameter_dictionary = ParameterDictionary()
 
@@ -99,7 +96,6 @@ class PersistenceLayer():
         p = rtree.index.Property()
         p.dimension = tree_rank
         brick_tree = rtree.index.Index(properties=p)
-#        self.brick_tree_dict[parameter_name] = [brick_tree, bD]
 
         self.parameter_metadata[parameter_name][0] = {} # brick_list {brick_guid: [brick_extents, origin, tuple(bD), brick_active_size]
         self.parameter_metadata[parameter_name][1] = [tD, bD, cD, bricking_scheme] # brick_domain_dict [tD, bD, cD, bricking_scheme]
@@ -107,10 +103,8 @@ class PersistenceLayer():
 
         # TODO: Sort out the path to the bricks for this parameter
         brick_path = '{0}/{1}/{2}'.format(self.root, self.guid, parameter_name)
-#        self.brick_list[parameter_name] = {}
         v = PersistedStorage(brick_path=brick_path, brick_tree=self.parameter_metadata[parameter_name][2], brick_list=self.parameter_metadata[parameter_name][0], dtype=parameter_context.param_type.value_encoding)
         self.value_list[parameter_name] = v
-        self.parameter_domain_dict[parameter_name] = [None, None, None, bricking_scheme]
 
         self.expand_domain(parameter_context)
 
@@ -214,14 +208,12 @@ class PersistenceLayer():
 
         # Update the brick listing
         log.debug('Updating brick list[%s] with (%s, %s)', parameter_name, brick_guid, brick_extents)
-#        self.brick_list[parameter_name][brick_guid] = [brick_extents, origin, tuple(bD), brick_active_size]
         brick_count = self.parameter_brick_count(parameter_name)
         self.parameter_metadata[parameter_name][0][brick_guid] = [brick_extents, origin, tuple(bD), brick_active_size]
         log.debug('Brick count for %s is %s', parameter_name, brick_count)
-        
+
         # Insert into Rtree
         log.debug('Inserting into Rtree %s:%s:%s', brick_count, rtree_extents, brick_guid)
-#        self.brick_tree_dict[parameter_name][0].insert(brick_count - 1, rtree_extents, obj=brick_guid)
         self.parameter_metadata[parameter_name][2].insert(brick_count, rtree_extents, obj=brick_guid)
         log.debug('Rtree inserted successfully.')
 
@@ -249,28 +241,29 @@ class PersistenceLayer():
         parameter_name = parameter_context.name
         log.debug('Expand %s', parameter_name)
 
-        if self.parameter_domain_dict[parameter_name][0] is not None:
+        if self.parameter_metadata[parameter_name][1][0] is not None:
             log.debug('Expanding domain (n-dimension)')
 
             # Check if the number of dimensions of the total domain has changed
             # TODO: Will this ever happen???  If so, how to handle?
-            if len(parameter_context.dom.total_extents) != len(self.parameter_domain_dict[parameter_name][0]):
+            if len(parameter_context.dom.total_extents) != len(self.parameter_metadata[parameter_name][1][0]):
                 raise SystemError('Number of dimensions for parameter cannot change, only expand in size! No action performed.')
             else:
-                tD = self.parameter_domain_dict[parameter_name][0]
-                bD = self.parameter_domain_dict[parameter_name][1]
-                cD = self.parameter_domain_dict[parameter_name][2]
+                tD = self.parameter_metadata[parameter_name][1][0]
+                bD = self.parameter_metadata[parameter_name][1][1]
+                cD = self.parameter_metadata[parameter_name][1][2]
                 new_domain = parameter_context.dom.total_extents
 
                 delta_domain = [(x - y) for x, y in zip(new_domain, tD)]
                 log.debug('delta domain: %s', delta_domain)
 
                 tD = [(x + y) for x, y in zip(tD, delta_domain)]
-                self.parameter_domain_dict[parameter_name][0] = tD
+                self.parameter_metadata[parameter_name][1][0] = tD
         else:
             tD = parameter_context.dom.total_extents
-            bD,cD = self.calculate_brick_size(tD, self.parameter_domain_dict[parameter_name][3])
-            self.parameter_domain_dict[parameter_name] = [tD, bD, cD]
+            bricking_scheme = self.parameter_metadata[parameter_name][1][3]
+            bD,cD = self.calculate_brick_size(tD, bricking_scheme)
+            self.parameter_metadata[parameter_name][1] = [tD, bD, cD, bricking_scheme]
 
         try:
             # Gather block list
