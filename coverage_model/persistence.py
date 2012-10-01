@@ -9,7 +9,7 @@
 
 from pyon.public import log
 from coverage_model.basic_types import create_guid, AbstractStorage, InMemoryStorage
-from coverage_model.parameter import ParameterDictionary
+from coverage_model.parameter import ParameterContext, ParameterDictionary
 import numpy as np
 import h5py
 import os
@@ -55,7 +55,6 @@ class PersistenceLayer():
 
         # Peek inside the master file and populate master_groups and master_links
         # TODO:  This is where the brick_list and brick_tree_dict will be populated if the master file exists
-        self.master_groups = []
         self.master_links = {}
         self._inspect_master()
 
@@ -95,14 +94,21 @@ class PersistenceLayer():
         log.debug('tree_rank: %s', tree_rank)
         p = rtree.index.Property()
         p.dimension = tree_rank
-        brick_tree = rtree.index.Index(properties=p)
+        p.dat_extension = 'data' # persisted Rtree data file
+        p.idx_extension = 'index' # persisted Rtree index file
+
+        # TODO: Sort out the path to the bricks for this parameter
+        brick_path = '{0}/{1}/{2}'.format(self.root, self.guid, parameter_name)
+        # Make sure the root path exists, if not, make it
+        if not os.path.exists(brick_path):
+            os.makedirs(brick_path)
+        brick_tree_file = '{0}/{1}'.format(brick_path, parameter_name) # auto-assigns file extension .idx
+        brick_tree = rtree.index.Index(brick_tree_file, properties=p)
 
         self.parameter_metadata[parameter_name][0] = {} # brick_list {brick_guid: [brick_extents, origin, tuple(bD), brick_active_size]
         self.parameter_metadata[parameter_name][1] = [tD, bD, cD, bricking_scheme] # brick_domain_dict [tD, bD, cD, bricking_scheme]
         self.parameter_metadata[parameter_name][2] = brick_tree # brick_tree
-
-        # TODO: Sort out the path to the bricks for this parameter
-        brick_path = '{0}/{1}/{2}'.format(self.root, self.guid, parameter_name)
+        self.parameter_metadata[parameter_name][3] = parameter_context
         v = PersistedStorage(brick_path=brick_path, brick_tree=self.parameter_metadata[parameter_name][2], brick_list=self.parameter_metadata[parameter_name][0], dtype=parameter_context.param_type.value_encoding)
         self.value_list[parameter_name] = v
 
@@ -222,6 +228,28 @@ class PersistenceLayer():
         _master_file['{0}/{1}'.format(parameter_name, brick_guid)].attrs['brick_origin'] = str(origin)
         _master_file['{0}/{1}'.format(parameter_name, brick_guid)].attrs['brick_size'] = str(tuple(bD))
 
+        # Parameter Metadata
+        _parameter_file_name = '{0}.hdf5'.format(parameter_name)
+        _parameter_file_path = '{0}/{1}'.format(root_path,_parameter_file_name)
+        # Check if the parameter file already exists, if not, create it
+        if not os.path.exists(_parameter_file_path):
+            master_file = h5py.File(_parameter_file_path, 'w')
+            master_file.close()
+        _parameter_file = h5py.File(_parameter_file_path, 'r+')
+        _parameter_file_group = '/{0}'.format(parameter_name)
+        try:
+            _parameter_file[_parameter_file_group]
+        except:
+            _parameter_file.create_group('/{0}'.format(parameter_name))
+        _parameter_file['/{0}'.format(parameter_name)].attrs['brick_list'] = msgpack.packb(self.parameter_metadata[parameter_name][0])
+        _parameter_file['/{0}'.format(parameter_name)].attrs['brick_domains'] = msgpack.packb(self.parameter_metadata[parameter_name][1])
+        _parameter_file['/{0}'.format(parameter_name)].attrs['brick_tree_data'] = '{0}/{1}.data'.format(root_path, parameter_name)
+        _parameter_file['/{0}'.format(parameter_name)].attrs['brick_tree_index'] = '{0}/{1}.index'.format(root_path, parameter_name)
+        _parameter_file['/{0}'.format(parameter_name)].attrs['parameter_context'] = str(self.parameter_metadata[parameter_name][3].dump())
+        _parameter_file.close()
+
+        _master_file['{0}'.format(parameter_name)].attrs['parameter_metadata_file'] = _parameter_file_path
+
         log.debug('Brick Size At End: %s', os.path.getsize(brick_file_path))
 
         # TODO: This is a really ugly way to store the brick_list for a parameter
@@ -280,7 +308,7 @@ class PersistenceLayer():
                 map(lambda origin: self.write_brick(origin,bD,cD,parameter_name,parameter_context.param_type.value_encoding), vertices)
 
                 # Refresh master file object data
-                self._inspect_master()
+#                self._inspect_master()
 
                 log.info('Persistence Layer Successfully Initialized')
             else:
@@ -303,12 +331,12 @@ class PersistenceLayer():
         _master_file = h5py.File(self.master_file_path, 'r+')
 
         # Get all the groups
-        self.master_groups = []
-        _master_file.visit(self.master_groups.append)
+        master_groups = []
+        _master_file.visit(master_groups.append)
 
         # Get all parameter's external links to datasets
         self.master_links = {}
-        for g in self.master_groups:
+        for g in master_groups:
             grp = _master_file[g]
             for v in grp.values():
                 if isinstance(v,h5py.Dataset):
@@ -316,8 +344,33 @@ class PersistenceLayer():
                     v.file.close()
 
         # TODO: Generate/Update the brick_list
+        for g in master_groups:
+            log.debug('master group: %s', g)
+            self.parameter_metadata[g] = {}
 
-        # TODO: Generate/Update the brick_tree_dict
+            grp = _master_file[g]
+            for v in grp.attrs.values():
+                pfile = h5py.File(v,'r+')
+                for an, at in pfile[g].attrs.iteritems():
+                    if an == 'brick_list':
+                        log.debug('Unpacking brick list metadata into parameter_metadata.')
+                        val = msgpack.unpackb(at)
+                        self.parameter_metadata[g][0] = val
+                        log.debug('%s: %s', an, val)
+                    if an == 'brick_domains':
+                        log.debug('Unpacking brick domain metadata into parameter_metadata.')
+                        val = msgpack.unpackb(at)
+                        self.parameter_metadata[g][1] = val
+                        log.debug('%s: %s', an, val)
+                    if an == 'parameter_context':
+                        log.debug('Unpacking parameter context into parameter metadata.')
+                        self.parameter_metadata[g][3] = ParameterContext(at)
+                    if an == 'brick_tree_data':
+                        # TODO: Not sure I really need to do anything here
+                        pass
+                    if an == 'brick_tree_index':
+                        # TODO: Not sure I really need to do anything here
+                        pass
 
         # Close the master file
         _master_file.close()
