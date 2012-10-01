@@ -112,6 +112,9 @@ class ParameterContext(AbstractIdentifiable):
         my_kwargs = {x:kwc.pop(x) for x in self.ATTRS if x in kwc}
         new_name = kwc.pop('new_name') if 'new_name' in kwc else None
         param_context = None
+        if not isinstance(name, (str, ParameterContext)):
+            raise SystemError('\'name\' must be an instance of either str or ParameterContext')
+
         if isinstance(name, ParameterContext):
             param_context = name
             name = new_name or param_context.name
