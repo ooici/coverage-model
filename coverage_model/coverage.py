@@ -150,7 +150,7 @@ class SimplexCoverage(AbstractCoverage):
         if self._in_memory_storage:
             self._persistence_layer = InMemoryPersistenceLayer()
         else:
-            self._persistence_layer = PersistenceLayer('test_data', create_guid())
+            self._persistence_layer = PersistenceLayer('test_data', create_guid(), name=name, tdom=temporal_domain, sdom=spatial_domain)
 
         self._bricking_scheme = bricking_scheme or {'brick_size':10,'chunk_size':5}
 
