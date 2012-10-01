@@ -23,12 +23,12 @@ class PersistenceError(Exception):
     pass
 
 class PersistenceLayer():
-    def __init__(self, root, guid, **kwargs):
+    def __init__(self, root, guid, name=None, tdom=None, sdom=None, **kwargs):
         """
         Constructor for Persistence Layer
         @param root: Where to save/look for HDF5 files
         @param guid: CoverageModel GUID
-        @param parameter_dictionary: CoverageModel ParameterDictionary
+        @param name: CoverageModel Name
         @param tdom: Temporal Domain
         @param sdom: Spatial Domain
         @param kwargs:
@@ -37,6 +37,9 @@ class PersistenceLayer():
         self.root = '.' if root is ('' or None) else root
         self.guid = guid
         log.debug('Persistence GUID: %s', self.guid)
+        self.name = name
+        self.tdom = tdom
+        self.sdom = sdom
 
         self.parameter_metadata = {} # {parameter_name: [brick_list, parameter_domains, rtree]}
         self.parameter_dictionary = ParameterDictionary()
@@ -45,20 +48,88 @@ class PersistenceLayer():
         self.master_file_path = '{0}/{1}_master.hdf5'.format(self.root,self.guid)
 
         # Make sure the root path exists, if not, make it
+        # TODO: Should probably be a test way before it gets here and fail outright instead of making it.
+        # TODO: Then we need to check for existing files to avoid problems
         if not os.path.exists(self.root):
             os.makedirs(self.root)
 
-        # Check if the master file already exists, if not, create it
-        if not os.path.exists(self.master_file_path):
-            master_file = h5py.File(self.master_file_path, 'w')
-            master_file.close()
+        if name is not None and tdom is not None and sdom is not None:
+            # Creating new coverage model
+            # Check if the master file already exists, if not, create it
+            if not os.path.exists(self.master_file_path):
+                with open(self.master_file_path, 'w'):
+                    pass
 
-        # Peek inside the master file and populate master_groups and master_links
-        # TODO:  This is where the brick_list and brick_tree_dict will be populated if the master file exists
-        self.master_links = {}
-        self._inspect_master()
+                # Add the master file-level metadata
+                master_file = h5py.File(self.master_file_path, 'r+')
+                master_file.attrs['root'] = self.root
+                master_file.attrs['guid'] = self.guid
+                master_file.attrs['name'] = self.name
+                master_file.attrs['tdom'] = str(self.tdom.dump())
+                master_file.attrs['sdom'] = str(self.sdom.dump())
+            else:
+                raise ValueError('A master file already exists for this coverage.')
+        else:
+            # Loading existing coverage model
+            self._load()
 
         self.value_list = {}
+
+    def _load(self):
+        # Open the master file
+        _master_file = h5py.File(self.master_file_path, 'r+')
+
+        self.root = _master_file.attrs['root']
+        self.guid = _master_file.attrs['guid']
+        self.name = _master_file.attrs['name']
+        self.tdom = GridDomain.load(_master_file.attrs['tdom'])
+        self.sdom = GridDomain.load(_master_file.attrs['sdom'])
+
+        # Get all the groups
+        master_groups = []
+        _master_file.visit(master_groups.append)
+
+        # Get all parameter's external links to datasets
+        # TODO: Verify the external liks gathered below actually exist on the filesystem
+        master_links = {}
+        for g in master_groups:
+            grp = _master_file[g]
+            for v in grp.values():
+                if isinstance(v,h5py.Dataset):
+                    master_links[v.name] = v.file.filename
+                    v.file.close()
+
+        # Populate the in-memory objects from the stored master and parameter metadata
+        for g in master_groups:
+            log.debug('master group: %s', g)
+            self.parameter_metadata[g] = {}
+
+            grp = _master_file[g]
+            for v in grp.attrs.values():
+                pfile = h5py.File(v,'r+')
+                for an, at in pfile[g].attrs.iteritems():
+                    if an == 'brick_list':
+                        log.debug('Unpacking brick list metadata into parameter_metadata.')
+                        val = msgpack.unpackb(at)
+                        self.parameter_metadata[g][0] = val
+                        log.debug('%s: %s', an, val)
+                    if an == 'brick_domains':
+                        log.debug('Unpacking brick domain metadata into parameter_metadata.')
+                        val = msgpack.unpackb(at)
+                        self.parameter_metadata[g][1] = val
+                        log.debug('%s: %s', an, val)
+                    if an == 'parameter_context':
+                        log.debug('Unpacking parameter context into parameter metadata.')
+                        self.parameter_metadata[g][3] = ParameterContext.load(at)
+                    if an == 'brick_tree_data':
+                        # TODO: Not sure I really need to do anything here
+                        pass
+                    if an == 'brick_tree_index':
+                        # TODO: Not sure I really need to do anything here
+                        pass
+
+        # Close the master file
+        _master_file.close()
 
     def calculate_brick_size(self, tD, bricking_scheme):
         """
@@ -231,10 +302,12 @@ class PersistenceLayer():
         # Parameter Metadata
         _parameter_file_name = '{0}.hdf5'.format(parameter_name)
         _parameter_file_path = '{0}/{1}'.format(root_path,_parameter_file_name)
+
         # Check if the parameter file already exists, if not, create it
         if not os.path.exists(_parameter_file_path):
-            master_file = h5py.File(_parameter_file_path, 'w')
-            master_file.close()
+            param_file = h5py.File(_parameter_file_path, 'w')
+            param_file.close()
+
         _parameter_file = h5py.File(_parameter_file_path, 'r+')
         _parameter_file_group = '/{0}'.format(parameter_name)
         try:
@@ -307,9 +380,6 @@ class PersistenceLayer():
                 # Write brick to HDF5 file
                 map(lambda origin: self.write_brick(origin,bD,cD,parameter_name,parameter_context.param_type.value_encoding), vertices)
 
-                # Refresh master file object data
-#                self._inspect_master()
-
                 log.info('Persistence Layer Successfully Initialized')
             else:
                 log.debug('No bricks to create yet since the total domain is empty...')
@@ -325,55 +395,6 @@ class PersistenceLayer():
             log.debug('No bricks found for parameter: %s', parameter_name)
 
         return ret
-
-    def _inspect_master(self):
-        # Open the master file
-        _master_file = h5py.File(self.master_file_path, 'r+')
-
-        # Get all the groups
-        master_groups = []
-        _master_file.visit(master_groups.append)
-
-        # Get all parameter's external links to datasets
-        self.master_links = {}
-        for g in master_groups:
-            grp = _master_file[g]
-            for v in grp.values():
-                if isinstance(v,h5py.Dataset):
-                    self.master_links[v.name] = v.file.filename
-                    v.file.close()
-
-        # TODO: Generate/Update the brick_list
-        for g in master_groups:
-            log.debug('master group: %s', g)
-            self.parameter_metadata[g] = {}
-
-            grp = _master_file[g]
-            for v in grp.attrs.values():
-                pfile = h5py.File(v,'r+')
-                for an, at in pfile[g].attrs.iteritems():
-                    if an == 'brick_list':
-                        log.debug('Unpacking brick list metadata into parameter_metadata.')
-                        val = msgpack.unpackb(at)
-                        self.parameter_metadata[g][0] = val
-                        log.debug('%s: %s', an, val)
-                    if an == 'brick_domains':
-                        log.debug('Unpacking brick domain metadata into parameter_metadata.')
-                        val = msgpack.unpackb(at)
-                        self.parameter_metadata[g][1] = val
-                        log.debug('%s: %s', an, val)
-                    if an == 'parameter_context':
-                        log.debug('Unpacking parameter context into parameter metadata.')
-                        self.parameter_metadata[g][3] = ParameterContext(at)
-                    if an == 'brick_tree_data':
-                        # TODO: Not sure I really need to do anything here
-                        pass
-                    if an == 'brick_tree_index':
-                        # TODO: Not sure I really need to do anything here
-                        pass
-
-        # Close the master file
-        _master_file.close()
 
 class PersistedStorage(AbstractStorage):
 
