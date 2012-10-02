@@ -17,6 +17,7 @@ import rtree
 import itertools
 import msgpack
 from copy import deepcopy
+import ast
 
 # TODO: Make persistence-specific error classes
 class PersistenceError(Exception):
@@ -76,14 +77,15 @@ class PersistenceLayer():
         self.value_list = {}
 
     def _load(self):
+        from coverage_model.coverage import AbstractDomain
         # Open the master file
         _master_file = h5py.File(self.master_file_path, 'r+')
 
         self.root = _master_file.attrs['root']
         self.guid = _master_file.attrs['guid']
         self.name = _master_file.attrs['name']
-        self.tdom = GridDomain.load(_master_file.attrs['tdom'])
-        self.sdom = GridDomain.load(_master_file.attrs['sdom'])
+        self.tdom = AbstractDomain.load(ast.literal_eval(_master_file.attrs['tdom']))
+        self.sdom = AbstractDomain.load(ast.literal_eval(_master_file.attrs['sdom']))
 
         # Get all the groups
         master_groups = []
@@ -107,7 +109,7 @@ class PersistenceLayer():
             grp = _master_file[g]
             for v in grp.attrs.values():
                 pfile = h5py.File(v,'r+')
-                for an, at in pfile[g].attrs.iteritems():
+                for an, at in pfile.attrs.iteritems():
                     if an == 'brick_list':
                         log.debug('Unpacking brick list metadata into parameter_metadata.')
                         val = msgpack.unpackb(at)
@@ -120,13 +122,33 @@ class PersistenceLayer():
                         log.debug('%s: %s', an, val)
                     if an == 'parameter_context':
                         log.debug('Unpacking parameter context into parameter metadata.')
-                        self.parameter_metadata[g][3] = ParameterContext.load(at)
-                    if an == 'brick_tree_data':
-                        # TODO: Not sure I really need to do anything here
-                        pass
-                    if an == 'brick_tree_index':
-                        # TODO: Not sure I really need to do anything here
-                        pass
+                        self.parameter_metadata[g][3] = ParameterContext.load(ast.literal_eval(at))
+                        self.parameter_dictionary.add_context(self.parameter_metadata[g][3])
+
+                # Populate the brick tree
+                tree_rank = len(self.parameter_metadata[g][1][1])
+                log.debug('tree_rank: %s', tree_rank)
+                if tree_rank == 1:
+                    tree_rank += 1
+                log.debug('tree_rank: %s', tree_rank)
+                p = rtree.index.Property()
+                p.dimension = tree_rank
+                brick_tree = rtree.index.Index(properties=p)
+
+                # TODO: Populate brick tree from dataset 'rtree' in parameter.hdf5 file
+                tfile = h5py.File('{0}/{1}/{2}/{3}.hdf5'.format(self.root, self.guid, g, g), 'r+')
+                ds = tfile['/rtree']
+                d = ds[0]
+                log.debug('rtree data: %s', msgpack.unpackb(d))
+
+                for i,x in enumerate(ds[:]):
+                    val = msgpack.unpackb(x)
+                    log.debug('val: %s', val)
+#                    log.debug('extents: %s', val[0])
+#                    log.debug('guid: %s', val[1])
+    #                brick_tree.insert(i, ast.literal_eval(val[0]), obj=ast.literal_eval(val[1]))
+
+                self.parameter_metadata[g][2] = brick_tree
 
         # Close the master file
         _master_file.close()
@@ -165,16 +187,14 @@ class PersistenceLayer():
         log.debug('tree_rank: %s', tree_rank)
         p = rtree.index.Property()
         p.dimension = tree_rank
-        p.dat_extension = 'data' # persisted Rtree data file
-        p.idx_extension = 'index' # persisted Rtree index file
 
         # TODO: Sort out the path to the bricks for this parameter
         brick_path = '{0}/{1}/{2}'.format(self.root, self.guid, parameter_name)
         # Make sure the root path exists, if not, make it
         if not os.path.exists(brick_path):
             os.makedirs(brick_path)
-        brick_tree_file = '{0}/{1}'.format(brick_path, parameter_name) # auto-assigns file extension .idx
-        brick_tree = rtree.index.Index(brick_tree_file, properties=p)
+
+        brick_tree = rtree.index.Index(properties=p)
 
         self.parameter_metadata[parameter_name][0] = {} # brick_list {brick_guid: [brick_extents, origin, tuple(bD), brick_active_size]
         self.parameter_metadata[parameter_name][1] = [tD, bD, cD, bricking_scheme] # brick_domain_dict [tD, bD, cD, bricking_scheme]
@@ -289,11 +309,6 @@ class PersistenceLayer():
         self.parameter_metadata[parameter_name][0][brick_guid] = [brick_extents, origin, tuple(bD), brick_active_size]
         log.debug('Brick count for %s is %s', parameter_name, brick_count)
 
-        # Insert into Rtree
-        log.debug('Inserting into Rtree %s:%s:%s', brick_count, rtree_extents, brick_guid)
-        self.parameter_metadata[parameter_name][2].insert(brick_count, rtree_extents, obj=brick_guid)
-        log.debug('Rtree inserted successfully.')
-
         # Brick metadata
         _master_file['{0}/{1}'.format(parameter_name, brick_guid)].attrs['dirty'] = 0
         _master_file['{0}/{1}'.format(parameter_name, brick_guid)].attrs['brick_origin'] = str(origin)
@@ -309,29 +324,31 @@ class PersistenceLayer():
             param_file.close()
 
         _parameter_file = h5py.File(_parameter_file_path, 'r+')
-        _parameter_file_group = '/{0}'.format(parameter_name)
+        _parameter_file.attrs['brick_list'] = msgpack.packb(self.parameter_metadata[parameter_name][0])
+        _parameter_file.attrs['brick_domains'] = msgpack.packb(self.parameter_metadata[parameter_name][1])
+        _parameter_file.attrs['parameter_context'] = str(self.parameter_metadata[parameter_name][3].dump())
+        # Insert into Rtree
+        log.debug('Inserting into Rtree %s:%s:%s', brick_count, rtree_extents, brick_guid)
+        self.parameter_metadata[parameter_name][2].insert(brick_count, rtree_extents, obj=brick_guid)
+
+        # TODO: Fix rtree dataset.  Doesn't seem to save msgpack to record.
         try:
-            _parameter_file[_parameter_file_group]
+            data_type = h5py.new_vlen(str)
+#            data_type = h5py.special_dtype(vlen=str)
+            _brick_tree_dataset = _parameter_file.create_dataset('rtree', shape=(1,), maxshape=(None,), dtype=data_type)
         except:
-            _parameter_file.create_group('/{0}'.format(parameter_name))
-        _parameter_file['/{0}'.format(parameter_name)].attrs['brick_list'] = msgpack.packb(self.parameter_metadata[parameter_name][0])
-        _parameter_file['/{0}'.format(parameter_name)].attrs['brick_domains'] = msgpack.packb(self.parameter_metadata[parameter_name][1])
-        _parameter_file['/{0}'.format(parameter_name)].attrs['brick_tree_data'] = '{0}/{1}.data'.format(root_path, parameter_name)
-        _parameter_file['/{0}'.format(parameter_name)].attrs['brick_tree_index'] = '{0}/{1}.index'.format(root_path, parameter_name)
-        _parameter_file['/{0}'.format(parameter_name)].attrs['parameter_context'] = str(self.parameter_metadata[parameter_name][3].dump())
+            _brick_tree_dataset = _parameter_file['rtree']
+        rtree_payload = msgpack.packb((rtree_extents, brick_guid))
+        log.debug('Inserting into brick tree dataset: [%s]: %s', brick_count, msgpack.unpackb(rtree_payload))
+        _brick_tree_dataset[brick_count] = rtree_payload
+        _brick_tree_dataset.resize((deepcopy(brick_count)+1,))
+        log.debug('Rtree inserted successfully.')
+
         _parameter_file.close()
 
         _master_file['{0}'.format(parameter_name)].attrs['parameter_metadata_file'] = _parameter_file_path
 
         log.debug('Brick Size At End: %s', os.path.getsize(brick_file_path))
-
-        # TODO: This is a really ugly way to store the brick_list for a parameter
-#        brick_list_attrs_filtered = [(k,v) for k, v in self.brick_list.items() if k[0]==parameter_name]
-#        str_size = 'S'+str(len(str(brick_list_attrs_filtered[0])))
-#        brick_list_attrs = np.ndarray(tuple([len(brick_list_attrs_filtered)]), str_size)
-#        for i,v in enumerate(brick_list_attrs_filtered):
-#            brick_list_attrs[i] = str(v)
-#        _master_file[brick_group_path].attrs['brick_list'] = brick_list_attrs
 
         # Close the master file
         _master_file.close()
@@ -526,7 +543,7 @@ class PersistedStorage(AbstractStorage):
 
                 # TODO: Move this to writer function
 
-                bf = h5py.File(brick_file, 'r+')
+                bf = h5py.File(brick_file, 'a')
 
                 ds_path = '/{0}'.format(brick_guid)
 
