@@ -176,7 +176,7 @@ class PersistenceLayer():
         parameter_name = parameter_context.name
         if is_temporal_param:
             self._temporal_param_name = parameter_name
-            
+
         self.parameter_metadata[parameter_name] = {}
         log.debug('Initialize %s', parameter_name)
 
@@ -206,7 +206,12 @@ class PersistenceLayer():
         self.parameter_metadata[parameter_name][1] = [tD, bD, cD, bricking_scheme] # brick_domain_dict [tD, bD, cD, bricking_scheme]
         self.parameter_metadata[parameter_name][2] = brick_tree # brick_tree
         self.parameter_metadata[parameter_name][3] = parameter_context
-        v = PersistedStorage(brick_path=brick_path, brick_tree=self.parameter_metadata[parameter_name][2], brick_list=self.parameter_metadata[parameter_name][0], brick_domains=self.parameter_metadata[parameter_name][1], dtype=parameter_context.param_type.value_encoding)
+        v = PersistedStorage(brick_path=brick_path,
+            brick_tree=self.parameter_metadata[parameter_name][2],
+            brick_list=self.parameter_metadata[parameter_name][0],
+            brick_domains=self.parameter_metadata[parameter_name][1],
+            dtype=parameter_context.param_type.value_encoding,
+            fill_value=parameter_context.param_type.fill_value)
         self.value_list[parameter_name] = v
 
         self.expand_domain(parameter_context)
@@ -382,13 +387,13 @@ class PersistenceLayer():
 
 class PersistedStorage(AbstractStorage):
 
-    def __init__(self, brick_path, brick_tree, brick_list, brick_domains, dtype, **kwargs):
+    def __init__(self, brick_path, brick_tree, brick_list, brick_domains, dtype=None, fill_value=None, **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractStorage; see documentation for that class for details
         """
         kwc=kwargs.copy()
-        AbstractStorage.__init__(self, **kwc)
+        AbstractStorage.__init__(self, dtype=dtype, fill_value=fill_value, **kwc)
 
         # Rtree of bricks for parameter
         self.brick_tree = brick_tree
@@ -400,9 +405,6 @@ class PersistedStorage(AbstractStorage):
         self.brick_list = brick_list
 
         self.brick_domains = brick_domains
-
-        # Data type for parameter
-        self.dtype = dtype
 
     # Calculates the bricks from Rtree (brick_tree) using the slice_
     def _bricks_from_slice(self, slice_):
@@ -452,7 +454,7 @@ class PersistedStorage(AbstractStorage):
         arr_shp = self._get_array_shape_from_slice(slice_)
 
         ret_arr = np.empty(arr_shp, dtype=self.dtype)
-        ret_arr.fill(-1)
+        ret_arr.fill(self.fill_value)
         ret_origin = [0 for x in range(ret_arr.ndim)]
         log.debug('Shape of returned array: %s', ret_arr.shape)
 
@@ -652,7 +654,7 @@ class PersistedStorage(AbstractStorage):
 
         return tuple(shp)
 
-    def reinit(self, storage):
+    def expand(self, arrshp, origin, expansion, fill_value=None):
         pass # No op
 
     def fill(self, value):
@@ -672,6 +674,6 @@ class InMemoryPersistenceLayer():
         # No Op - storage expanded by *Value classes
         pass
 
-    def init_parameter(self, *args, **kwargs):
-        return InMemoryStorage()
+    def init_parameter(self, parameter_context, *args, **kwargs):
+        return InMemoryStorage(dtype=parameter_context.param_type.value_encoding, fill_value=parameter_context.param_type.fill_value)
 
