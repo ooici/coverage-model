@@ -67,6 +67,27 @@ def values_outside_coverage():
     log.info('Returning: qval, aval, rval, cval, fval')
     return vals
 
+def param_dict_dump_load():
+    pd = ParameterDictionary()
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    pd.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')))
+    pd.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
+    pd.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
+    pd.add_context(ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius')))
+
+    pddump = pd.dump()
+
+    pd2 = ParameterDictionary.load(pddump)
+
+    # Tests that a dumped/loaded PD is equal to the original
+    print 'pd==pd2: {0}'.format(pd==pd2)
+
+    # Tests that a dumped/loaded PD is ordered the same way as the original
+    for o, pc in pd.itervalues():
+        print 'pc.name :: pd2.get_context_by_ord(o).name: {0} :: {1}'.format(pc.name, pd2.get_context_by_ord(o).name)
+
+
 def param_dict_compare():
 # Instantiate a ParameterDictionary
     pdict_1 = ParameterDictionary()
@@ -520,6 +541,47 @@ def ncstation2cov(save_coverage=True, in_memory=True):
         SimplexCoverage.save(scov, 'test_data/usgs.cov')
 
     return scov
+
+def test_get_single():
+    from coverage_model.test.examples import samplecov
+    cov = samplecov(False,False)
+    dat = cov._range_value.time
+    for s in range(len(dat)):
+        log.debug(s)
+        log.debug('\t%s', dat[s])
+
+def test_get_slices():
+    from coverage_model.test.examples import samplecov
+    cov = samplecov(False,False)
+    dat = cov._range_value.time
+    for s in range(len(dat)):
+        for e in range(len(dat)):
+            if s < e:
+                sl = slice(s, None, None)
+                log.debug(sl)
+                log.debug('\t%s', dat[s])
+                sl = slice(None, e, None)
+                log.debug(sl)
+                log.debug('\t%s', dat[s])
+                sl = slice(s, e, None)
+                log.debug(sl)
+                log.debug('\t%s', dat[s])
+                for st in range(e-s):
+                    sl = slice(s, e, st+1)
+                    log.debug(sl)
+                    log.debug('\t%s', dat[s])
+
+def cov_get_by_list():
+    cov = samplecov(False,False)
+    dat = cov._range_value.time
+    dl = len(dat)
+    for x in range(5):
+        lst = list(set([np.random.randint(0,dl) for s in xrange(np.random.randint(1,dl-1))]))
+        lst.sort()
+        print lst
+        print '\t%s' % dat[[lst]]
+
+
 
 def direct_read():
     scov, ds = ncstation2cov()
