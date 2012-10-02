@@ -521,7 +521,8 @@ class PersistedStorage(AbstractStorage):
             # Create the HDF5 dataset that represents one brick
             bD = tuple(self.brick_domains[1])
             cD = self.brick_domains[2]
-            brick_cubes = brick_file.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=cD)
+            fv = pack(self.fill_value) if self.dtype == '|O8' else self.fill_value
+            brick_cubes = brick_file.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=cD, fillvalue=fv)
 
             v = val if value_slice is None else val[value_slice]
 
