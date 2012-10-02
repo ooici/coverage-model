@@ -172,8 +172,11 @@ class PersistenceLayer():
         log.debug('cD: %s', cD)
         return bD,tuple(cD)
 
-    def init_parameter(self, parameter_context, bricking_scheme):
+    def init_parameter(self, parameter_context, bricking_scheme, is_temporal_param=False):
         parameter_name = parameter_context.name
+        if is_temporal_param:
+            self._temporal_param_name = parameter_name
+            
         self.parameter_metadata[parameter_name] = {}
         log.debug('Initialize %s', parameter_name)
 
