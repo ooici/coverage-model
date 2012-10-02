@@ -23,6 +23,12 @@ import ast
 class PersistenceError(Exception):
     pass
 
+def pack(payload):
+    return msgpack.packb(payload).replace('\x01','\x01\x02').replace('\x00','\x01\x01')
+
+def unpack(msg):
+    return msgpack.unpackb(msg.replace('\x01\x01','\x00').replace('\x01\x02','\x01'))
+
 class PersistenceLayer():
     def __init__(self, root, guid, name=None, tdom=None, sdom=None, **kwargs):
         """
@@ -112,12 +118,12 @@ class PersistenceLayer():
                 for an, at in pfile.attrs.iteritems():
                     if an == 'brick_list':
                         log.debug('Unpacking brick list metadata into parameter_metadata.')
-                        val = msgpack.unpackb(at)
+                        val = unpack(at)
                         self.parameter_metadata[g][0] = val
                         log.debug('%s: %s', an, val)
                     if an == 'brick_domains':
                         log.debug('Unpacking brick domain metadata into parameter_metadata.')
-                        val = msgpack.unpackb(at)
+                        val = unpack(at)
                         self.parameter_metadata[g][1] = val
                         log.debug('%s: %s', an, val)
                     if an == 'parameter_context':
@@ -133,20 +139,17 @@ class PersistenceLayer():
                 log.debug('tree_rank: %s', tree_rank)
                 p = rtree.index.Property()
                 p.dimension = tree_rank
-                brick_tree = rtree.index.Index(properties=p)
 
                 # TODO: Populate brick tree from dataset 'rtree' in parameter.hdf5 file
                 tfile = h5py.File('{0}/{1}/{2}/{3}.hdf5'.format(self.root, self.guid, g, g), 'r+')
                 ds = tfile['/rtree']
-                d = ds[0]
-                log.debug('rtree data: %s', msgpack.unpackb(d))
 
-                for i,x in enumerate(ds[:]):
-                    val = msgpack.unpackb(x)
-                    log.debug('val: %s', val)
-#                    log.debug('extents: %s', val[0])
-#                    log.debug('guid: %s', val[1])
-    #                brick_tree.insert(i, ast.literal_eval(val[0]), obj=ast.literal_eval(val[1]))
+                def tree_loader(darr):
+                    for i, x in enumerate(darr):
+                        ext, obj = unpack(x)
+                        yield (i, ext, obj)
+
+                brick_tree = rtree.index.Index(tree_loader(ds[:]), properties=p)
 
                 self.parameter_metadata[g][2] = brick_tree
 
@@ -324,24 +327,19 @@ class PersistenceLayer():
             param_file.close()
 
         _parameter_file = h5py.File(_parameter_file_path, 'r+')
-        _parameter_file.attrs['brick_list'] = msgpack.packb(self.parameter_metadata[parameter_name][0])
-        _parameter_file.attrs['brick_domains'] = msgpack.packb(self.parameter_metadata[parameter_name][1])
+        _parameter_file.attrs['brick_list'] = pack(self.parameter_metadata[parameter_name][0])
+        _parameter_file.attrs['brick_domains'] = pack(self.parameter_metadata[parameter_name][1])
         _parameter_file.attrs['parameter_context'] = str(self.parameter_metadata[parameter_name][3].dump())
         # Insert into Rtree
         log.debug('Inserting into Rtree %s:%s:%s', brick_count, rtree_extents, brick_guid)
         self.parameter_metadata[parameter_name][2].insert(brick_count, rtree_extents, obj=brick_guid)
 
-        # TODO: Fix rtree dataset.  Doesn't seem to save msgpack to record.
-        try:
-            data_type = h5py.new_vlen(str)
-#            data_type = h5py.special_dtype(vlen=str)
-            _brick_tree_dataset = _parameter_file.create_dataset('rtree', shape=(1,), maxshape=(None,), dtype=data_type)
-        except:
-            _brick_tree_dataset = _parameter_file['rtree']
-        rtree_payload = msgpack.packb((rtree_extents, brick_guid))
-        log.debug('Inserting into brick tree dataset: [%s]: %s', brick_count, msgpack.unpackb(rtree_payload))
-        _brick_tree_dataset[brick_count] = rtree_payload
+
+        _brick_tree_dataset = _parameter_file.require_dataset('rtree', shape=(brick_count,), dtype=h5py.new_vlen(str), maxshape=(None,))
         _brick_tree_dataset.resize((deepcopy(brick_count)+1,))
+        rtree_payload = pack((rtree_extents, brick_guid))
+        log.debug('Inserting into brick tree dataset: [%s]: %s', brick_count, unpack(rtree_payload))
+        _brick_tree_dataset[brick_count] = rtree_payload
         log.debug('Rtree inserted successfully.')
 
         _parameter_file.close()
@@ -511,7 +509,7 @@ class PersistedStorage(AbstractStorage):
             if self.dtype == '|O8':
                 if not hasattr(v, '__iter__'):
                     v = [v]
-                v = [msgpack.unpackb(x) for x in v]
+                v = [unpack(x) for x in v]
 
             ret_arr[value_slice] = v
 
@@ -555,7 +553,7 @@ class PersistedStorage(AbstractStorage):
                 if self.dtype == '|O8':
                     if not hasattr(v, '__iter__'):
                         v = [v]
-                    v = [msgpack.packb(x) for x in v]
+                    v = [pack(x) for x in v]
 
                 bf[ds_path].__setitem__(*brick_slice, val=v)
 
