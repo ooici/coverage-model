@@ -174,13 +174,15 @@ class AbstractIdentifiable(AbstractBase):
 
 class AbstractStorage(AbstractBase):
 
-    def __init__(self, **kwargs):
+    def __init__(self, dtype=None, fill_value=None, **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractBase; see documentation for that class for details
         """
         kwc=kwargs.copy()
         AbstractBase.__init__(self, **kwargs)
+        self.dtype = dtype or '|O8'
+        self.fill_value = fill_value or None
 
     def __getitem__(self, slice_):
         raise NotImplementedError('Not implemented in abstract class')
@@ -188,7 +190,7 @@ class AbstractStorage(AbstractBase):
     def __setitem__(self, slice_, value):
         raise NotImplementedError('Not implemented in abstract class')
 
-    def reinit(self, storage):
+    def expand(self, arrshp, origin, expansion):
         raise NotImplementedError('Not implemented in abstract class')
 
     def fill(self, value):
@@ -202,14 +204,14 @@ class AbstractStorage(AbstractBase):
 
 class InMemoryStorage(AbstractStorage):
 
-    def __init__(self, **kwargs):
+    def __init__(self, dtype=None, fill_value=None, **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractStorage; see documentation for that class for details
         """
         kwc=kwargs.copy()
-        AbstractStorage.__init__(self, **kwc)
-        self._storage = np.empty((0,))
+        AbstractStorage.__init__(self, dtype=dtype, fill_value=fill_value, **kwc)
+        self._storage = np.empty((0,), dtype=self.dtype)
 
     def __getitem__(self, slice_):
         return self._storage.__getitem__(slice_)
@@ -217,8 +219,11 @@ class InMemoryStorage(AbstractStorage):
     def __setitem__(self, slice_, value):
         self._storage.__setitem__(slice_, value)
 
-    def reinit(self, storage):
-        self._storage = storage.copy()
+    def expand(self, arrshp, origin, expansion):
+        narr = np.empty(arrshp, dtype=self.dtype)
+        narr.fill(self.fill_value)
+        loc=[origin for x in xrange(expansion)]
+        self._storage = np.insert(self._storage[:], loc, narr, axis=0)
 
     def fill(self, value):
         self._storage.fill(value)
