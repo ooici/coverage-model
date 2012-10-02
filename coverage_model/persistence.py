@@ -629,14 +629,21 @@ class PersistedStorage(AbstractStorage):
 
                 log.debug('start=%s, stop=%s', start, stop)
                 nbs = slice(start, stop, sl.step)
-                brick_slice.append(nbs)
                 nbsl = len(range(*nbs.indices(stop)))
                 log.debug('nbsl=%s',nbsl)
+                if vs is not None and vs != vo:
+                    while nbsl > (vs-vo):
+                        stop -= 1
+                        nbs = slice(start, stop, sl.step)
+                        nbsl = len(range(*nbs.indices(stop)))
+
+                log.debug('nbsl=%s',nbsl)
+                brick_slice.append(nbs)
                 vstp = vo+nbsl
                 log.debug('vstp=%s',vstp)
-                if vs is not None and vstp > vs: # Don't think this will ever happen, caught by 'if vs is not None:' above
+                if vs is not None and vstp > vs: # Don't think this will ever happen, should be dealt with by active_brick_size logic...
                     log.warn('Value set not the proper size for setter slice (vstp > vs)!')
-                    vstp = vs
+#                    vstp = vs
 
                 value_slice.append(slice(vo, vstp, None))
                 val_ori[i] = vo + nbsl
