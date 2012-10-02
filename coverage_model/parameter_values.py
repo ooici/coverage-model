@@ -90,7 +90,9 @@ class AbstractParameterValue(AbstractBase):
         raise NotImplementedError('Not implemented by abstract class')
 
     def __len__(self):
-        return len(self._storage)
+        # I don't think this is correct - should be the length of the total available set of values, not the length of storage...
+#        return len(self._storage)
+        return prod(self.shape)
 
     def __str__(self):
         return str(self.content)
