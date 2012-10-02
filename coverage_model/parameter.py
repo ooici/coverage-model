@@ -281,8 +281,7 @@ class ParameterDictionary(AbstractIdentifiable):
         @returns    The ParameterContext with the ordinal 'ordinal'
         @throws KeyError    A parameter with the provided ordinal does not exist
         """
-        key=self.key_from_ord(ordinal)
-
+        return self.get_context(self.key_from_ord(ordinal))
 
     def ord_from_key(self, param_name):
         """
@@ -345,6 +344,12 @@ class ParameterDictionary(AbstractIdentifiable):
 
 
         return ret
+
+    def size(self):
+        return self.__count
+
+    def __len__(self):
+        return self.size()
 
     def __iter__(self):
         return self._map.__iter__()
