@@ -542,16 +542,14 @@ def ncstation2cov(save_coverage=True, in_memory=True):
 
     return scov
 
-def test_get_single():
-    from coverage_model.test.examples import samplecov
+def cov_get_by_integer():
     cov = samplecov(False,False)
     dat = cov._range_value.time
     for s in range(len(dat)):
         log.debug(s)
         log.debug('\t%s', dat[s])
 
-def test_get_slices():
-    from coverage_model.test.examples import samplecov
+def cov_get_by_slice():
     cov = samplecov(False,False)
     dat = cov._range_value.time
     for s in range(len(dat)):
