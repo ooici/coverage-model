@@ -64,11 +64,11 @@ class PersistenceLayer():
             # Creating new coverage model
             # Check if the master file already exists, if not, create it
             if not os.path.exists(self.master_file_path):
-                with open(self.master_file_path, 'w'):
-                    pass
+#                with open(self.master_file_path, 'w'):
+#                    pass
 
                 # Add the master file-level metadata
-                master_file = h5py.File(self.master_file_path, 'r+')
+                master_file = h5py.File(self.master_file_path, 'a')
                 master_file.attrs['root'] = self.root
                 master_file.attrs['guid'] = self.guid
                 master_file.attrs['name'] = self.name
@@ -206,7 +206,7 @@ class PersistenceLayer():
         self.parameter_metadata[parameter_name][1] = [tD, bD, cD, bricking_scheme] # brick_domain_dict [tD, bD, cD, bricking_scheme]
         self.parameter_metadata[parameter_name][2] = brick_tree # brick_tree
         self.parameter_metadata[parameter_name][3] = parameter_context
-        v = PersistedStorage(brick_path=brick_path, brick_tree=self.parameter_metadata[parameter_name][2], brick_list=self.parameter_metadata[parameter_name][0], dtype=parameter_context.param_type.value_encoding)
+        v = PersistedStorage(brick_path=brick_path, brick_tree=self.parameter_metadata[parameter_name][2], brick_list=self.parameter_metadata[parameter_name][0], brick_domains=self.parameter_metadata[parameter_name][1], dtype=parameter_context.param_type.value_encoding)
         self.value_list[parameter_name] = v
 
         self.expand_domain(parameter_context)
@@ -266,43 +266,22 @@ class PersistenceLayer():
 
     # Write empty HDF5 brick to the filesystem
     def write_brick(self,origin,bD,cD,parameter_name,data_type):
+        root_path = '{0}/{1}/{2}'.format(self.root,self.guid,parameter_name)
+        # Create a GUID for the brick
+        brick_guid = create_guid()
         rtree_extents, brick_extents, brick_active_size = self.calculate_extents(origin, bD, parameter_name)
 
         do_write, bguid = self._brick_exists(parameter_name, brick_extents)
         if not do_write:
-            log.debug('Brick already exists!  Do not write')
-            # TODO: We need to update the brick_list's brick_active_size here
+            log.debug('Brick already exists!  Updating brick metadata...')
             self.parameter_metadata[parameter_name][0][bguid] = [brick_extents, origin, tuple(bD), brick_active_size]
             return
 
-        log.debug('Writing brick for parameter %s', parameter_name)
-
-        root_path = '{0}/{1}/{2}'.format(self.root,self.guid,parameter_name)
-
-        # Create the root path if it does not exist
-        # TODO: Eliminate possible race condition
-        if not os.path.exists(root_path):
-            os.makedirs(root_path)
-
-        # Create a GUID for the brick
-        brick_guid = create_guid()
+        log.debug('Writing virtual brick for parameter %s', parameter_name)
 
         # Set HDF5 file and group
         brick_file_name = '{0}.hdf5'.format(brick_guid)
         brick_file_path = '{0}/{1}'.format(root_path,brick_file_name)
-        brick_file = h5py.File(brick_file_path, 'w')
-
-        # Check for object type
-        if data_type == '|O8':
-            data_type = h5py.new_vlen(str)
-
-        # Create the HDF5 dataset that represents one brick
-        brick_cubes = brick_file.create_dataset('{0}'.format(brick_guid), bD, dtype=data_type, chunks=cD)
-
-        # Close the HDF5 file that represents one brick
-        log.debug('Size Before Close: %s', os.path.getsize(brick_file_path))
-        brick_file.close()
-        log.debug('Size After Close: %s', os.path.getsize(brick_file_path))
 
         # Add brick to Master HDF file
         log.debug('Adding %s external link to %s.', brick_file_path, self.master_file_path)
@@ -315,44 +294,31 @@ class PersistenceLayer():
         self.parameter_metadata[parameter_name][0][brick_guid] = [brick_extents, origin, tuple(bD), brick_active_size]
         log.debug('Brick count for %s is %s', parameter_name, brick_count)
 
-        # Brick metadata
-        _master_file['{0}/{1}'.format(parameter_name, brick_guid)].attrs['dirty'] = 0
-        _master_file['{0}/{1}'.format(parameter_name, brick_guid)].attrs['brick_origin'] = str(origin)
-        _master_file['{0}/{1}'.format(parameter_name, brick_guid)].attrs['brick_size'] = str(tuple(bD))
-
         # Parameter Metadata
         _parameter_file_name = '{0}.hdf5'.format(parameter_name)
         _parameter_file_path = '{0}/{1}'.format(root_path,_parameter_file_name)
+        _master_file['{0}'.format(parameter_name)].attrs['parameter_metadata_file'] = _parameter_file_path
+        # Close the master file
+        _master_file.close()
 
         # Check if the parameter file already exists, if not, create it
-        if not os.path.exists(_parameter_file_path):
-            param_file = h5py.File(_parameter_file_path, 'w')
-            param_file.close()
-
-        _parameter_file = h5py.File(_parameter_file_path, 'r+')
+#        if not os.path.exists(_parameter_file_path):
+#            param_file = h5py.File(_parameter_file_path, 'w')
+#            param_file.close()
+        _parameter_file = h5py.File(_parameter_file_path, 'a')
         _parameter_file.attrs['brick_list'] = pack(self.parameter_metadata[parameter_name][0])
         _parameter_file.attrs['brick_domains'] = pack(self.parameter_metadata[parameter_name][1])
         _parameter_file.attrs['parameter_context'] = str(self.parameter_metadata[parameter_name][3].dump())
         # Insert into Rtree
         log.debug('Inserting into Rtree %s:%s:%s', brick_count, rtree_extents, brick_guid)
         self.parameter_metadata[parameter_name][2].insert(brick_count, rtree_extents, obj=brick_guid)
-
-
         _brick_tree_dataset = _parameter_file.require_dataset('rtree', shape=(brick_count,), dtype=h5py.new_vlen(str), maxshape=(None,))
         _brick_tree_dataset.resize((deepcopy(brick_count)+1,))
         rtree_payload = pack((rtree_extents, brick_guid))
         log.debug('Inserting into brick tree dataset: [%s]: %s', brick_count, unpack(rtree_payload))
         _brick_tree_dataset[brick_count] = rtree_payload
         log.debug('Rtree inserted successfully.')
-
         _parameter_file.close()
-
-        _master_file['{0}'.format(parameter_name)].attrs['parameter_metadata_file'] = _parameter_file_path
-
-        log.debug('Brick Size At End: %s', os.path.getsize(brick_file_path))
-
-        # Close the master file
-        _master_file.close()
 
     # Expand the domain
     # TODO: Verify brick and chunk sizes are still valid????
@@ -416,7 +382,7 @@ class PersistenceLayer():
 
 class PersistedStorage(AbstractStorage):
 
-    def __init__(self, brick_path, brick_tree, brick_list, dtype, **kwargs):
+    def __init__(self, brick_path, brick_tree, brick_list, brick_domains, dtype, **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractStorage; see documentation for that class for details
@@ -432,6 +398,8 @@ class PersistedStorage(AbstractStorage):
 
         # Listing of bricks and their metadata for parameter
         self.brick_list = brick_list
+
+        self.brick_domains = brick_domains
 
         # Data type for parameter
         self.dtype = dtype
@@ -492,33 +460,30 @@ class PersistedStorage(AbstractStorage):
         log.debug('Slice %s indicates bricks: %s', slice_, bricks)
 
         for idx, brick_guid in bricks:
-            brick_file = '{0}/{1}.hdf5'.format(self.brick_path, brick_guid)
-            if not os.path.exists(brick_file):
-                raise IndexError('Expected brick_file \'%s\' not found', brick_file)
-            log.debug('Found brick file: %s', brick_file)
-
+            brick_file_path = '{0}/{1}.hdf5'.format(self.brick_path, brick_guid)
             # Figuring out which part of brick to set values
             log.debug('Return array origin: %s', ret_origin)
             brick_slice, value_slice = self._calc_slices(slice_, brick_guid, ret_arr, ret_origin)
             log.debug('Brick slice to extract: %s', brick_slice)
             log.debug('Value slice to fill: %s', value_slice)
 
-            bf = h5py.File(brick_file, 'r+')
-            ds_path = '/{0}'.format(brick_guid)
+            if not os.path.exists(brick_file_path):
+                log.debug('Expected brick_file \'%s\' not found, passing back empty array...', brick_file_path)
+#                v = np.empty(ret_arr.shape, dtype=self.dtype)
+            else:
+                log.debug('Found brick file: %s', brick_file_path)
+                brick_file = h5py.File(brick_file_path, 'r+')
+                v = brick_file[brick_guid].__getitem__(*brick_slice)
 
-            v = bf[ds_path].__getitem__(*brick_slice)
+                # Check if object type
+                if self.dtype == '|O8':
+                    if not hasattr(v, '__iter__'):
+                        v = [v]
+                    v = [unpack(x) for x in v]
 
-            # Check if object type
-            if self.dtype == '|O8':
-                if not hasattr(v, '__iter__'):
-                    v = [v]
-                v = [unpack(x) for x in v]
+                ret_arr[value_slice] = v
 
-            ret_arr[value_slice] = v
-
-            bf.close()
-
-#            log.error(ret_arr)
+                brick_file.close()
 
         return ret_arr
 
@@ -533,41 +498,43 @@ class PersistedStorage(AbstractStorage):
         log.debug('Slice %s indicates bricks: %s', slice_, bricks)
 
         for idx, brick_guid in bricks:
-            brick_file = '{0}/{1}.hdf5'.format(self.brick_path, brick_guid)
-            if os.path.exists(brick_file):
-                log.debug('Found brick file: %s', brick_file)
+            brick_file_path = '{0}/{1}.hdf5'.format(self.brick_path, brick_guid)
+#            if os.path.exists(brick_file):
+            log.debug('Found brick file: %s', brick_file_path)
 
-                # Figuring out which part of brick to set values
-                brick_slice, value_slice = self._calc_slices(slice_, brick_guid, val, val_origin)
-                log.debug('Brick slice to fill: %s', brick_slice)
-                log.debug('Value slice to extract: %s', value_slice)
+            # Figuring out which part of brick to set values
+            brick_slice, value_slice = self._calc_slices(slice_, brick_guid, val, val_origin)
+            log.debug('Brick slice to fill: %s', brick_slice)
+            log.debug('Value slice to extract: %s', value_slice)
 
-                # TODO: Move this to writer function
+            # TODO: Move this to writer function
 
-                bf = h5py.File(brick_file, 'a')
+            brick_file = h5py.File(brick_file_path, 'a')
 
-                ds_path = '/{0}'.format(brick_guid)
+            # Check for object type
+            data_type = deepcopy(self.dtype)
+            if data_type == '|O8':
+                data_type = h5py.new_vlen(str)
 
-#                log.error('BEFORE: %s', bf[ds_path][:])
+            # Create the HDF5 dataset that represents one brick
+            bD = tuple(self.brick_domains[1])
+            cD = self.brick_domains[2]
+            brick_cubes = brick_file.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=cD)
 
-                v = val if value_slice is None else val[value_slice]
+            v = val if value_slice is None else val[value_slice]
 
-                # Check for object type
-                if self.dtype == '|O8':
-                    if not hasattr(v, '__iter__'):
-                        v = [v]
-                    v = [pack(x) for x in v]
+            # Check for object type
+            if self.dtype == '|O8':
+                if not hasattr(v, '__iter__'):
+                    v = [v]
+                v = [pack(x) for x in v]
 
-                bf[ds_path].__setitem__(*brick_slice, val=v)
+            brick_file[brick_guid].__setitem__(*brick_slice, val=v)
 
-                bf.flush()
+            brick_file.close()
 
-#                log.error('AFTER: %s', bf[ds_path][:])
-
-                bf.close()
-
-            else:
-                raise SystemError('Can\'t find brick: %s', brick_file)
+#            else:
+#                raise SystemError('Can\'t find brick: %s', brick_file)
 
     def _calc_slices(self, slice_, brick_guid, value, val_origin):
         brick_origin, _, brick_size = self.brick_list[brick_guid][1:]
