@@ -8,7 +8,7 @@
 """
 
 from pyon.public import log
-from coverage_model.basic_types import create_guid, AbstractStorage, InMemoryStorage
+from coverage_model.basic_types import create_guid, AbstractStorage, InMemoryStorage, Dictable
 from coverage_model.parameter import ParameterContext, ParameterDictionary
 import numpy as np
 import h5py
@@ -28,6 +28,67 @@ def pack(payload):
 
 def unpack(msg):
     return msgpack.unpackb(msg.replace('\x01\x01','\x00').replace('\x01\x02','\x01'))
+
+class ParameterManager(object):
+    def __init__(self, root_path, parameter_name, **kwargs):
+        object.__setattr__(self, '_map', {})
+        self.root_path = root_path
+        self.parameter_name = parameter_name
+        self.file_path = os.path.join(self.root_path, self.parameter_name, '{0}.hdf5'.format(self.parameter_name))
+
+        if os.path.exists(self.file_path):
+            # TODO: Do load - iterate over attributes in hdf file and call setattr(self, key, value)
+            pass
+        else:
+            # Touch the file
+#            with h5py.File(self.file_path, 'a') as f:
+                # Set any kwargs
+            for k, v in kwargs.iteritems():
+                setattr(self, k, v)
+
+    def __setattr__(self, key, value):
+        # 0 If it's Dictable, dump it and pack it...
+        if isinstance(value, Dictable):
+            value = 'PACKED:' + pack(value.dump())
+
+        # 1 TODO: logic to sort out what the value type is
+        # TODO: may need to pack other things
+
+        log.error(value)
+        # 2 TODO: Write it to the hdf file
+
+        # 3 assign it to the __dict__
+        self._map[key] = value
+
+    def __getattr__(self, item):
+        try:
+            val = self._map[item]
+        except KeyError:
+            raise AttributeError('object has no attribute \'{0}\''.format(item))
+
+        # TODO: Is this OK? does this also catch str objects?
+        log.warn(type(val))
+        if isinstance(val, str):
+            if val.startswith('PACKED:'):
+                val = unpack(val.replace('PACKED:',''))
+
+        # TODO: Deal with other types appropriately as necessary
+
+        if isinstance(val, dict) and 'cm_type' in val:
+            ms, cs = val['cm_type']
+            module = __import__(ms, fromlist=[cs])
+            classobj = getattr(module, cs)
+            val = classobj._fromdict(val)
+
+        return val
+
+    def __delattr__(self, item):
+        try:
+            del self._map[item] # Will raise an error if the key isn't there
+        except KeyError:
+            raise AttributeError('object has no attribute \'{0}\''.format(item))
+
+        # TODO: Remove the attribute from the hdf file
 
 class ParameterMetadata():
     def __init__(self, root, guid, parameter_name, meta_title, meta_path, meta_object=None, **kwargs):
@@ -73,7 +134,7 @@ class ParameterMetadata():
         else:
             return meta
 
-class PersistenceLayer():
+class PersistenceLayer(object):
     def __init__(self, root, guid, name=None, tdom=None, sdom=None, **kwargs):
         """
         Constructor for Persistence Layer
@@ -159,47 +220,43 @@ class PersistenceLayer():
         for g in master_groups:
             log.debug('master group: %s', g)
             self.parameter_metadata[g] = {}
+            pfile = h5py.File('{0}/{1}/{2}/{3}.hdf5'.format(self.root, self.guid, g, g), 'r+')
+            for an, at in pfile.attrs.iteritems():
+                if an == 'brick_list':
+                    log.debug('Unpacking brick list metadata into parameter_metadata.')
+                    val = unpack(at)
+                    self.parameter_metadata[g]['brick_list'] = val
+                    log.debug('%s: %s', an, val)
+                if an == 'brick_domains':
+                    log.debug('Unpacking brick domain metadata into parameter_metadata.')
+                    val = unpack(at)
+                    self.parameter_metadata[g]['brick_domains'] = list(val)
+                    log.debug('%s: %s', an, val)
+                if an == 'parameter_context':
+                    log.debug('Unpacking parameter context into parameter metadata.')
+                    self.parameter_metadata[g]['parameter_context'] = ParameterContext.load(ast.literal_eval(at))
+                    self.parameter_dictionary.add_context(self.parameter_metadata[g]['parameter_context'])
 
-            grp = _master_file[g]
-            for v in grp.attrs.values():
-                pfile = h5py.File(v,'r+')
-                for an, at in pfile.attrs.iteritems():
-                    if an == 'brick_list':
-                        log.debug('Unpacking brick list metadata into parameter_metadata.')
-                        val = unpack(at)
-                        self.parameter_metadata[g]['brick_list'] = val
-                        log.debug('%s: %s', an, val)
-                    if an == 'brick_domains':
-                        log.debug('Unpacking brick domain metadata into parameter_metadata.')
-                        val = unpack(at)
-                        self.parameter_metadata[g]['brick_domains'] = val
-                        log.debug('%s: %s', an, val)
-                    if an == 'parameter_context':
-                        log.debug('Unpacking parameter context into parameter metadata.')
-                        self.parameter_metadata[g]['parameter_context'] = ParameterContext.load(ast.literal_eval(at))
-                        self.parameter_dictionary.add_context(self.parameter_metadata[g][3])
+            # Populate the brick tree
+            tree_rank = len(self.parameter_metadata[g]['brick_domains'][1])
+            log.debug('tree_rank: %s', tree_rank)
+            if tree_rank == 1:
+                tree_rank += 1
+            log.debug('tree_rank: %s', tree_rank)
+            p = rtree.index.Property()
+            p.dimension = tree_rank
 
-                # Populate the brick tree
-                tree_rank = len(self.parameter_metadata[g]['brick_domains'][1])
-                log.debug('tree_rank: %s', tree_rank)
-                if tree_rank == 1:
-                    tree_rank += 1
-                log.debug('tree_rank: %s', tree_rank)
-                p = rtree.index.Property()
-                p.dimension = tree_rank
+            # TODO: Populate brick tree from dataset 'rtree' in parameter.hdf5 file
+            ds = pfile['/rtree']
 
-                # TODO: Populate brick tree from dataset 'rtree' in parameter.hdf5 file
-                tfile = h5py.File('{0}/{1}/{2}/{3}.hdf5'.format(self.root, self.guid, g, g), 'r+')
-                ds = tfile['/rtree']
+            def tree_loader(darr):
+                for i, x in enumerate(darr):
+                    ext, obj = unpack(x)
+                    yield (i, ext, obj)
 
-                def tree_loader(darr):
-                    for i, x in enumerate(darr):
-                        ext, obj = unpack(x)
-                        yield (i, ext, obj)
+            brick_tree = rtree.index.Index(tree_loader(ds[:]), properties=p)
 
-                brick_tree = rtree.index.Index(tree_loader(ds[:]), properties=p)
-
-                self.parameter_metadata[g]['brick_tree'] = brick_tree
+            self.parameter_metadata[g]['brick_tree'] = brick_tree
 
         # Close the master file
         _master_file.close()
@@ -713,7 +770,7 @@ class PersistedStorage(AbstractStorage):
         # TODO: THIS IS NOT CORRECT
         return [1,1].__iter__()
 
-class InMemoryPersistenceLayer():
+class InMemoryPersistenceLayer(object):
 
     def expand_domain(self, *args, **kwargs):
         # No Op - storage expanded by *Value classes
