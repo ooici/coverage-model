@@ -553,15 +553,18 @@ class CRS(AbstractIdentifiable):
     """
 
     """
-    def __init__(self, axes):
+    def __init__(self, axis_types=None):
         AbstractIdentifiable.__init__(self)
-        self.axes=Axes()
-        for l in axes:
-            # Add an axis member for the indicated axis
-            try:
-                self.axes[l] = None
-            except KeyError as ke:
-                raise SystemError('Unknown AxisType \'{0}\': {1}'.format(l,ke.message))
+        self.axes={}
+        if axis_types is not None:
+            for l in axis_types:
+                self.add_axis(l)
+
+    def add_axis(self, axis_type, axis_name=None):
+        if not AxisTypeEnum.has_member(axis_type):
+            raise KeyError('Invalid \'axis_type\', must be a member of AxisTypeEnum')
+
+        self.axes[axis_type] = axis_name
 
     @classmethod
     def standard_temporal(cls):
@@ -579,35 +582,6 @@ class CRS(AbstractIdentifiable):
     def x_y_z(cls):
         return CRS([AxisTypeEnum.GEO_X, AxisTypeEnum.GEO_Y, AxisTypeEnum.GEO_Z])
 
-#    def _dump(self):
-#        return self._todict()
-##        ret = dict((k,v) for k,v in self.__dict__.iteritems())
-##        ret['cm_type'] = self.__class__.__name__
-##        return ret
-
-#    @classmethod
-#    def _load(cls, cdict):
-#        return cls._fromdict(cdict)
-##        if isinstance(cdict, dict) and 'cm_type' in cdict and cdict['cm_type']:
-##            import inspect
-##            mod = inspect.getmodule(cls)
-##            ptcls=getattr(mod, cdict['cm_type'])
-##
-##            args = inspect.getargspec(ptcls.__init__).args
-##            del args[0] # get rid of 'self'
-##            kwa={}
-##            for a in args:
-##                kwa[a] = cdict[a] if a in cdict else None
-##
-##            ret = ptcls(**kwa)
-##            for k,v in cdict.iteritems():
-##                if not k in kwa.keys() and not k == 'cm_type':
-##                    setattr(ret,k,v)
-##
-##            return ret
-##        else:
-##            raise TypeError('cdict is not properly formed, must be of type dict and contain a \'cm_type\' key: {0}'.format(cdict))
-
     def __str__(self, indent=None):
         indent = indent or ' '
         lst = []
@@ -615,37 +589,6 @@ class CRS(AbstractIdentifiable):
         lst.append('{0}Axes: {1}'.format(indent, self.axes))
 
         return '\n'.join(lst)
-
-class Axes(dict):
-    """
-    Ensures that the indicated axis exists and that the string representation is used for the key
-    """
-    # CBM TODO: Think about if this complexity is really necessary - can it just print Enum names on __str__??
-    def __getitem__(self, item):
-        if item in AxisTypeEnum._str_map:
-            item = AxisTypeEnum._str_map[item]
-        elif item in AxisTypeEnum._value_map:
-            pass
-        else:
-            raise KeyError('Invalid axis key, must be a member of AxisTypeEnum')
-
-        return dict.__getitem__(self, item)
-
-    def __setitem__(self, key, value):
-        if key in AxisTypeEnum._str_map:
-            key = AxisTypeEnum._str_map[key]
-        elif key in AxisTypeEnum._value_map:
-            pass
-        else:
-            raise KeyError('Invalid axis key, must be a member of AxisTypeEnum')
-
-        dict.__setitem__(self, key, value)
-
-    def __contains__(self, item):
-        if item in AxisTypeEnum._str_map:
-            item = AxisTypeEnum._str_map[item]
-
-        return dict.__contains__(self, item)
 
 #=========================
 # Domain Objects
@@ -717,7 +660,7 @@ class AbstractDomain(AbstractIdentifiable):
         lst.append('{0}ID: {1}'.format(indent, self._id))
         lst.append('{0}Shape:\n{1}'.format(indent, self.shape.__str__(indent*2)))
         lst.append('{0}CRS:\n{1}'.format(indent, self.crs.__str__(indent*2)))
-        lst.append('{0}Mutability: {1}'.format(indent, MutabilityEnum._str_map[self.mutability]))
+        lst.append('{0}Mutability: {1}'.format(indent, self.mutability))
 
         return '\n'.join(lst)
 

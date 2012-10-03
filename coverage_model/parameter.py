@@ -171,7 +171,7 @@ class ParameterContext(AbstractIdentifiable):
         lst.append('{0}Derived from name: {1}'.format(indent, self._derived_from_name))
         lst.append('{0}Name: {1}'.format(indent, self.name))
         if self.is_coordinate:
-            lst.append('{0}Is Coordinate: {1}'.format(indent, AxisTypeEnum._str_map[self.reference_frame]))
+            lst.append('{0}Is Coordinate: {1}'.format(indent, self.reference_frame))
         lst.append('{0}Type: {1}'.format(indent, self.param_type))
         lst.append('{0}Fill Value: {1}'.format(indent, self.fill_value))
         if hasattr(self, 'uom'): #TODO: This should be dealt with by the ParameterType...
