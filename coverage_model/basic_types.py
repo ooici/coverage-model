@@ -274,122 +274,84 @@ def get_valid_DomainOfApplication(v, valid_shape):
 
     return v
 
-class AxisTypeEnum(object):
+class BaseEnum(object):
+
+    @classmethod
+    def is_member(cls, value, want):
+        return hasattr(cls, value) and value == want
+
+    @classmethod
+    def has_member(cls, value):
+        return hasattr(cls, value)
+
+
+class AxisTypeEnum(BaseEnum):
     """
     Enumeration of Axis Types used when building CRS objects and assigning the ParameterContext.reference_frame
 
     Temporarily taken from: http://www.unidata.ucar.edu/software/netcdf-java/v4.2/javadoc/ucar/nc2/constants/AxisType.html
     """
     # Ensemble represents the ensemble coordinate
-    ENSEMBLE = 0
+    ENSEMBLE = 'ENSEMBLE'
 
     # GeoX represents a x coordinate
-    GEO_X = 1
+    GEO_X = 'GEO_X'
 
     # GeoY represents a y coordinate
-    GEO_Y = 2
+    GEO_Y = 'GEO_Y'
 
     # GeoZ represents a z coordinate
-    GEO_Z = 3
+    GEO_Z = 'GEO_Z'
 
     # Height represents a vertical height coordinate
-    HEIGHT = 4
+    HEIGHT = 'HEIGHT'
 
     # Lat represents a latitude coordinate
-    LAT = 5
+    LAT = 'LAT'
 
     # Lon represents a longitude coordinate
-    LON = 6
+    LON = 'LON'
 
     # Pressure represents a vertical pressure coordinate
-    PRESSURE = 7
+    PRESSURE = 'PRESSURE'
 
     # RadialAzimuth represents a radial azimuth coordinate
-    RADIAL_AZIMUTH = 8
+    RADIAL_AZIMUTH = 'RADIAL_AZIMUTH'
 
     # RadialDistance represents a radial distance coordinate
-    RADIAL_DISTANCE = 9
+    RADIAL_DISTANCE = 'RADIAL_DISTANCE'
 
     # RadialElevation represents a radial elevation coordinate
-    RADIAL_ELEVATION = 10
+    RADIAL_ELEVATION = 'RADIAL_ELEVATION'
 
     # RunTime represents the runTime coordinate
-    RUNTIME = 11
+    RUNTIME = 'RUNTIME'
 
     # Time represents the time coordinate
-    TIME = 12
+    TIME = 'TIME'
 
-    _value_map = {'ENSAMBLE':0, 'GEO_X':1 , 'GEO_Y':2, 'GEO_Z':3, 'HEIGHT':4, 'LAT':5, 'LON':6, 'PRESSURE':7, 'RADIAL_AZIMUTH':8, 'RADIAL_DISTANCE':9, 'RADIAL_ELEVATION':10, 'RUNTIME':11, 'TIME':12, }
-    _str_map = {0:'ENSAMBLE', 1:'GEO_X' , 2:'GEO_Y', 3:'GEO_Z', 4:'HEIGHT', 5:'LAT', 6:'LON', 7:'PRESSURE', 8:'RADIAL_AZIMUTH', 9:'RADIAL_DISTANCE', 10:'RADIAL_ELEVATION', 11:'RUNTIME', 12:'TIME', }
-
-    @classmethod
-    def get_member(cls, value):
-        if isinstance(value, int):
-            return AxisTypeEnum.__getattribute__(cls, AxisTypeEnum._str_map[value])
-        elif isinstance(value, (str,unicode)):
-            return AxisTypeEnum.__getattribute__(cls, value.upper())
-        else:
-            raise TypeError('AxisTypeEnum has no member: {0}'.format(value))
-
-    @classmethod
-    def is_member(cls, value, want):
-        v=AxisTypeEnum.get_member(value)
-        return v == want
-
-class MutabilityEnum(object):
+class MutabilityEnum(BaseEnum):
     """
     Enumeration of mutability types used in creation of concrete AbstractDomain objects
     """
     # NTK: mutable indicates ...
 
     ## Indicates the domain cannot be changed
-    IMMUTABLE = 1
+    IMMUTABLE = 'IMMUTABLE'
     ## Indicates the domain can be expanded in any of it's dimensions
-    EXTENSIBLE = 2
+    EXTENSIBLE = 'EXTENSIBLE'
     ## NTK: Indicates ...
-    MUTABLE = 3
-    _value_map = {'IMMUTABLE': 1, 'EXTENSIBLE': 2, 'MUTABLE': 3,}
-    _str_map = {1: 'IMMUTABLE', 2: 'EXTENSIBLE', 3: 'MUTABLE'}
+    MUTABLE = 'MUTABLE'
 
-    @classmethod
-    def get_member(cls, value):
-        if isinstance(value, int):
-            return MutabilityEnum.__getattribute__(cls, MutabilityEnum._str_map[value])
-        elif isinstance(value, (str,unicode)):
-            return MutabilityEnum.__getattribute__(cls, value.upper())
-        else:
-            raise TypeError('MutabilityEnum has no member: {0}'.format(value))
-
-    @classmethod
-    def is_member(cls, value, want):
-        v=MutabilityEnum.get_member(value)
-        return v == want
-
-class VariabilityEnum(object):
+class VariabilityEnum(BaseEnum):
     """
     Enumeration of Variability used when building ParameterContext objects
     """
     ## Indicates that the associated object is variable temporally, but not spatially
-    TEMPORAL = 1
+    TEMPORAL = 'TEMPORAL'
     ## Indicates that the associated object is variable spatially, but not temporally
-    SPATIAL = 2
+    SPATIAL = 'SPATIAL'
     ## Indicates that the associated object is variable both temporally and spatially
-    BOTH = 3
+    BOTH = 'BOTH'
     ## Indicates that the associated object has NO variability; is constant in both space and time
-    NONE = 99
-    _value_map = {'TEMPORAL': 1, 'SPATIAL': 2, 'MUTABLE': 3, 'NONE': 99}
-    _str_map = {1: 'TEMPORAL', 2: 'SPATIAL', 3: 'BOTH', 99: 'NONE'}
-
-    @classmethod
-    def get_member(cls, value):
-        if isinstance(value, int):
-            return VariabilityEnum.__getattribute__(cls, VariabilityEnum._str_map[value])
-        elif isinstance(value, (str,unicode)):
-            return VariabilityEnum.__getattribute__(cls, value.upper())
-        else:
-            raise TypeError('VariabilityEnum has no member: {0}'.format(value))
-
-    @classmethod
-    def is_member(cls, value, want):
-        v=VariabilityEnum.get_member(value)
-        return v == want
+    NONE = 'NONE'
