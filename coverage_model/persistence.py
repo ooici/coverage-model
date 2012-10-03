@@ -29,6 +29,51 @@ def pack(payload):
 def unpack(msg):
     return msgpack.unpackb(msg.replace('\x01\x01','\x00').replace('\x01\x02','\x01'))
 
+class ParameterMetadata():
+    def __init__(self, root, guid, parameter_name, meta_title, meta_path, meta_object=None, **kwargs):
+        self.root = root
+        self.guid = guid
+        self.parameter_name = parameter_name
+        self.meta_title = meta_title
+        self.meta_object = meta_object
+        self.meta_path = meta_path
+
+        self.file_path = '{0}/{1}/{2}/{2}.hdf5'.format(self.root,self.guid,self.parameter_name)
+
+        if self.meta_object is not None:
+            if isinstance(meta_object, (list, dict, tuple)):
+                self.meta_object = pack(self.meta_object)
+            elif isinstance(meta_object, ParameterContext):
+                self.meta_object = str(self.meta_object.dump())
+            elif meta_path == 'rtree':
+            #            Insert into Rtree
+            #            log.debug('Inserting into Rtree %s:%s:%s', brick_count, rtree_extents, brick_guid)
+            #            self.parameter_metadata[parameter_name]['brick_tree'].insert(brick_count, rtree_extents, obj=brick_guid)
+            #            _brick_tree_dataset = _parameter_file.require_dataset('rtree', shape=(brick_count,), dtype=h5py.new_vlen(str), maxshape=(None,))
+            #            _brick_tree_dataset.resize((brick_count+1,))
+            #            rtree_payload = pack((rtree_extents, brick_guid))
+            #            log.debug('Inserting into brick tree dataset: [%s]: %s', brick_count, unpack(rtree_payload))
+            #            _brick_tree_dataset[brick_count] = rtree_payload
+            #            log.debug('Rtree inserted successfully.')
+                pass
+
+    def __setitem__(self):
+        _parameter_file = h5py.File(self.file_path, 'a')
+        _parameter_file[self.meta_path].attrs[self.meta_title] = self.meta_object
+        _parameter_file.close()
+
+    def __getitem__(self):
+        _parameter_file = h5py.File(self.file_path, 'r+')
+        meta = _parameter_file[self.meta_path].attrs[self.meta_title]
+        _parameter_file.close()
+
+        if isinstance(meta, bytes):
+            return unpack(meta)
+        elif isinstance(meta, str):
+            return ast.literal_eval(meta)
+        else:
+            return meta
+
 class PersistenceLayer():
     def __init__(self, root, guid, name=None, tdom=None, sdom=None, **kwargs):
         """
@@ -48,6 +93,9 @@ class PersistenceLayer():
         self.tdom = tdom
         self.sdom = sdom
 
+        self.global_bricking_scheme = {}
+        self.temporal_param_name = ''
+
         self.parameter_metadata = {} # {parameter_name: [brick_list, parameter_domains, rtree]}
         self.parameter_dictionary = ParameterDictionary()
 
@@ -62,18 +110,17 @@ class PersistenceLayer():
 
         if name is not None and tdom is not None and sdom is not None:
             # Creating new coverage model
-            # Check if the master file already exists, if not, create it
+            # Verify the master file does not exist
             if not os.path.exists(self.master_file_path):
-#                with open(self.master_file_path, 'w'):
-#                    pass
-
-                # Add the master file-level metadata
+                # Create the master file and add the master file-level metadata
                 master_file = h5py.File(self.master_file_path, 'a')
                 master_file.attrs['root'] = self.root
                 master_file.attrs['guid'] = self.guid
                 master_file.attrs['name'] = self.name
                 master_file.attrs['tdom'] = str(self.tdom.dump())
                 master_file.attrs['sdom'] = str(self.sdom.dump())
+                master_file.attrs['global_bricking_scheme'] = str(self.global_bricking_scheme)
+                master_file.attrs['temporal_param_name'] = self.temporal_param_name
             else:
                 raise ValueError('A master file already exists for this coverage.')
         else:
@@ -92,6 +139,8 @@ class PersistenceLayer():
         self.name = _master_file.attrs['name']
         self.tdom = AbstractDomain.load(ast.literal_eval(_master_file.attrs['tdom']))
         self.sdom = AbstractDomain.load(ast.literal_eval(_master_file.attrs['sdom']))
+        self.global_bricking_scheme = ast.literal_eval(_master_file.attrs['global_bricking_scheme'])
+        self.temporal_param_name = _master_file.attrs['temporal_param_name']
 
         # Get all the groups
         master_groups = []
@@ -119,20 +168,20 @@ class PersistenceLayer():
                     if an == 'brick_list':
                         log.debug('Unpacking brick list metadata into parameter_metadata.')
                         val = unpack(at)
-                        self.parameter_metadata[g][0] = val
+                        self.parameter_metadata[g]['brick_list'] = val
                         log.debug('%s: %s', an, val)
                     if an == 'brick_domains':
                         log.debug('Unpacking brick domain metadata into parameter_metadata.')
                         val = unpack(at)
-                        self.parameter_metadata[g][1] = val
+                        self.parameter_metadata[g]['brick_domains'] = val
                         log.debug('%s: %s', an, val)
                     if an == 'parameter_context':
                         log.debug('Unpacking parameter context into parameter metadata.')
-                        self.parameter_metadata[g][3] = ParameterContext.load(ast.literal_eval(at))
+                        self.parameter_metadata[g]['parameter_context'] = ParameterContext.load(ast.literal_eval(at))
                         self.parameter_dictionary.add_context(self.parameter_metadata[g][3])
 
                 # Populate the brick tree
-                tree_rank = len(self.parameter_metadata[g][1][1])
+                tree_rank = len(self.parameter_metadata[g]['brick_domains'][1])
                 log.debug('tree_rank: %s', tree_rank)
                 if tree_rank == 1:
                     tree_rank += 1
@@ -151,7 +200,7 @@ class PersistenceLayer():
 
                 brick_tree = rtree.index.Index(tree_loader(ds[:]), properties=p)
 
-                self.parameter_metadata[g][2] = brick_tree
+                self.parameter_metadata[g]['brick_tree'] = brick_tree
 
         # Close the master file
         _master_file.close()
@@ -175,7 +224,9 @@ class PersistenceLayer():
     def init_parameter(self, parameter_context, bricking_scheme, is_temporal_param=False):
         parameter_name = parameter_context.name
         if is_temporal_param:
-            self._temporal_param_name = parameter_name
+            self.temporal_param_name = parameter_name
+
+        self.global_bricking_scheme = bricking_scheme
 
         self.parameter_metadata[parameter_name] = {}
         log.debug('Initialize %s', parameter_name)
@@ -202,14 +253,14 @@ class PersistenceLayer():
 
         brick_tree = rtree.index.Index(properties=p)
 
-        self.parameter_metadata[parameter_name][0] = {} # brick_list {brick_guid: [brick_extents, origin, tuple(bD), brick_active_size]
-        self.parameter_metadata[parameter_name][1] = [tD, bD, cD, bricking_scheme] # brick_domain_dict [tD, bD, cD, bricking_scheme]
-        self.parameter_metadata[parameter_name][2] = brick_tree # brick_tree
-        self.parameter_metadata[parameter_name][3] = parameter_context
+        self.parameter_metadata[parameter_name]['brick_list'] = {} # brick_list {brick_guid: [brick_extents, origin, tuple(bD), brick_active_size]
+        self.parameter_metadata[parameter_name]['brick_domains'] = [tD, bD, cD, bricking_scheme] # brick_domain_dict [tD, bD, cD, bricking_scheme]
+        self.parameter_metadata[parameter_name]['brick_tree'] = brick_tree # brick_tree
+        self.parameter_metadata[parameter_name]['parameter_context'] = parameter_context
         v = PersistedStorage(brick_path=brick_path,
-            brick_tree=self.parameter_metadata[parameter_name][2],
-            brick_list=self.parameter_metadata[parameter_name][0],
-            brick_domains=self.parameter_metadata[parameter_name][1],
+            brick_tree=self.parameter_metadata[parameter_name]['brick_tree'],
+            brick_list=self.parameter_metadata[parameter_name]['brick_list'],
+            brick_domains=self.parameter_metadata[parameter_name]['brick_domains'],
             dtype=parameter_context.param_type.value_encoding,
             fill_value=parameter_context.param_type.fill_value)
         self.value_list[parameter_name] = v
@@ -260,7 +311,7 @@ class PersistenceLayer():
         brick_guid = ''
         log.debug('Check bricks for parameter \'%s\'',parameter_name)
         if parameter_name in self.parameter_metadata:
-            for x,v in self.parameter_metadata[parameter_name][0].iteritems():
+            for x,v in self.parameter_metadata[parameter_name]['brick_list'].iteritems():
                 if brick_extents == v[0]:
                     log.debug('Brick found with matching extents: guid=%s', x)
                     do_write = False
@@ -279,7 +330,7 @@ class PersistenceLayer():
         do_write, bguid = self._brick_exists(parameter_name, brick_extents)
         if not do_write:
             log.debug('Brick already exists!  Updating brick metadata...')
-            self.parameter_metadata[parameter_name][0][bguid] = [brick_extents, origin, tuple(bD), brick_active_size]
+            self.parameter_metadata[parameter_name]['brick_list'][bguid] = [brick_extents, origin, tuple(bD), brick_active_size]
             return
 
         log.debug('Writing virtual brick for parameter %s', parameter_name)
@@ -296,29 +347,24 @@ class PersistenceLayer():
         # Update the brick listing
         log.debug('Updating brick list[%s] with (%s, %s)', parameter_name, brick_guid, brick_extents)
         brick_count = self.parameter_brick_count(parameter_name)
-        self.parameter_metadata[parameter_name][0][brick_guid] = [brick_extents, origin, tuple(bD), brick_active_size]
+        self.parameter_metadata[parameter_name]['brick_list'][brick_guid] = [brick_extents, origin, tuple(bD), brick_active_size]
         log.debug('Brick count for %s is %s', parameter_name, brick_count)
+
+        # Close the master file
+        _master_file.close()
 
         # Parameter Metadata
         _parameter_file_name = '{0}.hdf5'.format(parameter_name)
         _parameter_file_path = '{0}/{1}'.format(root_path,_parameter_file_name)
-        _master_file['{0}'.format(parameter_name)].attrs['parameter_metadata_file'] = _parameter_file_path
-        # Close the master file
-        _master_file.close()
-
-        # Check if the parameter file already exists, if not, create it
-#        if not os.path.exists(_parameter_file_path):
-#            param_file = h5py.File(_parameter_file_path, 'w')
-#            param_file.close()
         _parameter_file = h5py.File(_parameter_file_path, 'a')
-        _parameter_file.attrs['brick_list'] = pack(self.parameter_metadata[parameter_name][0])
-        _parameter_file.attrs['brick_domains'] = pack(self.parameter_metadata[parameter_name][1])
-        _parameter_file.attrs['parameter_context'] = str(self.parameter_metadata[parameter_name][3].dump())
+        _parameter_file.attrs['brick_list'] = pack(self.parameter_metadata[parameter_name]['brick_list'])
+        _parameter_file.attrs['brick_domains'] = pack(self.parameter_metadata[parameter_name]['brick_domains'])
+        _parameter_file.attrs['parameter_context'] = str(self.parameter_metadata[parameter_name]['parameter_context'].dump())
         # Insert into Rtree
         log.debug('Inserting into Rtree %s:%s:%s', brick_count, rtree_extents, brick_guid)
-        self.parameter_metadata[parameter_name][2].insert(brick_count, rtree_extents, obj=brick_guid)
+        self.parameter_metadata[parameter_name]['brick_tree'].insert(brick_count, rtree_extents, obj=brick_guid)
         _brick_tree_dataset = _parameter_file.require_dataset('rtree', shape=(brick_count,), dtype=h5py.new_vlen(str), maxshape=(None,))
-        _brick_tree_dataset.resize((deepcopy(brick_count)+1,))
+        _brick_tree_dataset.resize((brick_count+1,))
         rtree_payload = pack((rtree_extents, brick_guid))
         log.debug('Inserting into brick tree dataset: [%s]: %s', brick_count, unpack(rtree_payload))
         _brick_tree_dataset[brick_count] = rtree_payload
@@ -326,34 +372,33 @@ class PersistenceLayer():
         _parameter_file.close()
 
     # Expand the domain
-    # TODO: Verify brick and chunk sizes are still valid????
     def expand_domain(self, parameter_context):
         parameter_name = parameter_context.name
         log.debug('Expand %s', parameter_name)
 
-        if self.parameter_metadata[parameter_name][1][0] is not None:
+        if self.parameter_metadata[parameter_name]['brick_domains'][0] is not None:
             log.debug('Expanding domain (n-dimension)')
 
             # Check if the number of dimensions of the total domain has changed
             # TODO: Will this ever happen???  If so, how to handle?
-            if len(parameter_context.dom.total_extents) != len(self.parameter_metadata[parameter_name][1][0]):
+            if len(parameter_context.dom.total_extents) != len(self.parameter_metadata[parameter_name]['brick_domains'][0]):
                 raise SystemError('Number of dimensions for parameter cannot change, only expand in size! No action performed.')
             else:
-                tD = self.parameter_metadata[parameter_name][1][0]
-                bD = self.parameter_metadata[parameter_name][1][1]
-                cD = self.parameter_metadata[parameter_name][1][2]
+                tD = self.parameter_metadata[parameter_name]['brick_domains'][0]
+                bD = self.parameter_metadata[parameter_name]['brick_domains'][1]
+                cD = self.parameter_metadata[parameter_name]['brick_domains'][2]
                 new_domain = parameter_context.dom.total_extents
 
                 delta_domain = [(x - y) for x, y in zip(new_domain, tD)]
                 log.debug('delta domain: %s', delta_domain)
 
                 tD = [(x + y) for x, y in zip(tD, delta_domain)]
-                self.parameter_metadata[parameter_name][1][0] = tD
+                self.parameter_metadata[parameter_name]['brick_domains'][0] = tD
         else:
             tD = parameter_context.dom.total_extents
-            bricking_scheme = self.parameter_metadata[parameter_name][1][3]
+            bricking_scheme = self.parameter_metadata[parameter_name]['brick_domains'][3]
             bD,cD = self.calculate_brick_size(tD, bricking_scheme)
-            self.parameter_metadata[parameter_name][1] = [tD, bD, cD, bricking_scheme]
+            self.parameter_metadata[parameter_name]['brick_domains'] = [tD, bD, cD, bricking_scheme]
 
         try:
             # Gather block list
@@ -379,7 +424,7 @@ class PersistenceLayer():
     def parameter_brick_count(self, parameter_name):
         ret = 0
         if parameter_name in self.parameter_metadata:
-            ret = len(self.parameter_metadata[parameter_name][0])
+            ret = len(self.parameter_metadata[parameter_name]['brick_list'])
         else:
             log.debug('No bricks found for parameter: %s', parameter_name)
 
@@ -514,7 +559,7 @@ class PersistedStorage(AbstractStorage):
             brick_file = h5py.File(brick_file_path, 'a')
 
             # Check for object type
-            data_type = deepcopy(self.dtype)
+            data_type = self.dtype
             if data_type == '|O8':
                 data_type = h5py.new_vlen(str)
 
