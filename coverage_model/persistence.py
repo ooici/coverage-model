@@ -40,12 +40,13 @@ class ParameterMetadata():
 
         self.file_path = '{0}/{1}/{2}/{2}.hdf5'.format(self.root,self.guid,self.parameter_name)
 
+    def __setitem__(self):
         if self.meta_object is not None:
-            if isinstance(meta_object, (list, dict, tuple)):
+            if isinstance(self.meta_object, (list, dict, tuple)):
                 self.meta_object = pack(self.meta_object)
-            elif isinstance(meta_object, ParameterContext):
+            elif isinstance(self.meta_object, ParameterContext):
                 self.meta_object = str(self.meta_object.dump())
-            elif meta_path == 'rtree':
+            elif self.meta_path == 'rtree':
             #            Insert into Rtree
             #            log.debug('Inserting into Rtree %s:%s:%s', brick_count, rtree_extents, brick_guid)
             #            self.parameter_metadata[parameter_name]['brick_tree'].insert(brick_count, rtree_extents, obj=brick_guid)
@@ -56,8 +57,6 @@ class ParameterMetadata():
             #            _brick_tree_dataset[brick_count] = rtree_payload
             #            log.debug('Rtree inserted successfully.')
                 pass
-
-    def __setitem__(self):
         _parameter_file = h5py.File(self.file_path, 'a')
         _parameter_file[self.meta_path].attrs[self.meta_title] = self.meta_object
         _parameter_file.close()
