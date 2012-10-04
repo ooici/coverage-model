@@ -82,6 +82,10 @@ class AbstractCoverage(AbstractIdentifiable):
         return obj
 
     @classmethod
+    def new_load(cls, root_path, guid):
+        return SimplexCoverage(None, None, _load=(root_path, guid,))
+
+    @classmethod
     def copy(cls, cov_obj, *args):
         raise NotImplementedError('Coverages cannot yet be copied. You can load multiple \'independent\' copies of the same coverage, but be sure to save them to different names.')
 
@@ -127,7 +131,7 @@ class SimplexCoverage(AbstractCoverage):
     of the AbstractParameterValue class.
 
     """
-    def __init__(self, name, parameter_dictionary, temporal_domain=None, spatial_domain=None, in_memory_storage=False, bricking_scheme=None):
+    def __init__(self, name, parameter_dictionary, temporal_domain=None, spatial_domain=None, in_memory_storage=False, bricking_scheme=None, _load=None):
         """
         Constructor for SimplexCoverage
 
@@ -137,25 +141,48 @@ class SimplexCoverage(AbstractCoverage):
         @param temporal_domain a concrete instance of AbstractDomain for the temporal domain component
         """
         AbstractCoverage.__init__(self)
+        if _load is None:
+            self.name = name
+            self.spatial_domain = deepcopy(spatial_domain)
+            self.temporal_domain = deepcopy(temporal_domain) or GridDomain(GridShape('temporal',[0]), CRS.standard_temporal(), MutabilityEnum.EXTENSIBLE)
+            if not isinstance(parameter_dictionary, ParameterDictionary):
+                raise TypeError('\'parameter_dictionary\' must be of type ParameterDictionary')
+            self._range_dictionary = ParameterDictionary()
+            self._range_value = RangeValues()
+            self._temporal_param_name = None
+            self._in_memory_storage = in_memory_storage
+            self._bricking_scheme = bricking_scheme or {'brick_size':10,'chunk_size':5}
+            if self._in_memory_storage:
+                self._persistence_layer = InMemoryPersistenceLayer()
+            else:
+                self._persistence_layer = PersistenceLayer('test_data', create_guid(), name=name, tdom=temporal_domain, sdom=spatial_domain, bricking_scheme=self._bricking_scheme)
 
-        self.name = name
-        self.spatial_domain = deepcopy(spatial_domain)
-        self.temporal_domain = deepcopy(temporal_domain) or GridDomain(GridShape('temporal',[0]), CRS.standard_temporal(), MutabilityEnum.EXTENSIBLE)
-        if not isinstance(parameter_dictionary, ParameterDictionary):
-            raise TypeError('\'parameter_dictionary\' must be of type ParameterDictionary')
-        self._range_dictionary = ParameterDictionary()
-        self._range_value = RangeValues()
-        self._temporal_param_name = None
-        self._in_memory_storage = in_memory_storage
-        if self._in_memory_storage:
-            self._persistence_layer = InMemoryPersistenceLayer()
+            for o, pc in parameter_dictionary.itervalues():
+                self._append_parameter(pc)
         else:
-            self._persistence_layer = PersistenceLayer('test_data', create_guid(), name=name, tdom=temporal_domain, sdom=spatial_domain)
+            root_dir, guid = _load
+            self._persistence_layer = PersistenceLayer(root_dir, guid)
 
-        self._bricking_scheme = bricking_scheme or {'brick_size':10,'chunk_size':5}
+            self.name = self._persistence_layer.name
+            self.spatial_domain = self._persistence_layer.sdom
+            self.temporal_domain = self._persistence_layer.tdom
 
-        for pc in parameter_dictionary.itervalues():
-            self._append_parameter(pc[1])
+            self._range_dictionary = ParameterDictionary()
+            self._range_value = RangeValues()
+
+            self._bricking_scheme = self._persistence_layer.global_bricking_scheme
+            self._temporal_param_name = self._persistence_layer.temporal_param_name
+
+            self._in_memory_storage = False
+            self._bricking_scheme = None
+
+            from coverage_model.persistence import PersistedStorage
+            for parameter_name in self._persistence_layer.parameter_metadata.keys():
+                md = self._persistence_layer.parameter_metadata[parameter_name]
+                pc = md.parameter_context
+                self._range_dictionary.add_context(pc)
+                s = PersistedStorage(md, dtype=pc.param_type.value_encoding, fill_value=pc.param_type.fill_value)
+                self._range_value[parameter_name] = get_value_class(param_type=pc.param_type, domain_set=pc.dom, storage=s)
 
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
@@ -164,6 +191,13 @@ class SimplexCoverage(AbstractCoverage):
     @property
     def parameter_dictionary(self):
         return deepcopy(self._range_dictionary)
+
+    @property
+    def persistence_guid(self):
+        if isinstance(self._persistence_layer, InMemoryPersistenceLayer):
+            return None
+        else:
+            return self._persistence_layer.guid
 
     def append_parameter(self, parameter_context):
         """
@@ -204,15 +238,15 @@ class SimplexCoverage(AbstractCoverage):
             log.warn('Provided \'parameter_context\' indicates Spatial variability, but coverage has no Spatial Domain')
 
         if pv == VariabilityEnum.TEMPORAL: # Only varies in the Temporal Domain
-            pcontext.dom = DomainSet(self.temporal_domain, None)
+            pcontext.dom = DomainSet(self.temporal_domain.shape.extents, None)
         elif pv == VariabilityEnum.SPATIAL: # Only varies in the Spatial Domain
-            pcontext.dom = DomainSet(None, self.spatial_domain)
+            pcontext.dom = DomainSet(None, self.spatial_domain.shape.extents)
         elif pv == VariabilityEnum.BOTH: # Varies in both domains
             # If the Spatial Domain is only a single point on a 0d Topology, the parameter's shape is that of the Temporal Domain only
             if not no_sdom and (len(self.spatial_domain.shape.extents) == 1 and self.spatial_domain.shape.extents[0] == 0):
-                pcontext.dom = DomainSet(self.temporal_domain, None)
+                pcontext.dom = DomainSet(self.temporal_domain.shape.extents, None)
             else:
-                pcontext.dom = DomainSet(self.temporal_domain, self.spatial_domain)
+                pcontext.dom = DomainSet(self.temporal_domain.shape.extents, self.spatial_domain.shape.extents)
         elif pv == VariabilityEnum.NONE: # No variance; constant
             # CBM TODO: Not sure we can have this constraint - precludes situations like a TextType with Variablity==None...
 #            # This is a constant - if the ParameterContext is not a ConstantType, make it one with the default 'x' expr
@@ -222,18 +256,20 @@ class SimplexCoverage(AbstractCoverage):
             # The domain is the total domain - same value everywhere!!
             # If the Spatial Domain is only a single point on a 0d Topology, the parameter's shape is that of the Temporal Domain only
             if not no_sdom and (len(self.spatial_domain.shape.extents) == 1 and self.spatial_domain.shape.extents[0] == 0):
-                pcontext.dom = DomainSet(self.temporal_domain, None)
+                pcontext.dom = DomainSet(self.temporal_domain.shape.extents, None)
             else:
-                pcontext.dom = DomainSet(self.temporal_domain, self.spatial_domain)
+                pcontext.dom = DomainSet(self.temporal_domain.shape.extents, self.spatial_domain.shape.extents)
         else:
             # Should never get here...but...
             raise SystemError('Must define the variability of the ParameterContext: a member of VariabilityEnum')
 
         # Assign the pname to the CRS (if applicable) and select the appropriate domain (default is the spatial_domain)
         dom = self.spatial_domain
+        is_tparam = False
         if not pcontext.reference_frame is None and AxisTypeEnum.is_member(pcontext.reference_frame, AxisTypeEnum.TIME):
             if self._temporal_param_name is None:
                 self._temporal_param_name = pname
+                is_tparam = True
             else:
                 raise StandardError("temporal_parameter already defined.")
             dom = self.temporal_domain
@@ -242,7 +278,7 @@ class SimplexCoverage(AbstractCoverage):
             dom.crs.axes[pcontext.reference_frame] = pcontext.name
 
         self._range_dictionary.add_context(pcontext)
-        s = self._persistence_layer.init_parameter(pcontext, self._bricking_scheme)
+        s = self._persistence_layer.init_parameter(pcontext, self._bricking_scheme, is_temporal_param=is_tparam)
         self._range_value[pname] = get_value_class(param_type=pcontext.param_type, domain_set=pcontext.dom, storage=s)
 
     def get_parameter(self, param_name):
@@ -296,13 +332,18 @@ class SimplexCoverage(AbstractCoverage):
         if origin is None or not isinstance(origin, int):
             origin = shp.extents[0]
 
-        # Expand the shape of the temporal_domain
-        shp.extents[0] += count
+        # Expand the shape of the temporal_domain - following works if extents is a list or tuple
+        shp.extents = (shp.extents[0]+count,)+tuple(shp.extents[1:])
 
         # Expand the temporal dimension of each of the parameters - the parameter determines how to apply the change
         for n in self._range_dictionary:
-            self._persistence_layer.expand_domain(self._range_dictionary.get_context(n))
-            self._range_value[n].expand_content(self.temporal_domain, origin, count)
+            pc = self._range_dictionary.get_context(n)
+            # Update the dom of the parameter_context
+            if pc.dom.tdom is not None:
+                pc.dom.tdom = self.temporal_domain.shape.extents
+
+            self._persistence_layer.expand_domain(pc, tdom=self.temporal_domain)
+            self._range_value[n].expand_content(VariabilityEnum.TEMPORAL, origin, count)
 
     def set_time_values(self, value, tdoa):
         """
@@ -694,11 +735,6 @@ class DomainSet(AbstractIdentifiable):
     def __init__(self, tdom=None, sdom=None, **kwargs):
         kwc=kwargs.copy()
         AbstractIdentifiable.__init__(self, **kwc)
-        if tdom and not isinstance(tdom, AbstractDomain):
-            raise TypeError('\'tdom\' must inherit from AbstractDomain')
-        if sdom and not isinstance(sdom, AbstractDomain):
-            raise TypeError('\'sdom\' must inherit from AbstractDomain')
-
         self.tdom = tdom
         self.sdom = sdom
 
@@ -706,9 +742,9 @@ class DomainSet(AbstractIdentifiable):
     def total_extents(self):
         ret=[]
         if self.tdom:
-            ret += self.tdom.shape.extents
+            ret += self.tdom
         if self.sdom:
-            ret += self.sdom.shape.extents
+            ret += self.sdom
 
         return tuple(ret)
 

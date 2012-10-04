@@ -7,7 +7,7 @@
 @brief Abstract and concrete value objects for parameters
 """
 from pyon.public import log
-from coverage_model.basic_types import AbstractBase, is_valid_constraint, InMemoryStorage
+from coverage_model.basic_types import AbstractBase, is_valid_constraint, InMemoryStorage, VariabilityEnum
 from coverage_model.numexpr_utils import is_well_formed_where, nest_wheres
 import numpy as np
 import numexpr as ne
@@ -91,9 +91,9 @@ class AbstractParameterValue(AbstractBase):
         return self.parameter_type.value_encoding
 
     def expand_content(self, domain, origin, expansion):
-        if domain == self.domain_set.tdom: # Temporal
+        if domain == VariabilityEnum.TEMPORAL: # Temporal
             self._storage.expand(self.shape[1:], origin, expansion)
-        elif domain == self.domain_set.sdom: # Spatial
+        elif domain == VariabilityEnum.SPATIAL: # Spatial
             raise NotImplementedError('Expansion of the Spatial Domain is not yet supported')
 
     def __len__(self):
