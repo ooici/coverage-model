@@ -265,6 +265,38 @@ def samplecov2(save_coverage=True, in_memory=True):
 
     return scov
 
+def oneparamcov(save_coverage=True, in_memory=True):
+    # Instantiate a ParameterDictionary
+    pdict = ParameterDictionary()
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
+    t_ctxt.reference_frame = AxisTypeEnum.TIME
+    t_ctxt.uom = 'seconds since 01-01-1970'
+    pdict.add_context(t_ctxt)
+
+    # Construct temporal and spatial Coordinate Reference System objects
+    tcrs = CRS([AxisTypeEnum.TIME])
+    scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+    # Construct temporal and spatial Domain objects
+    tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
+
+    # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+    scov = SimplexCoverage('sample coverage_model', pdict, tdom, sdom, in_memory)
+
+    # Insert some timesteps (automatically expands other arrays)
+    scov.insert_timesteps(10)
+
+    # Add data for the parameter
+    scov.set_parameter_values('time', value=np.arange(10))
+
+    if save_coverage:
+        SimplexCoverage.save(scov, 'test_data/sample.cov')
+
+    return scov
+
 def ptypescov(save_coverage=True, in_memory=True):
     # Construct temporal and spatial Coordinate Reference System objects
     tcrs = CRS([AxisTypeEnum.TIME])
