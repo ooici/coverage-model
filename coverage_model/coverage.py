@@ -247,7 +247,7 @@ class SimplexCoverage(AbstractCoverage):
             pcontext.dom = DomainSet(None, self.spatial_domain.shape.extents)
         elif pv == VariabilityEnum.BOTH: # Varies in both domains
             # If the Spatial Domain is only a single point on a 0d Topology, the parameter's shape is that of the Temporal Domain only
-            if not no_sdom and (len(self.spatial_domain.shape.extents) == 1 and self.spatial_domain.shape.extents[0] == 0):
+            if no_sdom or (len(self.spatial_domain.shape.extents) == 1 and self.spatial_domain.shape.extents[0] == 0):
                 pcontext.dom = DomainSet(self.temporal_domain.shape.extents, None)
             else:
                 pcontext.dom = DomainSet(self.temporal_domain.shape.extents, self.spatial_domain.shape.extents)
@@ -259,7 +259,7 @@ class SimplexCoverage(AbstractCoverage):
 
             # The domain is the total domain - same value everywhere!!
             # If the Spatial Domain is only a single point on a 0d Topology, the parameter's shape is that of the Temporal Domain only
-            if not no_sdom and (len(self.spatial_domain.shape.extents) == 1 and self.spatial_domain.shape.extents[0] == 0):
+            if no_sdom or (len(self.spatial_domain.shape.extents) == 1 and self.spatial_domain.shape.extents[0] == 0):
                 pcontext.dom = DomainSet(self.temporal_domain.shape.extents, None)
             else:
                 pcontext.dom = DomainSet(self.temporal_domain.shape.extents, self.spatial_domain.shape.extents)
@@ -399,7 +399,6 @@ class SimplexCoverage(AbstractCoverage):
 
         log.debug('Setting slice: %s', slice_)
 
-        #TODO: Do we need some validation that slice_ is the same rank and/or shape as values?
         self._range_value[param_name][slice_] = value
 
     def get_parameter_values(self, param_name, tdoa=None, sdoa=None, return_value=None):
@@ -412,13 +411,14 @@ class SimplexCoverage(AbstractCoverage):
         @param param_name   The name of the parameter
         @param tdoa The temporal DomainOfApplication
         @param sdoa The spatial DomainOfApplication
-        @param return_value If supplied, filled with response value
+        @param return_value If supplied, filled with response value - currently via OVERWRITE
         @throws KeyError    The coverage does not contain a parameter with name 'param_name'
         """
         if not param_name in self._range_value:
             raise KeyError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
-        return_value = return_value or np.zeros([0])
+        if return_value is not None:
+            log.warn('Provided \'return_value\' will be OVERWRITTEN')
 
         slice_ = []
 
