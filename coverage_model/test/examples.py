@@ -376,7 +376,7 @@ def ptypescov(save_coverage=True, in_memory=True):
 
     return scov
 
-def nospatialcov(save_coverage=True):
+def nospatialcov(save_coverage=True, in_memory=True):
     # Construct temporal and spatial Coordinate Reference System objects
     tcrs = CRS([AxisTypeEnum.TIME])
 
@@ -410,7 +410,7 @@ def nospatialcov(save_coverage=True):
     pdict.add_context(arr2_ctxt)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('sample coverage_model', pdict, tdom)
+    scov = SimplexCoverage('sample coverage_model', pdict, temporal_domain=tdom, in_memory_storage=in_memory)
 
     # Insert some timesteps (automatically expands other arrays)
     scov.insert_timesteps(10)
