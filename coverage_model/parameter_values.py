@@ -208,7 +208,7 @@ class ConstantValue(AbstractComplexParameterValue):
 
     @property
     def content(self):
-        return self._storage[0]
+        return self._storage[0][()] # Returned from storage as a 0-d array
 
     def expand_content(self, domain, origin, expansion):
         # No op storage is always 1 - appropriate domain applied during retrieval of data
@@ -219,7 +219,13 @@ class ConstantValue(AbstractComplexParameterValue):
 
         c = np.ones(self.shape)[slice_] # Make an array of ones of the appropriate shape and slice it as desired
 
-        return ne.evaluate(self.content).astype(self.value_encoding)
+        ret = ne.evaluate(self.content).astype(self.value_encoding)
+        if ret.size==1:
+            if ret.ndim==0:
+                ret=ret[()]
+            else:
+                ret=ret[0]
+        return ret
 
     def __setitem__(self, slice_, value):
         value = str(value) # Ensure we're dealing with a str

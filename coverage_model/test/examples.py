@@ -327,9 +327,9 @@ def ptypescov(save_coverage=True, in_memory=True):
     cnst_flt_ctxt.uom = 'degree_east'
     pdict.add_context(cnst_flt_ctxt)
 
-    func_ctxt = ParameterContext('function', param_type=FunctionType(QuantityType(value_encoding=np.dtype('float32'))))
-    func_ctxt.long_name = 'example of a parameter of type FunctionType'
-    pdict.add_context(func_ctxt)
+#    func_ctxt = ParameterContext('function', param_type=FunctionType(QuantityType(value_encoding=np.dtype('float32'))))
+#    func_ctxt.long_name = 'example of a parameter of type FunctionType'
+#    pdict.add_context(func_ctxt)
 
     quant_ctxt = ParameterContext('quantity', param_type=QuantityType(value_encoding=np.dtype('float32')))
     quant_ctxt.long_name = 'example of a parameter of type QuantityType'
@@ -356,10 +356,10 @@ def ptypescov(save_coverage=True, in_memory=True):
     scov.set_parameter_values('const_float', value=make_range_expr(-71.11)) # Set with a properly formed constant expression
     scov.set_parameter_values('quantity', value=np.random.random_sample(10)*(26-23)+23)
 
-    # Setting three range expressions such that indices 0-2 == 10, 3-7 == 15 and >=8 == 20
-    scov.set_parameter_values('function', value=make_range_expr(10, 0, 3, min_incl=True, max_incl=False, else_val=-999.9))
-    scov.set_parameter_values('function', value=make_range_expr(15, 3, 8, min_incl=True, max_incl=False, else_val=-999.9))
-    scov.set_parameter_values('function', value=make_range_expr(20, 8, min_incl=True, max_incl=False, else_val=-999.9))
+#    # Setting three range expressions such that indices 0-2 == 10, 3-7 == 15 and >=8 == 20
+#    scov.set_parameter_values('function', value=make_range_expr(10, 0, 3, min_incl=True, max_incl=False, else_val=-999.9))
+#    scov.set_parameter_values('function', value=make_range_expr(15, 3, 8, min_incl=True, max_incl=False, else_val=-999.9))
+#    scov.set_parameter_values('function', value=make_range_expr(20, 8, min_incl=True, max_incl=False, else_val=-999.9))
 
     arrval = []
     recval = []

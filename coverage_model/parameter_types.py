@@ -305,10 +305,11 @@ class FunctionType(AbstractComplexParameterType):
 
         self.base_type = base_type or QuantityType()
 
+        self._template_attrs.update(self.base_type._template_attrs)
+
         self._template_attrs['value_encoding'] = '|O8'
         self._template_attrs['fill_value'] = None
 
-        self._template_attrs.update(self.base_type._template_attrs)
         self._gen_template_attrs()
 
     def is_valid_value(self, value):
@@ -338,10 +339,10 @@ class ConstantType(AbstractComplexParameterType):
 
         self.base_type = base_type or QuantityType()
 
+        self._template_attrs.update(self.base_type._template_attrs)
         self._template_attrs['value_encoding'] = '|O8'
         self._template_attrs['fill_value'] = None
 
-        self._template_attrs.update(self.base_type._template_attrs)
         self._gen_template_attrs()
 
     def is_valid_value(self, value):
