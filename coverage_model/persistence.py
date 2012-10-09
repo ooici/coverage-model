@@ -8,8 +8,9 @@
 """
 
 from pyon.public import log
+from pyon.core.interceptor.encode import encode_ion, decode_ion
 from coverage_model.basic_types import create_guid, AbstractStorage, InMemoryStorage, Dictable
-from coverage_model.parameter import ParameterContext, ParameterDictionary
+from coverage_model.parameter_types import FunctionType, ConstantType
 import numpy as np
 import h5py
 import os
@@ -25,10 +26,10 @@ class PersistenceError(Exception):
     pass
 
 def pack(payload):
-    return msgpack.packb(payload).replace('\x01','\x01\x02').replace('\x00','\x01\x01')
+    return msgpack.packb(payload, default=encode_ion).replace('\x01','\x01\x02').replace('\x00','\x01\x01')
 
 def unpack(msg):
-    return msgpack.unpackb(msg.replace('\x01\x01','\x00').replace('\x01\x02','\x01'))
+    return msgpack.unpackb(msg.replace('\x01\x01','\x00').replace('\x01\x02','\x01'), object_hook=decode_ion)
 
 class BaseManager(object):
 
@@ -178,7 +179,7 @@ class ParameterManager(BaseManager):
             raise AttributeError('Cannot update rtree; object does not have a \'brick_tree\' attribute!!')
 
         with h5py.File(self.file_path, 'a') as f:
-            rtree_ds = f.require_dataset('rtree', shape=(count,), dtype=h5py.new_vlen(str), maxshape=(None,))
+            rtree_ds = f.require_dataset('rtree', shape=(count,), dtype=h5py.special_dtype(vlen=str), maxshape=(None,))
             rtree_ds.resize((count+1,))
             rtree_ds[count] = pack((extents, obj))
 
@@ -293,7 +294,12 @@ class PersistenceLayer(object):
         brick_tree = rtree.index.Index(properties=p)
 
         pm.brick_list = {}
-        pm.brick_domains = [tD, bD, cD, bricking_scheme]
+        if isinstance(parameter_context.param_type, (FunctionType, ConstantType)):
+            # These have constant storage, never expand!!
+                pm.brick_domains = [(1,),(1,),(1,),bricking_scheme]
+        else:
+            pm.brick_domains = [tD, bD, cD, bricking_scheme]
+
         pm.tree_rank = tree_rank
         pm.brick_tree = brick_tree
 
@@ -418,13 +424,14 @@ class PersistenceLayer(object):
                 tD = pm.brick_domains[0]
                 bD = pm.brick_domains[1]
                 cD = pm.brick_domains[2]
-                new_domain = parameter_context.dom.total_extents
+                if not isinstance(pm.parameter_context.param_type, (FunctionType, ConstantType)): # These have constant storage, never expand!!
+                    new_domain = parameter_context.dom.total_extents
 
-                delta_domain = [(x - y) for x, y in zip(new_domain, tD)]
-                log.debug('delta domain: %s', delta_domain)
+                    delta_domain = [(x - y) for x, y in zip(new_domain, tD)]
+                    log.debug('delta domain: %s', delta_domain)
 
-                tD = [(x + y) for x, y in zip(tD, delta_domain)]
-                pm.brick_domains[0] = tD
+                    tD = [(x + y) for x, y in zip(tD, delta_domain)]
+                    pm.brick_domains[0] = tD
         else:
             tD = parameter_context.dom.total_extents
             bricking_scheme = pm.brick_domains[3]
@@ -595,6 +602,11 @@ class PersistedStorage(AbstractStorage):
 
                 brick_file.close()
 
+        if ret_arr.size == 1:
+            if ret_arr.ndim==0:
+                ret_arr=ret_arr[()]
+            else:
+                ret_arr=ret_arr[0]
         return ret_arr
 
     def __setitem__(self, slice_, value):
@@ -608,10 +620,6 @@ class PersistedStorage(AbstractStorage):
         log.debug('Slice %s indicates bricks: %s', slice_, bricks)
 
         for idx, brick_guid in bricks:
-            brick_file_path = '{0}/{1}.hdf5'.format(self.brick_path, brick_guid)
-#            if os.path.exists(brick_file):
-            log.debug('Found brick file: %s', brick_file_path)
-
             # Figuring out which part of brick to set values
             try:
                 brick_slice, value_slice = self._calc_slices(slice_, brick_guid, val, val_origin)
@@ -619,31 +627,38 @@ class PersistedStorage(AbstractStorage):
                 log.warn(ve.message + '; moving to next brick')
                 continue
 
+            brick_file_path = os.path.join(self.brick_path, '{0}.hdf5'.format(brick_guid))
             log.debug('Brick slice to fill: %s', brick_slice)
             log.debug('Value slice to extract: %s', value_slice)
-
-            # TODO: Move this to writer function
-
-            brick_file = h5py.File(brick_file_path, 'a')
-
-            # Check for object type
-            data_type = self.dtype
-            if data_type == '|O8':
-                data_type = h5py.new_vlen(str)
 
             # Create the HDF5 dataset that represents one brick
             bD = tuple(self.brick_domains[1])
             cD = self.brick_domains[2]
-            fv = pack(self.fill_value) if self.dtype == '|O8' else self.fill_value
-            brick_cubes = brick_file.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=cD, fillvalue=fv)
-
             v = val if value_slice is None else val[value_slice]
 
             # Check for object type
-            if self.dtype == '|O8':
-                if not hasattr(v, '__iter__'):
-                    v = [v]
-                v = [pack(x) for x in v]
+            data_type = self.dtype
+            fv = self.fill_value
+
+            # Check for object type
+            if data_type == '|O8':
+                data_type = h5py.special_dtype(vlen=str)
+    #                fv = pack(self.fill_value)
+                if np.iterable(v):
+                    v = [pack(x) for x in v]
+                else:
+                    v = pack(v)
+
+            work_key = brick_guid
+            work = (brick_slice, v)
+            work_metrics = (brick_file_path, bD, cD, data_type, fv)
+
+            # TODO: Submit work to dispatcher: NOTE--> The brick_file_path, bD, and cD should all be known
+#            brick_dispatcher.put_work(work_key, work_metrics, work)
+
+            # TODO: This is done by a worker (or serially in the dispatcher)
+            brick_file = h5py.File(brick_file_path, 'a')
+            brick_file.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=cD, fillvalue=fv)
 
             brick_file[brick_guid].__setitem__(*brick_slice, val=v)
 
@@ -651,8 +666,8 @@ class PersistedStorage(AbstractStorage):
 
     def _calc_slices(self, slice_, brick_guid, value, val_origin):
         brick_origin, _, brick_size = self.brick_list[brick_guid][1:]
-        log.trace('Brick %s:  origin=%s, size=%s', brick_guid, brick_origin, brick_size)
-        log.trace('Slice set: %s', slice_)
+        log.debug('Brick %s:  origin=%s, size=%s', brick_guid, brick_origin, brick_size)
+        log.debug('Slice set: %s', slice_)
 
         brick_slice = []
         value_slice = []
@@ -661,7 +676,7 @@ class PersistedStorage(AbstractStorage):
         val_arr = np.asanyarray(value)
         val_shp = val_arr.shape
         val_rank = val_arr.ndim
-        log.trace('Value asanyarray: rank=%s, shape=%s', val_rank, val_shp)
+        log.debug('Value asanyarray: rank=%s, shape=%s', val_rank, val_shp)
 
         if val_origin is None or len(val_origin) == 0:
             val_ori = [0 for x in range(len(slice_))]
@@ -674,7 +689,7 @@ class PersistedStorage(AbstractStorage):
             bn=bo+bs
             vo=val_ori[i]
             vs=val_shp[i] if len(val_shp) > 0 else None
-            log.trace('i=%s, sl=%s, bo=%s, bs=%s, bn=%s, vo=%s, vs=%s',i,sl,bo,bs,bn,vo,vs)
+            log.debug('i=%s, sl=%s, bo=%s, bs=%s, bn=%s, vo=%s, vs=%s',i,sl,bo,bs,bn,vo,vs)
             if isinstance(sl, int):
                 if bo <= sl < bn: # The slice is within the bounds of the brick
                     brick_slice.append(sl-bo) # brick_slice is the given index minus the brick origin
@@ -710,20 +725,20 @@ class PersistedStorage(AbstractStorage):
                     else: #  bo > sl.stop
                         raise ValueError('The slice is not contained in this brick (bo > sl.stop)')
 
-                log.trace('start=%s, stop=%s', start, stop)
+                log.debug('start=%s, stop=%s', start, stop)
                 nbs = slice(start, stop, sl.step)
                 nbsl = len(range(*nbs.indices(stop)))
-                log.trace('nbsl=%s',nbsl)
+                log.debug('nbsl=%s',nbsl)
                 if vs is not None and vs != vo:
                     while nbsl > (vs-vo):
                         stop -= 1
                         nbs = slice(start, stop, sl.step)
                         nbsl = len(range(*nbs.indices(stop)))
 
-                log.trace('nbsl=%s',nbsl)
+                log.debug('nbsl=%s',nbsl)
                 brick_slice.append(nbs)
                 vstp = vo+nbsl
-                log.trace('vstp=%s',vstp)
+                log.debug('vstp=%s',vstp)
                 if vs is not None and vstp > vs: # Don't think this will ever happen, should be dealt with by active_brick_size logic...
                     log.warn('Value set not the proper size for setter slice (vstp > vs)!')
 #                    vstp = vs
@@ -742,7 +757,7 @@ class PersistedStorage(AbstractStorage):
         log.debug('Getting array shape for slice_: %s', slice_)
 
         vals = self.brick_list.values()
-        log.trace('vals: %s', vals)
+        log.debug('vals: %s', vals)
         # Calculate the min and max brick value indices for each dimension
         if len(vals[0][1]) > 1:
             min_len = min([min(*x[0][i])+1 for i,x in enumerate(vals)])
