@@ -493,6 +493,11 @@ class PersistenceLayer(object):
 
         return ret
 
+    def flush(self):
+        for pk, pm in self.parameter_metadata.iteritems():
+            pm.flush()
+        self.master_manager.flush()
+
 class PersistedStorage(AbstractStorage):
 
     def __init__(self, parameter_manager, dtype=None, fill_value=None, **kwargs):
@@ -803,3 +808,6 @@ class InMemoryPersistenceLayer(object):
     def init_parameter(self, parameter_context, *args, **kwargs):
         return InMemoryStorage(dtype=parameter_context.param_type.value_encoding, fill_value=parameter_context.param_type.fill_value)
 
+    def flush(self):
+        # No Op
+        pass
