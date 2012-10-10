@@ -7,8 +7,8 @@
 @brief The core classes comprising the Persistence Layer
 """
 
-from pyon.public import log
 from pyon.core.interceptor.encode import encode_ion, decode_ion
+from ooi.logging import log
 from coverage_model.basic_types import create_guid, AbstractStorage, InMemoryStorage, Dictable
 from coverage_model.parameter_types import FunctionType, ConstantType
 import numpy as np

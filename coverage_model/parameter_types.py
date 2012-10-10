@@ -18,7 +18,7 @@
 #    if isinstance(value, bool):
 #        self.__is_coordinate = value
 
-from pyon.public import log
+from ooi.logging import log
 from coverage_model.basic_types import AbstractIdentifiable
 from coverage_model.numexpr_utils import digit_match, is_well_formed_where, single_where_match
 import numpy as np

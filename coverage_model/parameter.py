@@ -7,7 +7,7 @@
 @brief Concrete parameter classes
 """
 
-from pyon.public import log
+from ooi.logging import log
 from coverage_model.basic_types import AbstractIdentifiable, VariabilityEnum, AxisTypeEnum
 from coverage_model.parameter_types import AbstractParameterType, QuantityType
 from collections import OrderedDict

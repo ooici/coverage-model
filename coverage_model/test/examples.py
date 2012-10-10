@@ -7,7 +7,7 @@
 @brief Exemplar functions for creation, manipulation, and basic visualization of coverages
 """
 
-from pyon.public import log
+from ooi.logging import log
 from coverage_model.numexpr_utils import make_range_expr
 from netCDF4 import Dataset
 from coverage_model.basic_types import *
