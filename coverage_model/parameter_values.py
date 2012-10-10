@@ -6,7 +6,7 @@
 @author Christopher Mueller
 @brief Abstract and concrete value objects for parameters
 """
-from pyon.public import log
+from ooi.logging import log
 from coverage_model.basic_types import AbstractBase, is_valid_constraint, InMemoryStorage, VariabilityEnum
 from coverage_model.numexpr_utils import is_well_formed_where, nest_wheres
 import numpy as np
