@@ -31,9 +31,12 @@ setup(  name = 'coverage-model',
     test_suite = '',
     install_requires = [
         'pyon',
+        'pyzmq==2.2.0',
+        'gevent_zeromq==0.2.5',
         'netCDF4>=0.9.8',
         'numexpr==2.0.1',
         'h5py==2.0.1',
+        'rtree==0.7.0',
 #        'scipy==0.10.1',
     ],
 )
