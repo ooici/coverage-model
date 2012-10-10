@@ -45,6 +45,7 @@ from coverage_model.persistence import PersistenceLayer, InMemoryPersistenceLaye
 from copy import deepcopy
 import numpy as np
 import pickle
+import os
 
 #=========================
 # Coverage Objects
@@ -61,35 +62,52 @@ class AbstractCoverage(AbstractIdentifiable):
 
 
     @classmethod
-    def save(cls, cov_obj, file_path, use_ascii=False):
+    def pickle_save(cls, cov_obj, file_path, use_ascii=False):
         if not isinstance(cov_obj, AbstractCoverage):
             raise StandardError('cov_obj must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(cov_obj)))
 
         with open(file_path, 'w') as f:
             pickle.dump(cov_obj, f, 0 if use_ascii else 2)
 
-        log.info('Saved coverage_model to \'%s\'', file_path)
+        log.info('Saved to pickle \'%s\'', file_path)
+        log.warn('\'pickle_save\' and \'pickle_load\' are not 100% safe, use at your own risk!!')
 
     @classmethod
-    def load(cls, file_path):
+    def pickle_load(cls, file_path):
         with open(file_path, 'r') as f:
             obj = pickle.load(f)
 
         if not isinstance(obj, AbstractCoverage):
             raise StandardError('loaded object must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(obj)))
 
-        log.info('Loaded coverage_model from \'%s\'', file_path)
+        log.warn('\'pickle_save\' and \'pickle_load\' are not 100% safe, use at your own risk!!')
+        log.info('Loaded from pickle \'%s\'', file_path)
         return obj
 
     @classmethod
-    def new_load(cls, root_path, guid):
-        return SimplexCoverage(None, None, _load=(root_path, guid,))
+    def load(cls, root_dir, persistence_guid=None):
+        if persistence_guid is None:
+            root_dir, persistence_guid = root_dir.rsplit('/',1)
+
+        return SimplexCoverage(root_dir, persistence_guid)
+
+    @classmethod
+    def save(cls, cov_obj, *args, **kwargs):
+        if not isinstance(cov_obj, AbstractCoverage):
+            raise StandardError('cov_obj must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(cov_obj)))
+
+        cov_obj.flush()
+
+    def flush(self):
+        self._persistence_layer.flush()
+
+    def close(self):
+        self.flush()
+        # Not much else to do here at this point....but can add other things down the road
 
     @classmethod
     def copy(cls, cov_obj, *args):
         raise NotImplementedError('Coverages cannot yet be copied. You can load multiple \'independent\' copies of the same coverage, but be sure to save them to different names.')
-
-
 #        if not isinstance(cov_obj, AbstractCoverage):
 #            raise StandardError('cov_obj must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(cov_obj)))
 #
@@ -100,7 +118,6 @@ class AbstractCoverage(AbstractIdentifiable):
 #        ccov = SimplexCoverage(name='', _range_dictionary=None, spatial_domain=None, temporal_domain=None)
 #
 #        return ccov
-
 
 class ViewCoverage(AbstractCoverage):
     # TODO: Implement
@@ -131,37 +148,31 @@ class SimplexCoverage(AbstractCoverage):
     of the AbstractParameterValue class.
 
     """
-    def __init__(self, name, parameter_dictionary, temporal_domain=None, spatial_domain=None, in_memory_storage=False, bricking_scheme=None, _load=None):
+    def __init__(self, root_dir, persistence_guid, name=None, parameter_dictionary=None, temporal_domain=None, spatial_domain=None, in_memory_storage=False, bricking_scheme=None):
         """
         Constructor for SimplexCoverage
 
-        @param name    The name of the coverage
+        @param root_dir The root directory for storage of this coverage
+        @param persistence_guid The persistence uuid for this coverage
+        @param name The name of the coverage
         @param parameter_dictionary    a ParameterDictionary object expected to contain one or more valid ParameterContext objects
         @param spatial_domain  a concrete instance of AbstractDomain for the spatial domain component
         @param temporal_domain a concrete instance of AbstractDomain for the temporal domain component
         """
-        AbstractCoverage.__init__(self)
-        if _load is None:
-            self.name = name
-            self.spatial_domain = deepcopy(spatial_domain)
-            self.temporal_domain = deepcopy(temporal_domain) or GridDomain(GridShape('temporal',[0]), CRS.standard_temporal(), MutabilityEnum.EXTENSIBLE)
-            if not isinstance(parameter_dictionary, ParameterDictionary):
-                raise TypeError('\'parameter_dictionary\' must be of type ParameterDictionary')
-            self._range_dictionary = ParameterDictionary()
-            self._range_value = RangeValues()
-            self._temporal_param_name = None
-            self._in_memory_storage = in_memory_storage
-            self._bricking_scheme = bricking_scheme or {'brick_size':10,'chunk_size':5}
-            if self._in_memory_storage:
-                self._persistence_layer = InMemoryPersistenceLayer()
-            else:
-                self._persistence_layer = PersistenceLayer('test_data', create_guid(), name=name, tdom=temporal_domain, sdom=spatial_domain, bricking_scheme=self._bricking_scheme)
 
-            for o, pc in parameter_dictionary.itervalues():
-                self._append_parameter(pc)
-        else:
-            root_dir, guid = _load
-            self._persistence_layer = PersistenceLayer(root_dir, guid)
+        # Make sure root_dir and persistence_guid are both not None and are strings
+        if not isinstance(root_dir, str) or not isinstance(persistence_guid, str):
+            raise SystemError('\'root_dir\' and \'persistence_guid\' must be instances of str')
+
+        pth=os.path.join(root_dir, persistence_guid)
+
+        def _doload(self):
+            # Make sure the coverage directory exists
+            if not os.path.exists(pth):
+                raise SystemError('Cannot find specified coverage: {0}'.format(pth))
+
+            # All appears well - load it up!
+            self._persistence_layer = PersistenceLayer(root_dir, persistence_guid)
 
             self.name = self._persistence_layer.name
             self.spatial_domain = self._persistence_layer.sdom
@@ -174,7 +185,6 @@ class SimplexCoverage(AbstractCoverage):
             self._temporal_param_name = self._persistence_layer.temporal_param_name
 
             self._in_memory_storage = False
-            self._bricking_scheme = None
 
             from coverage_model.persistence import PersistedStorage
             for parameter_name in self._persistence_layer.parameter_metadata.keys():
@@ -183,6 +193,49 @@ class SimplexCoverage(AbstractCoverage):
                 self._range_dictionary.add_context(pc)
                 s = PersistedStorage(md, dtype=pc.param_type.value_encoding, fill_value=pc.param_type.fill_value)
                 self._range_value[parameter_name] = get_value_class(param_type=pc.param_type, domain_set=pc.dom, storage=s)
+
+
+        AbstractCoverage.__init__(self)
+        if name is None or parameter_dictionary is None:
+            # This appears to be a load
+            _doload(self)
+
+        else:
+            # This appears to be a new coverage
+            # Make sure name and parameter_dictionary are not None
+            if name is None or parameter_dictionary is None:
+                raise SystemError('\'name\' and \'parameter_dictionary\' cannot be None')
+
+            # Make sure the specified root_dir exists
+            if not in_memory_storage and not os.path.exists(root_dir):
+                raise SystemError('Cannot find specified \'root_dir\': {0}'.format(root_dir))
+
+            # If the coverage directory exists, load it instead!!
+            if os.path.exists(pth):
+                log.warn('The specified coverage already exists - performing load of \'{0}\''.format(pth))
+                _doload(self)
+                return
+
+            self.name = name
+            self.spatial_domain = deepcopy(spatial_domain)
+            self.temporal_domain = deepcopy(temporal_domain) or GridDomain(GridShape('temporal',[0]), CRS.standard_temporal(), MutabilityEnum.EXTENSIBLE)
+
+            if not isinstance(parameter_dictionary, ParameterDictionary):
+                raise TypeError('\'parameter_dictionary\' must be of type ParameterDictionary')
+            self._range_dictionary = ParameterDictionary()
+            self._range_value = RangeValues()
+
+            self._bricking_scheme = bricking_scheme or {'brick_size':10,'chunk_size':5}
+            self._temporal_param_name = None
+
+            self._in_memory_storage = in_memory_storage
+            if self._in_memory_storage:
+                self._persistence_layer = InMemoryPersistenceLayer()
+            else:
+                self._persistence_layer = PersistenceLayer(root_dir, persistence_guid, name=name, tdom=temporal_domain, sdom=spatial_domain, bricking_scheme=self._bricking_scheme)
+
+            for o, pc in parameter_dictionary.itervalues():
+                self._append_parameter(pc)
 
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
