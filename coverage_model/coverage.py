@@ -35,7 +35,7 @@
 #    if isinstance(value, AbstractDomain):
 #        self.__spatial_domain = value
 
-from pyon.public import log
+from ooi.logging import log
 from pyon.util.containers import DotDict
 
 from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_DomainOfApplication, is_valid_constraint, Dictable, create_guid, InMemoryStorage

@@ -7,7 +7,7 @@
 @brief Base classes for Coverage Model and Parameter classes
 """
 
-from pyon.public import log
+from ooi.logging import log
 import numpy as np
 import uuid
 
