@@ -20,7 +20,10 @@ import random
 from pyon.core.interceptor.encode import encode_ion, decode_ion
 from msgpack import packb, unpackb
 import numpy as np
-import h5py
+
+import tempfile
+from pidantic.supd.pidsupd import SupDPidanticFactory
+from pidantic.state_machine import PIDanticState
 
 REQUEST_WORK = 'REQUEST_WORK'
 SUCCESS = 'SUCCESS'
@@ -41,7 +44,8 @@ class BrickWriterDispatcher(object):
 
     _original = False
 
-    def __init__(self):
+    def __init__(self, num_workers=1, pidantic_dir=None, working_dir=None, worker_cmd=None):
+        self.guid = create_guid()
         self.prep_queue = queue.Queue()
         self.work_queue = queue.Queue()
         self._pending_work = {}
@@ -60,6 +64,64 @@ class BrickWriterDispatcher(object):
         self.sub_sock.bind('tcp://*:5566')
         self.sub_sock.setsockopt(zmq.SUBSCRIBE, '')
 
+        self.num_workers = num_workers if num_workers > 0 else 1
+        self.is_single_worker = self.num_workers == 1
+        self.working_dir = working_dir or '.'
+        self.worker_cmd = worker_cmd or 'bin/python coverage_model/brick_worker.py'
+        self.pidantic_dir = pidantic_dir or './pid_dir'
+        self.workers = []
+
+        self._configure_workers()
+
+    def _configure_workers(self):
+        # TODO: if num_workers == 1, simply run one in-line (runs in a greenlet anyhow)
+        if self.is_single_worker:
+            from brick_worker import run_worker
+            worker = run_worker()
+            self.workers.append(worker)
+        else:
+            if os.path.exists(self.pidantic_dir):
+                bdp = os.path.join(self.pidantic_dir, 'brick_dispatch')
+                if os.path.exists(bdp):
+                    import zipfile, zlib
+                    with zipfile.ZipFile(os.path.join(bdp, 'archived_worker_logs.zip'), 'a', zipfile.ZIP_DEFLATED) as f:
+                        names = f.namelist()
+                        for x in [x for x in os.listdir(bdp) if x.startswith('worker_') and x not in names]:
+                            fn = os.path.join(bdp, x)
+                            f.write(filename=fn, arcname=x)
+                            os.remove(fn)
+
+            else:
+                os.makedirs(self.pidantic_dir)
+
+            self.factory = SupDPidanticFactory(name='brick_dispatch', directory=self.pidantic_dir)
+            # Check for old workers - FOR NOW, TERMINATE THEM TODO: These should be reusable...
+            old_workers = self.factory.reload_instances()
+            for x in old_workers:
+                old_workers[x].cleanup()
+
+            for x in xrange(self.num_workers):
+                w = self.factory.get_pidantic(command=self.worker_cmd, process_name='worker_{0}'.format(x), directory=os.path.realpath(self.working_dir))
+                w.start()
+                self.workers.append(w)
+
+            ready=False
+            while not ready:
+                self.factory.poll()
+                for x in self.workers:
+                    s = x.get_state()
+                    if s is PIDanticState.STATE_STARTING:
+                        break
+                    elif s is PIDanticState.STATE_RUNNING:
+                        continue
+                    elif s is PIDanticState.STATE_EXITED:
+                        self.stop()
+                        raise SystemError('Error starting worker - cannot continue')
+                    else:
+                        raise SystemError('Problem starting worker - cannot continue')
+
+                ready = True
+
     def run(self):
         self._do_stop = False
         spawn(self.organize_work)
@@ -69,6 +131,13 @@ class BrickWriterDispatcher(object):
 
     def stop(self):
         self._do_stop = True
+        if self.is_single_worker:
+            self.workers[0].stop()
+        else:
+            self.workers = self.factory.reload_instances()
+            for x in self.workers:
+                self.workers[x].cleanup()
+            self.factory.terminate()
 
     def organize_work(self):
         while True:
@@ -84,7 +153,7 @@ class BrickWriterDispatcher(object):
                     log.warn('Discarding empty work')
                     continue
 
-                log.warn('Work: %s',w)
+                log.debug('Work: %s',w)
 
                 is_active = False
                 with self._active_work_lock:
@@ -112,8 +181,9 @@ class BrickWriterDispatcher(object):
                         else:
                             sv.append(w)
                         w = sv
+                        is_list = True # Work is a list going forward!!
 
-                    log.warn('Work: %s',w)
+                    log.debug('Work: %s',w)
 
                     # The work_key is not yet pending
                     with self._pending_work_lock:
@@ -122,7 +192,7 @@ class BrickWriterDispatcher(object):
                         if not_in_pend:
                             # Create the pending for this work_key
                             log.debug('-> new pointer \'%s\'', k)
-                            self._pending_work[k] = (wm,[])
+                            self._pending_work[k] = (wm, [])
 
                         # Add the work to the pending
                         log.debug('-> adding work to \'%s\': %s', k, w)
@@ -139,7 +209,7 @@ class BrickWriterDispatcher(object):
                 for k in self._stashed_work:
                     log.warn('Cleanup _stashed_work...')
                     # Just want to trigger cleanup of the _stashed_work, pass an empty list of 'work', gets discarded
-                    self.put_work(k, None, [])
+                    self.put_work(k, self._stashed_work[k][0], [])
 
 
     def put_work(self, work_key, work_metrics, work):
@@ -155,7 +225,7 @@ class BrickWriterDispatcher(object):
                 with self._active_work_lock:
                     self._active_work.pop(work_key)
             elif resp_type == FAILURE:
-                log.debug('===> FAILURE reported for work on %s', work_key)
+                log.debug('===> FAILURE reported for work on %s by worker %s', work_key, worker_guid)
                 if work_key is None:
                     # Worker failed before it did anything, put all work back on the prep queue to be reorganized by the organizer
                     with self._active_work_lock:
@@ -187,73 +257,15 @@ class BrickWriterDispatcher(object):
                 self._active_work[work_key] = (worker_guid, (work_metrics, work))
 
             wp = (work_key, work_metrics, work)
+            time.sleep(0.3)
             log.debug('===> assigning to %s: %s', work_key, wp)
             self.prov_sock.send(pack(wp))
 
-class BrickWriterWorker(object):
+    def __del__(self):
+        self.stop()
 
-    def __init__(self, name=None):
-        self.name=name or create_guid()
-        self.context = zmq.Context(1)
-
-        # Socket to get work from provisioner
-        self.req_sock = self.context.socket(zmq.REQ)
-        self.req_sock.connect(PROVISIONER_ENDPOINT)
-
-        # Socket to respond to responder
-        self.resp_sock = self.context.socket(zmq.PUB)
-        self.resp_sock.connect(RESPONDER_ENDPOINT)
-
-        self._do_stop = False
-
-    def stop(self):
-        self._do_stop = True
-
-    def start(self):
-        self._do_stop = False
-        guid = create_guid()
-        spawn(self._run, guid)
-        log.debug('worker \'%s\' started', guid)
-
-    def _run(self, guid):
-        while not self._do_stop:
-            try:
-                log.debug('%s making work request', guid)
-                self.req_sock.send(pack((REQUEST_WORK, guid)))
-                brick_key, brick_metrics, work = unpack(self.req_sock.recv())
-                work=list(work) # lists decode as a tuples
-                try:
-                    log.warn('*%s*%s* got work for %s: %s', time.time(), guid, brick_key, work)
-                    brick_path, bD, cD, data_type, fill_value = brick_metrics
-                    with h5py.File(brick_path, 'a') as f:
-                        f.require_dataset(brick_key, shape=bD, dtype=data_type, chunks=cD, fillvalue=fill_value)
-                        for w in list(work): # Iterate a copy - WARN, this is NOT deep, if the list contains objects, they're NOT copied
-                            brick_slice, value = w
-                            if isinstance(brick_slice, tuple):
-                                brick_slice = list(brick_slice)
-
-                            log.error('slice_=%s, value=%s', brick_slice, value)
-                            f[brick_key].__setitem__(*brick_slice, val=value)
-                            # Remove the work AFTER it's completed (i.e. written)
-                            work.remove(w)
-                    log.debug('*%s*%s* done working on %s', time.time(), guid, brick_key)
-                    self.resp_sock.send(pack((SUCCESS, guid, brick_key, None)))
-                except Exception as ex:
-                    log.debug('Exception: %s', ex.message)
-                    log.debug('%s send failure response with work %s', guid, work)
-                    # TODO: Send the remaining work back
-                    self.resp_sock.send(pack((FAILURE, guid, brick_key, work)))
-                    time.sleep(0.001)
-            except Exception as ex:
-                log.debug('Exception: %s', ex.message)
-                log.debug('%s send failure response with work %s', guid, None)
-                # TODO: Send a response - I don't know what I was working on...
-                self.resp_sock.send(pack((FAILURE, guid, None, None)))
-                time.sleep(0.001)
-
-
-def run_test_dispatcher(work_count):
-    for x in os.listdir(BASE_DIR):
+def run_test_dispatcher(work_count, num_workers=1):
+    for x in [x for x in os.listdir(BASE_DIR) if x.endswith('.h5')]:
         os.remove(os.path.join(BASE_DIR,x))
 
     fps = {}
@@ -267,7 +279,7 @@ def run_test_dispatcher(work_count):
     fv = -9999
     dtype = 'f'
 
-    disp = BrickWriterDispatcher()
+    disp = BrickWriterDispatcher(num_workers=num_workers, pidantic_dir='test_data/pid')
     disp.run()
 
     def make_work():
@@ -289,18 +301,16 @@ def run_test_dispatcher(work_count):
 
     return disp
 
-def run_test_worker():
-    worker = BrickWriterWorker()
-    worker.start()
-    return worker
-
-
 """
 from coverage_model.brick_dispatch import run_test_dispatcher;
 disp=run_test_dispatcher(20)
 
-------------
+"""
 
-from coverage_model.brick_dispatch import run_test_worker;
-worker=run_test_worker()
+"""
+https://github.com/nimbusproject/pidantic
+https://github.com/nimbusproject/pidantic/blob/master/pidantic/nosetests/piddler_supd_basic_test.py
+https://github.com/nimbusproject/epuharness/blob/master/epuharness/harness.py
+https://github.com/nimbusproject/eeagent/blob/master/eeagent/execute.py#L265
+https://github.com/nimbusproject/eeagent/blob/master/eeagent/execute.py#L290
 """
