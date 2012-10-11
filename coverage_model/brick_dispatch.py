@@ -31,9 +31,6 @@ FAILURE = 'FAILURE'
 PROVISIONER_ENDPOINT = 'tcp://localhost:5071'
 RESPONDER_ENDPOINT = 'tcp://localhost:5566'
 
-BASE_DIR = 'test_data/masonry'
-WORK_KEYS = ['a','b','c','d','e']
-
 def pack(msg):
     return packb(msg, default=encode_ion)
 
@@ -44,7 +41,7 @@ class BrickWriterDispatcher(object):
 
     _original = False
 
-    def __init__(self, num_workers=1, pidantic_dir=None, working_dir=None, worker_cmd=None):
+    def __init__(self, num_workers=1, pidantic_dir=None, working_dir=None):
         self.guid = create_guid()
         self.prep_queue = queue.Queue()
         self.work_queue = queue.Queue()
@@ -67,7 +64,7 @@ class BrickWriterDispatcher(object):
         self.num_workers = num_workers if num_workers > 0 else 1
         self.is_single_worker = self.num_workers == 1
         self.working_dir = working_dir or '.'
-        self.worker_cmd = worker_cmd or 'bin/python coverage_model/brick_worker.py'
+#        self.worker_cmd = worker_cmd or 'bin/python coverage_model/brick_worker.py'
         self.pidantic_dir = pidantic_dir or './pid_dir'
         self.workers = []
 
@@ -100,8 +97,9 @@ class BrickWriterDispatcher(object):
             for x in old_workers:
                 old_workers[x].cleanup()
 
+            worker_cmd = 'bin/python coverage_model/brick_worker.py'
             for x in xrange(self.num_workers):
-                w = self.factory.get_pidantic(command=self.worker_cmd, process_name='worker_{0}'.format(x), directory=os.path.realpath(self.working_dir))
+                w = self.factory.get_pidantic(command=worker_cmd, process_name='worker_{0}'.format(x), directory=os.path.realpath(self.working_dir))
                 w.start()
                 self.workers.append(w)
 
@@ -265,6 +263,10 @@ class BrickWriterDispatcher(object):
         self.stop()
 
 def run_test_dispatcher(work_count, num_workers=1):
+
+    BASE_DIR = 'test_data/masonry'
+    WORK_KEYS = ['a','b','c','d','e']
+
     for x in [x for x in os.listdir(BASE_DIR) if x.endswith('.h5')]:
         os.remove(os.path.join(BASE_DIR,x))
 
