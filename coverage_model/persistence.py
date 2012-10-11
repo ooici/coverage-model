@@ -8,6 +8,7 @@
 """
 
 from pyon.core.interceptor.encode import encode_ion, decode_ion
+from coverage_model.brick_dispatch import BrickWriterDispatcher
 from ooi.logging import log
 from coverage_model.basic_types import create_guid, AbstractStorage, InMemoryStorage, Dictable
 from coverage_model.parameter_types import FunctionType, ConstantType
@@ -232,6 +233,8 @@ class PersistenceLayer(object):
         if self.master_manager.is_dirty():
             self.master_manager.flush()
 
+        self.brick_dispatcher = BrickWriterDispatcher()
+        self.brick_dispatcher.run()
 
         log.info('Persistence Layer Successfully Initialized')
 
@@ -303,7 +306,7 @@ class PersistenceLayer(object):
         pm.tree_rank = tree_rank
         pm.brick_tree = brick_tree
 
-        v = PersistedStorage(pm, dtype=parameter_context.param_type.value_encoding, fill_value=parameter_context.param_type.fill_value)
+        v = PersistedStorage(pm, self.brick_dispatcher, dtype=parameter_context.param_type.value_encoding, fill_value=parameter_context.param_type.fill_value)
         self.value_list[parameter_name] = v
 
         self.expand_domain(parameter_context)
@@ -500,7 +503,7 @@ class PersistenceLayer(object):
 
 class PersistedStorage(AbstractStorage):
 
-    def __init__(self, parameter_manager, dtype=None, fill_value=None, **kwargs):
+    def __init__(self, parameter_manager, brick_dispatcher, dtype=None, fill_value=None, **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractStorage; see documentation for that class for details
@@ -518,6 +521,8 @@ class PersistedStorage(AbstractStorage):
         self.brick_list = parameter_manager.brick_list
 
         self.brick_domains = parameter_manager.brick_domains
+
+        self.brick_dispatcher = brick_dispatcher
 
     # Calculates the bricks from Rtree (brick_tree) using the slice_
     def _bricks_from_slice(self, slice_):
@@ -647,8 +652,6 @@ class PersistedStorage(AbstractStorage):
 
             # Check for object type
             if data_type == '|O8':
-                data_type = h5py.special_dtype(vlen=str)
-    #                fv = pack(self.fill_value)
                 if np.iterable(v):
                     v = [pack(x) for x in v]
                 else:
@@ -657,17 +660,10 @@ class PersistedStorage(AbstractStorage):
             work_key = brick_guid
             work = (brick_slice, v)
             work_metrics = (brick_file_path, bD, cD, data_type, fv)
+            log.debug('Work metrics: %s', work_metrics)
 
-            # TODO: Submit work to dispatcher: NOTE--> The brick_file_path, bD, and cD should all be known
-#            brick_dispatcher.put_work(work_key, work_metrics, work)
-
-            # TODO: This is done by a worker (or serially in the dispatcher)
-            brick_file = h5py.File(brick_file_path, 'a')
-            brick_file.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=cD, fillvalue=fv)
-
-            brick_file[brick_guid].__setitem__(*brick_slice, val=v)
-
-            brick_file.close()
+            # Submit work to dispatcher
+            self.brick_dispatcher.put_work(work_key, work_metrics, work)
 
     def _calc_slices(self, slice_, brick_guid, value, val_origin):
         brick_origin, _, brick_size = self.brick_list[brick_guid][1:]

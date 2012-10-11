@@ -191,7 +191,7 @@ class SimplexCoverage(AbstractCoverage):
                 md = self._persistence_layer.parameter_metadata[parameter_name]
                 pc = md.parameter_context
                 self._range_dictionary.add_context(pc)
-                s = PersistedStorage(md, dtype=pc.param_type.value_encoding, fill_value=pc.param_type.fill_value)
+                s = PersistedStorage(md, self._persistence_layer.brick_dispatcher, dtype=pc.param_type.value_encoding, fill_value=pc.param_type.fill_value)
                 self._range_value[parameter_name] = get_value_class(param_type=pc.param_type, domain_set=pc.dom, storage=s)
 
 

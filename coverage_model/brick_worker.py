@@ -53,6 +53,8 @@ class BrickWriterWorker(object):
                 try:
                     log.debug('*%s*%s* got work for %s, metrics %s: %s', time.time(), guid, brick_key, brick_metrics, work)
                     brick_path, bD, cD, data_type, fill_value = brick_metrics
+                    if data_type == '|O8':
+                        data_type = h5py.special_dtype(vlen=str)
                     with h5py.File(brick_path, 'a') as f:
                         f.require_dataset(brick_key, shape=bD, dtype=data_type, chunks=cD, fillvalue=fill_value)
                         for w in list(work): # Iterate a copy - WARN, this is NOT deep, if the list contains objects, they're NOT copied
