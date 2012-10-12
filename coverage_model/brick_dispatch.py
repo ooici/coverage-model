@@ -14,6 +14,7 @@ from coverage_model.basic_types import create_guid
 
 from ooi.logging import log
 from gevent_zeromq import zmq
+from zmq.core.error import ZMQError
 from gevent import queue, coros
 import time
 import random
@@ -28,8 +29,7 @@ from pidantic.state_machine import PIDanticState
 REQUEST_WORK = 'REQUEST_WORK'
 SUCCESS = 'SUCCESS'
 FAILURE = 'FAILURE'
-PROVISIONER_ENDPOINT = 'tcp://localhost:5071'
-RESPONDER_ENDPOINT = 'tcp://localhost:5566'
+PORT_RANGE = [10000,20000]
 
 def pack(msg):
     return packb(msg, default=encode_ion)
@@ -38,8 +38,6 @@ def unpack(msg):
     return unpackb(msg, object_hook=decode_ion)
 
 class BrickWriterDispatcher(object):
-
-    _original = False
 
     def __init__(self, num_workers=1, pidantic_dir=None, working_dir=None):
         self.guid = create_guid()
@@ -55,26 +53,35 @@ class BrickWriterDispatcher(object):
 
         self.context = zmq.Context(1)
         self.prov_sock = self.context.socket(zmq.REP)
-        self.prov_sock.bind('tcp://*:5071')
+        self.prov_port = self._get_port(self.prov_sock)
+        log.info('Provisioning url: tcp://*:{0}'.format(self.prov_port))
 
-        self.sub_sock = self.context.socket(zmq.SUB)
-        self.sub_sock.bind('tcp://*:5566')
-        self.sub_sock.setsockopt(zmq.SUBSCRIBE, '')
+        self.resp_sock = self.context.socket(zmq.SUB)
+        self.resp_port = self._get_port(self.resp_sock)
+        self.resp_sock.setsockopt(zmq.SUBSCRIBE, '')
+        log.info('Response url: tcp://*:{0}'.format(self.resp_port))
 
         self.num_workers = num_workers if num_workers > 0 else 1
         self.is_single_worker = self.num_workers == 1
         self.working_dir = working_dir or '.'
-#        self.worker_cmd = worker_cmd or 'bin/python coverage_model/brick_worker.py'
         self.pidantic_dir = pidantic_dir or './pid_dir'
         self.workers = []
 
         self._configure_workers()
 
+    def _get_port(self, socket):
+        for x in xrange(PORT_RANGE[0], PORT_RANGE[1]):
+            try:
+                socket.bind('tcp://*:{0}'.format(x))
+                return x
+            except ZMQError:
+                continue
+
     def _configure_workers(self):
         # TODO: if num_workers == 1, simply run one in-line (runs in a greenlet anyhow)
         if self.is_single_worker:
             from brick_worker import run_worker
-            worker = run_worker()
+            worker = run_worker(self.prov_port, self.resp_port)
             self.workers.append(worker)
         else:
             if os.path.exists(self.pidantic_dir):
@@ -97,7 +104,7 @@ class BrickWriterDispatcher(object):
             for x in old_workers:
                 old_workers[x].cleanup()
 
-            worker_cmd = 'bin/python coverage_model/brick_worker.py'
+            worker_cmd = 'bin/python coverage_model/brick_worker.py {0} {1}'.format(self.prov_port, self.resp_port)
             for x in xrange(self.num_workers):
                 w = self.factory.get_pidantic(command=worker_cmd, process_name='worker_{0}'.format(x), directory=os.path.realpath(self.working_dir))
                 w.start()
@@ -216,7 +223,7 @@ class BrickWriterDispatcher(object):
 
     def receiver(self):
         while not self._do_stop:
-            resp_type, worker_guid, work_key, work = unpack(self.sub_sock.recv())
+            resp_type, worker_guid, work_key, work = unpack(self.resp_sock.recv())
             work = list(work) if work is not None else work
             if resp_type == SUCCESS:
                 log.debug('Worker %s was successful', worker_guid)
