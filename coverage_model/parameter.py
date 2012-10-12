@@ -7,7 +7,7 @@
 @brief Concrete parameter classes
 """
 
-from pyon.public import log
+from ooi.logging import log
 from coverage_model.basic_types import AbstractIdentifiable, VariabilityEnum, AxisTypeEnum
 from coverage_model.parameter_types import AbstractParameterType, QuantityType
 from collections import OrderedDict
@@ -112,6 +112,9 @@ class ParameterContext(AbstractIdentifiable):
         my_kwargs = {x:kwc.pop(x) for x in self.ATTRS if x in kwc}
         new_name = kwc.pop('new_name') if 'new_name' in kwc else None
         param_context = None
+        if not isinstance(name, (str, ParameterContext)):
+            raise SystemError('\'name\' must be an instance of either str or ParameterContext')
+
         if isinstance(name, ParameterContext):
             param_context = name
             name = new_name or param_context.name
@@ -168,7 +171,7 @@ class ParameterContext(AbstractIdentifiable):
         lst.append('{0}Derived from name: {1}'.format(indent, self._derived_from_name))
         lst.append('{0}Name: {1}'.format(indent, self.name))
         if self.is_coordinate:
-            lst.append('{0}Is Coordinate: {1}'.format(indent, AxisTypeEnum._str_map[self.reference_frame]))
+            lst.append('{0}Is Coordinate: {1}'.format(indent, self.reference_frame))
         lst.append('{0}Type: {1}'.format(indent, self.param_type))
         lst.append('{0}Fill Value: {1}'.format(indent, self.fill_value))
         if hasattr(self, 'uom'): #TODO: This should be dealt with by the ParameterType...
@@ -254,7 +257,7 @@ class ParameterDictionary(AbstractIdentifiable):
 
         return self._map[param_name][1]
 
-    def get_context_from_ord(self, ordinal):
+    def get_context_by_ord(self, ordinal):
         """
         Retrieve a ParameterContext by ordinal
 
@@ -262,8 +265,7 @@ class ParameterDictionary(AbstractIdentifiable):
         @returns    The ParameterContext with the ordinal 'ordinal'
         @throws KeyError    A parameter with the provided ordinal does not exist
         """
-        key=self.key_from_ord(ordinal)
-
+        return self.get_context(self.key_from_ord(ordinal))
 
     def ord_from_key(self, param_name):
         """
@@ -316,6 +318,12 @@ class ParameterDictionary(AbstractIdentifiable):
                 ret._map[pc.name] = (v[0], pc)
 
         return ret
+
+    def size(self):
+        return self.__count
+
+    def __len__(self):
+        return self.size()
 
     def __iter__(self):
         return self._map.__iter__()

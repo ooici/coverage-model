@@ -6,8 +6,8 @@
 @author Christopher Mueller
 @brief Abstract and concrete value objects for parameters
 """
-from pyon.public import log
-from coverage_model.basic_types import AbstractBase, is_valid_constraint, InMemoryStorage
+from ooi.logging import log
+from coverage_model.basic_types import AbstractBase, is_valid_constraint, InMemoryStorage, VariabilityEnum
 from coverage_model.numexpr_utils import is_well_formed_where, nest_wheres
 import numpy as np
 import numexpr as ne
@@ -38,7 +38,7 @@ class AbstractParameterValue(AbstractBase):
         AbstractBase.__init__(self, **kwc)
         self.parameter_type = parameter_type
         self.domain_set = domain_set
-        self._storage = storage or InMemoryStorage()
+        self._storage = storage or InMemoryStorage(dtype=self.storage_encoding, fill_value=self.parameter_type.fill_value)
 
     def _fix_slice(self, slice_, rank):
         # CBM: First swack - see this for more possible checks: http://code.google.com/p/netcdf4-python/source/browse/trunk/netCDF4_utils.py
@@ -86,11 +86,20 @@ class AbstractParameterValue(AbstractBase):
 
         return t.value_encoding
 
+    @property
+    def storage_encoding(self):
+        return self.parameter_type.value_encoding
+
     def expand_content(self, domain, origin, expansion):
-        raise NotImplementedError('Not implemented by abstract class')
+        if domain == VariabilityEnum.TEMPORAL: # Temporal
+            self._storage.expand(self.shape[1:], origin, expansion)
+        elif domain == VariabilityEnum.SPATIAL: # Spatial
+            raise NotImplementedError('Expansion of the Spatial Domain is not yet supported')
 
     def __len__(self):
-        return len(self._storage)
+        # I don't think this is correct - should be the length of the total available set of values, not the length of storage...
+#        return len(self._storage)
+        return prod(self.shape)
 
     def __str__(self):
         return str(self.content)
@@ -133,17 +142,7 @@ class NumericValue(AbstractSimplexParameterValue):
         """
         kwc=kwargs.copy()
         AbstractSimplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
-        self._storage.reinit(np.empty(self.shape, dtype=self.value_encoding))
-        self._storage.fill(self.parameter_type.fill_value)
-
-    def expand_content(self, domain, origin, expansion):
-        if domain == self.domain_set.tdom: # Temporal
-            narr = np.empty(self.shape[1:], dtype=self.value_encoding)
-            narr.fill(self.parameter_type.fill_value)
-            loc=[origin for x in xrange(expansion)]
-            self._storage.reinit(np.insert(self._storage[:], loc, narr, axis=0))
-        elif domain == self.domain_set.sdom: # Spatial
-            raise NotImplementedError('Expansion of the Spatial Domain is not yet supported')
+        self._storage.expand(self.shape, 0, self.shape[0])
 
     def __getitem__(self, slice_):
         slice_ = self._fix_slice(slice_, len(self.shape))
@@ -166,18 +165,18 @@ class FunctionValue(AbstractComplexParameterValue):
         """
         kwc=kwargs.copy()
         AbstractComplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
-
-        self._storage.reinit(np.empty([0], dtype=object))
+        self._storage.expand((1,), 0, 1)
+        self._storage[0] = []
 
     @property
     def content(self):
-        if len(self._storage) > 1:
-            return nest_wheres(*[x for x in self._storage[:]])
+        if len(self._storage[0]) > 1:
+            return nest_wheres(*[x for x in self._storage[0]])
         else:
-            return self._storage[0]
+            return self._storage[0][0]
 
     def expand_content(self, domain, origin, expansion):
-        # No op - appropriate domain applied during retrieval of data
+        # No op storage is always 1 - appropriate domain applied during retrieval of data
         pass
 
     def __getitem__(self, slice_):
@@ -191,10 +190,10 @@ class FunctionValue(AbstractComplexParameterValue):
     def __setitem__(self, slice_, value):
         if is_well_formed_where(value):
             slice_ = self._fix_slice(slice_, len(self.shape))
-            if len(slice_) == 1 and isinstance(slice_[0], int) and slice_ < len(self._storage):
-                self._storage[slice_] = value
+            if len(slice_) == 1 and isinstance(slice_[0], int) and slice_ < len(self._storage[0]):
+                self._storage[0][slice_[0]] = value
             else:
-                self._storage.reinit(np.append(self._storage[:], np.array([value],dtype=object), axis=0))
+                self._storage[0].append(value)
 
 class ConstantValue(AbstractComplexParameterValue):
 
@@ -205,15 +204,14 @@ class ConstantValue(AbstractComplexParameterValue):
         """
         kwc=kwargs.copy()
         AbstractComplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
-
-        self._storage.reinit(np.empty([1], dtype=object))
+        self._storage.expand((1,), 0, 1)
 
     @property
     def content(self):
-        return self._storage[0]
+        return self._storage[0][()] # Returned from storage as a 0-d array
 
     def expand_content(self, domain, origin, expansion):
-        # No op - constant over any domain
+        # No op storage is always 1 - appropriate domain applied during retrieval of data
         pass
 
     def __getitem__(self, slice_):
@@ -221,7 +219,13 @@ class ConstantValue(AbstractComplexParameterValue):
 
         c = np.ones(self.shape)[slice_] # Make an array of ones of the appropriate shape and slice it as desired
 
-        return ne.evaluate(self.content).astype(self.value_encoding)
+        ret = ne.evaluate(self.content).astype(self.value_encoding)
+        if ret.size==1:
+            if ret.ndim==0:
+                ret=ret[()]
+            else:
+                ret=ret[0]
+        return ret
 
     def __setitem__(self, slice_, value):
         value = str(value) # Ensure we're dealing with a str
@@ -239,17 +243,7 @@ class RecordValue(AbstractComplexParameterValue):
         """
         kwc=kwargs.copy()
         AbstractComplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
-
-        self._storage.reinit(np.empty(self.shape, dtype=object))
-
-    def expand_content(self, domain, origin, expansion):
-        if domain == self.domain_set.tdom: # Temporal
-            narr = np.empty(self.shape[1:], dtype=self.value_encoding)
-            narr.fill(self.parameter_type.fill_value)
-            loc=[origin for x in xrange(expansion)]
-            self._storage.reinit(np.insert(self._storage[:], loc, narr, axis=0))
-        elif domain == self.domain_set.sdom: # Spatial
-            raise NotImplementedError('Expansion of the Spatial Domain is not yet supported')
+        self._storage.expand(self.shape, 0, self.shape[0])
 
     def __getitem__(self, slice_):
         slice_ = self._fix_slice(slice_, len(self.shape))
@@ -282,17 +276,7 @@ class ArrayValue(AbstractComplexParameterValue):
         """
         kwc=kwargs.copy()
         AbstractComplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
-
-        self._storage.reinit(np.empty(self.shape, dtype=object))
-
-    def expand_content(self, domain, origin, expansion):
-        if domain == self.domain_set.tdom: # Temporal
-            narr = np.empty(self.shape[1:], dtype=self.value_encoding)
-            narr.fill(self.parameter_type.fill_value)
-            loc=[origin for x in xrange(expansion)]
-            self._storage.reinit(np.insert(self._storage[:], loc, narr, axis=0))
-        elif domain == self.domain_set.sdom: # Spatial
-            raise NotImplementedError('Expansion of the Spatial Domain is not yet supported')
+        self._storage.expand(self.shape, 0, self.shape[0])
 
     def __getitem__(self, slice_):
         slice_ = self._fix_slice(slice_, len(self.shape))

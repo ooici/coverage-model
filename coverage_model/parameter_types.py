@@ -18,7 +18,7 @@
 #    if isinstance(value, bool):
 #        self.__is_coordinate = value
 
-from pyon.public import log
+from ooi.logging import log
 from coverage_model.basic_types import AbstractIdentifiable
 from coverage_model.numexpr_utils import digit_match, is_well_formed_where, single_where_match
 import numpy as np
@@ -305,9 +305,11 @@ class FunctionType(AbstractComplexParameterType):
 
         self.base_type = base_type or QuantityType()
 
+        self._template_attrs.update(self.base_type._template_attrs)
+
+        self._template_attrs['value_encoding'] = '|O8'
         self._template_attrs['fill_value'] = None
 
-        self._template_attrs.update(self.base_type._template_attrs)
         self._gen_template_attrs()
 
     def is_valid_value(self, value):
@@ -337,9 +339,10 @@ class ConstantType(AbstractComplexParameterType):
 
         self.base_type = base_type or QuantityType()
 
-        self._template_attrs['value_encoding'] = self.base_type.value_encoding
-
         self._template_attrs.update(self.base_type._template_attrs)
+        self._template_attrs['value_encoding'] = '|O8'
+        self._template_attrs['fill_value'] = None
+
         self._gen_template_attrs()
 
     def is_valid_value(self, value):

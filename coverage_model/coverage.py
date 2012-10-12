@@ -35,15 +35,17 @@
 #    if isinstance(value, AbstractDomain):
 #        self.__spatial_domain = value
 
-from pyon.public import log
+from ooi.logging import log
 from pyon.util.containers import DotDict
 
-from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_DomainOfApplication, is_valid_constraint, Dictable
+from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_DomainOfApplication, is_valid_constraint, Dictable, create_guid, InMemoryStorage
 from coverage_model.parameter import Parameter, ParameterDictionary, ParameterContext
 from coverage_model.parameter_values import get_value_class, AbstractParameterValue
+from coverage_model.persistence import PersistenceLayer, InMemoryPersistenceLayer
 from copy import deepcopy
 import numpy as np
 import pickle
+import os
 
 #=========================
 # Coverage Objects
@@ -60,31 +62,52 @@ class AbstractCoverage(AbstractIdentifiable):
 
 
     @classmethod
-    def save(cls, cov_obj, file_path, use_ascii=False):
+    def pickle_save(cls, cov_obj, file_path, use_ascii=False):
         if not isinstance(cov_obj, AbstractCoverage):
             raise StandardError('cov_obj must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(cov_obj)))
 
         with open(file_path, 'w') as f:
             pickle.dump(cov_obj, f, 0 if use_ascii else 2)
 
-        log.info('Saved coverage_model to \'%s\'', file_path)
+        log.info('Saved to pickle \'%s\'', file_path)
+        log.warn('\'pickle_save\' and \'pickle_load\' are not 100% safe, use at your own risk!!')
 
     @classmethod
-    def load(cls, file_path):
+    def pickle_load(cls, file_path):
         with open(file_path, 'r') as f:
             obj = pickle.load(f)
 
         if not isinstance(obj, AbstractCoverage):
             raise StandardError('loaded object must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(obj)))
 
-        log.info('Loaded coverage_model from \'%s\'', file_path)
+        log.warn('\'pickle_save\' and \'pickle_load\' are not 100% safe, use at your own risk!!')
+        log.info('Loaded from pickle \'%s\'', file_path)
         return obj
+
+    @classmethod
+    def load(cls, root_dir, persistence_guid=None):
+        if persistence_guid is None:
+            root_dir, persistence_guid = root_dir.rsplit('/',1)
+
+        return SimplexCoverage(root_dir, persistence_guid)
+
+    @classmethod
+    def save(cls, cov_obj, *args, **kwargs):
+        if not isinstance(cov_obj, AbstractCoverage):
+            raise StandardError('cov_obj must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(cov_obj)))
+
+        cov_obj.flush()
+
+    def flush(self):
+        self._persistence_layer.flush()
+
+    def close(self):
+        self.flush()
+        # Not much else to do here at this point....but can add other things down the road
 
     @classmethod
     def copy(cls, cov_obj, *args):
         raise NotImplementedError('Coverages cannot yet be copied. You can load multiple \'independent\' copies of the same coverage, but be sure to save them to different names.')
-
-
 #        if not isinstance(cov_obj, AbstractCoverage):
 #            raise StandardError('cov_obj must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(cov_obj)))
 #
@@ -95,7 +118,6 @@ class AbstractCoverage(AbstractIdentifiable):
 #        ccov = SimplexCoverage(name='', _range_dictionary=None, spatial_domain=None, temporal_domain=None)
 #
 #        return ccov
-
 
 class ViewCoverage(AbstractCoverage):
     # TODO: Implement
@@ -126,28 +148,94 @@ class SimplexCoverage(AbstractCoverage):
     of the AbstractParameterValue class.
 
     """
-    def __init__(self, name, parameter_dictionary, temporal_domain=None, spatial_domain=None):
+    def __init__(self, root_dir, persistence_guid, name=None, parameter_dictionary=None, temporal_domain=None, spatial_domain=None, in_memory_storage=False, bricking_scheme=None):
         """
         Constructor for SimplexCoverage
 
-        @param name    The name of the coverage
+        @param root_dir The root directory for storage of this coverage
+        @param persistence_guid The persistence uuid for this coverage
+        @param name The name of the coverage
         @param parameter_dictionary    a ParameterDictionary object expected to contain one or more valid ParameterContext objects
         @param spatial_domain  a concrete instance of AbstractDomain for the spatial domain component
         @param temporal_domain a concrete instance of AbstractDomain for the temporal domain component
         """
+
+        # Make sure root_dir and persistence_guid are both not None and are strings
+        if not isinstance(root_dir, str) or not isinstance(persistence_guid, str):
+            raise SystemError('\'root_dir\' and \'persistence_guid\' must be instances of str')
+
+        pth=os.path.join(root_dir, persistence_guid)
+
+        def _doload(self):
+            # Make sure the coverage directory exists
+            if not os.path.exists(pth):
+                raise SystemError('Cannot find specified coverage: {0}'.format(pth))
+
+            # All appears well - load it up!
+            self._persistence_layer = PersistenceLayer(root_dir, persistence_guid)
+
+            self.name = self._persistence_layer.name
+            self.spatial_domain = self._persistence_layer.sdom
+            self.temporal_domain = self._persistence_layer.tdom
+
+            self._range_dictionary = ParameterDictionary()
+            self._range_value = RangeValues()
+
+            self._bricking_scheme = self._persistence_layer.global_bricking_scheme
+            self._temporal_param_name = self._persistence_layer.temporal_param_name
+
+            self._in_memory_storage = False
+
+            from coverage_model.persistence import PersistedStorage
+            for parameter_name in self._persistence_layer.parameter_metadata.keys():
+                md = self._persistence_layer.parameter_metadata[parameter_name]
+                pc = md.parameter_context
+                self._range_dictionary.add_context(pc)
+                s = PersistedStorage(md, self._persistence_layer.brick_dispatcher, dtype=pc.param_type.value_encoding, fill_value=pc.param_type.fill_value)
+                self._range_value[parameter_name] = get_value_class(param_type=pc.param_type, domain_set=pc.dom, storage=s)
+
+
         AbstractCoverage.__init__(self)
+        if name is None or parameter_dictionary is None:
+            # This appears to be a load
+            _doload(self)
 
-        self.name = name
-        self.spatial_domain = deepcopy(spatial_domain)
-        self.temporal_domain = deepcopy(temporal_domain) or GridDomain(GridShape('temporal',[0]), CRS.standard_temporal(), MutabilityEnum.EXTENSIBLE)
-        if not isinstance(parameter_dictionary, ParameterDictionary):
-            raise TypeError('\'parameter_dictionary\' must be of type ParameterDictionary')
-        self._range_dictionary = ParameterDictionary()
-        self._range_value = RangeValues()
-        self._temporal_param_name = None
+        else:
+            # This appears to be a new coverage
+            # Make sure name and parameter_dictionary are not None
+            if name is None or parameter_dictionary is None:
+                raise SystemError('\'name\' and \'parameter_dictionary\' cannot be None')
 
-        for pc in parameter_dictionary.itervalues():
-            self._append_parameter(pc[1])
+            # Make sure the specified root_dir exists
+            if not in_memory_storage and not os.path.exists(root_dir):
+                raise SystemError('Cannot find specified \'root_dir\': {0}'.format(root_dir))
+
+            # If the coverage directory exists, load it instead!!
+            if os.path.exists(pth):
+                log.warn('The specified coverage already exists - performing load of \'{0}\''.format(pth))
+                _doload(self)
+                return
+
+            self.name = name
+            self.spatial_domain = deepcopy(spatial_domain)
+            self.temporal_domain = deepcopy(temporal_domain) or GridDomain(GridShape('temporal',[0]), CRS.standard_temporal(), MutabilityEnum.EXTENSIBLE)
+
+            if not isinstance(parameter_dictionary, ParameterDictionary):
+                raise TypeError('\'parameter_dictionary\' must be of type ParameterDictionary')
+            self._range_dictionary = ParameterDictionary()
+            self._range_value = RangeValues()
+
+            self._bricking_scheme = bricking_scheme or {'brick_size':10,'chunk_size':5}
+            self._temporal_param_name = None
+
+            self._in_memory_storage = in_memory_storage
+            if self._in_memory_storage:
+                self._persistence_layer = InMemoryPersistenceLayer()
+            else:
+                self._persistence_layer = PersistenceLayer(root_dir, persistence_guid, name=name, tdom=temporal_domain, sdom=spatial_domain, bricking_scheme=self._bricking_scheme)
+
+            for o, pc in parameter_dictionary.itervalues():
+                self._append_parameter(pc)
 
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
@@ -156,6 +244,13 @@ class SimplexCoverage(AbstractCoverage):
     @property
     def parameter_dictionary(self):
         return deepcopy(self._range_dictionary)
+
+    @property
+    def persistence_guid(self):
+        if isinstance(self._persistence_layer, InMemoryPersistenceLayer):
+            return None
+        else:
+            return self._persistence_layer.guid
 
     def append_parameter(self, parameter_context):
         """
@@ -196,15 +291,15 @@ class SimplexCoverage(AbstractCoverage):
             log.warn('Provided \'parameter_context\' indicates Spatial variability, but coverage has no Spatial Domain')
 
         if pv == VariabilityEnum.TEMPORAL: # Only varies in the Temporal Domain
-            pcontext.dom = DomainSet(self.temporal_domain, None)
+            pcontext.dom = DomainSet(self.temporal_domain.shape.extents, None)
         elif pv == VariabilityEnum.SPATIAL: # Only varies in the Spatial Domain
-            pcontext.dom = DomainSet(None, self.spatial_domain)
+            pcontext.dom = DomainSet(None, self.spatial_domain.shape.extents)
         elif pv == VariabilityEnum.BOTH: # Varies in both domains
             # If the Spatial Domain is only a single point on a 0d Topology, the parameter's shape is that of the Temporal Domain only
-            if not no_sdom and (len(self.spatial_domain.shape.extents) == 1 and self.spatial_domain.shape.extents[0] == 0):
-                pcontext.dom = DomainSet(self.temporal_domain, None)
+            if no_sdom or (len(self.spatial_domain.shape.extents) == 1 and self.spatial_domain.shape.extents[0] == 0):
+                pcontext.dom = DomainSet(self.temporal_domain.shape.extents, None)
             else:
-                pcontext.dom = DomainSet(self.temporal_domain, self.spatial_domain)
+                pcontext.dom = DomainSet(self.temporal_domain.shape.extents, self.spatial_domain.shape.extents)
         elif pv == VariabilityEnum.NONE: # No variance; constant
             # CBM TODO: Not sure we can have this constraint - precludes situations like a TextType with Variablity==None...
 #            # This is a constant - if the ParameterContext is not a ConstantType, make it one with the default 'x' expr
@@ -213,19 +308,21 @@ class SimplexCoverage(AbstractCoverage):
 
             # The domain is the total domain - same value everywhere!!
             # If the Spatial Domain is only a single point on a 0d Topology, the parameter's shape is that of the Temporal Domain only
-            if not no_sdom and (len(self.spatial_domain.shape.extents) == 1 and self.spatial_domain.shape.extents[0] == 0):
-                pcontext.dom = DomainSet(self.temporal_domain, None)
+            if no_sdom or (len(self.spatial_domain.shape.extents) == 1 and self.spatial_domain.shape.extents[0] == 0):
+                pcontext.dom = DomainSet(self.temporal_domain.shape.extents, None)
             else:
-                pcontext.dom = DomainSet(self.temporal_domain, self.spatial_domain)
+                pcontext.dom = DomainSet(self.temporal_domain.shape.extents, self.spatial_domain.shape.extents)
         else:
             # Should never get here...but...
             raise SystemError('Must define the variability of the ParameterContext: a member of VariabilityEnum')
 
         # Assign the pname to the CRS (if applicable) and select the appropriate domain (default is the spatial_domain)
         dom = self.spatial_domain
+        is_tparam = False
         if not pcontext.reference_frame is None and AxisTypeEnum.is_member(pcontext.reference_frame, AxisTypeEnum.TIME):
             if self._temporal_param_name is None:
                 self._temporal_param_name = pname
+                is_tparam = True
             else:
                 raise StandardError("temporal_parameter already defined.")
             dom = self.temporal_domain
@@ -234,7 +331,8 @@ class SimplexCoverage(AbstractCoverage):
             dom.crs.axes[pcontext.reference_frame] = pcontext.name
 
         self._range_dictionary.add_context(pcontext)
-        self._range_value[pname] = get_value_class(param_type=pcontext.param_type, domain_set=pcontext.dom)
+        s = self._persistence_layer.init_parameter(pcontext, self._bricking_scheme, is_temporal_param=is_tparam)
+        self._range_value[pname] = get_value_class(param_type=pcontext.param_type, domain_set=pcontext.dom, storage=s)
 
     def get_parameter(self, param_name):
         """
@@ -287,12 +385,18 @@ class SimplexCoverage(AbstractCoverage):
         if origin is None or not isinstance(origin, int):
             origin = shp.extents[0]
 
-        # Expand the shape of the temporal_domain
-        shp.extents[0] += count
+        # Expand the shape of the temporal_domain - following works if extents is a list or tuple
+        shp.extents = (shp.extents[0]+count,)+tuple(shp.extents[1:])
 
         # Expand the temporal dimension of each of the parameters - the parameter determines how to apply the change
         for n in self._range_dictionary:
-            self._range_value[n].expand_content(self.temporal_domain, origin, count)
+            pc = self._range_dictionary.get_context(n)
+            # Update the dom of the parameter_context
+            if pc.dom.tdom is not None:
+                pc.dom.tdom = self.temporal_domain.shape.extents
+
+            self._persistence_layer.expand_domain(pc, tdom=self.temporal_domain)
+            self._range_value[n].expand_content(VariabilityEnum.TEMPORAL, origin, count)
 
     def set_time_values(self, value, tdoa):
         """
@@ -349,7 +453,6 @@ class SimplexCoverage(AbstractCoverage):
 
         log.debug('Setting slice: %s', slice_)
 
-        #TODO: Do we need some validation that slice_ is the same rank and/or shape as values?
         self._range_value[param_name][slice_] = value
 
     def get_parameter_values(self, param_name, tdoa=None, sdoa=None, return_value=None):
@@ -362,13 +465,14 @@ class SimplexCoverage(AbstractCoverage):
         @param param_name   The name of the parameter
         @param tdoa The temporal DomainOfApplication
         @param sdoa The spatial DomainOfApplication
-        @param return_value If supplied, filled with response value
+        @param return_value If supplied, filled with response value - currently via OVERWRITE
         @throws KeyError    The coverage does not contain a parameter with name 'param_name'
         """
         if not param_name in self._range_value:
             raise KeyError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
-        return_value = return_value or np.zeros([0])
+        if return_value is not None:
+            log.warn('Provided \'return_value\' will be OVERWRITTEN')
 
         slice_ = []
 
@@ -554,15 +658,18 @@ class CRS(AbstractIdentifiable):
     """
 
     """
-    def __init__(self, axes):
+    def __init__(self, axis_types=None):
         AbstractIdentifiable.__init__(self)
-        self.axes=Axes()
-        for l in axes:
-            # Add an axis member for the indicated axis
-            try:
-                self.axes[l] = None
-            except KeyError as ke:
-                raise SystemError('Unknown AxisType \'{0}\': {1}'.format(l,ke.message))
+        self.axes={}
+        if axis_types is not None:
+            for l in axis_types:
+                self.add_axis(l)
+
+    def add_axis(self, axis_type, axis_name=None):
+        if not AxisTypeEnum.has_member(axis_type):
+            raise KeyError('Invalid \'axis_type\', must be a member of AxisTypeEnum')
+
+        self.axes[axis_type] = axis_name
 
     @classmethod
     def standard_temporal(cls):
@@ -580,35 +687,6 @@ class CRS(AbstractIdentifiable):
     def x_y_z(cls):
         return CRS([AxisTypeEnum.GEO_X, AxisTypeEnum.GEO_Y, AxisTypeEnum.GEO_Z])
 
-#    def _dump(self):
-#        return self._todict()
-##        ret = dict((k,v) for k,v in self.__dict__.iteritems())
-##        ret['cm_type'] = self.__class__.__name__
-##        return ret
-
-#    @classmethod
-#    def _load(cls, cdict):
-#        return cls._fromdict(cdict)
-##        if isinstance(cdict, dict) and 'cm_type' in cdict and cdict['cm_type']:
-##            import inspect
-##            mod = inspect.getmodule(cls)
-##            ptcls=getattr(mod, cdict['cm_type'])
-##
-##            args = inspect.getargspec(ptcls.__init__).args
-##            del args[0] # get rid of 'self'
-##            kwa={}
-##            for a in args:
-##                kwa[a] = cdict[a] if a in cdict else None
-##
-##            ret = ptcls(**kwa)
-##            for k,v in cdict.iteritems():
-##                if not k in kwa.keys() and not k == 'cm_type':
-##                    setattr(ret,k,v)
-##
-##            return ret
-##        else:
-##            raise TypeError('cdict is not properly formed, must be of type dict and contain a \'cm_type\' key: {0}'.format(cdict))
-
     def __str__(self, indent=None):
         indent = indent or ' '
         lst = []
@@ -616,37 +694,6 @@ class CRS(AbstractIdentifiable):
         lst.append('{0}Axes: {1}'.format(indent, self.axes))
 
         return '\n'.join(lst)
-
-class Axes(dict):
-    """
-    Ensures that the indicated axis exists and that the string representation is used for the key
-    """
-    # CBM TODO: Think about if this complexity is really necessary - can it just print Enum names on __str__??
-    def __getitem__(self, item):
-        if item in AxisTypeEnum._str_map:
-            item = AxisTypeEnum._str_map[item]
-        elif item in AxisTypeEnum._value_map:
-            pass
-        else:
-            raise KeyError('Invalid axis key, must be a member of AxisTypeEnum')
-
-        return dict.__getitem__(self, item)
-
-    def __setitem__(self, key, value):
-        if key in AxisTypeEnum._str_map:
-            key = AxisTypeEnum._str_map[key]
-        elif key in AxisTypeEnum._value_map:
-            pass
-        else:
-            raise KeyError('Invalid axis key, must be a member of AxisTypeEnum')
-
-        dict.__setitem__(self, key, value)
-
-    def __contains__(self, item):
-        if item in AxisTypeEnum._str_map:
-            item = AxisTypeEnum._str_map[item]
-
-        return dict.__contains__(self, item)
 
 #=========================
 # Domain Objects
@@ -718,7 +765,7 @@ class AbstractDomain(AbstractIdentifiable):
         lst.append('{0}ID: {1}'.format(indent, self._id))
         lst.append('{0}Shape:\n{1}'.format(indent, self.shape.__str__(indent*2)))
         lst.append('{0}CRS:\n{1}'.format(indent, self.crs.__str__(indent*2)))
-        lst.append('{0}Mutability: {1}'.format(indent, MutabilityEnum._str_map[self.mutability]))
+        lst.append('{0}Mutability: {1}'.format(indent, self.mutability))
 
         return '\n'.join(lst)
 
@@ -741,11 +788,6 @@ class DomainSet(AbstractIdentifiable):
     def __init__(self, tdom=None, sdom=None, **kwargs):
         kwc=kwargs.copy()
         AbstractIdentifiable.__init__(self, **kwc)
-        if tdom and not isinstance(tdom, AbstractDomain):
-            raise TypeError('\'tdom\' must inherit from AbstractDomain')
-        if sdom and not isinstance(sdom, AbstractDomain):
-            raise TypeError('\'sdom\' must inherit from AbstractDomain')
-
         self.tdom = tdom
         self.sdom = sdom
 
@@ -753,9 +795,9 @@ class DomainSet(AbstractIdentifiable):
     def total_extents(self):
         ret=[]
         if self.tdom:
-            ret += self.tdom.shape.extents
+            ret += self.tdom
         if self.sdom:
-            ret += self.sdom.shape.extents
+            ret += self.sdom
 
         return tuple(ret)
 
