@@ -10,7 +10,7 @@
 from pyon.util.async import spawn
 from ooi.logging import log, config
 import logging
-from coverage_model.brick_dispatch import pack, unpack, PROVISIONER_ENDPOINT, RESPONDER_ENDPOINT, FAILURE, REQUEST_WORK, SUCCESS
+from coverage_model.brick_dispatch import pack, unpack, FAILURE, REQUEST_WORK, SUCCESS
 from coverage_model.basic_types import create_guid
 from gevent_zeromq import zmq
 import h5py
@@ -20,28 +20,33 @@ import signal
 
 class BrickWriterWorker(object):
 
-    def __init__(self, name=None):
+    def __init__(self, req_port, resp_port, name=None):
         self.name=name or create_guid()
         self.context = zmq.Context(1)
 
         # Socket to get work from provisioner
         self.req_sock = self.context.socket(zmq.REQ)
-        self.req_sock.connect(PROVISIONER_ENDPOINT)
+        self.req_port = req_port
+        self.req_sock.connect('tcp://localhost:{0}'.format(self.req_port))
 
         # Socket to respond to responder
         self.resp_sock = self.context.socket(zmq.PUB)
-        self.resp_sock.connect(RESPONDER_ENDPOINT)
+        self.resp_port = resp_port
+        self.resp_sock.connect('tcp://localhost:{0}'.format(self.resp_port))
 
         self._do_stop = False
 
     def stop(self):
         self._do_stop = True
+        self._g.join()
+        self.req_sock.close()
+        self.resp_sock.close()
 
     def start(self):
         self._do_stop = False
-        g=spawn(self._run, self.name)
-        log.debug('worker \'%s\' started', self.name)
-        return g
+        self._g=spawn(self._run, self.name)
+        log.info('Brick writer worker \'%s\' started: req_port=%s, resp_port=%s', self.name, 'tcp://localhost:{0}'.format(self.req_port), 'tcp://localhost:{0}'.format(self.resp_port))
+        return self._g
 
     def _run(self, guid):
         while not self._do_stop:
@@ -82,8 +87,8 @@ class BrickWriterWorker(object):
                 time.sleep(0.001)
 
 
-def run_worker():
-    worker = BrickWriterWorker()
+def run_worker(req_port, resp_port):
+    worker = BrickWriterWorker(req_port, resp_port)
     worker.start()
     return worker
 
@@ -106,7 +111,10 @@ def main(args=None):
     logging.captureWarnings(True)
 
     args = args or sys.argv[:]
-    worker = BrickWriterWorker()
+    if len(args) < 3:
+        raise SystemError('Must provide request_port and response_port arguments')
+
+    worker = BrickWriterWorker(args[1], args[2])
     g = worker.start()
     log.info('Worker %s started successfully', worker.name)
 
