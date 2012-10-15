@@ -297,6 +297,50 @@ def oneparamcov(save_coverage=False, in_memory=False):
 
     return scov
 
+def emptysamplecov(save_coverage=False, in_memory=False):
+    # Instantiate a ParameterDictionary
+    pdict = ParameterDictionary()
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
+    t_ctxt.reference_frame = AxisTypeEnum.TIME
+    t_ctxt.uom = 'seconds since 01-01-1970'
+    pdict.add_context(t_ctxt)
+
+    lat_ctxt = ParameterContext('lat', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    lat_ctxt.reference_frame = AxisTypeEnum.LAT
+    lat_ctxt.uom = 'degree_north'
+    pdict.add_context(lat_ctxt)
+
+    lon_ctxt = ParameterContext('lon', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    lon_ctxt.reference_frame = AxisTypeEnum.LON
+    lon_ctxt.uom = 'degree_east'
+    pdict.add_context(lon_ctxt)
+
+    temp_ctxt = ParameterContext('temp', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    temp_ctxt.uom = 'degree_Celsius'
+    pdict.add_context(temp_ctxt)
+
+    cond_ctxt = ParameterContext('conductivity', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    cond_ctxt.uom = 'unknown'
+    pdict.add_context(cond_ctxt)
+
+    # Construct temporal and spatial Coordinate Reference System objects
+    tcrs = CRS([AxisTypeEnum.TIME])
+    scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+    # Construct temporal and spatial Domain objects
+    tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
+
+    # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+    scov = SimplexCoverage('test_data', create_guid(), 'empty sample coverage_model', pdict, tdom, sdom, in_memory)
+
+    if in_memory and save_coverage:
+        SimplexCoverage.pickle_save(scov, 'test_data/emptysample.cov')
+
+    return scov
+
 def ptypescov(save_coverage=False, in_memory=False):
     # Construct temporal and spatial Coordinate Reference System objects
     tcrs = CRS([AxisTypeEnum.TIME])
