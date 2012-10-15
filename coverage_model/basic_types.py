@@ -182,7 +182,7 @@ class AbstractStorage(AbstractBase):
         kwc=kwargs.copy()
         AbstractBase.__init__(self, **kwargs)
         self.dtype = dtype or '|O8'
-        self.fill_value = fill_value or None
+        self.fill_value = fill_value
 
     def __getitem__(self, slice_):
         raise NotImplementedError('Not implemented in abstract class')
