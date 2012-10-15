@@ -162,6 +162,10 @@ class MasterManager(BaseManager):
         with h5py.File(self.file_path, 'r+') as f:
             f[link_path] = h5py.ExternalLink(rel_ext_path, link_name)
 
+    def create_group(self, group_path):
+        with h5py.File(self.file_path, 'r+') as f:
+            f.create_group(group_path)
+
 
 class ParameterManager(BaseManager):
 
@@ -194,15 +198,18 @@ class ParameterManager(BaseManager):
             p = rtree.index.Property()
             p.dimension = self.tree_rank
 
-            # Populate brick tree from the 'rtree' dataset
-            ds = f['/rtree']
+            if 'rtree' in f.items():
+                # Populate brick tree from the 'rtree' dataset
+                ds = f['/rtree']
 
-            def tree_loader(darr):
-                for i, x in enumerate(darr):
-                    ext, obj = unpack(x)
-                    yield (i, ext, obj)
+                def tree_loader(darr):
+                    for i, x in enumerate(darr):
+                        ext, obj = unpack(x)
+                        yield (i, ext, obj)
 
-            setattr(self, 'brick_tree', rtree.index.Index(tree_loader(ds[:]), properties=p))
+                setattr(self, 'brick_tree', rtree.index.Index(tree_loader(ds[:]), properties=p))
+            else:
+                setattr(self, 'brick_tree', rtree.index.Index(properties=p))
 
 class PersistenceLayer(object):
     def __init__(self, root, guid, name=None, tdom=None, sdom=None, bricking_scheme=None, **kwargs):
@@ -280,7 +287,7 @@ class PersistenceLayer(object):
 
         log.debug('Initialize %s', parameter_name)
 
-#        self.parameter_dictionary.add_context(parameter_context)
+        self.master_manager.create_group(parameter_name)
 
         log.debug('Performing Rtree dict setup')
         tD = parameter_context.dom.total_extents
@@ -599,8 +606,8 @@ class PersistedStorage(AbstractStorage):
             else:
                 log.debug('Found real brick file: %s', brick_file_path)
 
-                brick_file = h5py.File(brick_file_path, 'r+')
-                v = brick_file[brick_guid].__getitem__(*brick_slice)
+                with h5py.File(brick_file_path) as brick_file:
+                    v = brick_file[brick_guid].__getitem__(*brick_slice)
 
                 # Check if object type
                 if self.dtype == '|O8':
@@ -609,8 +616,6 @@ class PersistedStorage(AbstractStorage):
                     v = [unpack(x) for x in v]
 
                 ret_arr[value_slice] = v
-
-                brick_file.close()
 
         if ret_arr.size == 1:
             if ret_arr.ndim==0:
