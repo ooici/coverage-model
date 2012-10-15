@@ -360,7 +360,8 @@ class PersistenceLayer(object):
         brick_active_size = map(lambda o,s: min(o,s[1]+1)-s[0], total_extents, brick_extents)
         log.debug('Brick active size: %s', brick_active_size)
 
-        return rtree_extents, brick_extents, tuple(brick_active_size)
+        # When loaded, brick_extents and brick_active_extents will be tuples...so, convert them now to allow clean comparison
+        return rtree_extents, tuple(brick_extents), tuple(brick_active_size)
 
     def _brick_exists(self, parameter_name, brick_extents):
         # Make sure the brick doesn't already exist if we already have some bricks
@@ -450,13 +451,16 @@ class PersistenceLayer(object):
 
         try:
             # Gather block list
-            log.debug('tD, bD, cD: %s, %s, %s', tD, bD, cD)
+            log.trace('tD, bD, cD: %s, %s, %s', tD, bD, cD)
             lst = [range(d)[::bD[i]] for i,d in enumerate(tD)]
 
             # Gather brick origins
             need_origins = set(itertools.product(*lst))
+            log.trace('need_origins: %s', need_origins)
             have_origins = set([v[1] for k,v in pm.brick_list.iteritems() if v[2] == v[3]])
+            log.trace('have_origins: %s', have_origins)
             need_origins.difference_update(have_origins)
+            log.trace('need_origins: %s', need_origins)
 
             if len(need_origins)>0:
                 log.debug('Number of Bricks to Create: %s', len(need_origins))
