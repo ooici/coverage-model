@@ -198,7 +198,7 @@ class ParameterManager(BaseManager):
             p = rtree.index.Property()
             p.dimension = self.tree_rank
 
-            if 'rtree' in f.items():
+            if 'rtree' in f.keys():
                 # Populate brick tree from the 'rtree' dataset
                 ds = f['/rtree']
 
