@@ -574,7 +574,9 @@ class PersistedStorage(AbstractStorage):
                 end.append(sx)
 
         hits = list(self.brick_tree.intersection(tuple(start+end), objects=True))
-        return [(h.id,h.object) for h in hits]
+        ret = [(h.id,h.object) for h in hits]
+        ret.sort()
+        return ret
 
     def __getitem__(self, slice_):
         if not isinstance(slice_, (list,tuple)):
