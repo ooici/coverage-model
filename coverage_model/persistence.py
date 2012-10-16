@@ -143,7 +143,7 @@ class BaseManager(object):
 class MasterManager(BaseManager):
 
     def __init__(self, root_dir, guid, **kwargs):
-        BaseManager.__init__(self, root_dir=root_dir, file_name='{0}_master.hdf5'.format(guid), **kwargs)
+        BaseManager.__init__(self, root_dir=os.path.join(root_dir,guid), file_name='{0}_master.hdf5'.format(guid), **kwargs)
         self.guid = guid
 
         # Add attributes that should NEVER be flushed
