@@ -14,7 +14,8 @@ from coverage_model.parameter_types import *
 import numpy as np
 import time
 
-all_dtypes = ['bool','int','int8','int16','int32','int64','uint8','uint16','uint32','uint64','float','float16','float32','float64','complex','complex64','complex128']
+all_dtypes = ['bool','int','int8','int16','int32','int64','uint8','uint16','uint32','uint64','float','float32','float64']
+#all_dtypes = ['float16', 'complex', 'complex64','complex128', 'complex256']  # NOT SUPPORTED - will raise an error within the coverage_model
 
 def _make_cov(brick_size=None, chunk_size=None, dtype='int64'):
     bricking_scheme = None
@@ -84,7 +85,7 @@ def run_perf_fill_test(sizes=[100], limit=86400, brick_size=10000, chunk_size=10
                 print 'Working on: {0},{1},{2},{3},{4}'.format(dtype, size, limit, brick_size, chunk_size)
                 scov = _make_cov(brick_size, chunk_size, dtype=dtype)
                 pl_scov = scov._persistence_layer
-                scov_path = os.path.join(pl_scov.master_manager.root_dir, pl_scov.master_manager.guid)
+                scov_path = pl_scov.master_manager.file_path
                 insert_timer, expand_timer = _fill(scov, size, limit)
                 insert_avg = sum(insert_timer)/len(insert_timer)
                 expand_avg = sum(expand_timer)/len(expand_timer)

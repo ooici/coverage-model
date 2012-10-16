@@ -619,14 +619,14 @@ def ncstation2cov(save_coverage=False, in_memory=False):
     return scov
 
 def cov_get_by_integer():
-    cov = samplecov(False,False)
+    cov = samplecov()
     dat = cov._range_value.time
     for s in range(len(dat)):
         log.debug(s)
         log.debug('\t%s', dat[s])
 
 def cov_get_by_slice():
-    cov = samplecov(False,False)
+    cov = samplecov()
     dat = cov._range_value.time
     for s in range(len(dat)):
         for e in range(len(dat)):
@@ -646,7 +646,7 @@ def cov_get_by_slice():
                     log.debug('\t%s', dat[s])
 
 def cov_get_by_list():
-    cov = samplecov(False,False)
+    cov = samplecov()
     dat = cov._range_value.time
     dl = len(dat)
     for x in range(5):
