@@ -40,30 +40,55 @@ class AbstractParameterValue(AbstractBase):
         self.domain_set = domain_set
         self._storage = storage or InMemoryStorage(dtype=self.storage_encoding, fill_value=self.parameter_type.fill_value)
 
-    def _fix_slice(self, slice_, rank):
+    def _fix_slice(self, slice_):
         # CBM: First swack - see this for more possible checks: http://code.google.com/p/netcdf4-python/source/browse/trunk/netCDF4_utils.py
         if not is_valid_constraint(slice_):
             raise SystemError('invalid constraint supplied: {0}'.format(slice_))
 
-        # First, ensure we're working with a tuple
+        # First, ensure we're working with a list so we can make edits...
         if not np.iterable(slice_):
-            slice_ = (slice_,)
-        elif not isinstance(slice_,tuple):
-            slice_ = tuple(slice_)
+            slice_ = [slice_,]
+        elif not isinstance(slice_,list):
+            slice_ = list(slice_)
 
-        # Then make it's the correct rank
+        # Then make sure it's the correct rank
+        rank = len(self.shape)
         slen = len(slice_)
         if not slen == rank:
             if slen > rank:
                 slice_ = slice_[:rank]
             else:
-                for n in range(slen, rank):
-                    slice_ += (slice(None,None,None),)
+                for n in xrange(slen, rank):
+                    slice_.append(slice(None,None,None))
 
-        # Remove the tuple if it's len==1, Don't do this you stupid bastard
-#        if len(slice_):
-#            slice_ = slice_[0]
-        return slice_
+        # Next, deal with negative indices
+        # Logic for handling negative indices from: http://docs.scipy.org/doc/numpy/reference/arrays.indexing.html
+        sshp = self.shape
+        for x in xrange(rank):
+            sl=slice_[x]
+            if isinstance(sl, int):
+                if sl < 0:
+                    slice_[x] = sshp[x] + slice_[x]
+            elif isinstance(sl, list):
+                for i in xrange(len(sl)):
+                    if sl[i] < 0:
+                        sl[i] = sshp[x] + sl[i]
+                slice_[x] = sl
+            elif isinstance(sl, slice):
+                sl_ = [sl.start, sl.stop, sl.step]
+                if sl_[0] is not None and sl_[0] < 0:
+                    sl_[0] = sshp[x] + sl_[0]
+
+                if sl_[1] is not None and sl_[1] < 0:
+                    sl_[1] = sshp[x] + sl_[1]
+
+                if sl_[2] is not None and sl_[2] < 0:
+                    slice_[x] = slice(sl_[1],sl_[0],-sl_[2])
+                else:
+                    slice_[x] = slice(*sl_)
+
+        # Finally, make it a tuple
+        return tuple(slice_)
 
     @property
     def shape(self):
@@ -145,12 +170,12 @@ class NumericValue(AbstractSimplexParameterValue):
         self._storage.expand(self.shape, 0, self.shape[0])
 
     def __getitem__(self, slice_):
-        slice_ = self._fix_slice(slice_, len(self.shape))
+        slice_ = self._fix_slice(slice_)
 
         return self._storage[slice_]
 
     def __setitem__(self, slice_, value):
-        slice_ = self._fix_slice(slice_, len(self.shape))
+        slice_ = self._fix_slice(slice_)
 
         self._storage[slice_] = value
 
@@ -180,7 +205,7 @@ class FunctionValue(AbstractComplexParameterValue):
         pass
 
     def __getitem__(self, slice_):
-        slice_ = self._fix_slice(slice_, len(self.shape))
+        slice_ = self._fix_slice(slice_)
 
         total_indices = prod(self.shape)
         x = np.arange(total_indices).reshape(self.shape)[slice_] # CBM TODO: This is INDEX based evaluation!!!
@@ -189,7 +214,7 @@ class FunctionValue(AbstractComplexParameterValue):
 
     def __setitem__(self, slice_, value):
         if is_well_formed_where(value):
-            slice_ = self._fix_slice(slice_, len(self.shape))
+            slice_ = self._fix_slice(slice_)
             if len(slice_) == 1 and isinstance(slice_[0], int) and slice_ < len(self._storage[0]):
                 self._storage[0][slice_[0]] = value
             else:
@@ -215,7 +240,7 @@ class ConstantValue(AbstractComplexParameterValue):
         pass
 
     def __getitem__(self, slice_):
-        slice_ = self._fix_slice(slice_, len(self.shape))
+        slice_ = self._fix_slice(slice_)
 
         c = np.ones(self.shape)[slice_] # Make an array of ones of the appropriate shape and slice it as desired
 
@@ -246,14 +271,14 @@ class RecordValue(AbstractComplexParameterValue):
         self._storage.expand(self.shape, 0, self.shape[0])
 
     def __getitem__(self, slice_):
-        slice_ = self._fix_slice(slice_, len(self.shape))
+        slice_ = self._fix_slice(slice_)
 
         ret = self._storage[slice_]
 
         return ret
 
     def __setitem__(self, slice_, value):
-        slice_ = self._fix_slice(slice_, len(self.shape))
+        slice_ = self._fix_slice(slice_)
 
         self._storage[slice_] = value
 
@@ -279,13 +304,13 @@ class ArrayValue(AbstractComplexParameterValue):
         self._storage.expand(self.shape, 0, self.shape[0])
 
     def __getitem__(self, slice_):
-        slice_ = self._fix_slice(slice_, len(self.shape))
+        slice_ = self._fix_slice(slice_)
 
         ret = self._storage[slice_]
 
         return ret
 
     def __setitem__(self, slice_, value):
-        slice_ = self._fix_slice(slice_, len(self.shape))
+        slice_ = self._fix_slice(slice_)
 
         self._storage[slice_] = value
