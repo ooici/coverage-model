@@ -593,6 +593,8 @@ class PersistedStorage(AbstractStorage):
         ret_origin = [0 for x in range(ret_arr.ndim)]
         log.trace('Shape of returned array: %s', ret_arr.shape)
 
+        brick_origin_offset = 0
+
         bricks = self._bricks_from_slice(slice_)
         log.trace('Slice %s indicates bricks: %s', slice_, bricks)
 
@@ -602,7 +604,7 @@ class PersistedStorage(AbstractStorage):
             # Figuring out which part of brick to set values - also appropriately increments the ret_origin
             log.trace('Return array origin: %s', ret_origin)
             try:
-                brick_slice, value_slice = self._calc_slices(slice_, brick_guid, ret_arr, ret_origin)
+                brick_slice, value_slice, brick_origin_offset = self._calc_slices(slice_, brick_guid, ret_arr, ret_origin, brick_origin_offset)
             except ValueError as ve:
                 log.warn(ve.message + '; moving to next brick')
                 continue
@@ -640,13 +642,15 @@ class PersistedStorage(AbstractStorage):
         val = np.asanyarray(value)
         val_origin = [0 for x in range(val.ndim)]
 
+        brick_origin_offset = 0
+
         bricks = self._bricks_from_slice(slice_)
         log.trace('Slice %s indicates bricks: %s', slice_, bricks)
 
         for idx, brick_guid in bricks:
             # Figuring out which part of brick to set values
             try:
-                brick_slice, value_slice = self._calc_slices(slice_, brick_guid, val, val_origin)
+                brick_slice, value_slice, brick_origin_offset = self._calc_slices(slice_, brick_guid, val, val_origin, brick_origin_offset)
             except ValueError as ve:
                 log.warn(ve.message + '; moving to next brick')
                 continue
@@ -678,10 +682,18 @@ class PersistedStorage(AbstractStorage):
             log.trace('Work metrics: %s', work_metrics)
             log.trace('Work: %s', work)
 
+#            with h5py.File(brick_file_path, 'a') as f:
+#                f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=cD, fillvalue=fv)
+#                if isinstance(brick_slice, tuple):
+#                    brick_slice = list(brick_slice)
+#
+#                f[brick_guid].__setitem__(*brick_slice, val=v)
+
+
             # Submit work to dispatcher
             self.brick_dispatcher.put_work(work_key, work_metrics, work)
 
-    def _calc_slices(self, slice_, brick_guid, value, val_origin):
+    def _calc_slices(self, slice_, brick_guid, value, val_origin, brick_origin_offset=0):
         brick_origin, _, brick_size = self.brick_list[brick_guid][1:]
         log.debug('Brick %s:  origin=%s, size=%s', brick_guid, brick_origin, brick_size)
         log.debug('Slice set: %s', slice_)
@@ -743,16 +755,23 @@ class PersistedStorage(AbstractStorage):
                         raise ValueError('The slice is not contained in this brick (bo > sl.stop)')
 
                 log.trace('start=%s, stop=%s', start, stop)
+                log.trace('brick_origin_offset=%s', brick_origin_offset)
+                start += brick_origin_offset
+                log.trace('start=%s, stop=%s', start, stop)
                 nbs = slice(start, stop, sl.step)
-                nbsl = len(range(*nbs.indices(stop)))
+                nbsi = range(*nbs.indices(stop))
+                nbsl = len(nbsi)
+                last_index = nbsi[-1]
+                log.trace('last_index=%s',last_index)
                 log.trace('nbsl=%s',nbsl)
-                if vs is not None and vs != vo:
-                    while nbsl > (vs-vo):
-                        stop -= 1
-                        nbs = slice(start, stop, sl.step)
-                        nbsl = len(range(*nbs.indices(stop)))
+                # brick_origin_offset should make this check unnecessary!!
+#                if vs is not None and vs != vo:
+#                    while nbsl > (vs-vo):
+#                        stop -= 1
+#                        nbs = slice(start, stop, sl.step)
+#                        nbsl = len(range(*nbs.indices(stop)))
+#                log.trace('nbsl=%s',nbsl)
 
-                log.trace('nbsl=%s',nbsl)
                 brick_slice.append(nbs)
                 vstp = vo+nbsl
                 log.trace('vstp=%s',vstp)
@@ -763,12 +782,16 @@ class PersistedStorage(AbstractStorage):
                 value_slice.append(slice(vo, vstp, None))
                 val_ori[i] = vo + nbsl
 
+                if sl.step is not None:
+                    brick_origin_offset = last_index - bs + sl.step
+                    log.trace('brick_origin_offset = %s', brick_origin_offset)
+
         if val_origin is not None and len(val_origin) != 0:
             val_origin = val_ori
         else:
             value_slice = None
 
-        return brick_slice, value_slice
+        return brick_slice, value_slice, brick_origin_offset
     # TODO: Does not support n-dimensional
     def _get_array_shape_from_slice(self, slice_):
         log.debug('Getting array shape for slice_: %s', slice_)
