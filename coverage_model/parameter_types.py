@@ -24,6 +24,8 @@ from coverage_model.numexpr_utils import digit_match, is_well_formed_where, sing
 import numpy as np
 import re
 
+UNSUPPORTED_DTYPES = set([np.dtype('float16'), np.dtype('complex'), np.dtype('complex64'), np.dtype('complex128'), np.dtype('complex256')])
+
 #==================
 # Abstract Parameter Type Objects
 #==================
@@ -180,12 +182,15 @@ class QuantityType(AbstractSimplexParameterType):
         else:
             try:
                 dt = np.dtype(value_encoding)
-                if dt.isbuiltin in (0,1):
-                    self._value_encoding = dt.str
-                else:
-                    raise TypeError()
+                if dt.isbuiltin not in (0,1):
+                    raise TypeError('\'value_encoding\' must be a valid numpy dtype: {0}'.format(value_encoding))
+                if dt in UNSUPPORTED_DTYPES:
+                    raise TypeError('\'value_encoding\' {0} is not supported by H5py: UNSUPPORTED types ==> {1}'.format(value_encoding, UNSUPPORTED_DTYPES))
+
+                self._value_encoding = dt.str
+
             except TypeError:
-                raise TypeError('\'value_encoding\' must be a valid numpy dtype: {0}'.format(value_encoding))
+                raise
 
         self._template_attrs['uom'] = uom or 'unspecified'
         self._template_attrs['constraint'] = constraint
