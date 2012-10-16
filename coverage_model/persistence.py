@@ -462,6 +462,9 @@ class PersistenceLayer(object):
             need_origins.difference_update(have_origins)
             log.trace('need_origins: %s', need_origins)
 
+            need_origins = list(need_origins)
+            need_origins.sort()
+
             if len(need_origins)>0:
                 log.debug('Number of Bricks to Create: %s', len(need_origins))
 
