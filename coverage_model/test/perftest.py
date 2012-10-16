@@ -14,7 +14,7 @@ from coverage_model.parameter_types import *
 import numpy as np
 import time
 
-all_dtypes = ['bool','int','int8','int16','int32','int64','uint8','uint16','uint32','uint64','float','float32','float64']
+all_dtypes = ['bool','int','int8','int16','int32','int64','uint8','uint16','uint32','uint64','float32','float64']
 #all_dtypes = ['float16', 'complex', 'complex64','complex128', 'complex256']  # NOT SUPPORTED - will raise an error within the coverage_model
 
 def _make_cov(brick_size=None, chunk_size=None, dtype='int64'):
@@ -66,6 +66,8 @@ def _fill(scov, size, limit):
         scov.set_parameter_values('quantity_time', value=np.arange(size)+origin, tdoa=loc)
         insert_timer.append(time.time()-st)
 
+    time.sleep(0.5)
+
     return insert_timer, expand_timer
 
 # run_perf_fill_test(sizes=[1,5,10,15,20,25], limit=300, brick_size=100, chunk_size=25, dtypes=['int64'])
@@ -85,7 +87,7 @@ def run_perf_fill_test(sizes=[100], limit=86400, brick_size=10000, chunk_size=10
                 print 'Working on: {0},{1},{2},{3},{4}'.format(dtype, size, limit, brick_size, chunk_size)
                 scov = _make_cov(brick_size, chunk_size, dtype=dtype)
                 pl_scov = scov._persistence_layer
-                scov_path = pl_scov.master_manager.file_path
+                scov_path = pl_scov.master_manager.root_dir
                 insert_timer, expand_timer = _fill(scov, size, limit)
                 insert_avg = sum(insert_timer)/len(insert_timer)
                 expand_avg = sum(expand_timer)/len(expand_timer)
@@ -94,6 +96,8 @@ def run_perf_fill_test(sizes=[100], limit=86400, brick_size=10000, chunk_size=10
                 print 'Folder Size for {0}: {1}'.format(scov_path, size_dir(scov_path))
                 scov_dict[dtype] = scov_path
 
+    time.sleep(10)
+    
     for s in scov_dict:
         print 'Folder Size for dtype ({2}) at location {0}: {1}'.format(scov_dict[s], size_dir(scov_dict[s]), s)
 
