@@ -141,28 +141,28 @@ class BrickWriterDispatcher(object):
         # CBM TODO: Revisit to ensure this won't strand work or terminate workers before they complete their work...!!
         self._do_stop = True
         try:
-            log.warn('Force == %s', force)
+            log.debug('Force == %s', force)
             if not force:
-                log.warn('Waiting for organizer; timeout == %s',timeout)
+                log.debug('Waiting for organizer; timeout == %s',timeout)
                 # Wait for the organizer to finish - ensures the prep_queue is empty
                 self._org_g.join(timeout=timeout)
 
-                log.warn('Waiting for provisioner; timeout == %s',timeout)
+                log.debug('Waiting for provisioner; timeout == %s',timeout)
                 # Wait for the provisioner to finish - ensures work_queue is empty
                 self._prov_g.join(timeout=timeout)
 
-                log.warn('Waiting for receiver; timeout == %s',timeout)
+                log.debug('Waiting for receiver; timeout == %s',timeout)
                 # Wait for the receiver to finish - allows workers to finish their work
                 self._rec_g.join(timeout=timeout)
 
-            log.warn('Killing organizer, provisioner, and receiver greenlets')
+            log.debug('Killing organizer, provisioner, and receiver greenlets')
             # Terminate the greenlets
             self._org_g.kill()
             self._prov_g.kill()
             self._rec_g.kill()
-            log.warn('Greenlets killed')
+            log.debug('Greenlets killed')
 
-            log.warn('Shutdown workers')
+            log.debug('Shutdown workers')
             # Shutdown workers - work should be completed by now...
             if self.is_single_worker:
                 # Current work will be finished
@@ -173,15 +173,15 @@ class BrickWriterDispatcher(object):
                 for x in self.workers:
                     self.workers[x].cleanup()
                 self.factory.terminate()
-            log.warn('Workers shutdown')
+            log.debug('Workers shutdown')
         except:
             raise
         finally:
-            log.warn('Closing provisioner and receiver sockets')
+            log.debug('Closing provisioner and receiver sockets')
             # Close sockets
             self.prov_sock.close()
             self.resp_sock.close()
-            log.warn('Sockets closed')
+            log.debug('Sockets closed')
 
             self._shutdown = True
 
@@ -196,7 +196,7 @@ class BrickWriterDispatcher(object):
                 is_list = isinstance(w, list)
 
                 if k not in self._stashed_work and len(w) == 0:
-                    log.warn('Discarding empty work')
+                    log.debug('Discarding empty work')
                     continue
 
                 log.debug('Work: %s',w)
@@ -206,7 +206,7 @@ class BrickWriterDispatcher(object):
                     is_active = k in self._active_work
 
                 if is_active:
-                    log.warn('Do Stash')
+                    log.debug('Do Stash')
                     # The work_key is being worked on
                     if k not in self._stashed_work:
                         # Create the stash for this work_key
@@ -220,7 +220,7 @@ class BrickWriterDispatcher(object):
                 else:
                     # If there is a stash for this work_key, prepend it to work
                     if k in self._stashed_work:
-                        log.warn('Was a stash, prepend: %s, %s', self._stashed_work[k], w)
+                        log.debug('Was a stash, prepend: %s, %s', self._stashed_work[k], w)
                         _, sv=self._stashed_work.pop(k)
                         if is_list:
                             sv.extend(w[:])
@@ -253,7 +253,7 @@ class BrickWriterDispatcher(object):
             except queue.Empty:
                 # No new work added - see if there's anything on the stash to cleanup...
                 for k in self._stashed_work:
-                    log.warn('Cleanup _stashed_work...')
+                    log.debug('Cleanup _stashed_work...')
                     # Just want to trigger cleanup of the _stashed_work, pass an empty list of 'work', gets discarded
                     self.put_work(k, self._stashed_work[k][0], [])
 
