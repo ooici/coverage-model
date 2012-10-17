@@ -518,9 +518,9 @@ class PersistenceLayer(object):
             pm.flush()
         self.master_manager.flush()
 
-    def close(self):
+    def close(self, force=False, timeout=None):
         self.flush()
-        self.brick_dispatcher.stop()
+        self.brick_dispatcher.shutdown(force=force, timeout=timeout)
 
 class PersistedStorage(AbstractStorage):
 

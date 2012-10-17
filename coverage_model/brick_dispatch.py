@@ -50,6 +50,7 @@ class BrickWriterDispatcher(object):
         self._count = 0
         self._active_work_lock = coros.RLock()
         self._pending_work_lock = coros.RLock()
+        self._shutdown = False
 
         self.context = zmq.Context(1)
         self.prov_sock = self.context.socket(zmq.REP)
@@ -131,26 +132,58 @@ class BrickWriterDispatcher(object):
         self._do_stop = False
         self._org_g = spawn(self.organize_work)
 
-        spawn(self.provisioner)
-        spawn(self.receiver)
+        self._prov_g = spawn(self.provisioner)
+        self._rec_g = spawn(self.receiver)
 
-    def stop(self):
+    def shutdown(self, force=False, timeout=None):
+        if self._shutdown:
+            return
         # CBM TODO: Revisit to ensure this won't strand work or terminate workers before they complete their work...!!
         self._do_stop = True
-        self._org_g.join() # Wait for the organizer to finish - ensures the prep_queue is empty
+        try:
+            log.warn('Force == %s', force)
+            if not force:
+                log.warn('Waiting for organizer; timeout == %s',timeout)
+                # Wait for the organizer to finish - ensures the prep_queue is empty
+                self._org_g.join(timeout=timeout)
 
-        # Shutdown workers - should allow work to be completed...
-        if self.is_single_worker:
-            self.workers[0].stop()
-        else:
-            self.workers = self.factory.reload_instances()
-            for x in self.workers:
-                self.workers[x].cleanup()
-            self.factory.terminate()
+                log.warn('Waiting for provisioner; timeout == %s',timeout)
+                # Wait for the provisioner to finish - ensures work_queue is empty
+                self._prov_g.join(timeout=timeout)
 
-        # Close sockets
-        self.prov_sock.close()
-        self.resp_sock.close()
+                log.warn('Waiting for receiver; timeout == %s',timeout)
+                # Wait for the receiver to finish - allows workers to finish their work
+                self._rec_g.join(timeout=timeout)
+
+            log.warn('Killing organizer, provisioner, and receiver greenlets')
+            # Terminate the greenlets
+            self._org_g.kill()
+            self._prov_g.kill()
+            self._rec_g.kill()
+            log.warn('Greenlets killed')
+
+            log.warn('Shutdown workers')
+            # Shutdown workers - work should be completed by now...
+            if self.is_single_worker:
+                # Current work will be finished
+                self.workers[0].stop()
+            else:
+                self.workers = self.factory.reload_instances()
+                # CBM TODO:  THIS DOES NOT ALLOW CURRENT WORK TO FINISH!!!
+                for x in self.workers:
+                    self.workers[x].cleanup()
+                self.factory.terminate()
+            log.warn('Workers shutdown')
+        except:
+            raise
+        finally:
+            log.warn('Closing provisioner and receiver sockets')
+            # Close sockets
+            self.prov_sock.close()
+            self.resp_sock.close()
+            log.warn('Sockets closed')
+
+            self._shutdown = True
 
     def organize_work(self):
         while True:
@@ -226,11 +259,16 @@ class BrickWriterDispatcher(object):
 
 
     def put_work(self, work_key, work_metrics, work):
+        if self._shutdown:
+            raise SystemError('This BrickDispatcher has been shutdown and cannot process more work!')
         log.debug('<<< put work for %s: %s', work_key, work)
         self.prep_queue.put((work_key, work_metrics, work))
 
     def receiver(self):
-        while not self._do_stop:
+        while True:
+            with self._active_work_lock:
+                if self._do_stop and len(self._active_work) == 0:
+                    break
             resp_type, worker_guid, work_key, work = unpack(self.resp_sock.recv())
             work = list(work) if work is not None else work
             if resp_type == SUCCESS:
@@ -259,7 +297,9 @@ class BrickWriterDispatcher(object):
                         self.put_work(work_key, wp[0], work)
 
     def provisioner(self):
-        while not self._do_stop:
+        while True:
+            if self._do_stop and self.work_queue.empty():
+                break
             _, worker_guid = unpack(self.prov_sock.recv())
             work_key = self.work_queue.get()
             log.debug('===> assign work for %s', work_key)
@@ -275,7 +315,7 @@ class BrickWriterDispatcher(object):
             self.prov_sock.send(pack(wp))
 
     def __del__(self):
-        self.stop()
+        self.shutdown()
 
 def run_test_dispatcher(work_count, num_workers=1):
 
