@@ -181,6 +181,7 @@ class BrickWriterDispatcher(object):
             # Close sockets
             self.prov_sock.close()
             self.resp_sock.close()
+            self.context.close()
             log.debug('Sockets closed')
 
             self._shutdown = True

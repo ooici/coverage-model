@@ -41,6 +41,7 @@ class BrickWriterWorker(object):
         self._g.join()
         self.req_sock.close()
         self.resp_sock.close()
+        self.context.close()
 
     def start(self):
         self._do_stop = False
