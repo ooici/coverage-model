@@ -518,6 +518,10 @@ class PersistenceLayer(object):
             pm.flush()
         self.master_manager.flush()
 
+    def close(self):
+        self.flush()
+        self.brick_dispatcher.stop()
+
 class PersistedStorage(AbstractStorage):
 
     def __init__(self, parameter_manager, brick_dispatcher, dtype=None, fill_value=None, **kwargs):
@@ -847,5 +851,9 @@ class InMemoryPersistenceLayer(object):
         return InMemoryStorage(dtype=parameter_context.param_type.value_encoding, fill_value=parameter_context.param_type.fill_value)
 
     def flush(self):
+        # No Op
+        pass
+
+    def close(self):
         # No Op
         pass
