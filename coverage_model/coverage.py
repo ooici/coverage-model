@@ -102,7 +102,7 @@ class AbstractCoverage(AbstractIdentifiable):
         self._persistence_layer.flush()
 
     def close(self):
-        self.flush()
+        self._persistence_layer.close() # Calls flush() on the persistence layer
         # Not much else to do here at this point....but can add other things down the road
 
     @classmethod

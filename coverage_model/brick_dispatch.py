@@ -129,13 +129,17 @@ class BrickWriterDispatcher(object):
 
     def run(self):
         self._do_stop = False
-        spawn(self.organize_work)
+        self._org_g = spawn(self.organize_work)
 
-        spawn(self.provisioner) # zmq style workers
+        spawn(self.provisioner)
         spawn(self.receiver)
 
     def stop(self):
+        # CBM TODO: Revisit to ensure this won't strand work or terminate workers before they complete their work...!!
         self._do_stop = True
+        self._org_g.join() # Wait for the organizer to finish - ensures the prep_queue is empty
+
+        # Shutdown workers - should allow work to be completed...
         if self.is_single_worker:
             self.workers[0].stop()
         else:
@@ -143,6 +147,10 @@ class BrickWriterDispatcher(object):
             for x in self.workers:
                 self.workers[x].cleanup()
             self.factory.terminate()
+
+        # Close sockets
+        self.prov_sock.close()
+        self.resp_sock.close()
 
     def organize_work(self):
         while True:
