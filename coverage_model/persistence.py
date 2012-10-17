@@ -87,12 +87,9 @@ class BaseManager(object):
                 module = __import__(smod, fromlist=[sclass])
                 classobj = getattr(module, sclass)
                 value = classobj._fromdict(value)
-            elif key.startswith('root_dir'):
-                log.error('_base_load -- self.root_dir: %s', self.root_dir)
-                value = self.root_dir
-            elif key.startswith('file_path'):
-                log.error('_base_load -- self.file_path: %s', self.file_path)
-                value = self.file_path
+            elif key in ('root_dir', 'file_path'):
+                # No op - set in constructor
+                continue
             else:
                 value = unpack(val)
 
