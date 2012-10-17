@@ -53,32 +53,43 @@ class BrickWriterWorker(object):
             try:
                 log.debug('%s making work request', guid)
                 self.req_sock.send(pack((REQUEST_WORK, guid)))
-                brick_key, brick_metrics, work = unpack(self.req_sock.recv())
-                work=list(work) # lists decode as a tuples
-                try:
-                    log.debug('*%s*%s* got work for %s, metrics %s: %s', time.time(), guid, brick_key, brick_metrics, work)
-                    brick_path, bD, cD, data_type, fill_value = brick_metrics
-                    if data_type == '|O8':
-                        data_type = h5py.special_dtype(vlen=str)
-                    with h5py.File(brick_path, 'a') as f:
-                        f.require_dataset(brick_key, shape=bD, dtype=data_type, chunks=cD, fillvalue=fill_value)
-                        for w in list(work): # Iterate a copy - WARN, this is NOT deep, if the list contains objects, they're NOT copied
-                            brick_slice, value = w
-                            if isinstance(brick_slice, tuple):
-                                brick_slice = list(brick_slice)
+                msg = None
+                while msg is None:
+                    try:
+                        msg = self.req_sock.recv(zmq.NOBLOCK)
+                    except zmq.ZMQError:
+                        if self._do_stop:
+                            break
+                        msg = None
+                        time.sleep(0.1)
 
-                            log.debug('slice_=%s, value=%s', brick_slice, value)
-                            f[brick_key].__setitem__(*brick_slice, val=value)
-                            # Remove the work AFTER it's completed (i.e. written)
-                            work.remove(w)
-                    log.debug('*%s*%s* done working on %s', time.time(), guid, brick_key)
-                    self.resp_sock.send(pack((SUCCESS, guid, brick_key, None)))
-                except Exception as ex:
-                    log.error('Exception: %s', ex.message)
-                    log.warn('%s send failure response with work %s', guid, work)
-                    # TODO: Send the remaining work back
-                    self.resp_sock.send(pack((FAILURE, guid, brick_key, work)))
-                    time.sleep(0.001)
+                if msg is not None:
+                    brick_key, brick_metrics, work = unpack(msg)
+                    work=list(work) # lists decode as a tuples
+                    try:
+                        log.debug('*%s*%s* got work for %s, metrics %s: %s', time.time(), guid, brick_key, brick_metrics, work)
+                        brick_path, bD, cD, data_type, fill_value = brick_metrics
+                        if data_type == '|O8':
+                            data_type = h5py.special_dtype(vlen=str)
+                        with h5py.File(brick_path, 'a') as f:
+                            f.require_dataset(brick_key, shape=bD, dtype=data_type, chunks=cD, fillvalue=fill_value)
+                            for w in list(work): # Iterate a copy - WARN, this is NOT deep, if the list contains objects, they're NOT copied
+                                brick_slice, value = w
+                                if isinstance(brick_slice, tuple):
+                                    brick_slice = list(brick_slice)
+
+                                log.debug('slice_=%s, value=%s', brick_slice, value)
+                                f[brick_key].__setitem__(*brick_slice, val=value)
+                                # Remove the work AFTER it's completed (i.e. written)
+                                work.remove(w)
+                        log.debug('*%s*%s* done working on %s', time.time(), guid, brick_key)
+                        self.resp_sock.send(pack((SUCCESS, guid, brick_key, None)))
+                    except Exception as ex:
+                        log.error('Exception: %s', ex.message)
+                        log.warn('%s send failure response with work %s', guid, work)
+                        # TODO: Send the remaining work back
+                        self.resp_sock.send(pack((FAILURE, guid, brick_key, work)))
+                        time.sleep(0.001)
             except Exception as ex:
                 log.error('Exception: %s', ex.message)
                 log.error('%s send failure response with work %s', guid, None)
