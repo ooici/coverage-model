@@ -410,7 +410,7 @@ class SimplexCoverage(AbstractCoverage):
             self._persistence_layer.expand_domain(pc, tdom=self.temporal_domain)
             self._range_value[n].expand_content(VariabilityEnum.TEMPORAL, origin, count)
 
-    def set_time_values(self, value, tdoa):
+    def set_time_values(self, value, tdoa=None):
         """
         Convenience method for setting time values
 
