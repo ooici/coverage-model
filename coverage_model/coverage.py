@@ -144,7 +144,6 @@ class SimplexCoverage(AbstractCoverage):
             raise TypeError('\'parameter_dictionary\' must be of type ParameterDictionary')
         self._range_dictionary = ParameterDictionary()
         self._range_value = RangeValues()
-        self._temporal_param_name = None
 
         for pc in parameter_dictionary.itervalues():
             self._append_parameter(pc[1])
@@ -152,6 +151,10 @@ class SimplexCoverage(AbstractCoverage):
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
         return super(SimplexCoverage, cls)._fromdict(cmdict, {'parameter_dictionary':'_range_dictionary'})
+
+    @property
+    def temporal_parameter_name(self):
+        return self._range_dictionary.temporal_parameter_name
 
     @property
     def parameter_dictionary(self):
@@ -224,10 +227,6 @@ class SimplexCoverage(AbstractCoverage):
         # Assign the pname to the CRS (if applicable) and select the appropriate domain (default is the spatial_domain)
         dom = self.spatial_domain
         if not pcontext.reference_frame is None and AxisTypeEnum.is_member(pcontext.reference_frame, AxisTypeEnum.TIME):
-            if self._temporal_param_name is None:
-                self._temporal_param_name = pname
-            else:
-                raise StandardError("temporal_parameter already defined.")
             dom = self.temporal_domain
             dom.crs.axes[pcontext.reference_frame] = pcontext.name
         elif not no_sdom and (pcontext.reference_frame in self.spatial_domain.crs.axes):
@@ -301,7 +300,7 @@ class SimplexCoverage(AbstractCoverage):
         @param value    The value to set
         @param tdoa The temporal DomainOfApplication; default to full Domain
         """
-        return self.set_parameter_values(self._temporal_param_name, value, tdoa, None)
+        return self.set_parameter_values(self.temporal_parameter_name, value, tdoa, None)
 
     def get_time_values(self, tdoa=None, return_value=None):
         """
@@ -311,7 +310,7 @@ class SimplexCoverage(AbstractCoverage):
         @param tdoa The temporal DomainOfApplication; default to full Domain
         @param return_value If supplied, filled with response value
         """
-        return self.get_parameter_values(self._temporal_param_name, tdoa, None, return_value)
+        return self.get_parameter_values(self.temporal_parameter_name, tdoa, None, return_value)
 
     @property
     def num_timesteps(self):
