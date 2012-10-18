@@ -6,6 +6,9 @@
 @author Christopher Mueller
 @brief Test cases for the coverage_model module
 """
+import shutil
+import tempfile
+import os
 
 from pyon.public import log
 from pyon.util.int_test import IonIntegrationTestCase
@@ -25,38 +28,166 @@ import unittest
 class TestCoverageModelBasicsInt(IonIntegrationTestCase):
 
     def setUp(self):
-        pass
+        self.working_dir = tempfile.mkdtemp()
+    
+    def tearDown(self):
+        shutil.rmtree(self.working_dir)
+        
+    #LOADS
+    def test_load_succeeds(self):
+        # Depends on a valid coverage existing, so let's make one
+        scov = self._make_samplecov()
+        pl = scov._persistence_layer
+        guid = scov.persistence_guid
+        root_path = pl.master_manager.root_dir
+        base_path = root_path.replace(guid,'')
+        lcov = SimplexCoverage(base_path, guid)
+        self.assertIs(type(lcov), SimplexCoverage)
 
-    def _run_standard_tests(self, scov, timesteps):
-        results = []
-        # Check basic metadata
-        results.append(scov.name == 'sample coverage_model')
-        results.append(scov.num_timesteps == timesteps)
-        results.append(list(scov.temporal_domain.shape.extents) == [timesteps])
-#        log.debug(scov.temporal_domain.shape.extents)
-        req_params = ['conductivity', 'lat', 'lon', 'temp', 'time']
-        params = scov.list_parameters()
-#        log.debug(req_params)
-#        log.debug(params)
-        for param in params:
-            results.append(param in req_params)
-            pc = scov.get_parameter_context(param)
-            results.append(len(pc.dom.identifier) == 36)
-            pc_dom_dict = pc.dom.dump()
-        pdict = scov.parameter_dictionary.dump()
-#        log.debug(results)
-        return (False not in results)
+    def test_load_fails_not_found(self):
+        guid = create_guid()
+        base_path = '/'
+        with self.assertRaises(SystemError):
+            SimplexCoverage(base_path, guid)
 
-    def _run_data_retrieval_tests(self, scov, timesteps):
-        results = []
-        orig = np.arange(timesteps)
-#        log.debug(orig)
-        params = scov.list.parameters()
-        for param in params:
-            vals = scov.get_parameter_values(param,slice(0,timesteps))
-#            log.debug(vals)
-            results.append((orig == vals).all())
-        return (False not in results)
+    def test_load_fails_bad_path(self):
+        # Depends on a valid coverage existing, so let's make one
+        scov = self._make_samplecov()
+        pl = scov._persistence_layer
+        guid = pl.master_manager.guid
+        base_path = 'some_path_that_dne'
+        with self.assertRaises(SystemError):
+            SimplexCoverage(base_path, guid)
+
+    def test_load_fails_bad_guid(self):
+        # Depends on a valid coverage existing, so let's make one
+        scov = self._make_samplecov()
+        pl = scov._persistence_layer
+        guid = 'some_guid_that_dne'
+        root_path = pl.master_manager.root_dir
+        base_path = root_path.replace(guid,'')
+        with self.assertRaises(SystemError):
+            SimplexCoverage(base_path, guid)
+
+    def test_load_succeeds_with_options(self):
+        # Depends on a valid coverage existing, so let's make one
+        scov = self._make_samplecov()
+        pl = scov._persistence_layer
+        guid = pl.master_manager.guid
+        root_path = pl.master_manager.root_dir
+        base_path = root_path.replace(guid,'')
+        name = 'whatever'
+        pdict = ParameterDictionary()
+        # Construct temporal and spatial Coordinate Reference System objects
+        tcrs = CRS([AxisTypeEnum.TIME])
+        scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+        # Construct temporal and spatial Domain objects
+        tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+        sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
+
+        lcov = SimplexCoverage(base_path, guid, name, pdict, tdom, sdom)
+        self.assertIs(type(lcov), SimplexCoverage)
+
+    #CREATES
+    # 'dir, 'guid', 'name', 'pd', 'tdom, 'sdom', 'in-memory'
+
+    def test_create_succeeds(self):
+        pdict = self._make_parameter_dict()
+        tcrs = self._make_tcrs()
+        tdom = self._make_tdom(tcrs)
+        scrs = self._make_scrs()
+        sdom = self._make_sdom(scrs)
+        in_memory = False
+        name = 'sample coverage_model'
+        bricking_scheme = {'brick_size':1000, 'chunk_size':True}
+        scov = SimplexCoverage(
+            root_dir=self.working_dir,
+            persistence_guid=create_guid(),
+            name=name,
+            parameter_dictionary=pdict,
+            temporal_domain=tdom,
+            spatial_domain=sdom,
+            in_memory_storage=in_memory,
+            bricking_scheme=bricking_scheme)
+        log.debug(scov.persistence_guid)
+        self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='all')
+        self.assertIs(type(scov), SimplexCoverage)
+
+    def test_create_dir_not_exists(self):
+        pdict = self._make_parameter_dict()
+        tcrs = self._make_tcrs()
+        tdom = self._make_tdom(tcrs)
+        scrs = self._make_scrs()
+        sdom = self._make_sdom(scrs)
+        in_memory = False
+        with self.assertRaises(SystemError):
+            SimplexCoverage('bad_path', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory)
+
+    def test_create_guid_valid(self):
+        self.assertTrue(len(create_guid()) == 36)
+
+    # The name field can be just about anything and work right now...not sure what would really break this??
+    # Basically, if it is dictable then it is valid
+    def test_create_name_invalid(self):
+        pdict = self._make_parameter_dict()
+        tcrs = self._make_tcrs()
+        tdom = self._make_tdom(tcrs)
+        scrs = self._make_scrs()
+        sdom = self._make_sdom(scrs)
+        in_memory = False
+        name = np.arange(10)
+        with self.assertRaises(AttributeError):
+            SimplexCoverage(self.working_dir, create_guid(), name, pdict, tdom, sdom, in_memory)
+
+    def test_create_pdict_invalid(self):
+        pdict = 1
+        tcrs = self._make_tcrs()
+        tdom = self._make_tdom(tcrs)
+        scrs = self._make_scrs()
+        sdom = self._make_sdom(scrs)
+        in_memory = False
+        name = 'sample coverage_model'
+        with self.assertRaises(TypeError):
+            SimplexCoverage(self.working_dir, create_guid(), name, pdict, tdom, sdom, in_memory)
+
+    def test_create_tdom_invalid(self):
+        pdict = self._make_parameter_dict()
+        tcrs = self._make_tcrs()
+        tdom = 1
+        scrs = self._make_scrs()
+        sdom = self._make_sdom(scrs)
+        in_memory = False
+        name = 'sample coverage_model'
+        with self.assertRaises(AttributeError):
+            SimplexCoverage(
+                root_dir=self.working_dir,
+                persistence_guid=create_guid(),
+                name=name,
+                parameter_dictionary=pdict,
+                temporal_domain=1,
+                spatial_domain=sdom,
+                in_memory_storage=in_memory,
+                bricking_scheme=None)
+
+    def test_create_sdom_invalid(self):
+        pdict = self._make_parameter_dict()
+        tcrs = self._make_tcrs()
+        tdom = self._make_tdom(tcrs)
+        scrs = self._make_scrs()
+        sdom = 1
+        in_memory = False
+        name = 'sample coverage_model'
+        with self.assertRaises(AttributeError):
+            SimplexCoverage(
+                root_dir=self.working_dir,
+                persistence_guid=create_guid(),
+                name=name,
+                parameter_dictionary=pdict,
+                temporal_domain=tdom,
+                spatial_domain=sdom,
+                in_memory_storage=in_memory,
+                bricking_scheme=None)
 
     def test_samplecov_create(self):
         res = False
@@ -103,13 +234,13 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
 
     def test_ptypescov_load_data(self):
         ptypes_cov = self._make_ptypescov()
-        ptypes_cov_loaded = self._load_ptypescov(ptypes_cov)
+        ptypes_cov_loaded = self._load_data_ptypescov(ptypes_cov)
         self.assertTrue(ptypes_cov_loaded.temporal_domain.shape.extents == (10,))
 
     def test_ptypescov_get_values(self):
         results = []
         ptypes_cov = self._make_ptypescov()
-        ptypes_cov_loaded = self._load_ptypescov(ptypes_cov)
+        ptypes_cov_loaded = self._load_data_ptypescov(ptypes_cov)
         time.sleep(5)
         results.append((ptypes_cov_loaded._range_value.quantity_time[:] == np.arange(10)).all())
         results.append(ptypes_cov_loaded._range_value.const_int[0] == 45)
@@ -123,6 +254,37 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
     def test_emptysamplecov_create(self):
         scov = self._make_emptysamplecov()
         self.assertTrue(scov.name == 'empty sample coverage_model')
+
+    def _run_standard_tests(self, scov, timesteps):
+        results = []
+        # Check basic metadata
+        results.append(scov.name == 'sample coverage_model')
+        results.append(scov.num_timesteps == timesteps)
+        results.append(list(scov.temporal_domain.shape.extents) == [timesteps])
+        #        log.debug(scov.temporal_domain.shape.extents)
+        req_params = ['conductivity', 'lat', 'lon', 'temp', 'time']
+        params = scov.list_parameters()
+        #        log.debug(req_params)
+        #        log.debug(params)
+        for param in params:
+            results.append(param in req_params)
+            pc = scov.get_parameter_context(param)
+            results.append(len(pc.dom.identifier) == 36)
+            pc_dom_dict = pc.dom.dump()
+        pdict = scov.parameter_dictionary.dump()
+        #        log.debug(results)
+        return (False not in results)
+
+    def _run_data_retrieval_tests(self, scov, timesteps):
+        results = []
+        orig = np.arange(timesteps)
+        #        log.debug(orig)
+        params = scov.list.parameters()
+        for param in params:
+            vals = scov.get_parameter_values(param,slice(0,timesteps))
+            #            log.debug(vals)
+            results.append((orig == vals).all())
+        return (False not in results)
 
     def _insert_set_get(self, scov, timesteps, data, _slice, param='all'):
         data = data[_slice]
@@ -142,7 +304,7 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
             ret = scov.get_parameter_values(param, _slice)
         return (ret == data).all()
 
-    def _load_ptypescov(self, scov):
+    def _load_data_ptypescov(self, scov):
         # Insert some timesteps (automatically expands other arrays)
         scov.insert_timesteps(10)
 
@@ -169,7 +331,7 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
 
         return scov
 
-    def _make_ptypescov(save_coverage=False, in_memory=False):
+    def _make_ptypescov(self, save_coverage=False, in_memory=False):
         # Construct temporal and spatial Coordinate Reference System objects
         tcrs = CRS([AxisTypeEnum.TIME])
         scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
@@ -217,9 +379,55 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         pdict.add_context(rec_ctxt)
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-        scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory)
+        scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory)
 
         return scov
+
+    def _make_parameter_dict(self):
+        pdict = ParameterDictionary()
+
+        # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+        t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
+        t_ctxt.reference_frame = AxisTypeEnum.TIME
+        t_ctxt.uom = 'seconds since 01-01-1970'
+        pdict.add_context(t_ctxt)
+
+        lat_ctxt = ParameterContext('lat', param_type=QuantityType(value_encoding=np.dtype('float32')))
+        lat_ctxt.reference_frame = AxisTypeEnum.LAT
+        lat_ctxt.uom = 'degree_north'
+        pdict.add_context(lat_ctxt)
+
+        lon_ctxt = ParameterContext('lon', param_type=QuantityType(value_encoding=np.dtype('float32')))
+        lon_ctxt.reference_frame = AxisTypeEnum.LON
+        lon_ctxt.uom = 'degree_east'
+        pdict.add_context(lon_ctxt)
+
+        temp_ctxt = ParameterContext('temp', param_type=QuantityType(value_encoding=np.dtype('float32')))
+        temp_ctxt.uom = 'degree_Celsius'
+        pdict.add_context(temp_ctxt)
+
+        cond_ctxt = ParameterContext('conductivity', param_type=QuantityType(value_encoding=np.dtype('float32')))
+        cond_ctxt.uom = 'unknown'
+        pdict.add_context(cond_ctxt)
+
+        return pdict
+
+    def _make_tcrs(self):
+        # Construct temporal and spatial Coordinate Reference System objects
+        tcrs = CRS([AxisTypeEnum.TIME])
+        return tcrs
+
+    def _make_scrs(self):
+        scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+        return scrs
+
+    def _make_tdom(self, tcrs):
+        tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+        return tdom
+
+    def _make_sdom(self, scrs):
+        sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
+        return sdom
 
     def _make_samplecov(self, save_coverage=False, in_memory=False):
         # Instantiate a ParameterDictionary
@@ -258,10 +466,10 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-        scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory)
+        scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory)
         return scov
 
-    def _make_nospatialcov(save_coverage=False, in_memory=False):
+    def _make_nospatialcov(self, save_coverage=False, in_memory=False):
         # Construct temporal and spatial Coordinate Reference System objects
         tcrs = CRS([AxisTypeEnum.TIME])
 
@@ -295,7 +503,7 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         pdict.add_context(arr2_ctxt)
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-        scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, temporal_domain=tdom, in_memory_storage=in_memory)
+        scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', pdict, temporal_domain=tdom, in_memory_storage=in_memory)
 
         # Insert some timesteps (automatically expands other arrays)
         scov.insert_timesteps(10)
@@ -315,7 +523,17 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
 
         return scov
 
-    def _make_emptysamplecov(save_coverage=False, in_memory=False):
+    def _make_parameter_context(self, name, ptype, dtype, uom):
+        ctxt = ParameterContext(name, type_string)
+
+    def _make_parameter_dictionary(self, params):
+        pdict = ParameterDictionary()
+
+        for param_context in params:
+            pdict.add_context(param_context)
+        return pdict
+
+    def _make_emptysamplecov(self, save_coverage=False, in_memory=False):
         # Instantiate a ParameterDictionary
         pdict = ParameterDictionary()
 
@@ -352,6 +570,6 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-        scov = SimplexCoverage('test_data', create_guid(), 'empty sample coverage_model', pdict, tdom, sdom, in_memory)
+        scov = SimplexCoverage(self.working_dir, create_guid(), 'empty sample coverage_model', pdict, tdom, sdom, in_memory)
 
         return scov
