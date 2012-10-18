@@ -220,8 +220,17 @@ class SimplexCoverage(AbstractCoverage):
                 return
 
             self.name = name
-            self.spatial_domain = deepcopy(spatial_domain)
-            self.temporal_domain = deepcopy(temporal_domain) or GridDomain(GridShape('temporal',[0]), CRS.standard_temporal(), MutabilityEnum.EXTENSIBLE)
+            if temporal_domain is None:
+                self.temporal_domain = GridDomain(GridShape('temporal',[0]), CRS.standard_temporal(), MutabilityEnum.EXTENSIBLE)
+            elif isinstance(temporal_domain, AbstractDomain):
+                self.temporal_domain = deepcopy(temporal_domain)
+            else:
+                raise TypeError('\'temporal_domain\' must be an instance of AbstractDomain')
+
+            if spatial_domain is None or isinstance(spatial_domain, AbstractDomain):
+                self.spatial_domain = deepcopy(spatial_domain)
+            else:
+                raise TypeError('\'spatial_domain\' must be an instance of AbstractDomain')
 
             if not isinstance(parameter_dictionary, ParameterDictionary):
                 raise TypeError('\'parameter_dictionary\' must be of type ParameterDictionary')
