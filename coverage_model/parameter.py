@@ -223,20 +223,33 @@ class ParameterDictionary(AbstractIdentifiable):
         AbstractIdentifiable.__init__(self)
         self._map = OrderedDict()
         self.__count=-1
+        self.temporal_parameter_name = None
 
         if not contexts is None and hasattr(contexts, '__iter__'):
             for pc in contexts:
                 if isinstance(pc, ParameterContext):
                     self.add_context(pc)
 
-    def add_context(self, param_ctxt):
+    def add_context(self, param_ctxt, is_temporal=False):
         """
         Add a ParameterContext
 
         @param param_ctxt The ParameterContext object to add
+        @param is_temporal  If this ParameterContext should be used as the temporal parameter
         """
         if not isinstance(param_ctxt, ParameterContext):
             raise TypeError('param_ctxt must be a ParameterContext object')
+
+        claims_time=param_ctxt.reference_frame == AxisTypeEnum.TIME
+        if is_temporal or claims_time:
+            if self.temporal_parameter_name is None:
+                self.temporal_parameter_name = param_ctxt.name
+            else:
+                raise NameError('This dictionary already has a parameter designated as \'temporal\': %s', self.temporal_parameter_name)
+            param_ctxt.reference_frame = AxisTypeEnum.TIME
+        else:
+            if claims_time:
+                param_ctxt.reference_frame = None
 
         self.__count += 1
         self._map[param_ctxt.name] = (self.__count, param_ctxt)
@@ -254,7 +267,13 @@ class ParameterDictionary(AbstractIdentifiable):
 
         return self._map[param_name][1]
 
-    def get_context_from_ord(self, ordinal):
+    def get_temporal_context(self):
+        if self.temporal_parameter_name is None:
+            return self._map[self.temporal_parameter_name][1]
+        else:
+            raise KeyError('This dictionary does not have a parameter designated as \'temporal\'')
+
+    def get_context_by_ord(self, ordinal):
         """
         Retrieve a ParameterContext by ordinal
 
