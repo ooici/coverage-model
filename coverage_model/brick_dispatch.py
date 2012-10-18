@@ -16,7 +16,7 @@ from gevent.event import AsyncResult
 from ooi.logging import log
 from gevent_zeromq import zmq
 from zmq.core.error import ZMQError
-from gevent import queue, coros
+from gevent import queue
 import time
 import random
 from pyon.core.interceptor.encode import encode_ion, decode_ion
@@ -49,14 +49,7 @@ class BrickWriterDispatcher(object):
         self._active_work = {}
         self._do_stop = False
         self._count = -1
-        self._active_work_lock = coros.RLock()
-        self._pending_work_lock = coros.RLock()
-        self._stashed_work_lock = coros.RLock()
         self._shutdown = False
-
-#        self._async_results = {}
-#        self._async_result_lock = coros.RLock()
-        self._dirty_async_res = None
 
         self.context = zmq.Context(1)
         self.prov_sock = self.context.socket(zmq.REP)
@@ -127,7 +120,7 @@ class BrickWriterDispatcher(object):
                     elif s is PIDanticState.STATE_RUNNING:
                         continue
                     elif s is PIDanticState.STATE_EXITED:
-                        self.stop()
+                        self.shutdown()
                         raise SystemError('Error starting worker - cannot continue')
                     else:
                         raise SystemError('Problem starting worker - cannot continue')
@@ -135,16 +128,13 @@ class BrickWriterDispatcher(object):
                 ready = True
 
     def has_pending_work(self):
-        with self._pending_work_lock:
-            return len(self._pending_work) > 0
+        return len(self._pending_work) > 0
 
     def has_active_work(self):
-        with self._active_work_lock:
-            return len(self._active_work) > 0
+        return len(self._active_work) > 0
 
     def has_stashed_work(self):
-        with self._stashed_work_lock:
-            return len(self._stashed_work) > 0
+        return len(self._stashed_work) > 0
 
     def is_dirty(self):
         if not self.has_active_work():
@@ -237,74 +227,65 @@ class BrickWriterDispatcher(object):
                 wd = self.prep_queue.get(timeout=1)
             except queue.Empty:
                 # No new work added - see if there's anything on the stash to cleanup...
-                with self._stashed_work_lock:
-                    for k in self._stashed_work:
-                        log.debug('Cleanup _stashed_work...')
-                        # Just want to trigger cleanup of the _stashed_work, pass an empty list of 'work', gets discarded
-                        self.put_work(k, self._stashed_work[k][0], [])
-                    continue
+                for k in self._stashed_work:
+                    log.debug('Cleanup _stashed_work...')
+                    # Just want to trigger cleanup of the _stashed_work, pass an empty list of 'work', gets discarded
+                    self.put_work(k, self._stashed_work[k][0], [])
+                continue
 
             try:
                 k, wm, w = wd
                 is_list = isinstance(w, list)
-                with self._stashed_work_lock:
-                    if k not in self._stashed_work and len(w) == 0:
-                        log.debug('Discarding empty work')
-                        continue
+                if k not in self._stashed_work and len(w) == 0:
+                    log.debug('Discarding empty work')
+                    continue
 
                 log.debug('Work: %s',w)
 
-                is_active = False
-                with self._active_work_lock:
-                    is_active = k in self._active_work
-
-                if is_active:
+                if k in self._active_work:
                     log.debug('Do Stash')
                     # The work_key is being worked on
-                    with self._stashed_work_lock:
-                        if k not in self._stashed_work:
-                            # Create the stash for this work_key
-                            self._stashed_work[k] = (wm, [])
+                    if k not in self._stashed_work:
+                        # Create the stash for this work_key
+                        self._stashed_work[k] = (wm, [])
 
-                        # Add the work to the stash
-                        if is_list:
-                            self._stashed_work[k][1].extend(w[:])
-                        else:
-                            self._stashed_work[k][1].append(w)
+                    # Add the work to the stash
+                    if is_list:
+                        self._stashed_work[k][1].extend(w[:])
+                    else:
+                        self._stashed_work[k][1].append(w)
                 else:
                     # If there is a stash for this work_key, prepend it to work
-                    with self._stashed_work_lock:
-                        if k in self._stashed_work:
-                            log.debug('Was a stash, prepend: %s, %s', self._stashed_work[k], w)
-                            _, sv=self._stashed_work.pop(k)
-                            if is_list:
-                                sv.extend(w[:])
-                            else:
-                                sv.append(w)
-                            w = sv
-                            is_list = True # Work is a list going forward!!
+                    if k in self._stashed_work:
+                        log.debug('Was a stash, prepend: %s, %s', self._stashed_work[k], w)
+                        _, sv=self._stashed_work.pop(k)
+                        if is_list:
+                            sv.extend(w[:])
+                        else:
+                            sv.append(w)
+                        w = sv
+                        is_list = True # Work is a list going forward!!
 
                     log.debug('Work: %s',w)
 
                     # The work_key is not yet pending
-                    with self._pending_work_lock:
-                        not_in_pend = k not in self._pending_work
+                    not_in_pend = k not in self._pending_work
 
-                        if not_in_pend:
-                            # Create the pending for this work_key
-                            log.debug('-> new pointer \'%s\'', k)
-                            self._pending_work[k] = (wm, [])
+                    if not_in_pend:
+                        # Create the pending for this work_key
+                        log.debug('-> new pointer \'%s\'', k)
+                        self._pending_work[k] = (wm, [])
 
-                        # Add the work to the pending
-                        log.debug('-> adding work to \'%s\': %s', k, w)
-                        if is_list:
-                            self._pending_work[k][1].extend(w[:])
-                        else:
-                            self._pending_work[k][1].append(w)
+                    # Add the work to the pending
+                    log.debug('-> adding work to \'%s\': %s', k, w)
+                    if is_list:
+                        self._pending_work[k][1].extend(w[:])
+                    else:
+                        self._pending_work[k][1].append(w)
 
-                        if not_in_pend:
-                            # Add the not-yet-pending work to the work_queue
-                            self.work_queue.put(k)
+                    if not_in_pend:
+                        # Add the not-yet-pending work to the work_queue
+                        self.work_queue.put(k)
             except:
                 raise
 
@@ -317,9 +298,8 @@ class BrickWriterDispatcher(object):
     def receiver(self):
         while True:
             try:
-                with self._active_work_lock:
-                    if self._do_stop and len(self._active_work) == 0:
-                        break
+                if self._do_stop and len(self._active_work) == 0:
+                    break
 
                 log.debug('Receive response message (loop)')
                 msg = None
@@ -340,28 +320,25 @@ class BrickWriterDispatcher(object):
                     work = list(work) if work is not None else work
                     if resp_type == SUCCESS:
                         log.debug('Worker %s was successful', worker_guid)
-                        with self._active_work_lock:
-                            self._active_work.pop(work_key)
+                        self._active_work.pop(work_key)
                     elif resp_type == FAILURE:
                         log.debug('Failure reported for work on %s by worker %s', work_key, worker_guid)
                         if work_key is None:
                             # Worker failed before it did anything, put all work back on the prep queue to be reorganized by the organizer
-                            with self._active_work_lock:
-                                # Because it failed so miserably, need to find the work_key based on guid
-                                for k, v in self._active_work.iteritems():
-                                    if v[0] == worker_guid:
-                                        work_key = k
-                                        break
+                            # Because it failed so miserably, need to find the work_key based on guid
+                            for k, v in self._active_work.iteritems():
+                                if v[0] == worker_guid:
+                                    work_key = k
+                                    break
 
-                                if work_key is not None:
-                                    wguid, wp = self._active_work.pop(work_key)
-                                    self.put_work(work_key, wp[0], wp[1])
+                            if work_key is not None:
+                                wguid, wp = self._active_work.pop(work_key)
+                                self.put_work(work_key, wp[0], wp[1])
                         else:
                             # Normal failure
-                            with self._active_work_lock:
-                                # Pop the work from active work, and queue the work returned by the worker
-                                wguid, wp = self._active_work.pop(work_key)
-                                self.put_work(work_key, wp[0], work)
+                            # Pop the work from active work, and queue the work returned by the worker
+                            wguid, wp = self._active_work.pop(work_key)
+                            self.put_work(work_key, wp[0], work)
             finally:
 #                time.sleep(0.1)
                 pass
@@ -402,14 +379,11 @@ class BrickWriterDispatcher(object):
 
                     if work_key is not None:
                         log.debug('Assign work for %s', work_key)
-                        with self._pending_work_lock:
-                            work_metrics, work = self._pending_work.pop(work_key)
+                        work_metrics, work = self._pending_work.pop(work_key)
 
-                        with self._active_work_lock:
-                            self._active_work[work_key] = (worker_guid, (work_metrics, work))
+                        self._active_work[work_key] = (worker_guid, (work_metrics, work))
 
                         wp = (work_key, work_metrics, work)
-                #            time.sleep(0.01)
                         log.debug('Assigning to %s: %s', work_key, wp)
                         self.prov_sock.send(pack(wp))
             finally:
