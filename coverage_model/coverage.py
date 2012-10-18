@@ -169,7 +169,7 @@ class SimplexCoverage(AbstractCoverage):
 
         # Make sure root_dir and persistence_guid are both not None and are strings
         if not isinstance(root_dir, str) or not isinstance(persistence_guid, str):
-            raise SystemError('\'root_dir\' and \'persistence_guid\' must be instances of str')
+            raise TypeError('\'root_dir\' and \'persistence_guid\' must be instances of str')
 
         pth=os.path.join(root_dir, persistence_guid)
 
