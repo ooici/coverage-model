@@ -123,6 +123,9 @@ class AbstractCoverage(AbstractIdentifiable):
 #
 #        return ccov
 
+    def __del__(self):
+        self.close()
+
 class ViewCoverage(AbstractCoverage):
     # TODO: Implement
     """
