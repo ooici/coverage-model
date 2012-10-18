@@ -186,7 +186,6 @@ class SimplexCoverage(AbstractCoverage):
             self._range_value = RangeValues()
 
             self._bricking_scheme = self._persistence_layer.global_bricking_scheme
-            self._temporal_param_name = self._persistence_layer.temporal_param_name
 
             self._in_memory_storage = False
 
@@ -230,7 +229,6 @@ class SimplexCoverage(AbstractCoverage):
             self._range_value = RangeValues()
 
             self._bricking_scheme = bricking_scheme or {'brick_size':1000,'chunk_size':500}
-            self._temporal_param_name = None
 
             self._in_memory_storage = in_memory_storage
             if self._in_memory_storage:
@@ -326,7 +324,6 @@ class SimplexCoverage(AbstractCoverage):
 
         # Assign the pname to the CRS (if applicable) and select the appropriate domain (default is the spatial_domain)
         dom = self.spatial_domain
-        is_tparam = False
         if not pcontext.reference_frame is None and AxisTypeEnum.is_member(pcontext.reference_frame, AxisTypeEnum.TIME):
             dom = self.temporal_domain
             dom.crs.axes[pcontext.reference_frame] = pcontext.name
