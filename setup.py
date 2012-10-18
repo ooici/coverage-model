@@ -27,7 +27,7 @@ setup(  name = 'coverage-model',
     dependency_links = [
         'http://sddevrepo.oceanobservatories.org/releases/',
         'https://github.com/ooici/pyon/tarball/master#egg=pyon',
-        'https://github.com/nimbusproject/pidantic/tarball/master#egg=pidantic'
+        'https://github.com/nimbusproject/pidantic/tarball/master#egg=pidantic-0.2'
     ],
     test_suite = '',
     install_requires = [
