@@ -340,7 +340,7 @@ class SimplexCoverage(AbstractCoverage):
             dom.crs.axes[pcontext.reference_frame] = pcontext.name
 
         self._range_dictionary.add_context(pcontext)
-        s = self._persistence_layer.init_parameter(pcontext, self._bricking_scheme, is_temporal_param=is_tparam)
+        s = self._persistence_layer.init_parameter(pcontext, self._bricking_scheme)
         self._range_value[pname] = get_value_class(param_type=pcontext.param_type, domain_set=pcontext.dom, storage=s)
 
     def get_parameter(self, param_name):
