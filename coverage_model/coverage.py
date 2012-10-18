@@ -229,7 +229,7 @@ class SimplexCoverage(AbstractCoverage):
             self._range_dictionary = ParameterDictionary()
             self._range_value = RangeValues()
 
-            self._bricking_scheme = bricking_scheme or {'brick_size':10,'chunk_size':5}
+            self._bricking_scheme = bricking_scheme or {'brick_size':1000,'chunk_size':500}
             self._temporal_param_name = None
 
             self._in_memory_storage = in_memory_storage
