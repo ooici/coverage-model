@@ -41,7 +41,9 @@ class BrickWriterWorker(object):
         self._g.join()
         self.req_sock.close()
         self.resp_sock.close()
-        self.context.close()
+        log.debug('Terminating the context')
+        self.context.term()
+        log.debug('Context terminated')
 
     def start(self):
         self._do_stop = False
@@ -58,11 +60,14 @@ class BrickWriterWorker(object):
                 while msg is None:
                     try:
                         msg = self.req_sock.recv(zmq.NOBLOCK)
-                    except zmq.ZMQError:
-                        if self._do_stop:
-                            break
-                        msg = None
-                        time.sleep(0.1)
+                    except zmq.ZMQError, e:
+                        if e.errno == zmq.EAGAIN:
+                            if self._do_stop:
+                                break
+                            else:
+                                time.sleep(0.1)
+                        else:
+                            raise
 
                 if msg is not None:
                     brick_key, brick_metrics, work = unpack(msg)
@@ -90,13 +95,14 @@ class BrickWriterWorker(object):
                         log.warn('%s send failure response with work %s', guid, work)
                         # TODO: Send the remaining work back
                         self.resp_sock.send(pack((FAILURE, guid, brick_key, work)))
-                        time.sleep(0.001)
             except Exception as ex:
                 log.error('Exception: %s', ex.message)
                 log.error('%s send failure response with work %s', guid, None)
                 # TODO: Send a response - I don't know what I was working on...
                 self.resp_sock.send(pack((FAILURE, guid, None, None)))
-                time.sleep(0.001)
+            finally:
+#                time.sleep(0.1)
+                pass
 
 
 def run_worker(req_port, resp_port):

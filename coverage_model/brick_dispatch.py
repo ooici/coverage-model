@@ -11,6 +11,7 @@ import os
 
 from pyon.util.async import spawn
 from coverage_model.basic_types import create_guid
+from gevent.event import AsyncResult
 
 from ooi.logging import log
 from gevent_zeromq import zmq
@@ -47,10 +48,15 @@ class BrickWriterDispatcher(object):
         self._stashed_work = {}
         self._active_work = {}
         self._do_stop = False
-        self._count = 0
+        self._count = -1
         self._active_work_lock = coros.RLock()
         self._pending_work_lock = coros.RLock()
+        self._stashed_work_lock = coros.RLock()
         self._shutdown = False
+
+#        self._async_results = {}
+#        self._async_result_lock = coros.RLock()
+        self._dirty_async_res = None
 
         self.context = zmq.Context(1)
         self.prov_sock = self.context.socket(zmq.REP)
@@ -128,6 +134,40 @@ class BrickWriterDispatcher(object):
 
                 ready = True
 
+    def has_pending_work(self):
+        with self._pending_work_lock:
+            return len(self._pending_work) > 0
+
+    def has_active_work(self):
+        with self._active_work_lock:
+            return len(self._active_work) > 0
+
+    def has_stashed_work(self):
+        with self._stashed_work_lock:
+            return len(self._stashed_work) > 0
+
+    def is_dirty(self):
+        if not self.has_active_work():
+            if not self.has_stashed_work():
+                if not self.has_pending_work():
+                    return False
+
+        return True
+
+    def get_dirty_values_async_result(self):
+        dirty_async_res = AsyncResult()
+        def dirty_check(self, res):
+            while True:
+                if self.is_dirty():
+                    time.sleep(0.1)
+                else:
+                    res.set(True)
+                    break
+
+        spawn(dirty_check, self, dirty_async_res)
+
+        return dirty_async_res
+
     def run(self):
         self._do_stop = False
         self._org_g = spawn(self.organize_work)
@@ -181,8 +221,10 @@ class BrickWriterDispatcher(object):
             # Close sockets
             self.prov_sock.close()
             self.resp_sock.close()
-            self.context.close()
             log.debug('Sockets closed')
+            log.debug('Terminating the context')
+            self.context.term()
+            log.debug('Context terminated')
 
             self._shutdown = True
 
@@ -193,12 +235,22 @@ class BrickWriterDispatcher(object):
             try:
                 # Timeout after 1 second to allow stopage and _stashed_work cleanup
                 wd = self.prep_queue.get(timeout=1)
+            except queue.Empty:
+                # No new work added - see if there's anything on the stash to cleanup...
+                with self._stashed_work_lock:
+                    for k in self._stashed_work:
+                        log.debug('Cleanup _stashed_work...')
+                        # Just want to trigger cleanup of the _stashed_work, pass an empty list of 'work', gets discarded
+                        self.put_work(k, self._stashed_work[k][0], [])
+                    continue
+
+            try:
                 k, wm, w = wd
                 is_list = isinstance(w, list)
-
-                if k not in self._stashed_work and len(w) == 0:
-                    log.debug('Discarding empty work')
-                    continue
+                with self._stashed_work_lock:
+                    if k not in self._stashed_work and len(w) == 0:
+                        log.debug('Discarding empty work')
+                        continue
 
                 log.debug('Work: %s',w)
 
@@ -209,26 +261,28 @@ class BrickWriterDispatcher(object):
                 if is_active:
                     log.debug('Do Stash')
                     # The work_key is being worked on
-                    if k not in self._stashed_work:
-                        # Create the stash for this work_key
-                        self._stashed_work[k] = (wm, [])
+                    with self._stashed_work_lock:
+                        if k not in self._stashed_work:
+                            # Create the stash for this work_key
+                            self._stashed_work[k] = (wm, [])
 
-                    # Add the work to the stash
-                    if is_list:
-                        self._stashed_work[k][1].extend(w[:])
-                    else:
-                        self._stashed_work[k][1].append(w)
+                        # Add the work to the stash
+                        if is_list:
+                            self._stashed_work[k][1].extend(w[:])
+                        else:
+                            self._stashed_work[k][1].append(w)
                 else:
                     # If there is a stash for this work_key, prepend it to work
-                    if k in self._stashed_work:
-                        log.debug('Was a stash, prepend: %s, %s', self._stashed_work[k], w)
-                        _, sv=self._stashed_work.pop(k)
-                        if is_list:
-                            sv.extend(w[:])
-                        else:
-                            sv.append(w)
-                        w = sv
-                        is_list = True # Work is a list going forward!!
+                    with self._stashed_work_lock:
+                        if k in self._stashed_work:
+                            log.debug('Was a stash, prepend: %s, %s', self._stashed_work[k], w)
+                            _, sv=self._stashed_work.pop(k)
+                            if is_list:
+                                sv.extend(w[:])
+                            else:
+                                sv.append(w)
+                            w = sv
+                            is_list = True # Work is a list going forward!!
 
                     log.debug('Work: %s',w)
 
@@ -251,69 +305,116 @@ class BrickWriterDispatcher(object):
                         if not_in_pend:
                             # Add the not-yet-pending work to the work_queue
                             self.work_queue.put(k)
-            except queue.Empty:
-                # No new work added - see if there's anything on the stash to cleanup...
-                for k in self._stashed_work:
-                    log.debug('Cleanup _stashed_work...')
-                    # Just want to trigger cleanup of the _stashed_work, pass an empty list of 'work', gets discarded
-                    self.put_work(k, self._stashed_work[k][0], [])
+            except:
+                raise
 
 
     def put_work(self, work_key, work_metrics, work):
         if self._shutdown:
             raise SystemError('This BrickDispatcher has been shutdown and cannot process more work!')
-        log.debug('<<< put work for %s: %s', work_key, work)
         self.prep_queue.put((work_key, work_metrics, work))
 
     def receiver(self):
         while True:
-            with self._active_work_lock:
-                if self._do_stop and len(self._active_work) == 0:
-                    break
-            resp_type, worker_guid, work_key, work = unpack(self.resp_sock.recv())
-            work = list(work) if work is not None else work
-            if resp_type == SUCCESS:
-                log.debug('Worker %s was successful', worker_guid)
+            try:
                 with self._active_work_lock:
-                    self._active_work.pop(work_key)
-            elif resp_type == FAILURE:
-                log.debug('===> FAILURE reported for work on %s by worker %s', work_key, worker_guid)
-                if work_key is None:
-                    # Worker failed before it did anything, put all work back on the prep queue to be reorganized by the organizer
-                    with self._active_work_lock:
-                        # Because it failed so miserably, need to find the work_key based on guid
-                        for k, v in self._active_work.iteritems():
-                            if v[0] == worker_guid:
-                                work_key = k
-                                break
+                    if self._do_stop and len(self._active_work) == 0:
+                        break
 
-                        if work_key is not None:
-                            wguid, wp = self._active_work.pop(work_key)
-                            self.put_work(work_key, wp[0], wp[1])
-                else:
-                    # Normal failure
-                    with self._active_work_lock:
-                        # Pop the work from active work, and queue the work returned by the worker
-                        wguid, wp = self._active_work.pop(work_key)
-                        self.put_work(work_key, wp[0], work)
+                log.debug('Receive response message (loop)')
+                msg = None
+                while msg is None:
+                    try:
+                        msg = self.resp_sock.recv(zmq.NOBLOCK)
+                    except zmq.ZMQError, e:
+                        if e.errno == zmq.EAGAIN:
+                            if self._do_stop:
+                                break
+                            else:
+                                time.sleep(0.1)
+                        else:
+                            raise
+
+                if msg is not None:
+                    resp_type, worker_guid, work_key, work = unpack(msg)
+                    work = list(work) if work is not None else work
+                    if resp_type == SUCCESS:
+                        log.debug('Worker %s was successful', worker_guid)
+                        with self._active_work_lock:
+                            self._active_work.pop(work_key)
+                    elif resp_type == FAILURE:
+                        log.debug('Failure reported for work on %s by worker %s', work_key, worker_guid)
+                        if work_key is None:
+                            # Worker failed before it did anything, put all work back on the prep queue to be reorganized by the organizer
+                            with self._active_work_lock:
+                                # Because it failed so miserably, need to find the work_key based on guid
+                                for k, v in self._active_work.iteritems():
+                                    if v[0] == worker_guid:
+                                        work_key = k
+                                        break
+
+                                if work_key is not None:
+                                    wguid, wp = self._active_work.pop(work_key)
+                                    self.put_work(work_key, wp[0], wp[1])
+                        else:
+                            # Normal failure
+                            with self._active_work_lock:
+                                # Pop the work from active work, and queue the work returned by the worker
+                                wguid, wp = self._active_work.pop(work_key)
+                                self.put_work(work_key, wp[0], work)
+            finally:
+#                time.sleep(0.1)
+                pass
+
 
     def provisioner(self):
         while True:
-            if self._do_stop and self.work_queue.empty():
-                break
-            _, worker_guid = unpack(self.prov_sock.recv())
-            work_key = self.work_queue.get()
-            log.debug('===> assign work for %s', work_key)
-            with self._pending_work_lock:
-                work_metrics, work = self._pending_work.pop(work_key)
+            try:
+                if self._do_stop and self.work_queue.empty():
+                    break
 
-            with self._active_work_lock:
-                self._active_work[work_key] = (worker_guid, (work_metrics, work))
+                log.debug('Receive work request (loop)')
+                msg = None
+                while msg is None:
+                    try:
+                        msg = self.prov_sock.recv(zmq.NOBLOCK)
+                    except zmq.ZMQError, e:
+                        if e.errno == zmq.EAGAIN:
+                            if self._do_stop:
+                                break
+                            else:
+                                time.sleep(0.1)
+                        else:
+                            raise
 
-            wp = (work_key, work_metrics, work)
-            time.sleep(0.3)
-            log.debug('===> assigning to %s: %s', work_key, wp)
-            self.prov_sock.send(pack(wp))
+                if msg is not None:
+                    _, worker_guid = unpack(msg)
+                    log.debug('Get work from work_queue (loop)')
+                    work_key = None
+                    while work_key is None:
+                        try:
+                            work_key = self.work_queue.get(block=False)
+                        except queue.Empty:
+                            if self._do_stop:
+                                break
+                            else:
+                                time.sleep(0.1)
+
+                    if work_key is not None:
+                        log.debug('Assign work for %s', work_key)
+                        with self._pending_work_lock:
+                            work_metrics, work = self._pending_work.pop(work_key)
+
+                        with self._active_work_lock:
+                            self._active_work[work_key] = (worker_guid, (work_metrics, work))
+
+                        wp = (work_key, work_metrics, work)
+                #            time.sleep(0.01)
+                        log.debug('Assigning to %s: %s', work_key, wp)
+                        self.prov_sock.send(pack(wp))
+            finally:
+#       e         time.sleep(0.1)
+                pass
 
     def __del__(self):
         self.shutdown()

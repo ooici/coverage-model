@@ -98,6 +98,10 @@ class AbstractCoverage(AbstractIdentifiable):
 
         cov_obj.flush()
 
+
+    def get_dirty_values_async_result(self):
+        return self._persistence_layer.get_dirty_values_async_result()
+
     def flush(self):
         self._persistence_layer.flush()
 
