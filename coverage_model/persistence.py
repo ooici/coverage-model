@@ -322,9 +322,15 @@ class PersistenceLayer(object):
 
         return ret
 
+
+    def get_dirty_values_async_result(self):
+        return self.brick_dispatcher.get_dirty_values_async_result()
+
     def flush(self):
         for pk, pm in self.parameter_metadata.iteritems():
+            log.debug('Flushing ParameterManager for \'%s\'...', pk)
             pm.flush()
+        log.debug('Flushing MasterManager...')
         self.master_manager.flush()
 
     def close(self, force=False, timeout=None):
@@ -498,12 +504,14 @@ class PersistedStorage(AbstractStorage):
             log.trace('Work metrics: %s', work_metrics)
             log.trace('Work: %s', work)
 
+            #region FOR TESTING WITHOUT OUT-OF-BAND WRITES - IN-LINE WRITING OF VALUES
 #            with h5py.File(brick_file_path, 'a') as f:
 #                f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=cD, fillvalue=fv)
 #                if isinstance(brick_slice, tuple):
 #                    brick_slice = list(brick_slice)
 #
 #                f[brick_guid].__setitem__(*brick_slice, val=v)
+            #endregion
 
 
             # Submit work to dispatcher
@@ -659,6 +667,11 @@ class InMemoryPersistenceLayer(object):
     def init_parameter(self, parameter_context, *args, **kwargs):
         return InMemoryStorage(dtype=parameter_context.param_type.value_encoding, fill_value=parameter_context.param_type.fill_value)
 
+    def get_dirty_async_result(self):
+        from gevent.event import AsyncResult
+        ret = AsyncResult()
+        ret.set(True)
+        return ret
     def flush(self):
         # No Op
         pass
