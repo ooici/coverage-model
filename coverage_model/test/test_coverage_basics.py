@@ -8,7 +8,6 @@
 """
 import shutil
 import tempfile
-import os
 
 from pyon.public import log
 from pyon.util.int_test import IonIntegrationTestCase
@@ -28,12 +27,15 @@ import unittest
 class TestCoverageModelBasicsInt(IonIntegrationTestCase):
 
     def setUp(self):
+        # Create temporary working directory for the persisted coverage tests
         self.working_dir = tempfile.mkdtemp()
     
     def tearDown(self):
+        # Comment this out if you need to inspect the HDF5 files.
         shutil.rmtree(self.working_dir)
         
-    #LOADS
+    # Loading Coverage Tests
+    # Test normal load of a SimplexCoverage
     def test_load_succeeds(self):
         # Depends on a valid coverage existing, so let's make one
         scov = self._make_samplecov()
@@ -41,23 +43,29 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         guid = scov.persistence_guid
         root_path = pl.master_manager.root_dir
         base_path = root_path.replace(guid,'')
+        scov.close()
         lcov = SimplexCoverage(base_path, guid)
-        self.assertIs(type(lcov), SimplexCoverage)
+        lcov.close()
+        self.assertIsInstance(lcov, SimplexCoverage)
 
+    # Test load when path is invalid
     def test_load_fails_not_found(self):
         guid = create_guid()
         base_path = '/'
         with self.assertRaises(SystemError):
-            SimplexCoverage(base_path, guid)
+            scov = SimplexCoverage(base_path, guid)
+            scov.close()
 
+    # Test load when path is invali
     def test_load_fails_bad_path(self):
         # Depends on a valid coverage existing, so let's make one
         scov = self._make_samplecov()
-        pl = scov._persistence_layer
-        guid = pl.master_manager.guid
+        guid = scov.persistence_guid
         base_path = 'some_path_that_dne'
+        scov.close()
         with self.assertRaises(SystemError):
-            SimplexCoverage(base_path, guid)
+            scov = SimplexCoverage(base_path, guid)
+            scov.close()
 
     def test_load_fails_bad_guid(self):
         # Depends on a valid coverage existing, so let's make one
@@ -66,15 +74,18 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         guid = 'some_guid_that_dne'
         root_path = pl.master_manager.root_dir
         base_path = root_path.replace(guid,'')
+        scov.close()
         with self.assertRaises(SystemError):
-            SimplexCoverage(base_path, guid)
+            scov = SimplexCoverage(base_path, guid)
+            scov.close()
 
     def test_load_succeeds_with_options(self):
         # Depends on a valid coverage existing, so let's make one
         scov = self._make_samplecov()
         pl = scov._persistence_layer
-        guid = pl.master_manager.guid
+        guid = scov.persistence_guid
         root_path = pl.master_manager.root_dir
+        scov.close()
         base_path = root_path.replace(guid,'')
         name = 'whatever'
         pdict = ParameterDictionary()
@@ -87,7 +98,8 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
 
         lcov = SimplexCoverage(base_path, guid, name, pdict, tdom, sdom)
-        self.assertIs(type(lcov), SimplexCoverage)
+        lcov.close()
+        self.assertIsInstance(lcov, SimplexCoverage)
 
     #CREATES
     # 'dir, 'guid', 'name', 'pd', 'tdom, 'sdom', 'in-memory'
@@ -112,7 +124,8 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
             bricking_scheme=bricking_scheme)
         log.debug(scov.persistence_guid)
         self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='all')
-        self.assertIs(type(scov), SimplexCoverage)
+        scov.close()
+        self.assertIsInstance(scov, SimplexCoverage)
 
     def test_create_dir_not_exists(self):
         pdict = self._make_parameter_dict()
@@ -122,7 +135,8 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         sdom = self._make_sdom(scrs)
         in_memory = False
         with self.assertRaises(SystemError):
-            SimplexCoverage('bad_path', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory)
+            scov = SimplexCoverage('bad_path', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory)
+            scov.close()
 
     def test_create_guid_valid(self):
         self.assertTrue(len(create_guid()) == 36)
@@ -138,7 +152,8 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         in_memory = False
         name = np.arange(10)
         with self.assertRaises(AttributeError):
-            SimplexCoverage(self.working_dir, create_guid(), name, pdict, tdom, sdom, in_memory)
+            scov = SimplexCoverage(self.working_dir, create_guid(), name, pdict, tdom, sdom, in_memory)
+            scov.close()
 
     def test_create_pdict_invalid(self):
         pdict = 1
@@ -149,7 +164,8 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         in_memory = False
         name = 'sample coverage_model'
         with self.assertRaises(TypeError):
-            SimplexCoverage(self.working_dir, create_guid(), name, pdict, tdom, sdom, in_memory)
+            scov = SimplexCoverage(self.working_dir, create_guid(), name, pdict, tdom, sdom, in_memory)
+            scov.close()
 
     def test_create_tdom_invalid(self):
         pdict = self._make_parameter_dict()
@@ -159,8 +175,8 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         sdom = self._make_sdom(scrs)
         in_memory = False
         name = 'sample coverage_model'
-        with self.assertRaises(AttributeError):
-            SimplexCoverage(
+        with self.assertRaises(TypeError):
+            scov=SimplexCoverage(
                 root_dir=self.working_dir,
                 persistence_guid=create_guid(),
                 name=name,
@@ -169,6 +185,7 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
                 spatial_domain=sdom,
                 in_memory_storage=in_memory,
                 bricking_scheme=None)
+            scov.close()
 
     def test_create_sdom_invalid(self):
         pdict = self._make_parameter_dict()
@@ -178,8 +195,8 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         sdom = 1
         in_memory = False
         name = 'sample coverage_model'
-        with self.assertRaises(AttributeError):
-            SimplexCoverage(
+        with self.assertRaises(TypeError):
+            scov = SimplexCoverage(
                 root_dir=self.working_dir,
                 persistence_guid=create_guid(),
                 name=name,
@@ -188,6 +205,7 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
                 spatial_domain=sdom,
                 in_memory_storage=in_memory,
                 bricking_scheme=None)
+            scov.close()
 
     def test_samplecov_create(self):
         res = False
@@ -201,58 +219,77 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         tsteps = 35
         res = self._insert_set_get(scov=scov, timesteps=tsteps, data=np.arange(tsteps)+prev_tsteps, _slice=slice(0,tsteps), param='all')
         res = self._run_standard_tests(scov, tsteps+prev_tsteps)
+        scov.close()
 #        res = self._run_data_retrieval_tests(scov, tsteps+prev_tsteps)
         self.assertTrue(res)
 
     def test_samplecov_time_one_brick(self):
         scov = self._make_samplecov()
-        self.assertTrue(self._insert_set_get(scov=scov, timesteps=10, data=np.arange(10), _slice=slice(0,10), param='time'))
+        res = self._insert_set_get(scov=scov, timesteps=10, data=np.arange(10), _slice=slice(0,10), param='time')
+        scov.close()
+        self.assertTrue(res)
 
     def test_samplecov_allparams_one_brick(self):
         scov = self._make_samplecov()
-        self.assertTrue(self._insert_set_get(scov=scov, timesteps=10, data=np.arange(10), _slice=slice(0,10), param='all'))
+        res = self._insert_set_get(scov=scov, timesteps=10, data=np.arange(10), _slice=slice(0,10), param='all')
+        scov.close()
+        self.assertTrue(res)
 
     def test_samplecov_time_five_bricks(self):
         scov = self._make_samplecov()
-        self.assertTrue(self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='time'))
+        res = self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='time')
+        scov.close()
+        self.assertTrue(res)
 
     def test_samplecov_allparams_five_bricks(self):
         scov = self._make_samplecov()
-        self.assertTrue(self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='all'))
+        res = self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='all')
+        scov.close()
+        self.assertTrue(res)
 
     def test_samplecov_time_one_brick_strided(self):
         scov = self._make_samplecov()
-        self.assertTrue(self._insert_set_get(scov=scov, timesteps=10, data=np.arange(10), _slice=slice(0,10,2), param='time'))
+        res = self._insert_set_get(scov=scov, timesteps=10, data=np.arange(10), _slice=slice(0,10,2), param='time')
+        scov.close()
+        self.assertTrue(res)
 
     def test_samplecov_time_five_bricks_strided(self):
         scov = self._make_samplecov()
-        self.assertTrue(self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50,5), param='time'))
+        res = self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50,5), param='time')
+        scov.close()
+        self.assertTrue(res)
 
     def test_ptypescov_create(self):
         scov = self._make_ptypescov()
+        scov.close()
         self.assertTrue(scov.name == 'sample coverage_model')
 
     def test_ptypescov_load_data(self):
         ptypes_cov = self._make_ptypescov()
         ptypes_cov_loaded = self._load_data_ptypescov(ptypes_cov)
+        ptypes_cov.close()
+        ptypes_cov_loaded.close()
         self.assertTrue(ptypes_cov_loaded.temporal_domain.shape.extents == (10,))
 
     def test_ptypescov_get_values(self):
         results = []
         ptypes_cov = self._make_ptypescov()
         ptypes_cov_loaded = self._load_data_ptypescov(ptypes_cov)
-        time.sleep(5)
         results.append((ptypes_cov_loaded._range_value.quantity_time[:] == np.arange(10)).all())
         results.append(ptypes_cov_loaded._range_value.const_int[0] == 45)
         total_errors = sum([1 for v in results if v == False])
+        ptypes_cov.close()
+        ptypes_cov_loaded.close()
         self.assertTrue(total_errors==0)
 
     def test_nospatial_create(self):
         scov = self._make_nospatialcov()
+        scov.close()
         self.assertTrue(scov.name == 'sample coverage_model')
 
     def test_emptysamplecov_create(self):
         scov = self._make_emptysamplecov()
+        scov.close()
         self.assertTrue(scov.name == 'empty sample coverage_model')
 
     def _run_standard_tests(self, scov, timesteps):
@@ -261,18 +298,14 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         results.append(scov.name == 'sample coverage_model')
         results.append(scov.num_timesteps == timesteps)
         results.append(list(scov.temporal_domain.shape.extents) == [timesteps])
-        #        log.debug(scov.temporal_domain.shape.extents)
         req_params = ['conductivity', 'lat', 'lon', 'temp', 'time']
         params = scov.list_parameters()
-        #        log.debug(req_params)
-        #        log.debug(params)
         for param in params:
             results.append(param in req_params)
             pc = scov.get_parameter_context(param)
             results.append(len(pc.dom.identifier) == 36)
             pc_dom_dict = pc.dom.dump()
         pdict = scov.parameter_dictionary.dump()
-        #        log.debug(results)
         return (False not in results)
 
     def _run_data_retrieval_tests(self, scov, timesteps):
@@ -299,8 +332,7 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
 
         for param in param_list:
             scov.set_parameter_values(param, data, _slice)
-            # Sleep to make sure data gets saved to disk by the dispatcher
-            time.sleep(5)
+            scov.get_dirty_values_async_result().get(timeout=30)
             ret = scov.get_parameter_values(param, _slice)
         return (ret == data).all()
 
@@ -328,7 +360,7 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
             recval.append(d) # One value (which is a dict) for each member of the domain
         scov.set_parameter_values('array', value=arrval)
         scov.set_parameter_values('record', value=recval)
-
+        scov.get_dirty_values_async_result().get(timeout=30)
         return scov
 
     def _make_ptypescov(self, save_coverage=False, in_memory=False):
@@ -520,18 +552,18 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
             arr2val.append(np.random.random_sample(np.random.randint(1,10)))
         scov.set_parameter_values('array', value=arrval)
         scov.set_parameter_values('array2', value=arr2val)
-
+        scov.get_dirty_values_async_result().get(timeout=30)
         return scov
-
-    def _make_parameter_context(self, name, ptype, dtype, uom):
-        ctxt = ParameterContext(name, type_string)
-
-    def _make_parameter_dictionary(self, params):
-        pdict = ParameterDictionary()
-
-        for param_context in params:
-            pdict.add_context(param_context)
-        return pdict
+#
+#    def _make_parameter_context(self, name, ptype, dtype, uom):
+#        ctxt = ParameterContext(name, type_string)
+#
+#    def _make_parameter_dictionary(self, params):
+#        pdict = ParameterDictionary()
+#
+#        for param_context in params:
+#            pdict.add_context(param_context)
+#        return pdict
 
     def _make_emptysamplecov(self, save_coverage=False, in_memory=False):
         # Instantiate a ParameterDictionary
