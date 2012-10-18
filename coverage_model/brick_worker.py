@@ -77,8 +77,12 @@ class BrickWriterWorker(object):
                         brick_path, bD, cD, data_type, fill_value = brick_metrics
                         if data_type == '|O8':
                             data_type = h5py.special_dtype(vlen=str)
+                        # TODO: Uncomment this to properly turn 0 & 1 chunking into True
+#                        if 0 in cD or 1 in cD:
+#                            cD = True
                         with h5py.File(brick_path, 'a') as f:
-                            f.require_dataset(brick_key, shape=bD, dtype=data_type, chunks=cD, fillvalue=fill_value)
+                            # TODO: Due to usage concerns, currently locking chunking to "auto"
+                            f.require_dataset(brick_key, shape=bD, dtype=data_type, chunks=True, fillvalue=fill_value)
                             for w in list(work): # Iterate a copy - WARN, this is NOT deep, if the list contains objects, they're NOT copied
                                 brick_slice, value = w
                                 if isinstance(brick_slice, tuple):
