@@ -187,7 +187,7 @@ class ConstantValue(AbstractComplexParameterValue):
         pass
 
     def __getitem__(self, slice_):
-        slice_ = self._fix_slice(slice_)
+        slice_ = fix_slice(slice_, self.shape)
 
         c = np.ones(self.shape)[slice_] # Make an array of ones of the appropriate shape and slice it as desired
 
