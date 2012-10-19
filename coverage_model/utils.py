@@ -70,10 +70,19 @@ def fix_slice(slice_, shape):
             if sl_[1] is not None and sl_[1] < 0:
                 sl_[1] = shape[x] + sl_[1]
 
-            if sl_[2] is not None and sl_[2] < 0:
-                slice_[x] = slice(sl_[1],sl_[0],-sl_[2])
-            else:
-                slice_[x] = slice(*sl_)
+            if sl_[2] is not None:
+                if sl_[2] < 0:
+                    sl_[0], sl_[1], sl_[2] = sl_[1], sl_[0], -sl_[2]
+
+                # Fix the stop value based on the step
+                s=sl_[0] if sl_[0] is not None else 0
+                e=sl_[1] if sl_[1] is not None and sl_[1] <= shape[x] else shape[x]
+                m=xrange(s, e, sl_[2])[-1]
+                m += 1 # Stop is non-inclusive
+                sl_[1] = m
+
+            # Reassign the slice
+            slice_[x] = slice(*sl_)
 
 
 
