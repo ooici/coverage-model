@@ -98,9 +98,14 @@ class AbstractCoverage(AbstractIdentifiable):
 
         cov_obj.flush()
 
+    def has_dirty_values(self):
+        return self._persistence_layer.has_dirty_values()
 
     def get_dirty_values_async_result(self):
         return self._persistence_layer.get_dirty_values_async_result()
+
+    def flush_values(self):
+        return self._persistence_layer.flush_values()
 
     def flush(self):
         self._persistence_layer.flush()
@@ -155,7 +160,7 @@ class SimplexCoverage(AbstractCoverage):
     of the AbstractParameterValue class.
 
     """
-    def __init__(self, root_dir, persistence_guid, name=None, parameter_dictionary=None, temporal_domain=None, spatial_domain=None, in_memory_storage=False, bricking_scheme=None):
+    def __init__(self, root_dir, persistence_guid, name=None, parameter_dictionary=None, temporal_domain=None, spatial_domain=None, in_memory_storage=False, bricking_scheme=None, auto_flush_values=True):
         """
         Constructor for SimplexCoverage
 
@@ -246,7 +251,7 @@ class SimplexCoverage(AbstractCoverage):
             if self._in_memory_storage:
                 self._persistence_layer = InMemoryPersistenceLayer()
             else:
-                self._persistence_layer = PersistenceLayer(root_dir, persistence_guid, name=name, tdom=temporal_domain, sdom=spatial_domain, bricking_scheme=self._bricking_scheme)
+                self._persistence_layer = PersistenceLayer(root_dir, persistence_guid, name=name, tdom=temporal_domain, sdom=spatial_domain, bricking_scheme=self._bricking_scheme, auto_flush_values=auto_flush_values)
 
             for o, pc in parameter_dictionary.itervalues():
                 self._append_parameter(pc)
