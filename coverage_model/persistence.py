@@ -24,7 +24,7 @@ class PersistenceError(Exception):
     pass
 
 class PersistenceLayer(object):
-    def __init__(self, root, guid, name=None, tdom=None, sdom=None, bricking_scheme=None, **kwargs):
+    def __init__(self, root, guid, name=None, tdom=None, sdom=None, bricking_scheme=None, auto_flush_values=True, **kwargs):
         """
         Constructor for Persistence Layer
         @param root: Where to save/look for HDF5 files
@@ -40,6 +40,7 @@ class PersistenceLayer(object):
 
         self.master_manager = MasterManager(root, guid, name=name, tdom=tdom, sdom=sdom, global_bricking_scheme=bricking_scheme)
 
+        self.auto_flush_values = auto_flush_values
         self.value_list = {}
 
         self.parameter_metadata = {} # {parameter_name: [brick_list, parameter_domains, rtree]}
@@ -122,7 +123,7 @@ class PersistenceLayer(object):
         pm.tree_rank = tree_rank
         pm.brick_tree = brick_tree
 
-        v = PersistedStorage(pm, self.brick_dispatcher, dtype=parameter_context.param_type.value_encoding, fill_value=parameter_context.param_type.fill_value)
+        v = PersistedStorage(pm, self.brick_dispatcher, dtype=parameter_context.param_type.value_encoding, fill_value=parameter_context.param_type.fill_value, auto_flush=self.auto_flush_values)
         self.value_list[parameter_name] = v
 
         self.expand_domain(parameter_context)
@@ -319,9 +320,21 @@ class PersistenceLayer(object):
 
         return ret
 
+    def has_dirty_values(self):
+        for v in self.value_list.itervalues():
+            if v.has_dirty_values():
+                return True
+
+        return False
 
     def get_dirty_values_async_result(self):
         return self.brick_dispatcher.get_dirty_values_async_result()
+
+    def flush_values(self):
+        for k, v in self.value_list.iteritems():
+            v.flush_values()
+
+        return self.get_dirty_values_async_result()
 
     def flush(self):
         for pk, pm in self.parameter_metadata.iteritems():
@@ -336,7 +349,7 @@ class PersistenceLayer(object):
 
 class PersistedStorage(AbstractStorage):
 
-    def __init__(self, parameter_manager, brick_dispatcher, dtype=None, fill_value=None, **kwargs):
+    def __init__(self, parameter_manager, brick_dispatcher, dtype=None, fill_value=None, auto_flush=True, **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractStorage; see documentation for that class for details
@@ -355,7 +368,28 @@ class PersistedStorage(AbstractStorage):
 
         self.brick_domains = parameter_manager.brick_domains
 
+        self._pending_values = {}
         self.brick_dispatcher = brick_dispatcher
+        self.auto_flush = auto_flush
+
+    def has_dirty_values(self):
+        return len(self._pending_values) > 0
+
+    def flush_values(self):
+        if self.has_dirty_values():
+            for k, v in self._pending_values.iteritems():
+                wk, wm = k
+                for vi in v:
+                    self.brick_dispatcher.put_work(wk, wm, vi)
+
+            self._pending_values = {}
+
+    def _queue_work(self, work_key, work_metrics, work):
+        wk = (work_key, work_metrics)
+        if wk not in self._pending_values:
+            self._pending_values[wk] = []
+
+        self._pending_values[wk].append(work)
 
     # Calculates the bricks from Rtree (brick_tree) using the slice_
     def _bricks_from_slice(self, slice_):
@@ -510,9 +544,12 @@ class PersistedStorage(AbstractStorage):
 #                f[brick_guid].__setitem__(*brick_slice, val=v)
             #endregion
 
-
-            # Submit work to dispatcher
-            self.brick_dispatcher.put_work(work_key, work_metrics, work)
+            if self.auto_flush:
+                # Immediately submit work to the dispatcher
+                self.brick_dispatcher.put_work(work_key, work_metrics, work)
+            else:
+                # Queue the work for later flushing
+                self._queue_work(work_key, work_metrics, work)
 
     def _calc_slices(self, slice_, brick_guid, value, val_origin, brick_origin_offset=0):
         brick_origin, _, brick_size = self.brick_list[brick_guid][1:]
@@ -664,11 +701,20 @@ class InMemoryPersistenceLayer(object):
     def init_parameter(self, parameter_context, *args, **kwargs):
         return InMemoryStorage(dtype=parameter_context.param_type.value_encoding, fill_value=parameter_context.param_type.fill_value)
 
+    def has_dirty_values(self):
+        # Never has dirty values
+        return False
+
     def get_dirty_async_result(self):
         from gevent.event import AsyncResult
         ret = AsyncResult()
         ret.set(True)
         return ret
+
+    def flush_values(self):
+        # No Op
+        pass
+
     def flush(self):
         # No Op
         pass
