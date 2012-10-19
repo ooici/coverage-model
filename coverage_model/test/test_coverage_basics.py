@@ -6,20 +6,21 @@
 @author Christopher Mueller
 @brief Test cases for the coverage_model module
 """
+import os
 import shutil
 import tempfile
 
 from pyon.public import log
 from pyon.util.int_test import IonIntegrationTestCase
 import numpy as np
-import time
+#import time
 from coverage_model.basic_types import AxisTypeEnum, MutabilityEnum, create_guid, VariabilityEnum
 from coverage_model.coverage import CRS, GridDomain, GridShape, SimplexCoverage
 from coverage_model.numexpr_utils import make_range_expr
 from coverage_model.parameter import ParameterDictionary, ParameterContext
 from coverage_model.parameter_types import QuantityType, ConstantType, ArrayType, RecordType
 from nose.plugins.attrib import attr
-from mock import patch, Mock
+#from mock import patch, Mock
 
 import unittest
 
@@ -33,6 +34,7 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
     def tearDown(self):
         # Comment this out if you need to inspect the HDF5 files.
         shutil.rmtree(self.working_dir)
+#        pass
         
     # Loading Coverage Tests
     # Test normal load of a SimplexCoverage
@@ -104,6 +106,12 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
     #CREATES
     # 'dir, 'guid', 'name', 'pd', 'tdom, 'sdom', 'in-memory'
 
+    def test_create_multi_bricks(self):
+        brick_size = 1000
+        time_steps = 5000
+        scov = self._create_multi_bricks_cov(brick_size, time_steps)
+        self.assertIsInstance(scov, SimplexCoverage)
+
     def test_create_succeeds(self):
         pdict = self._make_parameter_dict()
         tcrs = self._make_tcrs()
@@ -169,8 +177,6 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
 
     def test_create_tdom_invalid(self):
         pdict = self._make_parameter_dict()
-        tcrs = self._make_tcrs()
-        tdom = 1
         scrs = self._make_scrs()
         sdom = self._make_sdom(scrs)
         in_memory = False
@@ -213,14 +219,13 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         scov = self._make_samplecov()
         res = self._run_standard_tests(scov, tsteps)
         tsteps = 10
-        res = self._insert_set_get(scov=scov, timesteps=tsteps, data=np.arange(tsteps), _slice=slice(0,tsteps), param='all')
+        res = self._insert_set_get(scov=scov, timesteps=tsteps, data=np.arange(tsteps), _slice=slice(0, tsteps), param='all')
         res = self._run_standard_tests(scov, tsteps)
         prev_tsteps = tsteps
         tsteps = 35
-        res = self._insert_set_get(scov=scov, timesteps=tsteps, data=np.arange(tsteps)+prev_tsteps, _slice=slice(0,tsteps), param='all')
+        res = self._insert_set_get(scov=scov, timesteps=tsteps, data=np.arange(tsteps)+prev_tsteps, _slice=slice(prev_tsteps, tsteps), param='all')
         res = self._run_standard_tests(scov, tsteps+prev_tsteps)
         scov.close()
-#        res = self._run_data_retrieval_tests(scov, tsteps+prev_tsteps)
         self.assertTrue(res)
 
     def test_samplecov_time_one_brick(self):
@@ -306,18 +311,30 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
             results.append(len(pc.dom.identifier) == 36)
             pc_dom_dict = pc.dom.dump()
         pdict = scov.parameter_dictionary.dump()
-        return (False not in results)
+        return False not in results
 
-    def _run_data_retrieval_tests(self, scov, timesteps):
-        results = []
-        orig = np.arange(timesteps)
-        #        log.debug(orig)
-        params = scov.list.parameters()
-        for param in params:
-            vals = scov.get_parameter_values(param,slice(0,timesteps))
-            #            log.debug(vals)
-            results.append((orig == vals).all())
-        return (False not in results)
+    def _create_multi_bricks_cov(self, brick_size, time_steps):
+        pdict = self._make_parameter_dict()
+        tcrs = self._make_tcrs()
+        tdom = self._make_tdom(tcrs)
+        scrs = self._make_scrs()
+        sdom = self._make_sdom(scrs)
+        in_memory = False
+        name = 'multiple bricks coverage'
+        bricking_scheme = {'brick_size':brick_size, 'chunk_size':True}
+        scov = SimplexCoverage(
+            root_dir=self.working_dir,
+            persistence_guid=create_guid(),
+            name=name,
+            parameter_dictionary=pdict,
+            temporal_domain=tdom,
+            spatial_domain=sdom,
+            in_memory_storage=in_memory,
+            bricking_scheme=bricking_scheme)
+        log.debug(os.path.join(self.working_dir, scov.persistence_guid))
+        self._insert_set_get(scov=scov, timesteps=time_steps, data=np.arange(time_steps), _slice=slice(0,time_steps), param='all')
+        scov.close()
+        return scov
 
     def _insert_set_get(self, scov, timesteps, data, _slice, param='all'):
         data = data[_slice]
