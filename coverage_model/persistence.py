@@ -458,6 +458,8 @@ class PersistedStorage(AbstractStorage):
             log.trace('Return array origin: %s', ret_origin)
             try:
                 brick_slice, value_slice, brick_origin_offset = self._calc_slices(slice_, brick_guid, ret_arr, ret_origin, brick_origin_offset)
+                if brick_slice is None or value_slice is None:
+                    raise ValueError('Brick contains no values for specified slice')
             except ValueError as ve:
                 log.warn(ve.message + '; moving to next brick')
                 continue
@@ -504,6 +506,8 @@ class PersistedStorage(AbstractStorage):
             # Figuring out which part of brick to set values
             try:
                 brick_slice, value_slice, brick_origin_offset = self._calc_slices(slice_, brick_guid, val, val_origin, brick_origin_offset)
+                if brick_slice is None or value_slice is None:
+                    raise ValueError('Brick contains no values for specified slice')
             except ValueError as ve:
                 log.warn(ve.message + '; moving to next brick')
                 continue
@@ -619,6 +623,10 @@ class PersistedStorage(AbstractStorage):
                 nbs = slice(start, stop, sl.step)
                 nbsi = range(*nbs.indices(stop))
                 nbsl = len(nbsi)
+                if nbsl == 0: # No values in this brick!!
+                    if sl.step is not None:
+                        brick_origin_offset = brick_origin_offset - bs
+                    return None, None, brick_origin_offset
                 last_index = nbsi[-1]
                 log.trace('last_index=%s',last_index)
                 log.trace('nbsl=%s',nbsl)
