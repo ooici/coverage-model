@@ -41,6 +41,7 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
     def test_load_succeeds(self):
         # Depends on a valid coverage existing, so let's make one
         scov = self._make_samplecov()
+        self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='time')
         pl = scov._persistence_layer
         guid = scov.persistence_guid
         root_path = pl.master_manager.root_dir
@@ -112,6 +113,7 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         scov = self._create_multi_bricks_cov(brick_size, time_steps)
         self.assertIsInstance(scov, SimplexCoverage)
 
+
     def test_create_succeeds(self):
         pdict = self._make_parameter_dict()
         tcrs = self._make_tcrs()
@@ -130,7 +132,7 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
             spatial_domain=sdom,
             in_memory_storage=in_memory,
             bricking_scheme=bricking_scheme)
-        log.debug(scov.persistence_guid)
+        log.trace(scov.persistence_guid)
         self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='all')
         scov.close()
         self.assertIsInstance(scov, SimplexCoverage)
@@ -281,7 +283,7 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         ptypes_cov = self._make_ptypescov()
         ptypes_cov_loaded = self._load_data_ptypescov(ptypes_cov)
         results.append((ptypes_cov_loaded._range_value.quantity_time[:] == np.arange(10)).all())
-        results.append(ptypes_cov_loaded._range_value.const_int[0] == 45)
+        results.append(ptypes_cov_loaded._range_value.const_int == 45)
         total_errors = sum([1 for v in results if v == False])
         ptypes_cov.close()
         ptypes_cov_loaded.close()
@@ -296,6 +298,55 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         scov = self._make_emptysamplecov()
         scov.close()
         self.assertTrue(scov.name == 'empty sample coverage_model')
+
+    def test_slice_and_dice(self):
+        params, _slices, results, index_errors = self._slice_and_dice(brick_size=1000, time_steps=5000)
+        log.debug('slices per parameter: %s', len(_slices))
+        log.debug('total slices ran: %s', len(_slices)*len(params))
+        log.debug('data failure slices: %s', len(results))
+        log.debug('IndexError slices: %s\n%s', len(index_errors), index_errors)
+        self.assertTrue(len(results)+len(index_errors) == 0)
+
+    def test_slice_raises_index_error(self):
+        brick_size = 1000
+        time_steps = 5000
+        scov = self._create_multi_bricks_cov(brick_size, time_steps)
+        _slice = (5000, 5002, 1) # Should raise an IndexError but really grabs the fill value??
+        with self.assertRaises(IndexError):
+            arr = scov.get_parameter_values('temp', _slice)
+            log.debug(arr)
+            scov.close()
+
+    def _slice_and_dice(self, brick_size, time_steps):
+        results = []
+        index_errors = []
+        scov = self._create_multi_bricks_cov(brick_size, time_steps)
+        params = scov.list_parameters()
+        _slices = []
+        # TODO: Automatically calulate the start, stops and strides based on the brick size and time_steps
+        starts = [0, 1, 10, 500, 1000, 1001, 3000, 4999]
+        stops = [1, 2, 11, 501, 1001, 1002, 3001, 5002]
+        strides = [None, 1, 2, 3, 4, 5, 50, 100, 500, 750, 999, 1000, 1001, 1249, 1250, 1500, 2000, 3000, 4000, 5000, 5001, 6000]
+        for stride in strides:
+            for start in starts:
+                for stop in stops:
+                    if stop > start and (stop-start) > stride:
+                        _slices.append(slice(start, stop, stride))
+        for param in params:
+            for _slice in _slices:
+                log.trace('working on _slice: %s', _slice)
+                sliced_data = np.arange(5000)[_slice]
+                try:
+                    ret = scov.get_parameter_values(param, _slice)
+                    if not (ret == sliced_data).all():
+                        results.append(_slice)
+                        log.trace('failed _slice: %s', _slice)
+                except IndexError as ie:
+                    log.trace('%s; moving to next slice', ie.message)
+                    index_errors.append(_slice)
+                    continue
+        scov.close()
+        return params, _slices, results, index_errors
 
     def _run_standard_tests(self, scov, timesteps):
         results = []
@@ -331,7 +382,7 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
             spatial_domain=sdom,
             in_memory_storage=in_memory,
             bricking_scheme=bricking_scheme)
-        log.debug(os.path.join(self.working_dir, scov.persistence_guid))
+        log.trace(os.path.join(self.working_dir, scov.persistence_guid))
         self._insert_set_get(scov=scov, timesteps=time_steps, data=np.arange(time_steps), _slice=slice(0,time_steps), param='all')
         scov.close()
         return scov
