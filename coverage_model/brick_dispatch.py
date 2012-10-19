@@ -10,7 +10,7 @@
 import os
 
 from pyon.util.async import spawn
-from coverage_model.basic_types import create_guid
+from coverage_model.utils import create_guid
 from gevent.event import AsyncResult
 
 from ooi.logging import log

@@ -9,14 +9,7 @@
 
 from ooi.logging import log
 import numpy as np
-import uuid
-
-def create_guid():
-    """
-    @retval Return global unique id string
-    """
-    # guids seem to be more readable if they are UPPERCASE
-    return str(uuid.uuid4()).upper()
+from coverage_model.utils import create_guid, is_valid_constraint
 
 class Dictable(object):
 
@@ -254,14 +247,6 @@ class DomainOfApplication(object):
 
     def __len__(self):
         return len(self.slices)
-
-def is_valid_constraint(v):
-    ret = False
-    if isinstance(v, (slice, int)) or\
-       (isinstance(v, (list,tuple)) and np.array([is_valid_constraint(e) for e in v]).all()):
-        ret = True
-
-    return ret
 
 def get_valid_DomainOfApplication(v, valid_shape):
     """

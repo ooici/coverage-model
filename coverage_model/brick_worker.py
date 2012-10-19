@@ -11,12 +11,11 @@ from pyon.util.async import spawn
 from ooi.logging import log, config
 import logging
 from coverage_model.brick_dispatch import pack, unpack, FAILURE, REQUEST_WORK, SUCCESS
-from coverage_model.basic_types import create_guid
+from coverage_model.utils import create_guid
 from gevent_zeromq import zmq
 import h5py
 import time
 import sys
-import signal
 
 class BrickWriterWorker(object):
 

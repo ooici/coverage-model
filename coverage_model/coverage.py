@@ -23,8 +23,6 @@
 #
 # parameters can be implicitly aligned to cell array
 
-# TODO: All implementation is 'pre-alpha' - intended primarily to flesh out the API (though some may stick around)
-
 #CBM:TODO: Add type checking throughout all classes as determined appropriate, a la:
 #@property
 #def spatial_domain(self):
@@ -36,12 +34,12 @@
 #        self.__spatial_domain = value
 
 from ooi.logging import log
-from pyon.util.containers import DotDict
 
-from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_DomainOfApplication, is_valid_constraint, Dictable, create_guid, InMemoryStorage
+from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_DomainOfApplication, Dictable, InMemoryStorage
 from coverage_model.parameter import Parameter, ParameterDictionary, ParameterContext
 from coverage_model.parameter_values import get_value_class, AbstractParameterValue
 from coverage_model.persistence import PersistenceLayer, InMemoryPersistenceLayer
+from coverage_model.utils import is_valid_constraint
 from copy import deepcopy
 import numpy as np
 import pickle
