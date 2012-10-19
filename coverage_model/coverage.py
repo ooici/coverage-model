@@ -111,7 +111,10 @@ class AbstractCoverage(AbstractIdentifiable):
         self._persistence_layer.flush()
 
     def close(self, force=False, timeout=None):
-        self._persistence_layer.close(force=force, timeout=timeout) # Calls flush() on the persistence layer
+        # If the _persistence_layer attribute is present, call it's close function
+        if hasattr(self, '_persistence_layer'):
+            self._persistence_layer.close(force=force, timeout=timeout) # Calls flush() on the persistence layer
+
         # Not much else to do here at this point....but can add other things down the road
 
     @classmethod
