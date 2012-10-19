@@ -38,8 +38,7 @@ class PersistenceLayer(object):
         log.debug('Persistence GUID: %s', guid)
         root = '.' if root is ('' or None) else root
 
-        self.master_manager = MasterManager(root, guid, name=name, tdom=tdom, sdom=sdom, temporal_param_name=None, global_bricking_scheme=bricking_scheme)
-
+        self.master_manager = MasterManager(root, guid, name=name, tdom=tdom, sdom=sdom, global_bricking_scheme=bricking_scheme)
 
         self.value_list = {}
 
@@ -85,10 +84,8 @@ class PersistenceLayer(object):
         log.debug('cD: %s', cD)
         return bD,tuple(cD)
 
-    def init_parameter(self, parameter_context, bricking_scheme, is_temporal_param=False):
+    def init_parameter(self, parameter_context, bricking_scheme):
         parameter_name = parameter_context.name
-        if is_temporal_param:
-            self.master_manager.temporal_param_name = parameter_name
 
         self.global_bricking_scheme = bricking_scheme
 
