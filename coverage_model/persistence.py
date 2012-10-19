@@ -533,7 +533,7 @@ class PersistedStorage(AbstractStorage):
             work_metrics = (brick_file_path, bD, cD, data_type, fv)
             log.trace('Work key: %s', work_key)
             log.trace('Work metrics: %s', work_metrics)
-            log.trace('Work: %s', work)
+            log.trace('Work[0]: %s', work[0])
 
             #region FOR TESTING WITHOUT OUT-OF-BAND WRITES - IN-LINE WRITING OF VALUES
 #            with h5py.File(brick_file_path, 'a') as f:
