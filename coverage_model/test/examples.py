@@ -443,7 +443,9 @@ def ptypescov(save_coverage=False, in_memory=False):
 
     arrval = []
     recval = []
-    letts='abcdefghij'
+    letts='abcdefghijklmnopqrstuvwxyz'
+    while len(letts) < nt:
+        letts += 'abcdefghijklmnopqrstuvwxyz'
     for x in xrange(nt):
         arrval.append(np.random.bytes(np.random.randint(1,20))) # One value (which is a byte string) for each member of the domain
         d = {letts[x]: letts[x:]}
