@@ -57,7 +57,7 @@ class AbstractCoverage(AbstractIdentifiable):
     """
     def __init__(self):
         AbstractIdentifiable.__init__(self)
-
+        self._closed = False
 
     @classmethod
     def pickle_save(cls, cov_obj, file_path, use_ascii=False):
@@ -109,11 +109,19 @@ class AbstractCoverage(AbstractIdentifiable):
         self._persistence_layer.flush()
 
     def close(self, force=False, timeout=None):
-        # If the _persistence_layer attribute is present, call it's close function
-        if hasattr(self, '_persistence_layer'):
-            self._persistence_layer.close(force=force, timeout=timeout) # Calls flush() on the persistence layer
+        if not self._closed:
+            log.info('Closing coverage \'%s\'', self.name if hasattr(self,'name') else 'unnamed')
 
-        # Not much else to do here at this point....but can add other things down the road
+            log.debug('Ensuring dirty values have been flushed...')
+            self.get_dirty_values_async_result().get()
+
+            # If the _persistence_layer attribute is present, call it's close function
+            if hasattr(self, '_persistence_layer'):
+                self._persistence_layer.close(force=force, timeout=timeout) # Calls flush() on the persistence layer
+
+            # Not much else to do here at this point....but can add other things down the road
+
+        self._closed = True
 
     @classmethod
     def copy(cls, cov_obj, *args):

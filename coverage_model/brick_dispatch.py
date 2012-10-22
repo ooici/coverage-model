@@ -298,6 +298,8 @@ class BrickWriterDispatcher(object):
     def receiver(self):
         while True:
             try:
+                if self.resp_sock.closed:
+                    break
                 if self._do_stop and len(self._active_work) == 0:
                     break
 
@@ -347,6 +349,8 @@ class BrickWriterDispatcher(object):
     def provisioner(self):
         while True:
             try:
+                if self.prov_sock.closed:
+                    break
                 if self._do_stop and self.work_queue.empty():
                     break
 
@@ -389,9 +393,6 @@ class BrickWriterDispatcher(object):
             finally:
 #       e         time.sleep(0.1)
                 pass
-
-    def __del__(self):
-        self.shutdown()
 
 def run_test_dispatcher(work_count, num_workers=1):
 

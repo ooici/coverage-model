@@ -55,6 +55,8 @@ class PersistenceLayer(object):
         self.brick_dispatcher = BrickWriterDispatcher()
         self.brick_dispatcher.run()
 
+        self._closed = False
+
         log.info('Persistence Layer Successfully Initialized')
 
     def __getattr__(self, key):
@@ -344,8 +346,11 @@ class PersistenceLayer(object):
         self.master_manager.flush()
 
     def close(self, force=False, timeout=None):
-        self.flush()
-        self.brick_dispatcher.shutdown(force=force, timeout=timeout)
+        if not self._closed:
+            self.flush()
+            self.brick_dispatcher.shutdown(force=force, timeout=timeout)
+
+        self._closed = True
 
 class PersistedStorage(AbstractStorage):
 
