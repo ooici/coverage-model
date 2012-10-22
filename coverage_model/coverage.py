@@ -124,6 +124,10 @@ class AbstractCoverage(AbstractIdentifiable):
 
         self._closed = True
 
+    @property
+    def closed(self):
+        return self._closed
+
     @classmethod
     def copy(cls, cov_obj, *args):
         raise NotImplementedError('Coverages cannot yet be copied. You can load multiple \'independent\' copies of the same coverage, but be sure to save them to different names.')
@@ -306,6 +310,9 @@ class SimplexCoverage(AbstractCoverage):
         @throws StandardError   If the ParameterContext.axis indicates that it is temporal and a temporal parameter
         already exists in the coverage
         """
+        if self.closed:
+            raise ValueError('I/O operation on closed file')
+
         if not isinstance(parameter_context, ParameterContext):
             raise TypeError('\'parameter_context\' must be an instance of ParameterContext')
 
@@ -371,8 +378,11 @@ class SimplexCoverage(AbstractCoverage):
         @returns A Parameter object containing the context and value for the specified parameter
         @throws KeyError    The coverage does not contain a parameter with name 'param_name'
         """
+        if self.closed:
+            raise ValueError('I/O operation on closed file')
+
         if param_name in self._range_dictionary:
-            p = Parameter(self._range_dictionary.get_context(param_name), self._range_value[param_name].shape, self._range_value[param_name])
+            p = Parameter(deepcopy(self._range_dictionary.get_context(param_name)), self._range_value[param_name].shape, self._range_value[param_name])
             return p
         else:
             raise KeyError('Coverage does not contain parameter \'{0}\''.format(param_name))
@@ -404,6 +414,8 @@ class SimplexCoverage(AbstractCoverage):
         @param count    The number of timesteps to insert
         @param origin   The starting location, from which to begin the insertion
         """
+        if self.closed:
+            raise ValueError('I/O operation on closed file')
 
         # Get the current shape of the temporal_dimension
         shp = self.temporal_domain.shape
@@ -464,6 +476,9 @@ class SimplexCoverage(AbstractCoverage):
         @param sdoa The spatial DomainOfApplication
         @throws KeyError    The coverage does not contain a parameter with name 'param_name'
         """
+        if self.closed:
+            raise ValueError('I/O operation on closed file')
+
         if not param_name in self._range_value:
             raise KeyError('Parameter \'{0}\' not found in coverage_model'.format(param_name))
 
@@ -495,6 +510,9 @@ class SimplexCoverage(AbstractCoverage):
         @param return_value If supplied, filled with response value - currently via OVERWRITE
         @throws KeyError    The coverage does not contain a parameter with name 'param_name'
         """
+        if self.closed:
+            raise ValueError('I/O operation on closed file')
+
         if not param_name in self._range_value:
             raise KeyError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
@@ -519,16 +537,16 @@ class SimplexCoverage(AbstractCoverage):
 
     def get_parameter_context(self, param_name):
         """
-        Retrieve the ParameterContext object for the specified parameter
+        Retrieve a deepcopy of the ParameterContext object for the specified parameter
 
         @param param_name   The name of the parameter for which to retrieve context
-        @returns A ParameterContext object
+        @returns A deepcopy of the specified ParameterContext object
         @throws KeyError    The coverage does not contain a parameter with name 'param_name'
         """
         if not param_name in self._range_dictionary:
             raise KeyError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
-        return self._range_dictionary.get_context(param_name)
+        return deepcopy(self._range_dictionary.get_context(param_name))
 
     @property
     def info(self):
