@@ -185,90 +185,92 @@ class SimplexCoverage(AbstractCoverage):
         @param spatial_domain  a concrete instance of AbstractDomain for the spatial domain component
         @param temporal_domain a concrete instance of AbstractDomain for the temporal domain component
         """
-
-        # Make sure root_dir and persistence_guid are both not None and are strings
-        if not isinstance(root_dir, str) or not isinstance(persistence_guid, str):
-            raise TypeError('\'root_dir\' and \'persistence_guid\' must be instances of str')
-
-        pth=os.path.join(root_dir, persistence_guid)
-
-        def _doload(self):
-            # Make sure the coverage directory exists
-            if not os.path.exists(pth):
-                raise SystemError('Cannot find specified coverage: {0}'.format(pth))
-
-            # All appears well - load it up!
-            self._persistence_layer = PersistenceLayer(root_dir, persistence_guid)
-
-            self.name = self._persistence_layer.name
-            self.spatial_domain = self._persistence_layer.sdom
-            self.temporal_domain = self._persistence_layer.tdom
-
-            self._range_dictionary = ParameterDictionary()
-            self._range_value = RangeValues()
-
-            self._bricking_scheme = self._persistence_layer.global_bricking_scheme
-
-            self._in_memory_storage = False
-
-            from coverage_model.persistence import PersistedStorage
-            for parameter_name in self._persistence_layer.parameter_metadata.keys():
-                md = self._persistence_layer.parameter_metadata[parameter_name]
-                pc = md.parameter_context
-                self._range_dictionary.add_context(pc)
-                s = PersistedStorage(md, self._persistence_layer.brick_dispatcher, dtype=pc.param_type.value_encoding, fill_value=pc.param_type.fill_value)
-                self._range_value[parameter_name] = get_value_class(param_type=pc.param_type, domain_set=pc.dom, storage=s)
-
-
         AbstractCoverage.__init__(self)
-        if name is None or parameter_dictionary is None:
-            # This appears to be a load
-            _doload(self)
+        try:
+            # Make sure root_dir and persistence_guid are both not None and are strings
+            if not isinstance(root_dir, str) or not isinstance(persistence_guid, str):
+                raise TypeError('\'root_dir\' and \'persistence_guid\' must be instances of str')
 
-        else:
-            # This appears to be a new coverage
-            # Make sure name and parameter_dictionary are not None
+            pth=os.path.join(root_dir, persistence_guid)
+
+            def _doload(self):
+                # Make sure the coverage directory exists
+                if not os.path.exists(pth):
+                    raise SystemError('Cannot find specified coverage: {0}'.format(pth))
+
+                # All appears well - load it up!
+                self._persistence_layer = PersistenceLayer(root_dir, persistence_guid)
+
+                self.name = self._persistence_layer.name
+                self.spatial_domain = self._persistence_layer.sdom
+                self.temporal_domain = self._persistence_layer.tdom
+
+                self._range_dictionary = ParameterDictionary()
+                self._range_value = RangeValues()
+
+                self._bricking_scheme = self._persistence_layer.global_bricking_scheme
+
+                self._in_memory_storage = False
+
+                from coverage_model.persistence import PersistedStorage
+                for parameter_name in self._persistence_layer.parameter_metadata.keys():
+                    md = self._persistence_layer.parameter_metadata[parameter_name]
+                    pc = md.parameter_context
+                    self._range_dictionary.add_context(pc)
+                    s = PersistedStorage(md, self._persistence_layer.brick_dispatcher, dtype=pc.param_type.value_encoding, fill_value=pc.param_type.fill_value)
+                    self._range_value[parameter_name] = get_value_class(param_type=pc.param_type, domain_set=pc.dom, storage=s)
+
             if name is None or parameter_dictionary is None:
-                raise SystemError('\'name\' and \'parameter_dictionary\' cannot be None')
-
-            # Make sure the specified root_dir exists
-            if not in_memory_storage and not os.path.exists(root_dir):
-                raise SystemError('Cannot find specified \'root_dir\': {0}'.format(root_dir))
-
-            # If the coverage directory exists, load it instead!!
-            if os.path.exists(pth):
-                log.warn('The specified coverage already exists - performing load of \'{0}\''.format(pth))
+                # This appears to be a load
                 _doload(self)
-                return
 
-            self.name = name
-            if temporal_domain is None:
-                self.temporal_domain = GridDomain(GridShape('temporal',[0]), CRS.standard_temporal(), MutabilityEnum.EXTENSIBLE)
-            elif isinstance(temporal_domain, AbstractDomain):
-                self.temporal_domain = deepcopy(temporal_domain)
             else:
-                raise TypeError('\'temporal_domain\' must be an instance of AbstractDomain')
+                # This appears to be a new coverage
+                # Make sure name and parameter_dictionary are not None
+                if name is None or parameter_dictionary is None:
+                    raise SystemError('\'name\' and \'parameter_dictionary\' cannot be None')
 
-            if spatial_domain is None or isinstance(spatial_domain, AbstractDomain):
-                self.spatial_domain = deepcopy(spatial_domain)
-            else:
-                raise TypeError('\'spatial_domain\' must be an instance of AbstractDomain')
+                # Make sure the specified root_dir exists
+                if not in_memory_storage and not os.path.exists(root_dir):
+                    raise SystemError('Cannot find specified \'root_dir\': {0}'.format(root_dir))
 
-            if not isinstance(parameter_dictionary, ParameterDictionary):
-                raise TypeError('\'parameter_dictionary\' must be of type ParameterDictionary')
-            self._range_dictionary = ParameterDictionary()
-            self._range_value = RangeValues()
+                # If the coverage directory exists, load it instead!!
+                if os.path.exists(pth):
+                    log.warn('The specified coverage already exists - performing load of \'{0}\''.format(pth))
+                    _doload(self)
+                    return
 
-            self._bricking_scheme = bricking_scheme or {'brick_size':1000,'chunk_size':500}
+                self.name = name
+                if temporal_domain is None:
+                    self.temporal_domain = GridDomain(GridShape('temporal',[0]), CRS.standard_temporal(), MutabilityEnum.EXTENSIBLE)
+                elif isinstance(temporal_domain, AbstractDomain):
+                    self.temporal_domain = deepcopy(temporal_domain)
+                else:
+                    raise TypeError('\'temporal_domain\' must be an instance of AbstractDomain')
 
-            self._in_memory_storage = in_memory_storage
-            if self._in_memory_storage:
-                self._persistence_layer = InMemoryPersistenceLayer()
-            else:
-                self._persistence_layer = PersistenceLayer(root_dir, persistence_guid, name=name, tdom=temporal_domain, sdom=spatial_domain, bricking_scheme=self._bricking_scheme, auto_flush_values=auto_flush_values)
+                if spatial_domain is None or isinstance(spatial_domain, AbstractDomain):
+                    self.spatial_domain = deepcopy(spatial_domain)
+                else:
+                    raise TypeError('\'spatial_domain\' must be an instance of AbstractDomain')
 
-            for o, pc in parameter_dictionary.itervalues():
-                self._append_parameter(pc)
+                if not isinstance(parameter_dictionary, ParameterDictionary):
+                    raise TypeError('\'parameter_dictionary\' must be of type ParameterDictionary')
+                self._range_dictionary = ParameterDictionary()
+                self._range_value = RangeValues()
+
+                self._bricking_scheme = bricking_scheme or {'brick_size':1000,'chunk_size':500}
+
+                self._in_memory_storage = in_memory_storage
+                if self._in_memory_storage:
+                    self._persistence_layer = InMemoryPersistenceLayer()
+                else:
+                    self._persistence_layer = PersistenceLayer(root_dir, persistence_guid, name=name, tdom=temporal_domain, sdom=spatial_domain, bricking_scheme=self._bricking_scheme, auto_flush_values=auto_flush_values)
+
+                for o, pc in parameter_dictionary.itervalues():
+                    self._append_parameter(pc)
+        except:
+            self._closed = True
+            raise
 
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
