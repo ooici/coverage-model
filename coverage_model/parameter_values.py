@@ -180,7 +180,7 @@ class ConstantValue(AbstractComplexParameterValue):
 
     @property
     def content(self):
-        return self._storage[0][()] # Returned from storage as a 0-d array
+        return self._storage[0]
 
     def expand_content(self, domain, origin, expansion):
         # No op storage is always 1 - appropriate domain applied during retrieval of data
