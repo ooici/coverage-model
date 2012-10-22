@@ -113,7 +113,8 @@ class AbstractCoverage(AbstractIdentifiable):
             log.info('Closing coverage \'%s\'', self.name if hasattr(self,'name') else 'unnamed')
 
             log.debug('Ensuring dirty values have been flushed...')
-            self.get_dirty_values_async_result().get()
+            if not force:
+                self.get_dirty_values_async_result().get(timeout=timeout)
 
             # If the _persistence_layer attribute is present, call it's close function
             if hasattr(self, '_persistence_layer'):
