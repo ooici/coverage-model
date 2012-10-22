@@ -463,7 +463,7 @@ class PersistedStorage(AbstractStorage):
             log.trace('Return array origin: %s', ret_origin)
             try:
                 brick_slice, value_slice, brick_origin_offset = self._calc_slices(slice_, brick_guid, ret_arr, ret_origin, brick_origin_offset)
-                if brick_slice is None or value_slice is None:
+                if brick_slice is None:
                     raise ValueError('Brick contains no values for specified slice')
             except ValueError as ve:
                 log.warn(ve.message + '; moving to next brick')
@@ -511,7 +511,8 @@ class PersistedStorage(AbstractStorage):
             # Figuring out which part of brick to set values
             try:
                 brick_slice, value_slice, brick_origin_offset = self._calc_slices(slice_, brick_guid, val, val_origin, brick_origin_offset)
-                if brick_slice is None or value_slice is None:
+                log.trace('brick_slice: %s, value_slice: %s, brick_origin_offset: %s', brick_slice, value_slice, brick_origin_offset)
+                if brick_slice is None:
                     raise ValueError('Brick contains no values for specified slice')
             except ValueError as ve:
                 log.warn(ve.message + '; moving to next brick')
@@ -524,7 +525,9 @@ class PersistedStorage(AbstractStorage):
             # Create the HDF5 dataset that represents one brick
             bD = tuple(self.brick_domains[1])
             cD = self.brick_domains[2]
-            v = val if value_slice is None else val[value_slice]
+            v = val[value_slice]
+            if val.ndim == 0 and len(val.shape) == 0 and np.iterable(v): # Prevent single value strings from being iterated
+                v = [v]
 
             # Check for object type
             data_type = self.dtype
@@ -660,7 +663,10 @@ class PersistedStorage(AbstractStorage):
         if val_origin is not None and len(val_origin) != 0:
             val_origin = val_ori
         else:
-            value_slice = None
+            if val_arr.ndim == 0 and len(val_arr.shape) == 0:
+                value_slice = ()
+            else:
+                value_slice = brick_slice
 
         return brick_slice, value_slice, brick_origin_offset
     # TODO: Does not support n-dimensional
