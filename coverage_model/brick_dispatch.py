@@ -31,6 +31,7 @@ REQUEST_WORK = 'REQUEST_WORK'
 SUCCESS = 'SUCCESS'
 FAILURE = 'FAILURE'
 PORT_RANGE = [10000,20000]
+WORK_FAILURE_RETRIES = 4
 
 def pack(msg):
     return packb(msg, default=encode_ion)
@@ -40,16 +41,18 @@ def unpack(msg):
 
 class BrickWriterDispatcher(object):
 
-    def __init__(self, num_workers=1, pidantic_dir=None, working_dir=None):
+    def __init__(self, failure_callback, num_workers=1, pidantic_dir=None, working_dir=None):
         self.guid = create_guid()
         self.prep_queue = queue.Queue()
         self.work_queue = queue.Queue()
         self._pending_work = {}
         self._stashed_work = {}
         self._active_work = {}
+        self._failures = {}
         self._do_stop = False
         self._count = -1
         self._shutdown = False
+        self._failure_callback = failure_callback
 
         self.context = zmq.Context(1)
         self.prov_sock = self.context.socket(zmq.REP)
@@ -295,6 +298,17 @@ class BrickWriterDispatcher(object):
             raise SystemError('This BrickDispatcher has been shutdown and cannot process more work!')
         self.prep_queue.put((work_key, work_metrics, work))
 
+    def _add_failure(self, wp):
+        pwp = pack(wp)
+        log.warn('Adding to _failures: %s', pwp)
+        if pwp in self._failures:
+            self._failures[pwp] += 1
+        else:
+            self._failures[pwp] = 1
+
+        if self._failures[pwp] > WORK_FAILURE_RETRIES:
+            raise ValueError('Maximum failure retries exceeded')
+
     def receiver(self):
         while True:
             try:
@@ -322,7 +336,9 @@ class BrickWriterDispatcher(object):
                     work = list(work) if work is not None else work
                     if resp_type == SUCCESS:
                         log.debug('Worker %s was successful', worker_guid)
-                        self._active_work.pop(work_key)
+                        wguid, pw = self._active_work.pop(work_key)
+                        if pw in self._failures:
+                            self._failures.pop(pw)
                     elif resp_type == FAILURE:
                         log.debug('Failure reported for work on %s by worker %s', work_key, worker_guid)
                         if work_key is None:
@@ -334,17 +350,28 @@ class BrickWriterDispatcher(object):
                                     break
 
                             if work_key is not None:
-                                wguid, wp = self._active_work.pop(work_key)
-                                self.put_work(work_key, wp[0], wp[1])
+                                wguid, pw = self._active_work.pop(work_key)
+                                try:
+                                    self._add_failure(pw)
+                                except ValueError,e:
+                                    self._failure_callback(e.message, unpack(pw))
+                                    continue
+
+                                self.put_work(*unpack(pw))
                         else:
                             # Normal failure
                             # Pop the work from active work, and queue the work returned by the worker
-                            wguid, wp = self._active_work.pop(work_key)
-                            self.put_work(work_key, wp[0], work)
+                            wguid, pw = self._active_work.pop(work_key)
+                            try:
+                                self._add_failure(pw)
+                            except ValueError,e:
+                                self._failure_callback(e.message, unpack(pw))
+                                continue
+                            _, wm, wk = unpack(pw)
+                            self.put_work(work_key, wm, work)
             finally:
 #                time.sleep(0.1)
                 pass
-
 
     def provisioner(self):
         while True:
@@ -385,11 +412,12 @@ class BrickWriterDispatcher(object):
                         log.debug('Assign work for %s', work_key)
                         work_metrics, work = self._pending_work.pop(work_key)
 
-                        self._active_work[work_key] = (worker_guid, (work_metrics, work))
-
                         wp = (work_key, work_metrics, work)
                         log.debug('Assigning to %s: %s', work_key, wp)
-                        self.prov_sock.send(pack(wp))
+                        pw = pack(wp)
+
+                        self._active_work[work_key] = (worker_guid, pw)
+                        self.prov_sock.send(pw)
             finally:
 #       e         time.sleep(0.1)
                 pass
