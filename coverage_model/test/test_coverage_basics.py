@@ -309,13 +309,46 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         log.debug('IndexError slices: %s\n%s', len(index_errors), index_errors)
         self.assertTrue(len(results)+len(index_errors) == 0)
 
-    def test_slice_raises_index_error(self):
+    def test_slice_raises_index_error_in_out(self):
         brick_size = 1000
         time_steps = 5000
         scov = self._create_multi_bricks_cov(brick_size, time_steps)
-        _slice = (5000, 5002, 1) # Should raise an IndexError but really grabs the fill value??
+        _slice = slice(4999, 5020, None)
         with self.assertRaises(IndexError):
-            arr = scov.get_parameter_values('temp', _slice)
+            scov.get_parameter_values('temp', _slice)
+
+    def test_slice_raises_index_error_out_out(self):
+        brick_size = 1000
+        time_steps = 5000
+        scov = self._create_multi_bricks_cov(brick_size, time_steps)
+        _slice = slice(5010, 5020, None)
+        with self.assertRaises(IndexError):
+            scov.get_parameter_values('temp', _slice)
+
+    def test_slice_raises_index_error_in_out_step(self):
+        brick_size = 1000
+        time_steps = 5000
+        scov = self._create_multi_bricks_cov(brick_size, time_steps)
+        _slice = slice(4000, 5020, 5)
+        with self.assertRaises(IndexError):
+            scov.get_parameter_values('temp', _slice)
+
+    def test_get_by_slice(self):
+        results = []
+        brick_size = 1000
+        time_steps = 50
+        cov = self._create_multi_bricks_cov(brick_size, time_steps)
+        dat = cov.get_parameter_values('time')
+        for s in range(len(dat)):
+            for e in range(len(dat)):
+                e+=1
+                if s < e:
+                    for st in range(e-s):
+                        sl = slice(s, e, st+1)
+                        mock_data = np.array(range(*sl.indices(sl.stop)))
+                        data = cov.get_parameter_values('time', sl)
+                        results.append(np.array_equiv(mock_data, data))
+        self.assertTrue(False not in results)
 
 
     def _slice_and_dice(self, brick_size, time_steps):
@@ -326,8 +359,8 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         _slices = []
         # TODO: Automatically calulate the start, stops and strides based on the brick size and time_steps
         starts = [0, 1, 10, 500, 1000, 1001, 3000, 4999]
-        stops = [1, 2, 11, 501, 1001, 1002, 3001, 5002]
-        strides = [None, 1, 2, 3, 4, 5, 50, 100, 500, 750, 999, 1000, 1001, 1249, 1250, 1500, 2000, 3000, 4000, 5000, 5001, 6000]
+        stops = [1, 2, 11, 501, 1001, 1002, 3001, 5000]
+        strides = [None, 1, 2, 3, 4, 5, 50, 100, 500, 750, 999, 1000, 1001, 1249, 1250, 1500, 2000, 3000, 4000, 5000]
         for stride in strides:
             for start in starts:
                 for stop in stops:
