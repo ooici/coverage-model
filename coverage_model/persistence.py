@@ -52,7 +52,7 @@ class PersistenceLayer(object):
         if self.master_manager.is_dirty():
             self.master_manager.flush()
 
-        self.brick_dispatcher = BrickWriterDispatcher()
+        self.brick_dispatcher = BrickWriterDispatcher(self.write_failure_callback)
         self.brick_dispatcher.run()
 
         self._closed = False
@@ -70,6 +70,10 @@ class PersistenceLayer(object):
             setattr(self.master_manager, key, value)
         else:
             super(PersistenceLayer, self).__setattr__(key, value)
+
+    # CBM TODO: This needs to be improved greatly - should callback all the way to the Application layer as a "failure handler"
+    def write_failure_callback(self, message, work):
+        log.error('WORK DISCARDED!!!; %s: %s', message, work)
 
     def calculate_brick_size(self, tD, bricking_scheme):
         """
