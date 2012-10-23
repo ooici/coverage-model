@@ -93,7 +93,7 @@ def param_dict_compare():
     pdict_1 = ParameterDictionary()
 
     # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
-    pdict_1.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')))
+    pdict_1.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')), is_temporal=True)
     pdict_1.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
     pdict_1.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
     pdict_1.add_context(ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius')))
@@ -103,7 +103,7 @@ def param_dict_compare():
     pdict_2 = ParameterDictionary()
 
     # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
-    pdict_2.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')))
+    pdict_2.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')), is_temporal=True)
     pdict_2.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
     pdict_2.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
     pdict_2.add_context(ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius')))
@@ -113,7 +113,7 @@ def param_dict_compare():
     pdict_3 = ParameterDictionary()
 
     # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
-    pdict_3.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')))
+    pdict_3.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')), is_temporal=True)
     pdict_3.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
     pdict_3.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
     pdict_3.add_context(ParameterContext('temp2', param_type=QuantityType(uom='degree_Celsius')))
@@ -123,7 +123,7 @@ def param_dict_compare():
     pdict_4 = ParameterDictionary()
 
     # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
-    pdict_4.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')))
+    pdict_4.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')), is_temporal=True)
     pdict_4.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
     pdict_4.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
 

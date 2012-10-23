@@ -319,6 +319,7 @@ class ParameterDictionary(AbstractIdentifiable):
         """
         #CBM TODO: try/except this to inform more pleasantly if it bombs
         res = dict((k,(v[0],v[1]._todict())) for k, v in self._map.iteritems())
+        res.update((k,v._todict() if hasattr(v, '_todict') else v) for k, v in self.__dict__.iteritems() if k != '_map')
         res['cm_type'] = (self.__module__, self.__class__.__name__)
         return res
 
@@ -333,8 +334,17 @@ class ParameterDictionary(AbstractIdentifiable):
             d=cmdict.copy()
             _=d.pop('cm_type')
             for k, v in d.iteritems():
-                pc = ParameterContext._fromdict(v[1])
-                ret._map[pc.name] = (v[0], pc)
+                if isinstance(v, tuple) and len(v) == 2 and isinstance(v[0],int) and isinstance(v[1],dict) and 'cm_type' in v[1]:
+                    pc = ParameterContext._fromdict(v[1])
+                    ret._map[pc.name] = (v[0], pc)
+                elif isinstance(v, dict) and 'cm_type' in v:
+                    ms, cs = v['cm_type']
+                    module = __import__(ms, fromlist=[cs])
+                    classobj = getattr(module, cs)
+                    setattr(ret,k,classobj._fromdict(v))
+                else:
+                    setattr(ret, k, v)
+
 
         return ret
 
