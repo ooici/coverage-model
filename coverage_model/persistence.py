@@ -728,7 +728,7 @@ class InMemoryPersistenceLayer(object):
         # Never has dirty values
         return False
 
-    def get_dirty_async_result(self):
+    def get_dirty_values_async_result(self):
         from gevent.event import AsyncResult
         ret = AsyncResult()
         ret.set(True)
