@@ -764,6 +764,6 @@ class InMemoryPersistenceLayer(object):
         # No Op
         pass
 
-    def close(self):
+    def close(self, force=False, timeout=None):
         # No Op
         pass
