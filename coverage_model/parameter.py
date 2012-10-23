@@ -334,7 +334,7 @@ class ParameterDictionary(AbstractIdentifiable):
             d=cmdict.copy()
             _=d.pop('cm_type')
             for k, v in d.iteritems():
-                if isinstance(v, tuple) and len(v) == 2 and isinstance(v[0],int) and isinstance(v[1],dict) and 'cm_type' in v[1]:
+                if isinstance(v, (tuple,list)) and len(v) == 2 and isinstance(v[0],int) and isinstance(v[1],dict) and 'cm_type' in v[1]:
                     pc = ParameterContext._fromdict(v[1])
                     ret._map[pc.name] = (v[0], pc)
                 elif isinstance(v, dict) and 'cm_type' in v:
