@@ -8,12 +8,8 @@
 """
 
 from ooi.logging import log
-from coverage_model.numexpr_utils import make_range_expr
 from netCDF4 import Dataset
-from coverage_model.basic_types import *
-from coverage_model.coverage import *
-from coverage_model.parameter_types import *
-from coverage_model.parameter import *
+from coverage_model import *
 import numpy as np
 
 def values_outside_coverage():
@@ -747,7 +743,8 @@ def direct_write():
     log.debug(scov.range_value['streamflow'][slice_])
 
 def methodized_read():
-    from coverage_model.test.examples import SimplexCoverage
+    from coverage_model import SimplexCoverage
+    from coverage_model.basic_types import DomainOfApplication
     import numpy as np
     import os
 
