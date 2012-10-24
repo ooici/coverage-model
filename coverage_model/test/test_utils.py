@@ -28,12 +28,16 @@ class TestUtilsUnit(PyonTestCase):
         self.assertEqual(r, utils.prod([a,b,c]))
 
     def test_create_guid(self):
-        import re
-        guid_match = r'^\w{8}-\w{4}-\w{4}-\w{4}-\w{12}'
         guid = utils.create_guid()
-        self.assertIsInstance(guid, str)
-        self.assertIsNotNone(re.match(guid_match, guid))
 
+        # Ensure the guid is a str
+        self.assertIsInstance(guid, str)
+
+        # Make sure it's properly formatted - this also tests is_guid
+        self.assertTrue(utils.is_guid(guid))
+
+        # Test that is_guid fails when appropriate
+        self.assertFalse(utils.is_guid(guid[:-1]))
 
     def test_is_valid_constraint_passes(self):
         sl = 1
