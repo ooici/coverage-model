@@ -29,30 +29,38 @@ def is_valid_constraint(v):
 
     return ret
 
-def _raise_index_error_int(slice_, shape, dim):
+def _raise_index_error_int(slice_, size, dim):
     if slice_ < 0:
-        raise IndexError('index cannot be < 0: index => {0}'.format(slice_))
-    if slice_ >= shape:
-        raise IndexError('index cannot be >= the size for dimension {2}: index => {0}, size => {1}'.format(slice_, shape, dim))
+        raise IndexError('On dimension {0}; index cannot be < 0: index => {0}'.format(dim, slice_))
+    if slice_ >= size:
+        raise IndexError('On dimension {0}; index cannot be >= the size: index => {1}, size => {2}'.format(dim, slice_, size))
 
-def _raise_index_error_list(slice_, shape, dim):
+def _raise_index_error_list(slice_, size, dim):
     last = -1
     for i in xrange(len(slice_)):
         c=slice_[i]
         if last >= c:
-            raise IndexError('indices must be in increasing order and cannot be duplicated: list => {0}'.format(slice_))
+            raise IndexError('On dimension {0}; indices must be in increasing order and cannot be duplicated: list => {1}'.format(dim, slice_))
         last = c
-        if slice_[i] >= shape:
-            raise IndexError('index {0} of list cannot be >= the size for dimension {3}: list => {1}, size => {2}'.format(i, slice_, shape, dim))
+        if slice_[i] >= size:
+            raise IndexError('On dimension {0}; index {1} of list cannot be >= the size: list => {2}, size => {3}'.format(dim, i, slice_, size))
 
-def _raise_index_error_slice(slice_, shape, dim):
+def _raise_index_error_slice(slice_, size, dim):
+    if slice_.start is not None:
+        if slice_.start < 0:
+            raise IndexError('On dimension {0}; start index of slice cannot be < 0: slice => {1}, size => {2}'.format(dim, slice_, size))
+        if slice_.start >= size:
+            raise IndexError('On dimension {0}; start index of slice cannot be >= size: slice => {1}, size => {2}'.format(dim, slice_, size))
+    if slice_.stop is not None:
+        if slice_.start is None and slice_.stop == 0:
+            raise IndexError('On dimension {0}; stop index of slice cannot be == 0 when the start index is None: slice => {1}, size => {2}'.format(dim, slice_, size))
+        if slice_.stop < 0:
+            raise IndexError('On dimension {0}; stop index of slice cannot be < 0: slice => {1}, size => {2}'.format(dim, slice_, size))
+        if slice_.stop > size:
+            raise IndexError('On dimension {0}; stop index of slice cannot be > size: slice => {1}, size => {2}'.format(dim, slice_, size))
     if slice_.start is not None and slice_.stop is not None:
         if slice_.start >= slice_.stop:
-            raise IndexError('start index of slice cannot be >= stop index: slice => {0}'.format(slice_))
-        if slice_.start >= shape:
-            raise IndexError('start index of slice cannot be >= size for dimension {2}: slice => {0}, size => {1}'.format(slice_, shape, dim))
-        elif slice_.stop > shape:
-            raise IndexError('stop index of slice cannot be > size for dimension {2}: slice => {0}, size => {1}'.format(slice_, shape, dim))
+            raise IndexError('On dimension {0}; start index of slice cannot be >= stop index: slice => {1}'.format(dim, slice_))
 
 def fix_slice(slice_, shape):
     # CBM: First swack - see this for more possible checks: http://code.google.com/p/netcdf4-python/source/browse/trunk/netCDF4_utils.py
