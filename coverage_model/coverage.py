@@ -85,7 +85,7 @@ class AbstractCoverage(AbstractIdentifiable):
     @classmethod
     def load(cls, root_dir, persistence_guid=None):
         if persistence_guid is None:
-            root_dir, persistence_guid = root_dir.rsplit('/',1)
+            root_dir, persistence_guid = os.path.split(root_dir)
 
         return SimplexCoverage(root_dir, persistence_guid)
 
@@ -196,6 +196,8 @@ class SimplexCoverage(AbstractCoverage):
             if not isinstance(root_dir, str) or not isinstance(persistence_guid, str):
                 raise TypeError('\'root_dir\' and \'persistence_guid\' must be instances of str')
 
+            root_dir = root_dir if not root_dir.endswith(persistence_guid) else os.path.split(root_dir)[0]
+
             pth=os.path.join(root_dir, persistence_guid)
 
             def _doload(self):
@@ -295,6 +297,13 @@ class SimplexCoverage(AbstractCoverage):
             return None
         else:
             return self._persistence_layer.guid
+
+    @property
+    def persistence_dir(self):
+        if isinstance(self._persistence_layer, InMemoryPersistenceLayer):
+            return None
+        else:
+            return self._persistence_layer.master_manager.root_dir
 
     def append_parameter(self, parameter_context):
         """
