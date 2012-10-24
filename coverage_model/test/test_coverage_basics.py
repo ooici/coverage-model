@@ -3,7 +3,7 @@
 """
 @package coverage_model.test.test_coverage
 @file coverage_model/test/test_coverage.py
-@author Christopher Mueller
+@author James Case
 @brief Test cases for the coverage_model module
 """
 import os
@@ -13,16 +13,8 @@ import tempfile
 from pyon.public import log
 from pyon.util.int_test import IonIntegrationTestCase
 import numpy as np
-#import time
-from coverage_model.basic_types import AxisTypeEnum, MutabilityEnum, create_guid, VariabilityEnum
-from coverage_model.coverage import CRS, GridDomain, GridShape, SimplexCoverage
-from coverage_model.numexpr_utils import make_range_expr
-from coverage_model.parameter import ParameterDictionary, ParameterContext
-from coverage_model.parameter_types import QuantityType, ConstantType, ArrayType, RecordType
+from coverage_model import *
 from nose.plugins.attrib import attr
-#from mock import patch, Mock
-
-import unittest
 
 @attr('INT', group='cov')
 class TestCoverageModelBasicsInt(IonIntegrationTestCase):
@@ -50,6 +42,23 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         lcov = SimplexCoverage(base_path, guid)
         lcov.close()
         self.assertIsInstance(lcov, SimplexCoverage)
+
+    def test_dot_load_succeeds(self):
+    # Depends on a valid coverage existing, so let's make one
+        scov = self._make_samplecov()
+        self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='time')
+        pl = scov._persistence_layer
+        guid = scov.persistence_guid
+        root_path = pl.master_manager.root_dir
+        base_path = root_path.replace(guid,'')
+        scov.close()
+        lcov = SimplexCoverage.load(base_path, guid)
+        lcov.close()
+        self.assertIsInstance(lcov, SimplexCoverage)
+
+    def test_dot_load_fails(self):
+        with self.assertRaises(SystemError):
+            SimplexCoverage.load('bad_path', 'bad_guid')
 
     # Test load when path is invalid
     def test_load_fails_not_found(self):
@@ -79,6 +88,18 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         with self.assertRaises(SystemError):
             SimplexCoverage(base_path, guid)
 
+    def test_load_options(self):
+        scov = self._make_samplecov()
+        scov.close()
+
+        self.assertIsInstance(SimplexCoverage(self.working_dir, scov.persistence_guid), SimplexCoverage)
+        with self.assertRaises(TypeError):
+            SimplexCoverage(scov.persistence_dir)
+        self.assertIsInstance(SimplexCoverage(scov.persistence_dir, scov.persistence_guid), SimplexCoverage)
+
+        self.assertIsInstance(SimplexCoverage.load(scov.persistence_dir), SimplexCoverage)
+        self.assertIsInstance(SimplexCoverage.load(scov.persistence_dir, scov.persistence_guid), SimplexCoverage)
+
     def test_load_succeeds_with_options(self):
         # Depends on a valid coverage existing, so let's make one
         scov = self._make_samplecov()
@@ -101,21 +122,24 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         lcov.close()
         self.assertIsInstance(lcov, SimplexCoverage)
 
-    #CREATES
-    # 'dir, 'guid', 'name', 'pd', 'tdom, 'sdom', 'in-memory'
-
     def test_create_multi_bricks(self):
         brick_size = 1000
         time_steps = 5000
         scov = self._create_multi_bricks_cov(brick_size, time_steps)
         self.assertIsInstance(scov, SimplexCoverage)
 
-
     def test_create_succeeds(self):
         pdict = self._make_parameter_dict()
         tcrs = self._make_tcrs()
+        self.assertIsInstance(tcrs.lat_lon(), CRS)
+        self.assertIsInstance(tcrs.lat_lon_height(), CRS)
+        self.assertIsInstance(tcrs.x_y_z(), CRS)
+        self.assertIsInstance(tcrs.standard_temporal(), CRS)
+        self.assertTrue(tcrs.axes == {'TIME': None})
         tdom = self._make_tdom(tcrs)
         scrs = self._make_scrs()
+        self.assertTrue(scrs.axes == {'LAT': None, 'LON': None})
+        self.assertTrue(str(scrs) == " ID: None\n Axes: {'LAT': None, 'LON': None}")
         sdom = self._make_sdom(scrs)
         in_memory = False
         name = 'sample coverage_model'
@@ -147,8 +171,6 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
     def test_create_guid_valid(self):
         self.assertTrue(len(create_guid()) == 36)
 
-    # The name field can be just about anything and work right now...not sure what would really break this??
-    # Basically, if it is dictable then it is valid
     def test_create_name_invalid(self):
         pdict = self._make_parameter_dict()
         tcrs = self._make_tcrs()
@@ -279,6 +301,7 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         log.debug(ptypes_cov_loaded._range_value.const_int[0])
         results.append(ptypes_cov_loaded._range_value.const_int[0] == 45)
         log.debug(results)
+#        log.debug(ptypes_cov_loaded._range_value.record[:])
         ptypes_cov.close()
         ptypes_cov_loaded.close()
         self.assertTrue(False not in results)
@@ -364,21 +387,6 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
                         results.append(np.array_equiv(mock_data, data))
         self.assertTrue(False not in results)
 
-#    def test_hdf5_file_missing(self):
-#        brick_size = 1000
-#        time_steps = 5000
-#        cov = self._create_multi_bricks_cov(brick_size, time_steps)
-#        pl = cov._persistence_layer
-#        root_dir = pl.master_manager.root_dir
-#        log.trace(root_dir)
-#        cov.insert_timesteps(5000)
-#        shutil.rmtree(root_dir)
-#        with self.assertRaises(SystemError):
-#            try:
-#                cov.set_parameter_values('temp', 56.6)
-#            except Exception:
-#                raise SystemError
-
     def test_coverage_pickle_and_in_memory(self):
         self._make_oneparamcov(True, True)
         self.assertTrue(os.path.exists(os.path.join(self.working_dir, 'oneparamsample.cov')))
@@ -401,7 +409,6 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         pdict_1.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
         pdict_1.add_context(ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius')))
 
-
         # Instantiate a ParameterDictionary
         pdict_2 = ParameterDictionary()
 
@@ -411,7 +418,6 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         pdict_2.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
         pdict_2.add_context(ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius')))
 
-
         # Instantiate a ParameterDictionary
         pdict_3 = ParameterDictionary()
 
@@ -420,7 +426,6 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         pdict_3.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
         pdict_3.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
         pdict_3.add_context(ParameterContext('temp2', param_type=QuantityType(uom='degree_Celsius')))
-
 
         # Instantiate a ParameterDictionary
         pdict_4 = ParameterDictionary()
@@ -435,7 +440,6 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
 
         temp2_ctxt = ParameterContext(name=temp_ctxt, new_name='temp2')
         pdict_4.add_context(temp2_ctxt)
-
 
         with self.assertRaises(SystemError):
             ParameterContext([10,20,30], param_type=QuantityType(uom = 'bad name'))
@@ -452,23 +456,18 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         with self.assertRaises(SystemError):
             ParameterContext(None, param_type=QuantityType(uom = 'bad name'))
 
-#        print 'Should be equal and compare \'one-to-one\' with nothing in the None list'
-#        print pdict_1 == pdict_2
-#        print pdict_1.compare(pdict_2)
+        log.debug('Should be equal and compare \'one-to-one\' with nothing in the None list')
         self.assertTrue(pdict_1 == pdict_2)
         self.assertTrue(pdict_1.compare(pdict_2) == {'lat': ['lat'], 'lon': ['lon'], None: [], 'temp': ['temp'], 'time': ['time']})
 
-#        print '\nShould be unequal and compare with an empty list for \'temp\' and \'temp2\' in the None list'
-#        print pdict_1 == pdict_3
-#        print pdict_1.compare(pdict_3)
+        log.debug('Should be unequal and compare with an empty list for \'temp\' and \'temp2\' in the None list')
         self.assertTrue(pdict_1 != pdict_3)
         self.assertTrue(pdict_1.compare(pdict_3) == {'lat': ['lat'], 'lon': ['lon'], None: ['temp2'], 'temp': [], 'time': ['time']})
 
-#        print '\nShould be unequal and compare with both \'temp\' and \'temp2\' in \'temp\' and nothing in the None list'
-#        print pdict_1 == pdict_4
-#        print pdict_1.compare(pdict_4)
+        log.debug('Should be unequal and compare with both \'temp\' and \'temp2\' in \'temp\' and nothing in the None list')
         self.assertTrue(pdict_1 != pdict_4)
         self.assertTrue(pdict_1.compare(pdict_4) == {'lat': ['lat'], 'lon': ['lon'], None: [], 'temp': ['temp', 'temp2'], 'time': ['time']})
+
     def test_pickle_problems(self):
         # Instantiate a ParameterDictionary
         pdict = ParameterDictionary()
@@ -482,6 +481,7 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         # Construct temporal and spatial Coordinate Reference System objects
         tcrs = CRS([AxisTypeEnum.TIME])
         scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
 
         # Construct temporal and spatial Domain objects
         tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
@@ -618,8 +618,8 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
             arrval.append(np.random.bytes(np.random.randint(1,len(letts)))) # One value (which is a byte string) for each member of the domain
             d = {letts[x]: letts[x:]}
             recval.append(d) # One value (which is a dict) for each member of the domain
-#        scov.set_parameter_values('array', value=arrval)
-#        scov.set_parameter_values('record', value=recval)
+        scov.set_parameter_values('array', value=arrval)
+        scov.set_parameter_values('record', value=recval)
         scov.get_dirty_values_async_result().get(timeout=30)
         return scov
 
@@ -848,16 +848,6 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         scov.set_parameter_values('array2', value=arr2val)
         scov.get_dirty_values_async_result().get(timeout=30)
         return scov
-#
-#    def _make_parameter_context(self, name, ptype, dtype, uom):
-#        ctxt = ParameterContext(name, type_string)
-#
-#    def _make_parameter_dictionary(self, params):
-#        pdict = ParameterDictionary()
-#
-#        for param_context in params:
-#            pdict.add_context(param_context)
-#        return pdict
 
     def _make_emptysamplecov(self, save_coverage=False, in_memory=False):
         # Instantiate a ParameterDictionary
