@@ -551,13 +551,30 @@ class PersistedStorage(AbstractStorage):
             log.trace('Work metrics: %s', work_metrics)
             log.trace('Work[0]: %s', work[0])
 
+            # If the brick file doesn't exist, 'touch' it to make sure it's immediately available
+            if not os.path.exists(brick_file_path):
+                if data_type == '|O8':
+                    data_type = h5py.special_dtype(vlen=str)
+                # TODO: Uncomment this to properly turn 0 & 1 chunking into True
+                if 0 in cD or 1 in cD:
+                    cD = True
+                with h5py.File(brick_file_path, 'a') as f:
+                    # TODO: Due to usage concerns, currently locking chunking to "auto"
+                    f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=True, fillvalue=fv)
+
             #region FOR TESTING WITHOUT OUT-OF-BAND WRITES - IN-LINE WRITING OF VALUES
+#            if data_type == '|O8':
+#                data_type = h5py.special_dtype(vlen=str)
+#                # TODO: Uncomment this to properly turn 0 & 1 chunking into True
+#            if 0 in cD or 1 in cD:
+#                cD = True
 #            with h5py.File(brick_file_path, 'a') as f:
-#                f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=cD, fillvalue=fv)
-#                if isinstance(brick_slice, tuple):
-#                    brick_slice = list(brick_slice)
+#                # TODO: Due to usage concerns, currently locking chunking to "auto"
+#                f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=True, fillvalue=fv)
+#            if isinstance(brick_slice, tuple):
+#                brick_slice = list(brick_slice)
 #
-#                f[brick_guid].__setitem__(*brick_slice, val=v)
+#            f[brick_guid].__setitem__(*brick_slice, val=v)
             #endregion
 
             if self.auto_flush:
