@@ -46,7 +46,7 @@ def _raise_index_error_list(slice_, shape, dim):
             raise IndexError('index {0} of list cannot be >= the size for dimension {3}: list => {1}, size => {2}'.format(i, slice_, shape, dim))
 
 def _raise_index_error_slice(slice_, shape, dim):
-    if slice_.start is not None or slice_.stop is not None:
+    if slice_.start is not None and slice_.stop is not None:
         if slice_.start >= slice_.stop:
             raise IndexError('start index of slice cannot be >= stop index: slice => {0}'.format(slice_))
         if slice_.start >= shape:
