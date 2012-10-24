@@ -333,10 +333,24 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         with self.assertRaises(IndexError):
             scov.get_parameter_values('temp', _slice)
 
+    def test_int_raises_index_error(self):
+        brick_size = 1000
+        time_steps = 5000
+        scov = self._create_multi_bricks_cov(brick_size, time_steps)
+        with self.assertRaises(IndexError):
+            scov.get_parameter_values('temp', 9000)
+
+    def test_array_raises_index_error(self):
+        brick_size = 1000
+        time_steps = 5000
+        scov = self._create_multi_bricks_cov(brick_size, time_steps)
+        with self.assertRaises(IndexError):
+            scov.get_parameter_values('temp', [[5,9000]])
+
     def test_get_by_slice(self):
         results = []
-        brick_size = 1000
-        time_steps = 50
+        brick_size = 10
+        time_steps = 30
         cov = self._create_multi_bricks_cov(brick_size, time_steps)
         dat = cov.get_parameter_values('time')
         for s in range(len(dat)):
@@ -350,6 +364,150 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
                         results.append(np.array_equiv(mock_data, data))
         self.assertTrue(False not in results)
 
+#    def test_hdf5_file_missing(self):
+#        brick_size = 1000
+#        time_steps = 5000
+#        cov = self._create_multi_bricks_cov(brick_size, time_steps)
+#        pl = cov._persistence_layer
+#        root_dir = pl.master_manager.root_dir
+#        log.trace(root_dir)
+#        cov.insert_timesteps(5000)
+#        shutil.rmtree(root_dir)
+#        with self.assertRaises(SystemError):
+#            try:
+#                cov.set_parameter_values('temp', 56.6)
+#            except Exception:
+#                raise SystemError
+
+    def test_coverage_pickle_and_in_memory(self):
+        self._make_oneparamcov(True, True)
+        self.assertTrue(os.path.exists(os.path.join(self.working_dir, 'oneparamsample.cov')))
+
+    def test_bad_pc_from_dict(self):
+        pc1 = ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius'))
+        with self.assertRaises(TypeError):
+            pc1._fromdict('junk', pc1.dump())
+
+        pc2 = pc1._fromdict(pc1.dump())
+        self.assertTrue(pc1 == pc2)
+
+    def test_params(self):
+        # Instantiate a ParameterDictionary
+        pdict_1 = ParameterDictionary()
+
+        # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+        pdict_1.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')), is_temporal=True)
+        pdict_1.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
+        pdict_1.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
+        pdict_1.add_context(ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius')))
+
+
+        # Instantiate a ParameterDictionary
+        pdict_2 = ParameterDictionary()
+
+        # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+        pdict_2.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')), is_temporal=True)
+        pdict_2.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
+        pdict_2.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
+        pdict_2.add_context(ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius')))
+
+
+        # Instantiate a ParameterDictionary
+        pdict_3 = ParameterDictionary()
+
+        # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+        pdict_3.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')), is_temporal=True)
+        pdict_3.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
+        pdict_3.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
+        pdict_3.add_context(ParameterContext('temp2', param_type=QuantityType(uom='degree_Celsius')))
+
+
+        # Instantiate a ParameterDictionary
+        pdict_4 = ParameterDictionary()
+
+        # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+        pdict_4.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')), is_temporal=True)
+        pdict_4.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
+        pdict_4.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
+
+        temp_ctxt = ParameterContext('temp', param_type=QuantityType(uom = 'degree_Celsius'))
+        pdict_4.add_context(temp_ctxt)
+
+        temp2_ctxt = ParameterContext(name=temp_ctxt, new_name='temp2')
+        pdict_4.add_context(temp2_ctxt)
+
+
+        with self.assertRaises(SystemError):
+            ParameterContext([10,20,30], param_type=QuantityType(uom = 'bad name'))
+
+        with self.assertRaises(SystemError):
+            ParameterContext(None,None)
+
+        with self.assertRaises(SystemError):
+            ParameterContext(None)
+
+        with self.assertRaises(TypeError):
+            ParameterContext()
+
+        with self.assertRaises(SystemError):
+            ParameterContext(None, param_type=QuantityType(uom = 'bad name'))
+
+#        print 'Should be equal and compare \'one-to-one\' with nothing in the None list'
+#        print pdict_1 == pdict_2
+#        print pdict_1.compare(pdict_2)
+        self.assertTrue(pdict_1 == pdict_2)
+        self.assertTrue(pdict_1.compare(pdict_2) == {'lat': ['lat'], 'lon': ['lon'], None: [], 'temp': ['temp'], 'time': ['time']})
+
+#        print '\nShould be unequal and compare with an empty list for \'temp\' and \'temp2\' in the None list'
+#        print pdict_1 == pdict_3
+#        print pdict_1.compare(pdict_3)
+        self.assertTrue(pdict_1 != pdict_3)
+        self.assertTrue(pdict_1.compare(pdict_3) == {'lat': ['lat'], 'lon': ['lon'], None: ['temp2'], 'temp': [], 'time': ['time']})
+
+#        print '\nShould be unequal and compare with both \'temp\' and \'temp2\' in \'temp\' and nothing in the None list'
+#        print pdict_1 == pdict_4
+#        print pdict_1.compare(pdict_4)
+        self.assertTrue(pdict_1 != pdict_4)
+        self.assertTrue(pdict_1.compare(pdict_4) == {'lat': ['lat'], 'lon': ['lon'], None: [], 'temp': ['temp', 'temp2'], 'time': ['time']})
+    def test_pickle_problems(self):
+        # Instantiate a ParameterDictionary
+        pdict = ParameterDictionary()
+
+        # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+        t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
+        t_ctxt.reference_frame = AxisTypeEnum.TIME
+        t_ctxt.uom = 'seconds since 01-01-1970'
+        pdict.add_context(t_ctxt)
+
+        # Construct temporal and spatial Coordinate Reference System objects
+        tcrs = CRS([AxisTypeEnum.TIME])
+        scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+        # Construct temporal and spatial Domain objects
+        tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+        sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
+
+        # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+        bricking_scheme = {'brick_size':1000,'chunk_size':500}
+        scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, True, bricking_scheme=bricking_scheme)
+
+        # Insert some timesteps (automatically expands other arrays)
+        nt = 2000
+        scov.insert_timesteps(nt)
+
+        # Add data for the parameter
+        scov.set_parameter_values('time', value=np.arange(nt))
+
+        SimplexCoverage.pickle_save(scov, os.path.join(self.working_dir, 'oneparamsample.cov'))
+
+        ncov = SimplexCoverage.pickle_load(os.path.join(self.working_dir, 'oneparamsample.cov'))
+        self.assertIsInstance(ncov, SimplexCoverage)
+
+        with self.assertRaises(StandardError):
+            SimplexCoverage.pickle_load('some_bad_file_location.cov')
+
+        with self.assertRaises(StandardError):
+            SimplexCoverage.pickle_save('nat_a_SimplexCoverage', os.path.join(self.working_dir, 'oneparamsample.cov'))
 
     def _slice_and_dice(self, brick_size, time_steps):
         results = []
@@ -601,6 +759,40 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
         scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory)
+        return scov
+
+    def _make_oneparamcov(self, save_coverage=False, in_memory=False):
+        # Instantiate a ParameterDictionary
+        pdict = ParameterDictionary()
+
+        # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+        t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
+        t_ctxt.reference_frame = AxisTypeEnum.TIME
+        t_ctxt.uom = 'seconds since 01-01-1970'
+        pdict.add_context(t_ctxt)
+
+        # Construct temporal and spatial Coordinate Reference System objects
+        tcrs = CRS([AxisTypeEnum.TIME])
+        scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+        # Construct temporal and spatial Domain objects
+        tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+        sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
+
+        # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+        bricking_scheme = {'brick_size':1000,'chunk_size':500}
+        scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory, bricking_scheme=bricking_scheme)
+
+        # Insert some timesteps (automatically expands other arrays)
+        nt = 2000
+        scov.insert_timesteps(nt)
+
+        # Add data for the parameter
+        scov.set_parameter_values('time', value=np.arange(nt))
+
+        if in_memory and save_coverage:
+            SimplexCoverage.pickle_save(scov, os.path.join(self.working_dir, 'oneparamsample.cov'))
+
         return scov
 
     def _make_nospatialcov(self, save_coverage=False, in_memory=False):
