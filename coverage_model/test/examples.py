@@ -7,13 +7,9 @@
 @brief Exemplar functions for creation, manipulation, and basic visualization of coverages
 """
 
-from pyon.public import log
-from coverage_model.numexpr_utils import make_range_expr
+from ooi.logging import log
 from netCDF4 import Dataset
-from coverage_model.basic_types import *
-from coverage_model.coverage import *
-from coverage_model.parameter_types import *
-from coverage_model.parameter import *
+from coverage_model import *
 import numpy as np
 
 def values_outside_coverage():
@@ -59,13 +55,34 @@ def values_outside_coverage():
 
     types = (qtype, atype, rtype, ctype, ftype)
     vals = (qval, aval, rval, cval, fval)
-    for i in xrange(len(vals)):
-        log.info('Type: %s', types[i])
-        log.info('\tContent: %s', vals[i].content)
-        log.info('\tVals: %s', vals[i][:])
+#    for i in xrange(len(vals)):
+#        log.info('Type: %s', types[i])
+#        log.info('\tContent: %s', vals[i].content)
+#        log.info('\tVals: %s', vals[i][:])
 
     log.info('Returning: qval, aval, rval, cval, fval')
     return vals
+
+def param_dict_dump_load():
+    pd = ParameterDictionary()
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    pd.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')))
+    pd.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
+    pd.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
+    pd.add_context(ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius')))
+
+    pddump = pd.dump()
+
+    pd2 = ParameterDictionary.load(pddump)
+
+    # Tests that a dumped/loaded PD is equal to the original
+    print 'pd==pd2: {0}'.format(pd==pd2)
+
+    # Tests that a dumped/loaded PD is ordered the same way as the original
+    for o, pc in pd.itervalues():
+        print 'pc.name :: pd2.get_context_by_ord(o).name: {0} :: {1}'.format(pc.name, pd2.get_context_by_ord(o).name)
+
 
 def param_dict_compare():
 # Instantiate a ParameterDictionary
@@ -128,7 +145,190 @@ def param_dict_compare():
     print "Returning: pdict_1, pdict_2, pdict_3, pdict_4"
     return pdict_1, pdict_2, pdict_3, pdict_4
 
-def samplecov(save_coverage=True):
+def samplecov(save_coverage=False, in_memory=False):
+    # Instantiate a ParameterDictionary
+    pdict = ParameterDictionary()
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
+    t_ctxt.uom = 'seconds since 01-01-1970'
+    pdict.add_context(t_ctxt, is_temporal=True)
+
+    lat_ctxt = ParameterContext('lat', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    lat_ctxt.reference_frame = AxisTypeEnum.LAT
+    lat_ctxt.uom = 'degree_north'
+    pdict.add_context(lat_ctxt)
+
+    lon_ctxt = ParameterContext('lon', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    lon_ctxt.reference_frame = AxisTypeEnum.LON
+    lon_ctxt.uom = 'degree_east'
+    pdict.add_context(lon_ctxt)
+
+    temp_ctxt = ParameterContext('temp', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    temp_ctxt.uom = 'degree_Celsius'
+    pdict.add_context(temp_ctxt)
+
+    cond_ctxt = ParameterContext('conductivity', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    cond_ctxt.uom = 'unknown'
+    pdict.add_context(cond_ctxt)
+
+    # Construct temporal and spatial Coordinate Reference System objects
+    tcrs = CRS([AxisTypeEnum.TIME])
+    scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+    # Construct temporal and spatial Domain objects
+    tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
+
+    # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory)
+
+    # Insert some timesteps (automatically expands other arrays)
+    nt = 30
+    scov.insert_timesteps(nt)
+
+    # Add data for each parameter
+    scov.set_parameter_values('time', value=np.arange(nt))
+    scov.set_parameter_values('lat', value=45)
+    scov.set_parameter_values('lon', value=-71)
+    # make a random sample of 10 values between 23 and 26
+    # Ref: http://docs.scipy.org/doc/numpy/reference/generated/numpy.random.random_sample.html#numpy.random.random_sample
+    # --> To sample  multiply the output of random_sample by (b-a) and add a
+    tvals=np.random.random_sample(nt)*(26-23)+23
+    scov.set_parameter_values('temp', value=tvals)
+    scov.set_parameter_values('conductivity', value=np.random.random_sample(nt)*(110-90)+90)
+
+    if in_memory and save_coverage:
+        SimplexCoverage.pickle_save(scov, 'test_data/sample.cov')
+
+    return scov
+
+def samplecov2(save_coverage=False, in_memory=False):
+    # Instantiate a ParameterDictionary
+    pdict = ParameterDictionary()
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')), variability=VariabilityEnum.TEMPORAL)
+    t_ctxt.uom = 'seconds since 01-01-1970'
+    pdict.add_context(t_ctxt, is_temporal=True)
+
+    lat_ctxt = ParameterContext('lat', param_type=ConstantType(), variability=VariabilityEnum.NONE)
+    lat_ctxt.reference_frame = AxisTypeEnum.LAT
+    lat_ctxt.uom = 'degree_north'
+    pdict.add_context(lat_ctxt)
+
+    lon_ctxt = ParameterContext('lon', param_type=ConstantType(), variability=VariabilityEnum.NONE)
+    lon_ctxt.reference_frame = AxisTypeEnum.LON
+    lon_ctxt.uom = 'degree_east'
+    pdict.add_context(lon_ctxt)
+
+    temp_ctxt = ParameterContext('temp', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    temp_ctxt.uom = 'degree_Celsius'
+    pdict.add_context(temp_ctxt)
+
+    cond_ctxt = ParameterContext('conductivity', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    cond_ctxt.uom = 'unknown'
+    pdict.add_context(cond_ctxt)
+
+    # Construct temporal and spatial Coordinate Reference System objects
+    tcrs = CRS([AxisTypeEnum.TIME])
+    scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+    # Construct temporal and spatial Domain objects
+    nt = 20
+    tdom = GridDomain(GridShape('temporal', [nt]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
+
+    # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory)
+
+    # Insert some timesteps (automatically expands other arrays)
+#    scov.insert_timesteps(10)
+
+    # Add data for each parameter
+    scov.set_parameter_values('time', value=np.arange(nt))
+    scov.set_parameter_values('lat', value=make_range_expr(45.32))
+    scov.set_parameter_values('lon', value=make_range_expr(-71.11))
+    # make a random sample of 10 values between 23 and 26
+    # Ref: http://docs.scipy.org/doc/numpy/reference/generated/numpy.random.random_sample.html#numpy.random.random_sample
+    # --> To sample  multiply the output of random_sample by (b-a) and add a
+    tvals=np.random.random_sample(nt)*(26-23)+23
+    scov.set_parameter_values('temp', value=tvals)
+    scov.set_parameter_values('conductivity', value=np.random.random_sample(nt)*(110-90)+90)
+
+    if in_memory and save_coverage:
+        SimplexCoverage.pickle_save(scov, 'test_data/sample2.cov')
+
+    return scov
+
+def oneparamcov(save_coverage=False, in_memory=False):
+    # Instantiate a ParameterDictionary
+    pdict = ParameterDictionary()
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
+    t_ctxt.reference_frame = AxisTypeEnum.TIME
+    t_ctxt.uom = 'seconds since 01-01-1970'
+    pdict.add_context(t_ctxt)
+
+    # Construct temporal and spatial Coordinate Reference System objects
+    tcrs = CRS([AxisTypeEnum.TIME])
+    scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+    # Construct temporal and spatial Domain objects
+    tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
+
+    # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+    bricking_scheme = {'brick_size':1000,'chunk_size':500}
+    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory, bricking_scheme=bricking_scheme)
+
+    # Insert some timesteps (automatically expands other arrays)
+    nt = 1000
+    scov.insert_timesteps(nt)
+
+    # Add data for the parameter
+    scov.set_parameter_values('time', value=np.arange(nt))
+
+    if in_memory and save_coverage:
+        SimplexCoverage.pickle_save(scov, 'test_data/sample.cov')
+
+    return scov
+
+def oneparamcov_noautoflush(save_coverage=False, in_memory=False):
+    # Instantiate a ParameterDictionary
+    pdict = ParameterDictionary()
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
+    t_ctxt.reference_frame = AxisTypeEnum.TIME
+    t_ctxt.uom = 'seconds since 01-01-1970'
+    pdict.add_context(t_ctxt)
+
+    # Construct temporal and spatial Coordinate Reference System objects
+    tcrs = CRS([AxisTypeEnum.TIME])
+    scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+    # Construct temporal and spatial Domain objects
+    tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
+
+    # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory, auto_flush_values=False)
+
+    # Insert some timesteps (automatically expands other arrays)
+    nt = 100
+    scov.insert_timesteps(nt)
+
+    # Add data for the parameter
+    scov.set_parameter_values('time', value=np.arange(nt))
+
+    if in_memory and save_coverage:
+        SimplexCoverage.pickle_save(scov, 'test_data/sample.cov')
+
+    return scov
+
+def emptysamplecov(save_coverage=False, in_memory=False):
     # Instantiate a ParameterDictionary
     pdict = ParameterDictionary()
 
@@ -165,86 +365,14 @@ def samplecov(save_coverage=True):
     sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('sample coverage_model', pdict, tdom, sdom)
+    scov = SimplexCoverage('test_data', create_guid(), 'empty sample coverage_model', pdict, tdom, sdom, in_memory)
 
-    # Insert some timesteps (automatically expands other arrays)
-    scov.insert_timesteps(10)
-
-    # Add data for each parameter
-    scov.set_parameter_values('time', value=np.arange(10))
-    scov.set_parameter_values('lat', value=45)
-    scov.set_parameter_values('lon', value=-71)
-    # make a random sample of 10 values between 23 and 26
-    # Ref: http://docs.scipy.org/doc/numpy/reference/generated/numpy.random.random_sample.html#numpy.random.random_sample
-    # --> To sample  multiply the output of random_sample by (b-a) and add a
-    tvals=np.random.random_sample(10)*(26-23)+23
-    scov.set_parameter_values('temp', value=tvals)
-    scov.set_parameter_values('conductivity', value=np.random.random_sample(10)*(110-90)+90)
-
-    if save_coverage:
-        SimplexCoverage.save(scov, 'test_data/sample.cov')
+    if in_memory and save_coverage:
+        SimplexCoverage.pickle_save(scov, 'test_data/emptysample.cov')
 
     return scov
 
-def samplecov2(save_coverage=True):
-    # Instantiate a ParameterDictionary
-    pdict = ParameterDictionary()
-
-    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
-    t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')), variability=VariabilityEnum.TEMPORAL)
-    t_ctxt.reference_frame = AxisTypeEnum.TIME
-    t_ctxt.uom = 'seconds since 01-01-1970'
-    pdict.add_context(t_ctxt)
-
-    lat_ctxt = ParameterContext('lat', param_type=FunctionType(), variability=VariabilityEnum.NONE)
-    lat_ctxt.reference_frame = AxisTypeEnum.LAT
-    lat_ctxt.uom = 'degree_north'
-    pdict.add_context(lat_ctxt)
-
-    lon_ctxt = ParameterContext('lon', param_type=FunctionType(), variability=VariabilityEnum.NONE)
-    lon_ctxt.reference_frame = AxisTypeEnum.LON
-    lon_ctxt.uom = 'degree_east'
-    pdict.add_context(lon_ctxt)
-
-    temp_ctxt = ParameterContext('temp', param_type=QuantityType(value_encoding=np.dtype('float32')))
-    temp_ctxt.uom = 'degree_Celsius'
-    pdict.add_context(temp_ctxt)
-
-    cond_ctxt = ParameterContext('conductivity', param_type=QuantityType(value_encoding=np.dtype('float32')))
-    cond_ctxt.uom = 'unknown'
-    pdict.add_context(cond_ctxt)
-
-    # Construct temporal and spatial Coordinate Reference System objects
-    tcrs = CRS([AxisTypeEnum.TIME])
-    scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
-
-    # Construct temporal and spatial Domain objects
-    tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
-    sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
-
-    # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('sample coverage_model', pdict, tdom, sdom)
-
-    # Insert some timesteps (automatically expands other arrays)
-    scov.insert_timesteps(10)
-
-    # Add data for each parameter
-    scov.set_parameter_values('time', value=np.arange(10))
-    scov.set_parameter_values('lat', value=make_range_expr(45.32))
-    scov.set_parameter_values('lon', value=make_range_expr(-71.11))
-    # make a random sample of 10 values between 23 and 26
-    # Ref: http://docs.scipy.org/doc/numpy/reference/generated/numpy.random.random_sample.html#numpy.random.random_sample
-    # --> To sample  multiply the output of random_sample by (b-a) and add a
-    tvals=np.random.random_sample(10)*(26-23)+23
-    scov.set_parameter_values('temp', value=tvals)
-    scov.set_parameter_values('conductivity', value=np.random.random_sample(10)*(110-90)+90)
-
-    if save_coverage:
-        SimplexCoverage.save(scov, 'test_data/sample2.cov')
-
-    return scov
-
-def ptypescov(save_coverage=True):
+def ptypescov(save_coverage=False, in_memory=False):
     # Construct temporal and spatial Coordinate Reference System objects
     tcrs = CRS([AxisTypeEnum.TIME])
     scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
@@ -274,9 +402,9 @@ def ptypescov(save_coverage=True):
     cnst_flt_ctxt.uom = 'degree_east'
     pdict.add_context(cnst_flt_ctxt)
 
-    func_ctxt = ParameterContext('function', param_type=FunctionType(QuantityType(value_encoding=np.dtype('float32'))))
-    func_ctxt.long_name = 'example of a parameter of type FunctionType'
-    pdict.add_context(func_ctxt)
+#    func_ctxt = ParameterContext('function', param_type=FunctionType(QuantityType(value_encoding=np.dtype('float32'))))
+#    func_ctxt.long_name = 'example of a parameter of type FunctionType'
+#    pdict.add_context(func_ctxt)
 
     quant_ctxt = ParameterContext('quantity', param_type=QuantityType(value_encoding=np.dtype('float32')))
     quant_ctxt.long_name = 'example of a parameter of type QuantityType'
@@ -292,38 +420,41 @@ def ptypescov(save_coverage=True):
     pdict.add_context(rec_ctxt)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('sample coverage_model', pdict, tdom, sdom)
+    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory)
 
     # Insert some timesteps (automatically expands other arrays)
-    scov.insert_timesteps(10)
+    nt = 20
+    scov.insert_timesteps(nt)
 
     # Add data for each parameter
-    scov.set_parameter_values('quantity_time', value=np.arange(10))
+    scov.set_parameter_values('quantity_time', value=np.arange(nt))
     scov.set_parameter_values('const_int', value=45.32) # Set a constant directly, with incorrect data type (fixed under the hood)
     scov.set_parameter_values('const_float', value=make_range_expr(-71.11)) # Set with a properly formed constant expression
-    scov.set_parameter_values('quantity', value=np.random.random_sample(10)*(26-23)+23)
+    scov.set_parameter_values('quantity', value=np.random.random_sample(nt)*(26-23)+23)
 
-    # Setting three range expressions such that indices 0-2 == 10, 3-7 == 15 and >=8 == 20
-    scov.set_parameter_values('function', value=make_range_expr(10, 0, 3, min_incl=True, max_incl=False, else_val=-999.9))
-    scov.set_parameter_values('function', value=make_range_expr(15, 3, 8, min_incl=True, max_incl=False, else_val=-999.9))
-    scov.set_parameter_values('function', value=make_range_expr(20, 8, min_incl=True, max_incl=False, else_val=-999.9))
+#    # Setting three range expressions such that indices 0-2 == 10, 3-7 == 15 and >=8 == 20
+#    scov.set_parameter_values('function', value=make_range_expr(10, 0, 3, min_incl=True, max_incl=False, else_val=-999.9))
+#    scov.set_parameter_values('function', value=make_range_expr(15, 3, 8, min_incl=True, max_incl=False, else_val=-999.9))
+#    scov.set_parameter_values('function', value=make_range_expr(20, 8, min_incl=True, max_incl=False, else_val=-999.9))
 
     arrval = []
     recval = []
-    letts='abcdefghij'
-    for x in xrange(scov.num_timesteps):
+    letts='abcdefghijklmnopqrstuvwxyz'
+    while len(letts) < nt:
+        letts += 'abcdefghijklmnopqrstuvwxyz'
+    for x in xrange(nt):
         arrval.append(np.random.bytes(np.random.randint(1,20))) # One value (which is a byte string) for each member of the domain
         d = {letts[x]: letts[x:]}
         recval.append(d) # One value (which is a dict) for each member of the domain
     scov.set_parameter_values('array', value=arrval)
     scov.set_parameter_values('record', value=recval)
 
-    if save_coverage:
-        SimplexCoverage.save(scov, 'test_data/ptypes.cov')
+    if in_memory and save_coverage:
+        SimplexCoverage.pickle_save(scov, 'test_data/ptypes.cov')
 
     return scov
 
-def nospatialcov(save_coverage=True):
+def nospatialcov(save_coverage=False, in_memory=False):
     # Construct temporal and spatial Coordinate Reference System objects
     tcrs = CRS([AxisTypeEnum.TIME])
 
@@ -357,30 +488,31 @@ def nospatialcov(save_coverage=True):
     pdict.add_context(arr2_ctxt)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('sample coverage_model', pdict, tdom)
+    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, temporal_domain=tdom, in_memory_storage=in_memory)
 
     # Insert some timesteps (automatically expands other arrays)
-    scov.insert_timesteps(10)
+    nt = 20
+    scov.insert_timesteps(nt)
 
     # Add data for each parameter
-    scov.set_parameter_values('quantity_time', value=np.arange(10))
-    scov.set_parameter_values('quantity', value=np.random.random_sample(10)*(26-23)+23)
+    scov.set_parameter_values('quantity_time', value=np.arange(nt))
+    scov.set_parameter_values('quantity', value=np.random.random_sample(nt)*(26-23)+23)
     scov.set_parameter_values('constant', value=20)
 
     arrval = []
     arr2val = []
-    for x in xrange(scov.num_timesteps): # One value (which IS an array) for each member of the domain
+    for x in xrange(nt): # One value (which IS an array) for each member of the domain
         arrval.append(np.random.bytes(np.random.randint(1,20)))
         arr2val.append(np.random.random_sample(np.random.randint(1,10)))
     scov.set_parameter_values('array', value=arrval)
     scov.set_parameter_values('array2', value=arr2val)
 
-    if save_coverage:
-        SimplexCoverage.save(scov, 'test_data/ptypes.cov')
+    if in_memory and save_coverage:
+        SimplexCoverage.pickle_save(scov, 'test_data/ptypes.cov')
 
     return scov
 
-def ncgrid2cov(save_coverage=True):
+def ncgrid2cov(save_coverage=False, in_memory=False):
     # Open the netcdf dataset
     ds = Dataset('test_data/ncom.nc')
     # Itemize the variable names that we want to include in the coverage
@@ -423,7 +555,7 @@ def ncgrid2cov(save_coverage=True):
     sdom = GridDomain(GridShape('spatial', [34,57,89]), scrs, MutabilityEnum.IMMUTABLE) # 3d spatial topology (grid)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('sample grid coverage_model', pdict, tdom, sdom)
+    scov = SimplexCoverage('test_data', create_guid(), 'sample grid coverage_model', pdict, tdom, sdom, in_memory)
 
     # Insert the timesteps (automatically expands other arrays)
     tvar=ds.variables['time']
@@ -448,12 +580,12 @@ def ncgrid2cov(save_coverage=True):
         else:
             scov._range_value[v][:] = var[:]
 
-    if save_coverage:
-        SimplexCoverage.save(scov, 'test_data/ncom.cov')
+    if in_memory and save_coverage:
+        SimplexCoverage.pickle_save(scov, 'test_data/ncom.cov')
 
     return scov
 
-def ncstation2cov(save_coverage=True):
+def ncstation2cov(save_coverage=False, in_memory=False):
     # Open the netcdf dataset
     ds = Dataset('test_data/usgs.nc')
     # Itemize the variable names that we want to include in the coverage
@@ -500,7 +632,7 @@ def ncstation2cov(save_coverage=True):
     sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 1d spatial topology (station/trajectory)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('sample station coverage_model', pdict, tdom, sdom)
+    scov = SimplexCoverage('test_data', create_guid(), 'sample station coverage_model', pdict, tdom, sdom, in_memory)
 
     # Insert the timesteps (automatically expands other arrays)
     tvar=ds.variables['time']
@@ -516,17 +648,63 @@ def ncstation2cov(save_coverage=True):
         else:
             scov._range_value[v][:] = var[:]
 
-    if save_coverage:
-        SimplexCoverage.save(scov, 'test_data/usgs.cov')
+    if in_memory and save_coverage:
+        SimplexCoverage.pickle_save(scov, 'test_data/usgs.cov')
 
     return scov
+
+def cov_get_by_integer():
+    cov = oneparamcov()
+    dat = cov._range_value.time
+    for s in range(len(dat)):
+        log.info(s)
+        log.info('\t%s', dat[s])
+
+    return cov
+
+def cov_get_by_slice():
+    cov = oneparamcov()
+    dat = cov._range_value.time
+    for s in range(len(dat)):
+        for e in range(len(dat)):
+            e+=1
+            if s < e:
+                sl = slice(s, None, None)
+                log.info(sl)
+                log.info('\t%s', dat[s])
+                sl = slice(None, e, None)
+                log.info(sl)
+                log.info('\t%s', dat[s])
+                sl = slice(s, e, None)
+                log.info(sl)
+                log.info('\t%s', dat[s])
+                for st in range(e-s):
+                    sl = slice(s, e, st+1)
+                    log.info(sl)
+                    log.info('\t%s', dat[sl])
+
+    return cov
+
+def cov_get_by_list():
+    cov = oneparamcov()
+    dat = cov._range_value.time
+    dl = len(dat)
+    for x in range(5):
+        lst = list(set([np.random.randint(0,dl) for s in xrange(np.random.randint(1,dl-1))]))
+        lst.sort()
+        log.info(lst)
+        log.info('\t%s', dat[[lst]])
+
+    return cov
+
+
 
 def direct_read():
     scov, ds = ncstation2cov()
     shp = scov.range_value.streamflow.shape
 
-    log.debug('<========= Query =========>')
-    log.debug('\n>> All data for first timestep\n')
+    log.info('<========= Query =========>')
+    log.info('\n>> All data for first timestep\n')
     slice_ = 0
     log.debug('sflow <shape %s> sliced with: %s', shp,slice_)
     log.debug(scov.range_value['streamflow'][slice_])
@@ -565,7 +743,8 @@ def direct_write():
     log.debug(scov.range_value['streamflow'][slice_])
 
 def methodized_read():
-    from coverage_model.test.examples import SimplexCoverage
+    from coverage_model import SimplexCoverage
+    from coverage_model.basic_types import DomainOfApplication
     import numpy as np
     import os
 
