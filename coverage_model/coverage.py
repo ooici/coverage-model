@@ -109,6 +109,11 @@ class AbstractCoverage(AbstractIdentifiable):
         self._persistence_layer.flush()
 
     def close(self, force=False, timeout=None):
+        if not hasattr(self, '_closed'):
+            # _closed is the first attribute added to the coverage object (in AbstractCoverage)
+            # If it's not there, a TypeError has likely occurred while instantiating the coverage
+            # nothing else exists and we can just return
+            return
         if not self._closed:
             log.info('Closing coverage \'%s\'', self.name if hasattr(self,'name') else 'unnamed')
 
