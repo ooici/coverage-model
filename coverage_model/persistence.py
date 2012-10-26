@@ -455,6 +455,9 @@ class PersistedStorage(AbstractStorage):
         ret_origin = [0 for x in range(ret_arr.ndim)]
         log.trace('Shape of returned array: %s', ret_arr.shape)
 
+        if arr_shp == 0:
+            return ret_arr
+
         brick_origin_offset = 0
 
         bricks = self._bricks_from_slice(slice_)
@@ -696,6 +699,8 @@ class PersistedStorage(AbstractStorage):
 
         vals = self.brick_list.values()
         log.trace('vals: %s', vals)
+        if len(vals) == 0:
+            return 0
         # Calculate the min and max brick value indices for each dimension
         if len(vals[0][1]) > 1:
             min_len = min([min(*x[0][i])+1 for i,x in enumerate(vals)])
