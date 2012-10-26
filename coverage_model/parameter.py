@@ -225,7 +225,7 @@ class ParameterDictionary(AbstractIdentifiable):
         """
         AbstractIdentifiable.__init__(self)
         self._map = OrderedDict()
-        self.__count=-1
+        self.__count=0
         self.temporal_parameter_name = None
 
         if not contexts is None and hasattr(contexts, '__iter__'):
