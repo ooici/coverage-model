@@ -61,7 +61,7 @@ class ParameterContext(AbstractIdentifiable):
     - typing: the param_type attribute should be one of the concrete implementations of AbstractParameterType (i.e. QuantityType)
         - The type may impart certain attributes to the ParameterContext.  For example, a ParameterContext of type QuantityType
      will have a uom (units of measure) attribute.
-    - structure: from the perspective of the container (coverage-model, granule), this includes things such as reference_frame
+    - structure: from the perspective of the container (coverage-model, granule), this includes things such as axis
     (a.k.a. 'axis') and variability (one of the VariabilityEnum members).
     - data-critical-metadata: 'metadata' that is critical to the storage/processing of the data - such as fill_value, nil_value, etc.
 
@@ -80,14 +80,12 @@ class ParameterContext(AbstractIdentifiable):
 #             'missing_value', # accounted for as 'fill_value'
              'cdm_data_type',
              'variable_reports',
-#             'axis', # accounted for as 'reference_frame'
+#             'axis', # accounted for as 'axis'
              'references_list',
              'comment',
              'code_reports',]
 
-
-    # TODO: Need to incorporate some indication of if the parameter is a function of temporal, spatial, both, or None
-    def __init__(self, name, param_type=None, reference_frame=None, fill_value=None, variability=None, **kwargs):
+    def __init__(self, name, param_type=None, axis=None, fill_value=None, variability=None, **kwargs):
         """
         Construct a new ParameterContext object
 
@@ -97,13 +95,13 @@ class ParameterContext(AbstractIdentifiable):
         the new ParameterContext.  If 'new_name' is not provided, the name will be the same as the template.
 
         When 'name' is a ParameterContext - the provided ParameterContext is utilized as a 'template' and it's attributes are copied into the new
-        ParameterContext.  If additional constructor arguments are provided (i.e. reference_frame, fill_value, etc), they will be used preferrentially
+        ParameterContext.  If additional constructor arguments are provided (i.e. axis, fill_value, etc), they will be used preferentially
         over those in the 'template' ParameterContext.  If param_type is specified, it must be compatible (i.e. equivalent) to the param_type
         in the 'template' ParameterContext.
 
         @param name The local name OR a 'template' ParameterContext.
         @param param_type   The concrete AbstractParameterType; defaults to QuantityType if not provided
-        @param reference_frame The reference frame, often a coordinate axis identifier
+        @param axis The axis, typically a member of AxisTypeEnum; if not None, associated with the appropriate Domain
         @param fill_value  The default fill value
         @param variability Indicates if the parameter is a function of time, space, both, or neither; Default is VariabilityEnum.BOTH
         @param **kwargs Keyword arguments matching members of ParameterContext.ATTRS are applied.  Additional keyword arguments are copied and the copy is passed up to AbstractIdentifiable; see documentation for that class for details
@@ -132,7 +130,7 @@ class ParameterContext(AbstractIdentifiable):
             else:
                 self.param_type = copy.deepcopy(param_context.param_type)
 
-            self.reference_frame = reference_frame or param_context.reference_frame
+            self.axis = axis or param_context.axis
             self.fill_value = fill_value or param_context.fill_value
             self.variability = variability or param_context.variability
 
@@ -147,7 +145,7 @@ class ParameterContext(AbstractIdentifiable):
                 raise SystemError('\'param_type\' must be a concrete subclass of AbstractParameterType')
             self.param_type = param_type or QuantityType()
 
-            self.reference_frame = reference_frame or None
+            self.axis = axis or None
             if fill_value is not None: # Provided by ParameterType
                 self.fill_value = fill_value
             self.variability = variability or VariabilityEnum.BOTH
@@ -162,7 +160,7 @@ class ParameterContext(AbstractIdentifiable):
 
         @returns    True if it is a coordinate; False otherwise
         """
-        return not self.reference_frame is None
+        return not self.axis is None
 
     def __str__(self, indent=None):
         indent = indent or ' '
@@ -171,7 +169,7 @@ class ParameterContext(AbstractIdentifiable):
         lst.append('{0}Derived from name: {1}'.format(indent, self._derived_from_name))
         lst.append('{0}Name: {1}'.format(indent, self.name))
         if self.is_coordinate:
-            lst.append('{0}Is Coordinate: {1}'.format(indent, self.reference_frame))
+            lst.append('{0}Is Coordinate: {1}'.format(indent, self.axis))
         lst.append('{0}Type: {1}'.format(indent, self.param_type))
         lst.append('{0}Fill Value: {1}'.format(indent, self.fill_value))
         if hasattr(self, 'uom'): #TODO: This should be dealt with by the ParameterType...
@@ -243,16 +241,16 @@ class ParameterDictionary(AbstractIdentifiable):
         if not isinstance(param_ctxt, ParameterContext):
             raise TypeError('param_ctxt must be a ParameterContext object')
 
-        claims_time=param_ctxt.reference_frame == AxisTypeEnum.TIME
+        claims_time = param_ctxt.axis == AxisTypeEnum.TIME
         if is_temporal or claims_time:
             if self.temporal_parameter_name is None:
                 self.temporal_parameter_name = param_ctxt.name
             else:
                 raise NameError('This dictionary already has a parameter designated as \'temporal\': %s', self.temporal_parameter_name)
-            param_ctxt.reference_frame = AxisTypeEnum.TIME
+            param_ctxt.axis = AxisTypeEnum.TIME
         else:
             if claims_time:
-                param_ctxt.reference_frame = None
+                param_ctxt.axis = None
 
         self.__count += 1
         self._map[param_ctxt.name] = (self.__count, param_ctxt)

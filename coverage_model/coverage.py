@@ -374,11 +374,11 @@ class SimplexCoverage(AbstractCoverage):
 
         # Assign the pname to the CRS (if applicable) and select the appropriate domain (default is the spatial_domain)
         dom = self.spatial_domain
-        if not pcontext.reference_frame is None and AxisTypeEnum.is_member(pcontext.reference_frame, AxisTypeEnum.TIME):
+        if not pcontext.axis is None and AxisTypeEnum.is_member(pcontext.axis, AxisTypeEnum.TIME):
             dom = self.temporal_domain
-            dom.crs.axes[pcontext.reference_frame] = pcontext.name
-        elif not no_sdom and (pcontext.reference_frame in self.spatial_domain.crs.axes):
-            dom.crs.axes[pcontext.reference_frame] = pcontext.name
+            dom.crs.axes[pcontext.axis] = pcontext.name
+        elif not no_sdom and (pcontext.axis in self.spatial_domain.crs.axes):
+            dom.crs.axes[pcontext.axis] = pcontext.name
 
         self._range_dictionary.add_context(pcontext)
         s = self._persistence_layer.init_parameter(pcontext, self._bricking_scheme)
