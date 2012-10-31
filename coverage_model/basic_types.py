@@ -277,7 +277,7 @@ class BaseEnum(object):
 
 class AxisTypeEnum(BaseEnum):
     """
-    Enumeration of Axis Types used when building CRS objects and assigning the ParameterContext.reference_frame
+    Enumeration of Axis Types used when building CRS objects and assigning the ParameterContext.axis
 
     Temporarily taken from: http://www.unidata.ucar.edu/software/netcdf-java/v4.2/javadoc/ucar/nc2/constants/AxisType.html
     """

@@ -155,12 +155,12 @@ def samplecov(save_coverage=False, in_memory=False):
     pdict.add_context(t_ctxt, is_temporal=True)
 
     lat_ctxt = ParameterContext('lat', param_type=QuantityType(value_encoding=np.dtype('float32')))
-    lat_ctxt.reference_frame = AxisTypeEnum.LAT
+    lat_ctxt.axis = AxisTypeEnum.LAT
     lat_ctxt.uom = 'degree_north'
     pdict.add_context(lat_ctxt)
 
     lon_ctxt = ParameterContext('lon', param_type=QuantityType(value_encoding=np.dtype('float32')))
-    lon_ctxt.reference_frame = AxisTypeEnum.LON
+    lon_ctxt.axis = AxisTypeEnum.LON
     lon_ctxt.uom = 'degree_east'
     pdict.add_context(lon_ctxt)
 
@@ -213,12 +213,12 @@ def samplecov2(save_coverage=False, in_memory=False):
     pdict.add_context(t_ctxt, is_temporal=True)
 
     lat_ctxt = ParameterContext('lat', param_type=ConstantType(), variability=VariabilityEnum.NONE)
-    lat_ctxt.reference_frame = AxisTypeEnum.LAT
+    lat_ctxt.axis = AxisTypeEnum.LAT
     lat_ctxt.uom = 'degree_north'
     pdict.add_context(lat_ctxt)
 
     lon_ctxt = ParameterContext('lon', param_type=ConstantType(), variability=VariabilityEnum.NONE)
-    lon_ctxt.reference_frame = AxisTypeEnum.LON
+    lon_ctxt.axis = AxisTypeEnum.LON
     lon_ctxt.uom = 'degree_east'
     pdict.add_context(lon_ctxt)
 
@@ -267,7 +267,7 @@ def oneparamcov(save_coverage=False, in_memory=False):
 
     # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
     t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
-    t_ctxt.reference_frame = AxisTypeEnum.TIME
+    t_ctxt.axis = AxisTypeEnum.TIME
     t_ctxt.uom = 'seconds since 01-01-1970'
     pdict.add_context(t_ctxt)
 
@@ -301,7 +301,7 @@ def oneparamcov_noautoflush(save_coverage=False, in_memory=False):
 
     # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
     t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
-    t_ctxt.reference_frame = AxisTypeEnum.TIME
+    t_ctxt.axis = AxisTypeEnum.TIME
     t_ctxt.uom = 'seconds since 01-01-1970'
     pdict.add_context(t_ctxt)
 
@@ -334,17 +334,17 @@ def emptysamplecov(save_coverage=False, in_memory=False):
 
     # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
     t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
-    t_ctxt.reference_frame = AxisTypeEnum.TIME
+    t_ctxt.axis = AxisTypeEnum.TIME
     t_ctxt.uom = 'seconds since 01-01-1970'
     pdict.add_context(t_ctxt)
 
     lat_ctxt = ParameterContext('lat', param_type=QuantityType(value_encoding=np.dtype('float32')))
-    lat_ctxt.reference_frame = AxisTypeEnum.LAT
+    lat_ctxt.axis = AxisTypeEnum.LAT
     lat_ctxt.uom = 'degree_north'
     pdict.add_context(lat_ctxt)
 
     lon_ctxt = ParameterContext('lon', param_type=QuantityType(value_encoding=np.dtype('float32')))
-    lon_ctxt.reference_frame = AxisTypeEnum.LON
+    lon_ctxt.axis = AxisTypeEnum.LON
     lon_ctxt.uom = 'degree_east'
     pdict.add_context(lon_ctxt)
 
@@ -386,19 +386,19 @@ def ptypescov(save_coverage=False, in_memory=False):
 
     # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
     quant_t_ctxt = ParameterContext('quantity_time', param_type=QuantityType(value_encoding=np.dtype('int64')), variability=VariabilityEnum.TEMPORAL)
-    quant_t_ctxt.reference_frame = AxisTypeEnum.TIME
+    quant_t_ctxt.axis = AxisTypeEnum.TIME
     quant_t_ctxt.uom = 'seconds since 01-01-1970'
     pdict.add_context(quant_t_ctxt)
 
     cnst_int_ctxt = ParameterContext('const_int', param_type=ConstantType(QuantityType(value_encoding=np.dtype('int32'))), variability=VariabilityEnum.NONE)
     cnst_int_ctxt.long_name = 'example of a parameter of type ConstantType, base_type int32'
-    cnst_int_ctxt.reference_frame = AxisTypeEnum.LAT
+    cnst_int_ctxt.axis = AxisTypeEnum.LAT
     cnst_int_ctxt.uom = 'degree_north'
     pdict.add_context(cnst_int_ctxt)
 
     cnst_flt_ctxt = ParameterContext('const_float', param_type=ConstantType(), variability=VariabilityEnum.NONE)
     cnst_flt_ctxt.long_name = 'example of a parameter of type QuantityType, base_type float (default)'
-    cnst_flt_ctxt.reference_frame = AxisTypeEnum.LON
+    cnst_flt_ctxt.axis = AxisTypeEnum.LON
     cnst_flt_ctxt.uom = 'degree_east'
     pdict.add_context(cnst_flt_ctxt)
 
@@ -466,7 +466,7 @@ def nospatialcov(save_coverage=False, in_memory=False):
 
     # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
     t_ctxt = ParameterContext('quantity_time', param_type=QuantityType(value_encoding=np.dtype('int64')), variability=VariabilityEnum.TEMPORAL)
-    t_ctxt.reference_frame = AxisTypeEnum.TIME
+    t_ctxt.axis = AxisTypeEnum.TIME
     t_ctxt.uom = 'seconds since 01-01-1970'
     pdict.add_context(t_ctxt)
 
@@ -533,16 +533,16 @@ def ncgrid2cov(save_coverage=False, in_memory=False):
         if '_FillValue' in var.ncattrs():
             pcontext.fill_value = var.getncattr('_FillValue')
 
-        # Set the reference_frame for the coordinate parameters
+        # Set the axis for the coordinate parameters
         if v == 'time':
             pcontext.variability = VariabilityEnum.TEMPORAL
-            pcontext.reference_frame = AxisTypeEnum.TIME
+            pcontext.axis = AxisTypeEnum.TIME
         elif v == 'lat':
-            pcontext.reference_frame = AxisTypeEnum.LAT
+            pcontext.axis = AxisTypeEnum.LAT
         elif v == 'lon':
-            pcontext.reference_frame = AxisTypeEnum.LON
+            pcontext.axis = AxisTypeEnum.LON
         elif v == 'depth':
-            pcontext.reference_frame = AxisTypeEnum.HEIGHT
+            pcontext.axis = AxisTypeEnum.HEIGHT
 
         pdict.add_context(pcontext)
 
@@ -610,16 +610,16 @@ def ncstation2cov(save_coverage=False, in_memory=False):
         if '_FillValue' in var.ncattrs():
             pcontext.fill_value = var.getncattr('_FillValue')
 
-        # Set the reference_frame for the coordinate parameters
+        # Set the axis for the coordinate parameters
         if v == 'time':
             pcontext.variability = VariabilityEnum.TEMPORAL
-            pcontext.reference_frame = AxisTypeEnum.TIME
+            pcontext.axis = AxisTypeEnum.TIME
         elif v == 'lat':
-            pcontext.reference_frame = AxisTypeEnum.LAT
+            pcontext.axis = AxisTypeEnum.LAT
         elif v == 'lon':
-            pcontext.reference_frame = AxisTypeEnum.LON
+            pcontext.axis = AxisTypeEnum.LON
         elif v == 'z':
-            pcontext.reference_frame = AxisTypeEnum.HEIGHT
+            pcontext.axis = AxisTypeEnum.HEIGHT
 
         pdict.add_context(pcontext)
 

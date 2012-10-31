@@ -35,7 +35,7 @@ def _make_cov(brick_size=None, chunk_size=None, dtype='int64'):
 
     # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
     t_ctxt = ParameterContext('quantity_time', param_type=QuantityType(value_encoding=np.dtype(dtype)), variability=VariabilityEnum.TEMPORAL)
-    t_ctxt.reference_frame = AxisTypeEnum.TIME
+    t_ctxt.axis = AxisTypeEnum.TIME
     t_ctxt.uom = 'seconds since 01-01-1970'
     pdict.add_context(t_ctxt)
 
