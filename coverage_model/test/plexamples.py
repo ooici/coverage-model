@@ -59,15 +59,15 @@ def standup_pdict():
         if '_FillValue' in var.ncattrs():
             pcontext.fill_value = var.getncattr('_FillValue')
 
-        # Set the reference_frame for the coordinate parameters
+        # Set the axis for the coordinate parameters
         if v == 'time':
-            pcontext.reference_frame = AxisTypeEnum.TIME
+            pcontext.axis = AxisTypeEnum.TIME
         elif v == 'lat':
-            pcontext.reference_frame = AxisTypeEnum.LAT
+            pcontext.axis = AxisTypeEnum.LAT
         elif v == 'lon':
-            pcontext.reference_frame = AxisTypeEnum.LON
+            pcontext.axis = AxisTypeEnum.LON
         elif v == 'depth':
-            pcontext.reference_frame = AxisTypeEnum.HEIGHT
+            pcontext.axis = AxisTypeEnum.HEIGHT
 
         pdict.add_context(pcontext)
     return pdict
@@ -442,15 +442,15 @@ def nc2bricks():
         if '_FillValue' in var.ncattrs():
             pcontext.fill_value = var.getncattr('_FillValue')
 
-        # Set the reference_frame for the coordinate parameters
+        # Set the axis for the coordinate parameters
         if v == 'time':
-            pcontext.reference_frame = AxisTypeEnum.TIME
+            pcontext.axis = AxisTypeEnum.TIME
         elif v == 'lat':
-            pcontext.reference_frame = AxisTypeEnum.LAT
+            pcontext.axis = AxisTypeEnum.LAT
         elif v == 'lon':
-            pcontext.reference_frame = AxisTypeEnum.LON
+            pcontext.axis = AxisTypeEnum.LON
         elif v == 'depth':
-            pcontext.reference_frame = AxisTypeEnum.HEIGHT
+            pcontext.axis = AxisTypeEnum.HEIGHT
 
         pdict.add_context(pcontext)
 
