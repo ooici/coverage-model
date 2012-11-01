@@ -513,6 +513,8 @@ def nospatialcov(save_coverage=False, in_memory=False):
     return scov
 
 def ncgrid2cov(save_coverage=False, in_memory=False):
+    if True:
+        raise NotImplementedError('Multidimensional support is not available at this time')
     # Open the netcdf dataset
     ds = Dataset('test_data/ncom.nc')
     # Itemize the variable names that we want to include in the coverage
@@ -600,7 +602,7 @@ def ncstation2cov(save_coverage=False, in_memory=False):
 
         ptype = QuantityType(var.dtype.char)
         if v in ('lat','lon','z'):
-            ptype=FunctionType(ptype)
+            ptype=ConstantType(ptype)
 
         pcontext = ParameterContext(v, param_type=ptype)
         if 'units' in var.ncattrs():
@@ -644,7 +646,7 @@ def ncstation2cov(save_coverage=False, in_memory=False):
         var.set_auto_maskandscale(False)
 
         if v in ('lat','lon','z'):
-            scov._range_value[v] = make_range_expr(var[0])
+            scov._range_value[v][0] = make_range_expr(var[0])
         else:
             scov._range_value[v][:] = var[:]
 
