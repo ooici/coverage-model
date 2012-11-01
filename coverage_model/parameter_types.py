@@ -50,6 +50,27 @@ class AbstractParameterType(AbstractIdentifiable):
     def is_valid_value(self, value):
         raise NotImplementedError('Function not implemented by abstract class')
 
+    @property
+    def fill_value(self):
+        if hasattr(self, '_fill_value'):
+            return self._fill_value
+        else:
+            return None
+
+    @fill_value.setter
+    def fill_value(self, value):
+        if hasattr(self, 'value_encoding'):
+            dtk = np.dtype(self.value_encoding).kind
+            if dtk == 'u': # Unsigned integer's must be positive
+                self._fill_value = abs(value)
+            elif dtk == 'O': # object, must be None for now...
+                self._fill_value = None
+            else:
+                self._fill_value = value
+        else:
+            self._fill_value = value
+
+
     def _gen_template_attrs(self):
         for k, v in self._template_attrs.iteritems():
             setattr(self,k,v)
@@ -194,7 +215,6 @@ class QuantityType(AbstractSimplexParameterType):
 
         self._template_attrs['uom'] = uom or 'unspecified'
         self._template_attrs['constraint'] = constraint
-        self._template_attrs['fill_value'] = -9999
         self._gen_template_attrs()
 
     @property
