@@ -129,7 +129,7 @@ class PersistenceLayer(object):
         pm.tree_rank = tree_rank
         pm.brick_tree = brick_tree
 
-        v = PersistedStorage(pm, self.brick_dispatcher, dtype=parameter_context.param_type.value_encoding, fill_value=parameter_context.param_type.fill_value, auto_flush=self.auto_flush_values)
+        v = PersistedStorage(pm, self.brick_dispatcher, dtype=parameter_context.param_type.storage_encoding, fill_value=parameter_context.param_type.fill_value, auto_flush=self.auto_flush_values)
         self.value_list[parameter_name] = v
 
         self.expand_domain(parameter_context)

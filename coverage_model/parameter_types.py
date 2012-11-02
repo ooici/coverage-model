@@ -70,6 +70,17 @@ class AbstractParameterType(AbstractIdentifiable):
         else:
             self._fill_value = value
 
+    @property
+    def value_encoding(self):
+        return self._value_encoding
+
+    @value_encoding.setter
+    def value_encoding(self, value):
+        self._value_encoding = value
+
+    @property
+    def storage_encoding(self):
+        return self._value_encoding
 
     def _gen_template_attrs(self):
         for k, v in self._template_attrs.iteritems():
@@ -122,8 +133,30 @@ class AbstractComplexParameterType(AbstractParameterType):
         kwc=kwargs.copy()
         AbstractParameterType.__init__(self, **kwc)
 
-        self._template_attrs['value_encoding'] = np.dtype(object).str
+        self.value_encoding = np.dtype(object).str
         self._template_attrs['fill_value'] = None
+
+    @property
+    def value_encoding(self):
+        if hasattr(self, 'base_type'):
+            t = self.base_type
+        else:
+            t = self
+
+        return t._value_encoding
+
+    @value_encoding.setter
+    def value_encoding(self, value):
+        if hasattr(self, 'base_type'):
+            t = self.base_type
+        else:
+            t = self
+
+        t._value_encoding = value
+
+    @property
+    def storage_encoding(self):
+        return self._value_encoding
 
 #==================
 # Parameter Type Objects
@@ -332,7 +365,7 @@ class FunctionType(AbstractComplexParameterType):
 
         self._template_attrs.update(self.base_type._template_attrs)
 
-        self._template_attrs['value_encoding'] = '|O8'
+#        self._template_attrs['value_encoding'] = '|O8'
         self._template_attrs['fill_value'] = None
 
         self._gen_template_attrs()
@@ -365,7 +398,7 @@ class ConstantType(AbstractComplexParameterType):
         self.base_type = base_type or QuantityType()
 
         self._template_attrs.update(self.base_type._template_attrs)
-        self._template_attrs['value_encoding'] = '|O8'
+#        self._template_attrs['value_encoding'] = '|O8'
         self._template_attrs['fill_value'] = None
 
         self._gen_template_attrs()
