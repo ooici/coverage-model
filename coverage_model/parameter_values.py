@@ -35,7 +35,7 @@ class AbstractParameterValue(AbstractBase):
         AbstractBase.__init__(self, **kwc)
         self.parameter_type = parameter_type
         self.domain_set = domain_set
-        self._storage = storage or InMemoryStorage(dtype=self.storage_encoding, fill_value=self.parameter_type.fill_value)
+        self._storage = storage or InMemoryStorage(dtype=self.parameter_type.storage_encoding, fill_value=self.parameter_type.fill_value)
 
     @property
     def shape(self):
@@ -51,15 +51,6 @@ class AbstractParameterValue(AbstractBase):
 
     @property
     def value_encoding(self):
-        if hasattr(self.parameter_type, 'base_type'):
-            t = self.parameter_type.base_type
-        else:
-            t = self.parameter_type
-
-        return t.value_encoding
-
-    @property
-    def storage_encoding(self):
         return self.parameter_type.value_encoding
 
     def expand_content(self, domain, origin, expansion):
