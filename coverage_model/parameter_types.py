@@ -50,6 +50,38 @@ class AbstractParameterType(AbstractIdentifiable):
     def is_valid_value(self, value):
         raise NotImplementedError('Function not implemented by abstract class')
 
+    @property
+    def fill_value(self):
+        if hasattr(self, '_fill_value'):
+            return self._fill_value
+        else:
+            return None
+
+    @fill_value.setter
+    def fill_value(self, value):
+        if hasattr(self, 'value_encoding'):
+            dtk = np.dtype(self.value_encoding).kind
+            if dtk == 'u': # Unsigned integer's must be positive
+                self._fill_value = abs(value)
+            elif dtk == 'O': # object, must be None for now...
+                self._fill_value = None
+            else:
+                self._fill_value = value
+        else:
+            self._fill_value = value
+
+    @property
+    def value_encoding(self):
+        return self._value_encoding
+
+    @value_encoding.setter
+    def value_encoding(self, value):
+        self._value_encoding = value
+
+    @property
+    def storage_encoding(self):
+        return self._value_encoding
+
     def _gen_template_attrs(self):
         for k, v in self._template_attrs.iteritems():
             setattr(self,k,v)
@@ -101,8 +133,30 @@ class AbstractComplexParameterType(AbstractParameterType):
         kwc=kwargs.copy()
         AbstractParameterType.__init__(self, **kwc)
 
-        self._template_attrs['value_encoding'] = np.dtype(object).str
+        self.value_encoding = np.dtype(object).str
         self._template_attrs['fill_value'] = None
+
+    @property
+    def value_encoding(self):
+        if hasattr(self, 'base_type'):
+            t = self.base_type
+        else:
+            t = self
+
+        return t._value_encoding
+
+    @value_encoding.setter
+    def value_encoding(self, value):
+        if hasattr(self, 'base_type'):
+            t = self.base_type
+        else:
+            t = self
+
+        t._value_encoding = value
+
+    @property
+    def storage_encoding(self):
+        return self._value_encoding
 
 #==================
 # Parameter Type Objects
@@ -194,7 +248,6 @@ class QuantityType(AbstractSimplexParameterType):
 
         self._template_attrs['uom'] = uom or 'unspecified'
         self._template_attrs['constraint'] = constraint
-        self._template_attrs['fill_value'] = -9999
         self._gen_template_attrs()
 
     @property
@@ -312,7 +365,7 @@ class FunctionType(AbstractComplexParameterType):
 
         self._template_attrs.update(self.base_type._template_attrs)
 
-        self._template_attrs['value_encoding'] = '|O8'
+#        self._template_attrs['value_encoding'] = '|O8'
         self._template_attrs['fill_value'] = None
 
         self._gen_template_attrs()
@@ -345,7 +398,7 @@ class ConstantType(AbstractComplexParameterType):
         self.base_type = base_type or QuantityType()
 
         self._template_attrs.update(self.base_type._template_attrs)
-        self._template_attrs['value_encoding'] = '|O8'
+#        self._template_attrs['value_encoding'] = '|O8'
         self._template_attrs['fill_value'] = None
 
         self._gen_template_attrs()

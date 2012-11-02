@@ -39,7 +39,7 @@ from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, Mutab
 from coverage_model.parameter import Parameter, ParameterDictionary, ParameterContext
 from coverage_model.parameter_values import get_value_class, AbstractParameterValue
 from coverage_model.persistence import PersistenceLayer, InMemoryPersistenceLayer
-from coverage_model.utils import is_valid_constraint
+import coverage_model.utils as utils
 from copy import deepcopy
 import numpy as np
 import pickle
@@ -564,6 +564,169 @@ class SimplexCoverage(AbstractCoverage):
 
         return deepcopy(self._range_dictionary.get_context(param_name))
 
+    def __axis_arg_to_params(self, axis=None):
+        """
+        Helper function to compose a list of parameter names based on the <i>axis</i> argument
+
+        If <i>axis</i> is None, all coordinate parameters are included
+
+        @param axis A member of AxisTypeEnum; may be an iterable of such members
+        """
+        params = []
+        if axis is None:
+            params.extend(pn for pk, pn in self.temporal_domain.crs.axes.iteritems())
+            params.extend(pn for pk, pn in self.spatial_domain.crs.axes.iteritems())
+        elif hasattr(axis, '__iter__'):
+            for a in axis:
+                if a in self.temporal_domain.crs.axes:
+                    params.append(self.temporal_domain.crs.axes[a])
+                elif a in self.spatial_domain.crs.axes:
+                    params.append(self.spatial_domain.crs.axes[a])
+                else:
+                    raise ValueError('Specified axis ({0}) not found in coverage'.format(a))
+        elif axis in self.temporal_domain.crs.axes:
+            params.append(self.temporal_domain.crs.axes[axis])
+        elif axis in self.spatial_domain.crs.axes:
+            params.append(self.spatial_domain.crs.axes[axis])
+        else:
+            raise ValueError('Specified axis ({0}) not found in coverage'.format(axis))
+
+        return params
+
+    def __parameter_name_arg_to_params(self, parameter_name=None):
+        """
+        Helper function to compose a list of parameter names based on the <i>parameter_name</i> argument
+
+        If <i>parameter_name</i> is None, all parameters in the coverage are included
+
+        @param parameter_name A string parameter name; may be an iterable of such members
+        """
+        params = []
+        if parameter_name is None:
+            params.extend(self._range_dictionary.keys())
+        elif hasattr(parameter_name, '__iter__'):
+            params.extend(pn for pn in parameter_name if pn in self._range_dictionary.keys())
+        else:
+            params.append(parameter_name)
+
+        return params
+
+    def get_data_bounds(self, parameter_name=None):
+        """
+        Returns the bounds (min, max) for the parameter(s) indicated by <i>parameter_name</i>
+
+        If <i>parameter_name</i> is None, all parameters in the coverage are included
+
+        If more than one parameter is indicated by <i>parameter_name</i>, a dict of {key:(min,max)} is returned;
+        otherwise, only the (min, max) tuple is returned
+
+        @param parameter_name   A string parameter name; may be an iterable of such members
+        """
+
+        ret = {}
+        for pn in self.__parameter_name_arg_to_params(parameter_name):
+            v = self._range_value[pn][:]
+            ret[pn] = (np.min(v), np.max(v))
+
+        if len(ret) == 1:
+            ret = ret.values()[0]
+
+        return ret
+
+    def get_data_bounds_by_axis(self, axis=None):
+        """
+        Returns the bounds (min, max) for the coordinate parameter(s) indicated by <i>axis</i>
+
+        If <i>axis</i> is None, all coordinate parameters are included
+
+        If more than one parameter is indicated by <i>axis</i>, a dict of {key:(min,max)} is returned;
+        otherwise, only the (min, max) tuple is returned
+
+        @param axis   A member of AxisTypeEnum; may be an iterable of such members
+        """
+        return self.get_data_bounds(self.__axis_arg_to_params(axis))
+
+    def get_data_extents(self, parameter_name=None):
+        """
+        Returns the extents (dim_0,dim_1,...,dim_n) for the parameter(s) indicated by <i>parameter_name</i>
+
+        If <i>parameter_name</i> is None, all parameters in the coverage are included
+
+        If more than one parameter is indicated by <i>parameter_name</i>, a dict of {key:(dim_0,dim_1,...,dim_n)} is returned;
+        otherwise, only the (dim_0,dim_1,...,dim_n) tuple is returned
+
+        @param parameter_name   A string parameter name; may be an iterable of such members
+        """
+        ret = {}
+        for pn in self.__parameter_name_arg_to_params(parameter_name):
+            p = self._range_dictionary.get_context(pn)
+            ret[pn] = p.dom.total_extents
+
+        if len(ret) == 1:
+            ret = ret.values()[0]
+
+        return ret
+
+    def get_data_extents_by_axis(self, axis=None):
+        """
+        Returns the extents (dim_0,dim_1,...,dim_n) for the coordinate parameter(s) indicated by <i>axis</i>
+
+        If <i>axis</i> is None, all coordinate parameters are included
+
+        If more than one parameter is indicated by <i>axis</i>, a dict of {key:(dim_0,dim_1,...,dim_n)} is returned;
+        otherwise, only the (dim_0,dim_1,...,dim_n) tuple is returned
+
+        @param axis   A member of AxisTypeEnum; may be an iterable of such members
+        """
+        return self.get_data_extents(self.__axis_arg_to_params(axis))
+
+    def get_data_size(self, parameter_name=None, slice_=None, in_bytes=False):
+        """
+        Returns the size of the <b>data values</b> for the parameter(s) indicated by <i>parameter_name</i>.
+        ParameterContext and Coverage metadata is <b>NOT</b> included in the returned size.
+
+        If <i>parameter_name</i> is None, all parameters in the coverage are included
+
+        If more than one parameter is indicated by <i>parameter_name</i>, the sum of the indicated parameters is returned
+
+        If <i>slice_</i> is not None, it is applied to each parameter (after being run through utils.fix_slice) before
+        calculation of size
+
+        Sizes are calculated as:
+            size = itemsize * total_extent_size
+
+        where:
+            itemsize == the per-item size based on the data type of the parameter
+            total_extent_size == the total number of elements after slicing is applied (if applicable)
+
+        Sizes are in MB unless <i>in_bytes</i> == True
+
+        @param parameter_name   A string parameter name; may be an iterable of such members
+        @param slice_   If not None, applied to each parameter before calculation of size
+        @param in_bytes If True, returns the size in bytes; otherwise, returns the size in MB (default)
+        """
+        size = 0
+        if parameter_name is None:
+            for pn in self._range_dictionary.keys():
+                size += self.get_data_size(pn, in_bytes=in_bytes)
+
+        for pn in self.__parameter_name_arg_to_params(parameter_name):
+            p = self._range_dictionary.get_context(pn)
+            te=p.dom.total_extents
+            dt = np.dtype(p.param_type.value_encoding)
+
+            if slice_ is not None:
+                slice_ = utils.fix_slice(slice_, te)
+                a=np.empty(te, dtype=dt)[slice_]
+                size += a.nbytes
+            else:
+                size += dt.itemsize * utils.prod(te)
+
+        if not in_bytes:
+            size *= 9.53674e-7
+
+        return size
+
     @property
     def info(self):
         """
@@ -630,77 +793,6 @@ class RangeValues(Dictable):
 
     def __dir__(self):
         return self.__dict__.keys()
-
-class RangeMember(object):
-    # CBM TODO: Is this really AbstractParameterValue?? - I think so...content --> value
-    """
-    This is what would provide the "abstraction" between the in-memory model and the underlying persistence - all through __getitem__ and __setitem__
-    Mapping between the "complete" domain and the storage strategy can happen here
-    """
-
-    def __init__(self, shape, pcontext):
-        self._arr_obj = np.empty(shape, dtype=pcontext.param_type.value_encoding)
-        self._arr_obj.fill(pcontext.fill_value)
-
-    @property
-    def shape(self):
-        return self._arr_obj.shape
-
-    @property
-    def content(self):
-        return self._arr_obj
-
-    @content.setter
-    def content(self, value):
-        self._arr_obj=value
-
-    # CBM: First swack - see this for more possible checks: http://code.google.com/p/netcdf4-python/source/browse/trunk/netCDF4_utils.py
-    def __getitem__(self, slice_):
-        if not is_valid_constraint(slice_):
-            raise SystemError('invalid constraint supplied: {0}'.format(slice_))
-
-        # First, ensure we're working with a tuple
-        if not np.iterable(slice_):
-            slice_ = (slice_,)
-        elif not isinstance(slice_,tuple):
-            slice_ = tuple(slice_)
-
-        # Then make it's the correct shape TODO: Should reference the shape of the Domain object
-        alen = len(self._arr_obj.shape)
-        slen = len(slice_)
-        if not slen == alen:
-            if slen > alen:
-                slice_ = slice_[:alen]
-            else:
-                for n in range(slen, alen):
-                    slice_ += (slice(None,None,None),)
-
-        return self._arr_obj[slice_]
-
-    def __setitem__(self, slice_, value):
-        if not is_valid_constraint(slice_):
-            raise SystemError('invalid constraint supplied: {0}'.format(slice_))
-
-        # First, ensure we're working with a tuple
-        if not np.iterable(slice_):
-            slice_ = (slice_,)
-        elif not isinstance(slice_,tuple):
-            slice_ = tuple(slice_)
-
-        # Then make it's the correct rank TODO: Should reference the rank of the Domain object(s)
-        alen = len(self._arr_obj.shape)
-        slen = len(slice_)
-        if not slen == alen:
-            if slen > alen:
-                slice_ = slice_[:alen]
-            else:
-                for n in range(slen, alen):
-                    slice_ += (slice(None,None,None),)
-
-        self._arr_obj[slice_] = value
-
-    def __str__(self):
-        return '{0}'.format(self._arr_obj.shape)
 
 class RangeDictionary(AbstractIdentifiable):
     """
