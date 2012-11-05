@@ -55,6 +55,23 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         lcov.close()
         self.assertIsInstance(lcov, SimplexCoverage)
 
+    def test_get_data_after_load(self):
+        # Creates a valid coverage, inserts data and .load coverage back up from the HDF5 files.
+        results =[]
+        scov = self._make_samplecov()
+        self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='time')
+        pl = scov._persistence_layer
+        guid = scov.persistence_guid
+        root_path = pl.master_manager.root_dir
+        base_path = root_path.replace(guid,'')
+        scov.close()
+        lcov = SimplexCoverage.load(base_path, guid)
+        ret_data = lcov.get_parameter_values('time', slice(0,50))
+        results.append(np.arange(50).any() == ret_data.any())
+        self.assertTrue(False not in results)
+        lcov.close()
+        self.assertIsInstance(lcov, SimplexCoverage)
+
     def test_load_fails_bad_guid(self):
         # Tests load fails if coverage exists and path is correct but GUID is incorrect
         scov = self._make_samplecov()
