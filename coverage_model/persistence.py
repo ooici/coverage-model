@@ -26,15 +26,19 @@ class PersistenceError(Exception):
 class PersistenceLayer(object):
     def __init__(self, root, guid, name=None, tdom=None, sdom=None, bricking_scheme=None, auto_flush_values=True, **kwargs):
         """
-        Constructor for Persistence Layer
-        @param root: Where to save/look for HDF5 files
-        @param guid: CoverageModel GUID
-        @param name: CoverageModel Name
-        @param tdom: Temporal Domain
-        @param sdom: Spatial Domain
+        Constructor for PersistenceLayer
+
+        @param root: The <root> component of the filesystem path for the coverage (/<root>/<guid>)
+        @param guid: The <guid> component of the filesystem path for the coverage (/<root>/<guid>)
+        @param name: CoverageModel's name persisted to the metadata attribute in the master HDF5 file
+        @param tdom: Concrete instance of AbstractDomain for the temporal domain component
+        @param sdom: Concrete instance of AbstractDomain for the spatial domain component
+        @param bricking_scheme: A dictionary containing the brick and chunk sizes
+        @param auto_flush_values: True = Values flushed to HDF5 files automatically, False = Manual
         @param kwargs:
-        @return:
+        @return: None
         """
+
         log.debug('Persistence GUID: %s', guid)
         root = '.' if root is ('' or None) else root
 
@@ -77,11 +81,14 @@ class PersistenceLayer(object):
 
     def calculate_brick_size(self, tD, bricking_scheme):
         """
-        Calculate brick domain size given a target file system brick size (Mbytes) and dtype
-        @param tD:
-        @param bricking_scheme:
+        Calculates and returns the brick and chunk size for each dimension
+        in the total domain based on the bricking scheme
+
+        @param tD: Total domain
+        @param bricking_scheme: A dictionary containing the brick and chunk sizes
         @return:
         """
+
         log.debug('Calculating the size of a brick...')
         log.debug('Bricking scheme: %s', bricking_scheme)
         log.debug('tD: %s', tD)
@@ -92,6 +99,15 @@ class PersistenceLayer(object):
         return bD,tuple(cD)
 
     def init_parameter(self, parameter_context, bricking_scheme):
+        """
+        Initializes a parameter using a ParameterContext object and a bricking
+        scheme for that parameter
+
+        @param parameter_context: ParameterContext object describing the parameter to initialize
+        @param bricking_scheme: A dictionary containing the brick and chunk sizes
+        @return: A PersistedStorage object
+        """
+
         parameter_name = parameter_context.name
 
         self.global_bricking_scheme = bricking_scheme
@@ -144,12 +160,14 @@ class PersistenceLayer(object):
 
     def calculate_extents(self, origin, bD, parameter_name):
         """
-        Calculates the Rtree extents, brick extents and active brick size for the parameter
-        @param origin:
-        @param bD:
-        @param parameter_name:
-        @return:
+        Calculates and returns the Rtree extents, brick extents and active brick size for the parameter
+
+        @param origin: The origin of the brick in index space
+        @param bD: The brick's domain in index space
+        @param parameter_name: The parameter name
+        @return: rtree_extents, tuple(brick_extents), tuple(brick_active_size)
         """
+
         log.debug('origin: %s', origin)
         log.debug('bD: %s', bD)
         log.debug('parameter_name: %s', parameter_name)
@@ -180,6 +198,15 @@ class PersistenceLayer(object):
         return rtree_extents, tuple(brick_extents), tuple(brick_active_size)
 
     def _brick_exists(self, parameter_name, brick_extents):
+        """
+        Checks if a brick exists for a given parameter and extents
+
+        @param parameter_name: The parameter name
+        @param brick_extents: The brick extents
+        @return: Boolean (do_write) = False if found, returns found brick's GUID;
+         otherwise returns True with an empty brick GUID
+        """
+
         # Make sure the brick doesn't already exist if we already have some bricks
         do_write = True
         brick_guid = ''
@@ -196,6 +223,18 @@ class PersistenceLayer(object):
 
     # Write empty HDF5 brick to the filesystem
     def write_brick(self, rtree_extents, brick_extents, brick_active_size, origin, bD, parameter_name):
+        """
+        Creates a virtual brick in the PersistenceLayer by updating the HDF5 master file's
+        brick list, rtree and ExternalLink to where the HDF5 file will be saved in the future (lazy create)
+
+        @param rtree_extents: Total extents of brick's domain in rtree format
+        @param brick_extents: Size of brick
+        @param brick_active_size: Size of brick (same rank as parameter)
+        @param origin: Domain origin offset
+        @param bD: Slice-friendly size of brick's domain
+        @param parameter_name: Parameter name as string
+        @return: N/A
+        """
         pm = self.parameter_metadata[parameter_name]
 
 #        rtree_extents, brick_extents, brick_active_size = self.calculate_extents(origin, bD, parameter_name)
@@ -236,6 +275,16 @@ class PersistenceLayer(object):
 
     # Expand the domain
     def expand_domain(self, parameter_context, tdom=None, sdom=None):
+        """
+        Expands a parameter's total domain based on the requested new temporal and/or spatial domains.
+        Temporal domain expansion is most typical.
+        Number of dimensions may not change for the parameter.
+
+        @param parameter_context: ParameterContext object
+        @param tdom: Requested new temporal domain size
+        @param sdom: Requested new spatial domain size
+        @return: N/A
+        """
         parameter_name = parameter_context.name
         log.debug('Expand %s', parameter_name)
         pm = self.parameter_metadata[parameter_name]
@@ -318,6 +367,12 @@ class PersistenceLayer(object):
 
     # Returns a count of bricks for a parameter
     def parameter_brick_count(self, parameter_name):
+        """
+        Counts and returns the number of bricks in a given parameter's brick list
+
+        @param parameter_name:
+        @return: The number of virtual bricks
+        """
         ret = 0
         if parameter_name in self.parameter_metadata:
             ret = len(self.parameter_metadata[parameter_name].brick_list)
@@ -327,6 +382,11 @@ class PersistenceLayer(object):
         return ret
 
     def has_dirty_values(self):
+        """
+        Checks if the master file values have been modified
+
+        @return: True if master file metadata has been modified
+        """
         for v in self.value_list.itervalues():
             if v.has_dirty_values():
                 return True
@@ -357,11 +417,20 @@ class PersistenceLayer(object):
         self._closed = True
 
 class PersistedStorage(AbstractStorage):
-
+    """
+    A concrete implementation of AbstractStorage utilizing the ParameterManager and brick dispatcher
+    """
     def __init__(self, parameter_manager, brick_dispatcher, dtype=None, fill_value=None, auto_flush=True, **kwargs):
         """
+        Constructor for PersistedStorage
 
-        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractStorage; see documentation for that class for details
+        @param parameter_manager: ParameterManager object for the coverage
+        @param brick_dispatcher: BrickDispatcher object for the coverage
+        @param dtype: Data type (HDF5/numpy) of parameter
+        @param fill_value: HDF5/numpy compatible value based on dtype, returned if no value set within valid extent request
+        @param auto_flush: Saves/flushes data to HDF5 files on every assignment
+        @param kwargs: Additional keyword arguments
+        @return: N/A
         """
         kwc=kwargs.copy()
         AbstractStorage.__init__(self, dtype=dtype, fill_value=fill_value, **kwc)
@@ -402,6 +471,13 @@ class PersistedStorage(AbstractStorage):
 
     # Calculates the bricks from Rtree (brick_tree) using the slice_
     def _bricks_from_slice(self, slice_):
+        """
+        Calculates the a list of bricks from the rtree based on the requested slice
+
+        @param slice_: Requested slice
+        @return: Sorted list of tuples denoting the bricks
+        """
+
         # Make sure we don't modify the global slice_ object
         sl = deepcopy(slice_)
 
@@ -444,6 +520,16 @@ class PersistedStorage(AbstractStorage):
         return ret
 
     def __getitem__(self, slice_):
+        """
+        Called to implement evaluation of self[slice_].
+
+        Not implemented by the abstract class
+
+        @param slice_: A set of valid constraints - int, [int,], (int,), or slice
+        @return: The value contained by the storage at location slice
+        @raise: ValueError when brick contains no values for specified slice
+        """
+
         if not isinstance(slice_, (list,tuple)):
             slice_ = [slice_]
         log.debug('getitem slice_: %s', slice_)
@@ -503,6 +589,16 @@ class PersistedStorage(AbstractStorage):
         return ret_arr
 
     def __setitem__(self, slice_, value):
+        """
+        Called to implement assignment of self[slice_, value].
+
+        Not implemented by the abstract class
+
+        @param slice:  A set of valid constraints - int, [int,], (int,), or slice
+        @param value:  The value to assign to the storage at location slice_
+        @raise: ValueError when brick contains no values for specified slice
+        """
+
         if not isinstance(slice_, (list,tuple)):
             slice_ = [slice_]
         log.debug('setitem slice_: %s', slice_)
@@ -588,6 +684,17 @@ class PersistedStorage(AbstractStorage):
                 self._queue_work(work_key, work_metrics, work)
 
     def _calc_slices(self, slice_, brick_guid, value, val_origin, brick_origin_offset=0):
+        """
+        Calculates and returns the brick_slice, value_slice and brick_origin_offset for a given value and slice for a specific brick
+
+        @param slice_: Requested slice
+        @param brick_guid: GUID of brick
+        @param value: Value to apply to brick
+        @param val_origin: An origin offset within the value's domain
+        @param brick_origin_offset: A resultant offset based on the slice, ie. mid-brick slice start
+        @return: brick_slice, value_slice, brick_origin_offset
+        """
+
         brick_origin, _, brick_size = self.brick_list[brick_guid][1:]
         log.debug('Brick %s:  origin=%s, size=%s', brick_guid, brick_origin, brick_size)
         log.debug('Slice set: %s', slice_)
@@ -693,8 +800,16 @@ class PersistedStorage(AbstractStorage):
                 value_slice = brick_slice
 
         return brick_slice, value_slice, brick_origin_offset
+
     # TODO: Does not support n-dimensional
     def _get_array_shape_from_slice(self, slice_):
+        """
+        Calculates and returns the shape of the slice in each dimension of the total domain
+
+        @param slice_: Requested slice
+        @return: A tuple object denoting the shape of the slice in each dimension of the total domain
+        """
+
         log.debug('Getting array shape for slice_: %s', slice_)
 
         vals = self.brick_list.values()
