@@ -39,6 +39,10 @@ setup(  name = 'coverage-model',
         'h5py==2.0.1',
         'rtree==0.7.0',
         'pidantic',
-#        'scipy==0.10.1',
+        #        'scipy==0.10.1',
     ],
+    entry_points = """
+        [pydap.handler]
+        coverage = pydap.handlers.coverage:Handler
+    """,
 )
