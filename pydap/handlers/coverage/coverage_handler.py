@@ -13,7 +13,7 @@ from pydap.handlers.lib import BaseHandler
 class Handler(BaseHandler):
 
     #extensions = re.compile(r"^.*\.cov", re.IGNORECASE)
-    extensions = re.compile(r'^.*\w{8}-\w{4}-\w{4}-\w{4}-\w{12}', re.IGNORECASE)
+    extensions = re.compile(r'^.*[0-9A-Za-z]{32}', re.IGNORECASE)
 
     def __init__(self, filepath):
         self.filepath = filepath
