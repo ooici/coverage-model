@@ -6,6 +6,7 @@
 @author Christopher Mueller
 @brief Exemplar functions for creation, manipulation, and basic visualization of coverages
 """
+import random
 
 from ooi.logging import log
 from netCDF4 import Dataset
@@ -402,6 +403,10 @@ def ptypescov(save_coverage=False, in_memory=False):
     cnst_flt_ctxt.uom = 'degree_east'
     pdict.add_context(cnst_flt_ctxt)
 
+    cat = {0:'turkey',1:'duck',2:'chicken',99:'None'}
+    cat_ctxt = ParameterContext('category', param_type=CategoryType(categories=cat), variability=VariabilityEnum.TEMPORAL)
+    pdict.add_context(cat_ctxt)
+
 #    func_ctxt = ParameterContext('function', param_type=FunctionType(QuantityType(value_encoding=np.dtype('float32'))))
 #    func_ctxt.long_name = 'example of a parameter of type FunctionType'
 #    pdict.add_context(func_ctxt)
@@ -439,6 +444,8 @@ def ptypescov(save_coverage=False, in_memory=False):
 
     arrval = []
     recval = []
+    catval = []
+    catkeys = cat.keys()
     letts='abcdefghijklmnopqrstuvwxyz'
     while len(letts) < nt:
         letts += 'abcdefghijklmnopqrstuvwxyz'
@@ -446,8 +453,10 @@ def ptypescov(save_coverage=False, in_memory=False):
         arrval.append(np.random.bytes(np.random.randint(1,20))) # One value (which is a byte string) for each member of the domain
         d = {letts[x]: letts[x:]}
         recval.append(d) # One value (which is a dict) for each member of the domain
+        catval.append(random.choice(catkeys))
     scov.set_parameter_values('array', value=arrval)
     scov.set_parameter_values('record', value=recval)
+    scov.set_parameter_values('category', value=catval)
 
     if in_memory and save_coverage:
         SimplexCoverage.pickle_save(scov, 'test_data/ptypes.cov')
