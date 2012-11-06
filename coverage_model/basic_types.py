@@ -12,6 +12,10 @@ import numpy as np
 from coverage_model.utils import create_guid, is_valid_constraint
 
 class Dictable(object):
+    """
+    The Dictable class provides dump and load functions backed by overridable _todict and _fromdict functions.
+    It's purpose is to enable custom objects to be converted to/from a composable python dictionary.
+    """
 
     def dump(self):
         """
@@ -166,10 +170,17 @@ class AbstractIdentifiable(AbstractBase):
         return self._identifier
 
 class AbstractStorage(AbstractBase):
+    """
+    Base *Storage class within the Coverage Model
+
+    """
 
     def __init__(self, dtype=None, fill_value=None, **kwargs):
         """
+        Construct a new AbstractStorage object
 
+        @param dtype    The data type for this storage object - currently expected to be the .str of a valid numpy dtype
+        @param fill_value   This value is used to fill 'unassigned' spaces in the storage
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractBase; see documentation for that class for details
         """
         kwc=kwargs.copy()
@@ -178,12 +189,41 @@ class AbstractStorage(AbstractBase):
         self.fill_value = fill_value
 
     def __getitem__(self, slice_):
+        """
+        Called to implement evaluation of self[slice_].
+
+        Not implemented by the abstract class
+
+        @param slice_  A set of valid constraints - int, [int,], (int,), or slice
+        @return    The value contained by the storage at location slice_
+        @raise NotImplementedError
+        """
         raise NotImplementedError('Not implemented in abstract class')
 
     def __setitem__(self, slice_, value):
+        """
+        Called to implement assignment of self[slice_].
+
+        Not implemented by the abstract class
+
+        @param slice_  A set of valid constraints - int, [int,], (int,), or slice
+        @param value   The value to assign to the storage at location slice_
+        @raise NotImplementedError
+        """
         raise NotImplementedError('Not implemented in abstract class')
 
     def expand(self, arrshp, origin, expansion):
+        """
+        Expands the storage by:
+            inserting <i>arrshp</i> @ <i>origin expansion</i> times
+
+        Not implemented by the abstract class
+
+        @param arrshp   the shape (as a tuple) of the expansion
+        @param origin  the origin of the expansion; determines where arrshp is inserted
+        @param expansion   the number of expansions
+        @raise NotImplementedError
+        """
         raise NotImplementedError('Not implemented in abstract class')
 
     def fill(self, value):
