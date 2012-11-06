@@ -2,12 +2,9 @@ import re
 import os
 import numpy
 import urllib
-import time
 
 from coverage_model.coverage import SimplexCoverage
-from pydap.model import *
-from pydap.proxy import ConstraintExpression
-from pydap.exceptions import ConstraintExpressionError
+from pydap.model import DatasetType,BaseType, GridType, StructureType
 from pydap.handlers.lib import BaseHandler
 
 class Handler(BaseHandler):
@@ -30,7 +27,16 @@ class Handler(BaseHandler):
         dataset = DatasetType(coverage.name) #, attributes=atts)
         fields, queries = environ['pydap.ce']
         queries = filter(bool, queries)  # fix for older version of pydap
+
+
         all_vars = coverage.list_parameters()
+        t = []
+
+        for param in all_vars:
+            if numpy.dtype(coverage.get_parameter_context(param).param_type.value_encoding).char == 'O':
+                t.append(param)
+        [all_vars.remove(i) for i in t]
+
 
 #        slices = [f[0][1] for f in fields if f[0][0] == sequence_type.name]
 #        if slices:
@@ -43,6 +49,7 @@ class Handler(BaseHandler):
 
         # If no fields have been explicitly requested, of if the sequence
         # has been requested directly, return all variables.
+
         if not fields:
             fields = [[(name, ())] for name in all_vars]
 
@@ -74,8 +81,9 @@ class Handler(BaseHandler):
                     elif len(slice_) == 2:
                         data = coverage.get_parameter_values(name, tdoa=slice_[0], sdoa=slice_[1])
                     atts = {'units': coverage.get_parameter_context(name).uom }
+                    type_ = numpy.dtype(param.context.param_type.value_encoding).char
                     grid[name] = BaseType(name=name, data=data, shape=data.shape,
-                        type=numpy.dtype(param.context.param_type.value_encoding).char, dimensions=dims, attributes=atts)
+                        type=type_, dimensions=dims, attributes=atts)
                     for dim in dims:
                         atts = {'units': coverage.get_parameter_context(dim).uom }
                         data = numpy.arange(data.shape[dims.index(dim)])
