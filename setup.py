@@ -41,8 +41,4 @@ setup(  name = 'coverage-model',
         'pidantic',
         #        'scipy==0.10.1',
     ],
-    entry_points = """
-        [pydap.handler]
-        coverage = pydap.handlers.coverage:Handler
-    """,
 )
