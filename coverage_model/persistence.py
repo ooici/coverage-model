@@ -24,7 +24,7 @@ class PersistenceError(Exception):
     pass
 
 class PersistenceLayer(object):
-    def __init__(self, root, guid, name=None, tdom=None, sdom=None, bricking_scheme=None, auto_flush_values=True, **kwargs):
+    def __init__(self, root, guid, name=None, tdom=None, sdom=None, mode=None, bricking_scheme=None, auto_flush_values=True, **kwargs):
         """
         Constructor for Persistence Layer
         @param root: Where to save/look for HDF5 files
@@ -40,6 +40,7 @@ class PersistenceLayer(object):
 
         self.master_manager = MasterManager(root, guid, name=name, tdom=tdom, sdom=sdom, global_bricking_scheme=bricking_scheme)
 
+        self.mode = mode
         self.auto_flush_values = auto_flush_values
         self.value_list = {}
 
@@ -52,8 +53,11 @@ class PersistenceLayer(object):
         if self.master_manager.is_dirty():
             self.master_manager.flush()
 
-        self.brick_dispatcher = BrickWriterDispatcher(self.write_failure_callback)
-        self.brick_dispatcher.run()
+        if self.mode == 'r':
+            self.brick_dispatcher = None
+        else:
+            self.brick_dispatcher = BrickWriterDispatcher(self.write_failure_callback)
+            self.brick_dispatcher.run()
 
         self._closed = False
 
@@ -129,7 +133,7 @@ class PersistenceLayer(object):
         pm.tree_rank = tree_rank
         pm.brick_tree = brick_tree
 
-        v = PersistedStorage(pm, self.brick_dispatcher, dtype=parameter_context.param_type.storage_encoding, fill_value=parameter_context.param_type.fill_value, auto_flush=self.auto_flush_values)
+        v = PersistedStorage(pm, self.brick_dispatcher, dtype=parameter_context.param_type.storage_encoding, fill_value=parameter_context.param_type.fill_value, mode=self.mode, auto_flush=self.auto_flush_values)
         self.value_list[parameter_name] = v
 
         self.expand_domain(parameter_context)
@@ -236,6 +240,9 @@ class PersistenceLayer(object):
 
     # Expand the domain
     def expand_domain(self, parameter_context, tdom=None, sdom=None):
+        if self.mode == 'r':
+            raise IOError('PersistenceLayer not open for writing: mode == \'{0}\''.format(self.mode))
+
         parameter_name = parameter_context.name
         log.debug('Expand %s', parameter_name)
         pm = self.parameter_metadata[parameter_name]
@@ -334,15 +341,31 @@ class PersistenceLayer(object):
         return False
 
     def get_dirty_values_async_result(self):
+        if self.mode == 'r':
+            log.warn('PersistenceLayer not open for writing: mode=%s', self.mode)
+            from gevent.event import AsyncResult
+            ret = AsyncResult()
+            ret.set(True)
+            return ret
+
         return self.brick_dispatcher.get_dirty_values_async_result()
 
     def flush_values(self):
+        if self.mode == 'r':
+            log.warn('PersistenceLayer not open for writing: mode=%s', self.mode)
+            return
+
         for k, v in self.value_list.iteritems():
             v.flush_values()
 
         return self.get_dirty_values_async_result()
 
     def flush(self):
+        if self.mode == 'r':
+            log.warn('PersistenceLayer not open for writing: mode=%s', self.mode)
+            return
+
+        self.flush_values()
         for pk, pm in self.parameter_metadata.iteritems():
             log.debug('Flushing ParameterManager for \'%s\'...', pk)
             pm.flush()
@@ -351,14 +374,15 @@ class PersistenceLayer(object):
 
     def close(self, force=False, timeout=None):
         if not self._closed:
-            self.flush()
-            self.brick_dispatcher.shutdown(force=force, timeout=timeout)
+            if self.mode != 'r':
+                self.flush()
+                self.brick_dispatcher.shutdown(force=force, timeout=timeout)
 
         self._closed = True
 
 class PersistedStorage(AbstractStorage):
 
-    def __init__(self, parameter_manager, brick_dispatcher, dtype=None, fill_value=None, auto_flush=True, **kwargs):
+    def __init__(self, parameter_manager, brick_dispatcher, dtype=None, fill_value=None, mode=None, auto_flush=True, **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractStorage; see documentation for that class for details
@@ -379,6 +403,7 @@ class PersistedStorage(AbstractStorage):
 
         self._pending_values = {}
         self.brick_dispatcher = brick_dispatcher
+        self.mode = mode
         self.auto_flush = auto_flush
 
     def has_dirty_values(self):
