@@ -24,19 +24,23 @@ class PersistenceError(Exception):
     pass
 
 class PersistenceLayer(object):
+    """
+    The PersistenceLayer class manages the disk-level storage (and retrieval) of the Coverage Model using HDF5 files.
+    """
+
     def __init__(self, root, guid, name=None, tdom=None, sdom=None, mode=None, bricking_scheme=None, auto_flush_values=True, **kwargs):
         """
         Constructor for PersistenceLayer
 
-        @param root: The <root> component of the filesystem path for the coverage (/<root>/<guid>)
-        @param guid: The <guid> component of the filesystem path for the coverage (/<root>/<guid>)
-        @param name: CoverageModel's name persisted to the metadata attribute in the master HDF5 file
-        @param tdom: Concrete instance of AbstractDomain for the temporal domain component
-        @param sdom: Concrete instance of AbstractDomain for the spatial domain component
-        @param bricking_scheme: A dictionary containing the brick and chunk sizes
-        @param auto_flush_values: True = Values flushed to HDF5 files automatically, False = Manual
-        @param kwargs:
-        @return: None
+        @param root The <root> component of the filesystem path for the coverage (/<root>/<guid>)
+        @param guid The <guid> component of the filesystem path for the coverage (/<root>/<guid>)
+        @param name CoverageModel's name persisted to the metadata attribute in the master HDF5 file
+        @param tdom Concrete instance of AbstractDomain for the temporal domain component
+        @param sdom Concrete instance of AbstractDomain for the spatial domain component
+        @param bricking_scheme  A dictionary containing the brick and chunk sizes
+        @param auto_flush_values    True = Values flushed to HDF5 files automatically, False = Manual
+        @param kwargs
+        @return None
         """
 
         log.debug('Persistence GUID: %s', guid)
@@ -88,9 +92,9 @@ class PersistenceLayer(object):
         Calculates and returns the brick and chunk size for each dimension
         in the total domain based on the bricking scheme
 
-        @param tD: Total domain
-        @param bricking_scheme: A dictionary containing the brick and chunk sizes
-        @return:
+        @param tD   Total domain
+        @param bricking_scheme  A dictionary containing the brick and chunk sizes
+        @return Brick and Chunk sizes based on the total domain
         """
 
         log.debug('Calculating the size of a brick...')
@@ -107,9 +111,9 @@ class PersistenceLayer(object):
         Initializes a parameter using a ParameterContext object and a bricking
         scheme for that parameter
 
-        @param parameter_context: ParameterContext object describing the parameter to initialize
-        @param bricking_scheme: A dictionary containing the brick and chunk sizes
-        @return: A PersistedStorage object
+        @param parameter_context    ParameterContext object describing the parameter to initialize
+        @param bricking_scheme  A dictionary containing the brick and chunk sizes
+        @return A PersistedStorage object
         """
 
         parameter_name = parameter_context.name
@@ -165,10 +169,10 @@ class PersistenceLayer(object):
         """
         Calculates and returns the Rtree extents, brick extents and active brick size for the parameter
 
-        @param origin: The origin of the brick in index space
-        @param bD: The brick's domain in index space
-        @param parameter_name: The parameter name
-        @return: rtree_extents, tuple(brick_extents), tuple(brick_active_size)
+        @param origin   The origin of the brick in index space
+        @param bD   The brick's domain in index space
+        @param parameter_name   The parameter name
+        @return rtree_extents, tuple(brick_extents), tuple(brick_active_size)
         """
 
         log.debug('origin: %s', origin)
@@ -204,9 +208,9 @@ class PersistenceLayer(object):
         """
         Checks if a brick exists for a given parameter and extents
 
-        @param parameter_name: The parameter name
-        @param brick_extents: The brick extents
-        @return: Boolean (do_write) = False if found, returns found brick's GUID;
+        @param parameter_name   The parameter name
+        @param brick_extents    The brick extents
+        @return Boolean (do_write) = False if found, returns found brick's GUID;
          otherwise returns True with an empty brick GUID
         """
 
@@ -230,13 +234,13 @@ class PersistenceLayer(object):
         Creates a virtual brick in the PersistenceLayer by updating the HDF5 master file's
         brick list, rtree and ExternalLink to where the HDF5 file will be saved in the future (lazy create)
 
-        @param rtree_extents: Total extents of brick's domain in rtree format
-        @param brick_extents: Size of brick
-        @param brick_active_size: Size of brick (same rank as parameter)
-        @param origin: Domain origin offset
-        @param bD: Slice-friendly size of brick's domain
-        @param parameter_name: Parameter name as string
-        @return: N/A
+        @param rtree_extents    Total extents of brick's domain in rtree format
+        @param brick_extents    Size of brick
+        @param brick_active_size    Size of brick (same rank as parameter)
+        @param origin   Domain origin offset
+        @param bD   Slice-friendly size of brick's domain
+        @param parameter_name   Parameter name as string
+        @return N/A
         """
         pm = self.parameter_metadata[parameter_name]
 
@@ -276,10 +280,10 @@ class PersistenceLayer(object):
         Temporal domain expansion is most typical.
         Number of dimensions may not change for the parameter.
 
-        @param parameter_context: ParameterContext object
-        @param tdom: Requested new temporal domain size
-        @param sdom: Requested new spatial domain size
-        @return: N/A
+        @param parameter_context    ParameterContext object
+        @param tdom Requested new temporal domain size
+        @param sdom Requested new spatial domain size
+        @return N/A
         """
         if self.mode == 'r':
             raise IOError('PersistenceLayer not open for writing: mode == \'{0}\''.format(self.mode))
@@ -365,8 +369,8 @@ class PersistenceLayer(object):
         """
         Counts and returns the number of bricks in a given parameter's brick list
 
-        @param parameter_name:
-        @return: The number of virtual bricks
+        @param parameter_name   Name of parameter
+        @return The number of virtual bricks
         """
         ret = 0
         if parameter_name in self.parameter_metadata:
@@ -380,7 +384,7 @@ class PersistenceLayer(object):
         """
         Checks if the master file values have been modified
 
-        @return: True if master file metadata has been modified
+        @return True if master file metadata has been modified
         """
         for v in self.value_list.itervalues():
             if v.has_dirty_values():
@@ -456,13 +460,13 @@ class PersistedStorage(AbstractStorage):
         """
         Constructor for PersistedStorage
 
-        @param parameter_manager: ParameterManager object for the coverage
-        @param brick_dispatcher: BrickDispatcher object for the coverage
-        @param dtype: Data type (HDF5/numpy) of parameter
-        @param fill_value: HDF5/numpy compatible value based on dtype, returned if no value set within valid extent request
-        @param auto_flush: Saves/flushes data to HDF5 files on every assignment
-        @param kwargs: Additional keyword arguments
-        @return: N/A
+        @param parameter_manager    ParameterManager object for the coverage
+        @param brick_dispatcher BrickDispatcher object for the coverage
+        @param dtype    Data type (HDF5/numpy) of parameter
+        @param fill_value   HDF5/numpy compatible value based on dtype, returned if no value set within valid extent request
+        @param auto_flush   Saves/flushes data to HDF5 files on every assignment
+        @param kwargs   Additional keyword arguments
+        @return N/A
         """
         kwc=kwargs.copy()
         AbstractStorage.__init__(self, dtype=dtype, fill_value=fill_value, **kwc)
@@ -507,8 +511,8 @@ class PersistedStorage(AbstractStorage):
         """
         Calculates the a list of bricks from the rtree based on the requested slice
 
-        @param slice_: Requested slice
-        @return: Sorted list of tuples denoting the bricks
+        @param slice_   Requested slice
+        @return Sorted list of tuples denoting the bricks
         """
 
         # Make sure we don't modify the global slice_ object
@@ -558,9 +562,9 @@ class PersistedStorage(AbstractStorage):
 
         Not implemented by the abstract class
 
-        @param slice_: A set of valid constraints - int, [int,], (int,), or slice
-        @return: The value contained by the storage at location slice
-        @raise: ValueError when brick contains no values for specified slice
+        @param slice_   A set of valid constraints - int, [int,], (int,), or slice
+        @return The value contained by the storage at location slice
+        @raise  ValueError when brick contains no values for specified slice
         """
 
         if not isinstance(slice_, (list,tuple)):
@@ -627,9 +631,9 @@ class PersistedStorage(AbstractStorage):
 
         Not implemented by the abstract class
 
-        @param slice:  A set of valid constraints - int, [int,], (int,), or slice
-        @param value:  The value to assign to the storage at location slice_
-        @raise: ValueError when brick contains no values for specified slice
+        @param slice    A set of valid constraints - int, [int,], (int,), or slice
+        @param value    The value to assign to the storage at location slice_
+        @raise  ValueError when brick contains no values for specified slice
         """
         if self.mode == 'r':
             raise IOError('PersistenceLayer not open for writing: mode == \'{0}\''.format(self.mode))
@@ -722,12 +726,12 @@ class PersistedStorage(AbstractStorage):
         """
         Calculates and returns the brick_slice, value_slice and brick_origin_offset for a given value and slice for a specific brick
 
-        @param slice_: Requested slice
-        @param brick_guid: GUID of brick
-        @param value: Value to apply to brick
-        @param val_origin: An origin offset within the value's domain
-        @param brick_origin_offset: A resultant offset based on the slice, ie. mid-brick slice start
-        @return: brick_slice, value_slice, brick_origin_offset
+        @param slice_   Requested slice
+        @param brick_guid   GUID of brick
+        @param value    Value to apply to brick
+        @param val_origin   An origin offset within the value's domain
+        @param brick_origin_offset  A resultant offset based on the slice, ie. mid-brick slice start
+        @return brick_slice, value_slice, brick_origin_offset
         """
 
         brick_origin, _, brick_size = self.brick_list[brick_guid][1:]
@@ -841,8 +845,8 @@ class PersistedStorage(AbstractStorage):
         """
         Calculates and returns the shape of the slice in each dimension of the total domain
 
-        @param slice_: Requested slice
-        @return: A tuple object denoting the shape of the slice in each dimension of the total domain
+        @param slice_   Requested slice
+        @return A tuple object denoting the shape of the slice in each dimension of the total domain
         """
 
         log.debug('Getting array shape for slice_: %s', slice_)
