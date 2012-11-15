@@ -22,7 +22,7 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
     def setUp(self):
         # Create temporary working directory for the persisted coverage tests
         self.working_dir = tempfile.mkdtemp()
-    
+
     def tearDown(self):
         # Removes temporary files
         # Comment this out if you need to inspect the HDF5 files.
@@ -553,7 +553,7 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         self.assertNotEquals(pdict_1,  pdict_4)
         self.assertEquals(pdict_1.compare(pdict_4), {'lat': ['lat'], 'lon': ['lon'], None: [], 'temp': ['temp', 'temp2'], 'time': ['time']})
 
-    def test_pickle_problems(self):
+    def test_pickle_problems_in_memory(self):
         # Tests saving and loading with both successful and unsuccessful test scenarios
         # Instantiate a ParameterDictionary
         pdict = ParameterDictionary()
@@ -575,7 +575,7 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
         bricking_scheme = {'brick_size':1000,'chunk_size':500}
-        scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, True, bricking_scheme=bricking_scheme)
+        scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, bricking_scheme=bricking_scheme, in_memory_storage=True)
 
         # Insert some timesteps (automatically expands other arrays)
         nt = 2000
@@ -880,7 +880,7 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
         bricking_scheme = {'brick_size':1000,'chunk_size':500}
-        scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory, bricking_scheme=bricking_scheme)
+        scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory_storage=in_memory, bricking_scheme=bricking_scheme)
 
         # Insert some timesteps (automatically expands other arrays)
         nt = 2000

@@ -70,6 +70,9 @@ class AbstractCoverage(AbstractIdentifiable):
         if not isinstance(cov_obj, AbstractCoverage):
             raise StandardError('cov_obj must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(cov_obj)))
 
+        if not isinstance(cov_obj._persistence_layer, InMemoryPersistenceLayer):
+            raise StandardError('cov_obj must be constructed with the \'in_memory_storage\' flag == True')
+
         with open(file_path, 'w') as f:
             pickle.dump(cov_obj, f, 0 if use_ascii else 2)
 
