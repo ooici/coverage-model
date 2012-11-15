@@ -6,6 +6,7 @@
 @author Christopher Mueller
 @brief Exemplar functions for creation, manipulation, and basic visualization of coverages
 """
+from coverage_model.utils import prod
 
 from ooi.logging import log
 from netCDF4 import Dataset
@@ -258,6 +259,43 @@ def samplecov2(save_coverage=False, in_memory=False):
 
     if in_memory and save_coverage:
         SimplexCoverage.pickle_save(scov, 'test_data/sample2.cov')
+
+    return scov
+
+def manyparamcov(save_coverage=False, in_memory=False):
+    # Instantiate a ParameterDictionary
+    pdict = ParameterDictionary()
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
+    t_ctxt.axis = AxisTypeEnum.TIME
+    t_ctxt.uom = 'seconds since 01-01-1970'
+    pdict.add_context(t_ctxt)
+
+    # Construct temporal and spatial Coordinate Reference System objects
+    tcrs = CRS([AxisTypeEnum.TIME])
+    scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+    # Construct temporal and spatial Domain objects
+    tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
+
+    for x in range(500):
+        pdict.add_context(ParameterContext(str(x), param_type=QuantityType(value_encoding=np.dtype('float32'))))
+
+    # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+    bricking_scheme = {'brick_size':1000,'chunk_size':500}
+    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory, bricking_scheme=bricking_scheme)
+
+    # Insert some timesteps (automatically expands other arrays)
+#    nt = 1000
+#    scov.insert_timesteps(nt)
+#
+#    # Add data for the parameter
+#    scov.set_parameter_values('time', value=np.arange(nt))
+
+    if in_memory and save_coverage:
+        SimplexCoverage.pickle_save(scov, 'test_data/sample.cov')
 
     return scov
 
