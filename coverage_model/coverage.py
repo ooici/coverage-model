@@ -55,9 +55,14 @@ class AbstractCoverage(AbstractIdentifiable):
     TemporalTopology
     SpatialTopology
     """
-    def __init__(self):
+    def __init__(self, mode=None):
         AbstractIdentifiable.__init__(self)
         self._closed = False
+
+        if mode is not None and isinstance(mode, str) and mode[0] in ['r','w','a']:
+            self.mode = mode
+        else:
+            self.mode = 'r+'
 
     @classmethod
     def pickle_save(cls, cov_obj, file_path, use_ascii=False):
@@ -83,11 +88,11 @@ class AbstractCoverage(AbstractIdentifiable):
         return obj
 
     @classmethod
-    def load(cls, root_dir, persistence_guid=None):
+    def load(cls, root_dir, persistence_guid=None, mode=None):
         if persistence_guid is None:
             root_dir, persistence_guid = os.path.split(root_dir)
 
-        return SimplexCoverage(root_dir, persistence_guid)
+        return SimplexCoverage(root_dir, persistence_guid, mode=mode)
 
     @classmethod
     def save(cls, cov_obj, *args, **kwargs):
@@ -100,12 +105,27 @@ class AbstractCoverage(AbstractIdentifiable):
         return self._persistence_layer.has_dirty_values()
 
     def get_dirty_values_async_result(self):
+        if self.mode == 'r':
+            log.warn('Coverage not open for writing: mode=%s', self.mode)
+            from gevent.event import AsyncResult
+            ret = AsyncResult()
+            ret.set(True)
+            return ret
+
         return self._persistence_layer.get_dirty_values_async_result()
 
     def flush_values(self):
+        if self.mode == 'r':
+            log.warn('Coverage not open for writing: mode=%s', self.mode)
+            return
+
         return self._persistence_layer.flush_values()
 
     def flush(self):
+        if self.mode == 'r':
+            log.warn('Coverage not open for writing: mode=%s', self.mode)
+            return
+
         self._persistence_layer.flush()
 
     def close(self, force=False, timeout=None):
@@ -117,9 +137,10 @@ class AbstractCoverage(AbstractIdentifiable):
         if not self._closed:
             log.info('Closing coverage \'%s\'', self.name if hasattr(self,'name') else 'unnamed')
 
-            log.debug('Ensuring dirty values have been flushed...')
-            if not force:
-                self.get_dirty_values_async_result().get(timeout=timeout)
+            if self.mode != 'r':
+                log.debug('Ensuring dirty values have been flushed...')
+                if not force:
+                    self.get_dirty_values_async_result().get(timeout=timeout)
 
             # If the _persistence_layer attribute is present, call it's close function
             if hasattr(self, '_persistence_layer'):
@@ -179,7 +200,7 @@ class SimplexCoverage(AbstractCoverage):
     of the AbstractParameterValue class.
 
     """
-    def __init__(self, root_dir, persistence_guid, name=None, parameter_dictionary=None, temporal_domain=None, spatial_domain=None, in_memory_storage=False, bricking_scheme=None, auto_flush_values=True):
+    def __init__(self, root_dir, persistence_guid, name=None, parameter_dictionary=None, temporal_domain=None, spatial_domain=None, mode=None, in_memory_storage=False, bricking_scheme=None, auto_flush_values=True):
         """
         Constructor for SimplexCoverage
 
@@ -190,7 +211,7 @@ class SimplexCoverage(AbstractCoverage):
         @param spatial_domain  a concrete instance of AbstractDomain for the spatial domain component
         @param temporal_domain a concrete instance of AbstractDomain for the temporal domain component
         """
-        AbstractCoverage.__init__(self)
+        AbstractCoverage.__init__(self, mode=mode)
         try:
             # Make sure root_dir and persistence_guid are both not None and are strings
             if not isinstance(root_dir, str) or not isinstance(persistence_guid, str):
@@ -206,7 +227,7 @@ class SimplexCoverage(AbstractCoverage):
                     raise SystemError('Cannot find specified coverage: {0}'.format(pth))
 
                 # All appears well - load it up!
-                self._persistence_layer = PersistenceLayer(root_dir, persistence_guid)
+                self._persistence_layer = PersistenceLayer(root_dir, persistence_guid, mode=self.mode)
 
                 self.name = self._persistence_layer.name
                 self.spatial_domain = self._persistence_layer.sdom
@@ -224,7 +245,7 @@ class SimplexCoverage(AbstractCoverage):
                     md = self._persistence_layer.parameter_metadata[parameter_name]
                     pc = md.parameter_context
                     self._range_dictionary.add_context(pc)
-                    s = PersistedStorage(md, self._persistence_layer.brick_dispatcher, dtype=pc.param_type.storage_encoding, fill_value=pc.param_type.fill_value)
+                    s = PersistedStorage(md, self._persistence_layer.brick_dispatcher, dtype=pc.param_type.storage_encoding, fill_value=pc.param_type.fill_value, mode=self.mode)
                     self._range_value[parameter_name] = get_value_class(param_type=pc.param_type, domain_set=pc.dom, storage=s)
 
             if name is None or parameter_dictionary is None:
@@ -246,6 +267,10 @@ class SimplexCoverage(AbstractCoverage):
                     log.warn('The specified coverage already exists - performing load of \'{0}\''.format(pth))
                     _doload(self)
                     return
+
+                # Check the mode - can't make a new coverage in 'r' mode!!
+                if self.mode == 'r':
+                    raise IOError('Coverage not open for writing: mode == \'{0}\''.format(self.mode))
 
                 self.name = name
                 if temporal_domain is None:
@@ -271,7 +296,7 @@ class SimplexCoverage(AbstractCoverage):
                 if self._in_memory_storage:
                     self._persistence_layer = InMemoryPersistenceLayer()
                 else:
-                    self._persistence_layer = PersistenceLayer(root_dir, persistence_guid, name=name, tdom=temporal_domain, sdom=spatial_domain, bricking_scheme=self._bricking_scheme, auto_flush_values=auto_flush_values)
+                    self._persistence_layer = PersistenceLayer(root_dir, persistence_guid, name=name, tdom=temporal_domain, sdom=spatial_domain, mode=self.mode, bricking_scheme=self._bricking_scheme, auto_flush_values=auto_flush_values)
 
                 for o, pc in parameter_dictionary.itervalues():
                     self._append_parameter(pc)
@@ -327,7 +352,10 @@ class SimplexCoverage(AbstractCoverage):
         already exists in the coverage
         """
         if self.closed:
-            raise ValueError('I/O operation on closed file')
+            raise IOError('I/O operation on closed file')
+
+        if self.mode == 'r':
+            raise IOError('Coverage not open for writing: mode == \'{0}\''.format(self.mode))
 
         if not isinstance(parameter_context, ParameterContext):
             raise TypeError('\'parameter_context\' must be an instance of ParameterContext')
@@ -431,7 +459,10 @@ class SimplexCoverage(AbstractCoverage):
         @param origin   The starting location, from which to begin the insertion
         """
         if self.closed:
-            raise ValueError('I/O operation on closed file')
+            raise IOError('I/O operation on closed file')
+
+        if self.mode == 'r':
+            raise IOError('Coverage not open for writing: mode == \'{0}\''.format(self.mode))
 
         # Get the current shape of the temporal_dimension
         shp = self.temporal_domain.shape
@@ -493,7 +524,10 @@ class SimplexCoverage(AbstractCoverage):
         @throws KeyError    The coverage does not contain a parameter with name 'param_name'
         """
         if self.closed:
-            raise ValueError('I/O operation on closed file')
+            raise IOError('I/O operation on closed file')
+
+        if self.mode == 'r':
+            raise IOError('Coverage not open for writing: mode == \'{0}\''.format(self.mode))
 
         if not param_name in self._range_value:
             raise KeyError('Parameter \'{0}\' not found in coverage_model'.format(param_name))
