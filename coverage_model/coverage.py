@@ -48,6 +48,7 @@ import os
 #=========================
 # Coverage Objects
 #=========================
+from pyon.util.async import spawn
 
 class AbstractCoverage(AbstractIdentifiable):
     """
@@ -481,8 +482,13 @@ class SimplexCoverage(AbstractCoverage):
             if pc.dom.tdom is not None:
                 pc.dom.tdom = self.temporal_domain.shape.extents
 
-            self._persistence_layer.expand_domain(pc, tdom=self.temporal_domain)
+            self._persistence_layer.expand_domain(pc)
             self._range_value[n].expand_content(VariabilityEnum.TEMPORAL, origin, count)
+
+        # Update the temporal_domain in the master_manager, do NOT flush!!
+        self._persistence_layer.update_domain(tdom=self.temporal_domain, do_flush=False)
+        # Flush the master_manager & parameter_managers in a separate greenlet
+        spawn(self._persistence_layer.flush)
 
     def set_time_values(self, value, tdoa=None):
         """
