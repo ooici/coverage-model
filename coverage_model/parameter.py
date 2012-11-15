@@ -131,7 +131,10 @@ class ParameterContext(AbstractIdentifiable):
                 self.param_type = copy.deepcopy(param_context.param_type)
 
             self.axis = axis or param_context.axis
-            self.uom = uom or param_context.uom
+            if uom is not None:
+                self.uom = uom
+            elif param_context.uom is not None:
+                self.uom = param_context.uom
             self.fill_value = fill_value or param_context.fill_value
             self.variability = variability or param_context.variability
 
@@ -147,7 +150,8 @@ class ParameterContext(AbstractIdentifiable):
             self.param_type = param_type or QuantityType()
 
             self.axis = axis or None
-            self.uom = uom or None
+            if uom is not None:
+                self.uom = uom
             if fill_value is not None: # Provided by ParameterType
                 self.fill_value = fill_value
             self.variability = variability or VariabilityEnum.BOTH
