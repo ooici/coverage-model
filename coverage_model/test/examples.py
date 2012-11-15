@@ -655,6 +655,63 @@ def ncstation2cov(save_coverage=False, in_memory=False):
 
     return scov
 
+def benchmark_value_setting(num_params=10, num_insertions=100, repeat=1, bulk_ts_insert=False):
+    # Instantiate a ParameterDictionary
+    pdict = ParameterDictionary()
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
+    t_ctxt.axis = AxisTypeEnum.TIME
+    t_ctxt.uom = 'seconds since 01-01-1970'
+    pdict.add_context(t_ctxt)
+
+    for i in xrange(num_params-1):
+        pdict.add_context(ParameterContext('param_{0}'.format(i)))
+
+    # Construct temporal and spatial Coordinate Reference System objects
+    tcrs = CRS([AxisTypeEnum.TIME])
+    scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+    # Construct temporal and spatial Domain objects
+    tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
+
+    import time
+    counter = 1
+    insert_times = []
+    per_rep_times = []
+    full_time = time.time()
+    for r in xrange(repeat):
+        # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+        cov = SimplexCoverage('test_data', create_guid(), 'empty sample coverage_model', pdict, tdom, sdom)
+
+        rep_time = time.time()
+        if bulk_ts_insert:
+            cov.insert_timesteps(num_insertions)
+        for x in xrange(num_insertions):
+            in_time = time.time()
+            if not bulk_ts_insert:
+                cov.insert_timesteps(1)
+            slice_ = slice(cov.num_timesteps - 1, None)
+            cov.set_parameter_values('time', 1, tdoa=slice_)
+            for i in xrange(num_params-1):
+                cov.set_parameter_values('param_{0}'.format(i), 1.1, tdoa=slice_)
+
+            in_time = time.time() - in_time
+            insert_times.append(in_time)
+            counter += 1
+        rep_time = time.time() - rep_time
+        per_rep_times.append(rep_time)
+
+        cov.close()
+
+    print 'Average Value Insertion Time (%s repetitions): %s' % (repeat, sum(insert_times) / len(insert_times))
+    print 'Average Total Expansion Time (%s repetitions): %s' % (repeat, sum(per_rep_times) / len(per_rep_times))
+    print 'Full Time (includes cov creation/closing): %s' % (time.time() - full_time)
+
+    return cov
+
+
 def cov_get_by_integer():
     cov = oneparamcov()
     dat = cov._range_value.time

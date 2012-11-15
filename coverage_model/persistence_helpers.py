@@ -50,7 +50,7 @@ class BaseManager(object):
             with h5py.File(self.file_path, 'a') as f:
                 for k in list(self._dirty):
                     v = getattr(self, k)
-                    log.trace('FLUSH: key=%s  v=%s', k, v)
+#                    log.debug('FLUSH: key=%s  v=%s', k, v)
                     if isinstance(v, Dictable):
                         prefix='DICTABLE|{0}:{1}|'.format(v.__module__, v.__class__.__name__)
                         value = prefix + pack(v.dump())
@@ -110,25 +110,25 @@ class BaseManager(object):
     def _dohash(self, value, hv=None):
         hv = hv or 0
         if value is None or isinstance(value, (str, unicode, int, long, float, bool)):
-            log.trace('is primitive:  value=%s  hv=%s', value, hv)
+#            log.debug('is primitive:  value=%s  hv=%s', value, hv)
             hv = hash(value) ^ hv
         elif isinstance(value, (list, tuple, set)):
-            log.trace('is list/tuple/set:  value=%s  hv=%s', value, hv)
+#            log.debug('is list/tuple/set:  value=%s  hv=%s', value, hv)
             for x in value:
                 hv = self._dohash(x, hv)
         elif isinstance(value, dict):
-            log.trace('is dict:  value=%s  hv=%s', value, hv)
+#            log.debug('is dict:  value=%s  hv=%s', value, hv)
             for k,v in value.iteritems():
                 hv = self._dohash(k, hv)
                 hv = self._dohash(v, hv)
         elif isinstance(value, object):
-            log.trace('is object:  value=%s  hv=%s', value, hv)
+#            log.debug('is object:  value=%s  hv=%s', value, hv)
             hv = self._dohash(value.__dict__, hv)
 
         return hv
 
     def __setattr__(self, key, value):
-        self.__dict__[key] = value
+        super(BaseManager, self).__setattr__(key, value)
         if not key in self._ignore and not key.startswith('_'):
             self._hmap[key] = self._dohash(value)
             self._dirty.add(key)

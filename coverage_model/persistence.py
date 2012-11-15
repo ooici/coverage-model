@@ -134,11 +134,10 @@ class PersistenceLayer(object):
 
         self.expand_domain(parameter_context)
 
-        if pm.is_dirty():
-            pm.flush()
-
-        if self.master_manager.is_dirty():
-            self.master_manager.flush()
+        # CBM TODO: Consider making this optional and bulk-flushing from the coverage after all parameters have been initialized
+        # No need to check if they're dirty, we know they are!
+        pm.flush()
+        self.master_manager.flush()
 
         return v
 
@@ -195,7 +194,7 @@ class PersistenceLayer(object):
         return do_write, brick_guid
 
     # Write empty HDF5 brick to the filesystem
-    def write_brick(self, rtree_extents, brick_extents, brick_active_size, origin, bD, parameter_name):
+    def _write_brick(self, rtree_extents, brick_extents, brick_active_size, origin, bD, parameter_name):
         pm = self.parameter_metadata[parameter_name]
 
 #        rtree_extents, brick_extents, brick_active_size = self.calculate_extents(origin, bD, parameter_name)
@@ -227,15 +226,8 @@ class PersistenceLayer(object):
         log.debug('Inserting into Rtree %s:%s:%s', brick_count, rtree_extents, brick_guid)
         pm.update_rtree(brick_count, rtree_extents, obj=brick_guid)
 
-        # Flush the parameter_metadata
-        if pm.is_dirty():
-            pm.flush()
-
-        if self.master_manager.is_dirty():
-            self.master_manager.flush()
-
     # Expand the domain
-    def expand_domain(self, parameter_context, tdom=None, sdom=None):
+    def expand_domain(self, parameter_context, do_flush=False):
         parameter_name = parameter_context.name
         log.debug('Expand %s', parameter_name)
         pm = self.parameter_metadata[parameter_name]
@@ -296,25 +288,21 @@ class PersistenceLayer(object):
                         log.debug('Brick already exists!  Updating brick metadata...')
                         pm.brick_list[bguid] = [brick_extents, origin, tuple(bD), brick_active_size]
                     else:
-                        self.write_brick(rtree_extents, brick_extents, brick_active_size, origin, bD, parameter_name)
+                        self._write_brick(rtree_extents, brick_extents, brick_active_size, origin, bD, parameter_name)
 
             else:
                 log.debug('No bricks to create to satisfy the domain expansion...')
         except Exception:
             raise
 
+        ## .flush() is called by insert_timesteps - no need to call these here
+
+        if do_flush:
         # Flush the parameter_metadata
-        if pm.is_dirty():
             pm.flush()
-
-        # Update the global tdom & sdom as necessary
-        if tdom is not None:
-            self.master_manager.tdom = tdom
-        if sdom is not None:
-            self.master_manager.sdom = sdom
-
-        if self.master_manager.is_dirty():
-            self.master_manager.flush()
+            # If necessary (i.e. write_brick has been called), flush the master_manager
+            if self.master_manager.is_dirty():
+                self.master_manager.flush()
 
     # Returns a count of bricks for a parameter
     def parameter_brick_count(self, parameter_name):
@@ -335,6 +323,25 @@ class PersistenceLayer(object):
 
     def get_dirty_values_async_result(self):
         return self.brick_dispatcher.get_dirty_values_async_result()
+
+    def update_domain(self, tdom=None, sdom=None, do_flush=True):
+        """
+        Updates the temporal and/or spatial domain in the MasterManager.
+
+        If do_flush is unspecified or True, the MasterManager is flushed within this call
+
+        @param tdom     the value to update the Temporal Domain to
+        @param sdom     the value to update the Spatial Domain to
+        @param do_flush    Flush the MasterManager after updating the value(s); Default is True
+        """
+        # Update the global tdom & sdom as necessary
+        if tdom is not None:
+            self.master_manager.tdom = tdom
+        if sdom is not None:
+            self.master_manager.sdom = sdom
+
+        if do_flush:
+            self.master_manager.flush()
 
     def flush_values(self):
         for k, v in self.value_list.iteritems():
@@ -755,6 +762,10 @@ class InMemoryPersistenceLayer(object):
         ret = AsyncResult()
         ret.set(True)
         return ret
+
+    def update_domain(self, tdom=None, sdom=None, do_flush=True):
+        # No Op
+        pass
 
     def flush_values(self):
         # No Op
