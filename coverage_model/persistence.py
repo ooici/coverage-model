@@ -631,6 +631,8 @@ class PersistedStorage(AbstractStorage):
         @param value:  The value to assign to the storage at location slice_
         @raise: ValueError when brick contains no values for specified slice
         """
+        if self.mode == 'r':
+            raise IOError('PersistenceLayer not open for writing: mode == \'{0}\''.format(self.mode))
 
         if not isinstance(slice_, (list,tuple)):
             slice_ = [slice_]
