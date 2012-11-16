@@ -130,6 +130,25 @@ class TestCoverageModelBasicsInt(IonIntegrationTestCase):
         self.assertIsInstance(cov, SimplexCoverage)
         cov.close()
 
+    def test_coverage_mode_expand_domain(self):
+        scov = self._make_samplecov()
+        self.assertEqual(scov.mode, 'r+')
+        scov.close()
+        rcov = SimplexCoverage.load(self.working_dir, scov.persistence_guid, mode='r')
+        self.assertEqual(rcov.mode, 'r')
+        with self.assertRaises(IOError):
+            rcov.insert_timesteps(10)
+
+    def test_coverage_mode_set_value(self):
+        scov = self._make_samplecov()
+        self.assertEqual(scov.mode, 'r+')
+        scov.insert_timesteps(10)
+        scov.close()
+        rcov = SimplexCoverage.load(self.working_dir, scov.persistence_guid, mode='r')
+        self.assertEqual(rcov.mode, 'r')
+        with self.assertRaises(IOError):
+            rcov._range_value.time[0] = 1
+
     def test_load_succeeds_with_options(self):
         # Tests loading a SimplexCoverage using init parameters
         scov = self._make_samplecov()
