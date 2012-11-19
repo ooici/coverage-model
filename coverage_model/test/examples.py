@@ -6,6 +6,7 @@
 @author Christopher Mueller
 @brief Exemplar functions for creation, manipulation, and basic visualization of coverages
 """
+import random
 
 from ooi.logging import log
 from netCDF4 import Dataset
@@ -261,6 +262,43 @@ def samplecov2(save_coverage=False, in_memory=False):
 
     return scov
 
+def manyparamcov(save_coverage=False, in_memory=False):
+    # Instantiate a ParameterDictionary
+    pdict = ParameterDictionary()
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
+    t_ctxt.axis = AxisTypeEnum.TIME
+    t_ctxt.uom = 'seconds since 01-01-1970'
+    pdict.add_context(t_ctxt)
+
+    # Construct temporal and spatial Coordinate Reference System objects
+    tcrs = CRS([AxisTypeEnum.TIME])
+    scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+    # Construct temporal and spatial Domain objects
+    tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
+
+    for x in range(500):
+        pdict.add_context(ParameterContext(str(x), param_type=QuantityType(value_encoding=np.dtype('float32'))))
+
+    # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+    bricking_scheme = {'brick_size':1000,'chunk_size':500}
+    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory, bricking_scheme=bricking_scheme)
+
+    # Insert some timesteps (automatically expands other arrays)
+#    nt = 1000
+#    scov.insert_timesteps(nt)
+#
+#    # Add data for the parameter
+#    scov.set_parameter_values('time', value=np.arange(nt))
+
+    if in_memory and save_coverage:
+        SimplexCoverage.pickle_save(scov, 'test_data/sample.cov')
+
+    return scov
+
 def oneparamcov(save_coverage=False, in_memory=False):
     # Instantiate a ParameterDictionary
     pdict = ParameterDictionary()
@@ -402,6 +440,10 @@ def ptypescov(save_coverage=False, in_memory=False):
     cnst_flt_ctxt.uom = 'degree_east'
     pdict.add_context(cnst_flt_ctxt)
 
+    cat = {0:'turkey',1:'duck',2:'chicken',99:'None'}
+    cat_ctxt = ParameterContext('category', param_type=CategoryType(categories=cat), variability=VariabilityEnum.TEMPORAL)
+    pdict.add_context(cat_ctxt)
+
 #    func_ctxt = ParameterContext('function', param_type=FunctionType(QuantityType(value_encoding=np.dtype('float32'))))
 #    func_ctxt.long_name = 'example of a parameter of type FunctionType'
 #    pdict.add_context(func_ctxt)
@@ -439,6 +481,8 @@ def ptypescov(save_coverage=False, in_memory=False):
 
     arrval = []
     recval = []
+    catval = []
+    catkeys = cat.keys()
     letts='abcdefghijklmnopqrstuvwxyz'
     while len(letts) < nt:
         letts += 'abcdefghijklmnopqrstuvwxyz'
@@ -446,8 +490,10 @@ def ptypescov(save_coverage=False, in_memory=False):
         arrval.append(np.random.bytes(np.random.randint(1,20))) # One value (which is a byte string) for each member of the domain
         d = {letts[x]: letts[x:]}
         recval.append(d) # One value (which is a dict) for each member of the domain
+        catval.append(random.choice(catkeys))
     scov.set_parameter_values('array', value=arrval)
     scov.set_parameter_values('record', value=recval)
+    scov.set_parameter_values('category', value=catval)
 
     if in_memory and save_coverage:
         SimplexCoverage.pickle_save(scov, 'test_data/ptypes.cov')
@@ -654,6 +700,63 @@ def ncstation2cov(save_coverage=False, in_memory=False):
         SimplexCoverage.pickle_save(scov, 'test_data/usgs.cov')
 
     return scov
+
+def benchmark_value_setting(num_params=10, num_insertions=100, repeat=1, bulk_ts_insert=False):
+    # Instantiate a ParameterDictionary
+    pdict = ParameterDictionary()
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
+    t_ctxt.axis = AxisTypeEnum.TIME
+    t_ctxt.uom = 'seconds since 01-01-1970'
+    pdict.add_context(t_ctxt)
+
+    for i in xrange(num_params-1):
+        pdict.add_context(ParameterContext('param_{0}'.format(i)))
+
+    # Construct temporal and spatial Coordinate Reference System objects
+    tcrs = CRS([AxisTypeEnum.TIME])
+    scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+    # Construct temporal and spatial Domain objects
+    tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
+
+    import time
+    counter = 1
+    insert_times = []
+    per_rep_times = []
+    full_time = time.time()
+    for r in xrange(repeat):
+        # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+        cov = SimplexCoverage('test_data', create_guid(), 'empty sample coverage_model', pdict, tdom, sdom)
+
+        rep_time = time.time()
+        if bulk_ts_insert:
+            cov.insert_timesteps(num_insertions)
+        for x in xrange(num_insertions):
+            in_time = time.time()
+            if not bulk_ts_insert:
+                cov.insert_timesteps(1)
+            slice_ = slice(cov.num_timesteps - 1, None)
+            cov.set_parameter_values('time', 1, tdoa=slice_)
+            for i in xrange(num_params-1):
+                cov.set_parameter_values('param_{0}'.format(i), 1.1, tdoa=slice_)
+
+            in_time = time.time() - in_time
+            insert_times.append(in_time)
+            counter += 1
+        rep_time = time.time() - rep_time
+        per_rep_times.append(rep_time)
+
+        cov.close()
+
+    print 'Average Value Insertion Time (%s repetitions): %s' % (repeat, sum(insert_times) / len(insert_times))
+    print 'Average Total Expansion Time (%s repetitions): %s' % (repeat, sum(per_rep_times) / len(per_rep_times))
+    print 'Full Time (includes cov creation/closing): %s' % (time.time() - full_time)
+
+    return cov
+
 
 def cov_get_by_integer():
     cov = oneparamcov()

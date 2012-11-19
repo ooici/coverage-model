@@ -59,6 +59,18 @@ class AbstractParameterValue(AbstractBase):
         elif domain == VariabilityEnum.SPATIAL: # Spatial
             raise NotImplementedError('Expansion of the Spatial Domain is not yet supported')
 
+    def __getitem__(self, slice_):
+        slice_ = fix_slice(slice_, self.shape)
+
+        ret = self._storage[slice_]
+
+        return ret
+
+    def __setitem__(self, slice_, value):
+        slice_ = fix_slice(slice_, self.shape)
+
+        self._storage[slice_] = value
+
     def __len__(self):
         # I don't think this is correct - should be the length of the total available set of values, not the length of storage...
 #        return len(self._storage)
@@ -106,16 +118,6 @@ class NumericValue(AbstractSimplexParameterValue):
         kwc=kwargs.copy()
         AbstractSimplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
         self._storage.expand(self.shape, 0, self.shape[0])
-
-    def __getitem__(self, slice_):
-        slice_ = fix_slice(slice_, self.shape)
-
-        return self._storage[slice_]
-
-    def __setitem__(self, slice_, value):
-        slice_ = fix_slice(slice_, self.shape)
-
-        self._storage[slice_] = value
 
 class FunctionValue(AbstractComplexParameterValue):
     # CBM TODO: There are 2 'classes' of Function - those that operate against an INDEX, and those that operate against a VALUE
@@ -197,7 +199,7 @@ class ConstantValue(AbstractComplexParameterValue):
                 value = 'c*'+str(value)
             self._storage[0] = value
 
-class RecordValue(AbstractComplexParameterValue):
+class CategoryValue(AbstractComplexParameterValue):
 
     def __init__(self, parameter_type, domain_set, storage=None, **kwargs):
         """
@@ -212,13 +214,24 @@ class RecordValue(AbstractComplexParameterValue):
         slice_ = fix_slice(slice_, self.shape)
 
         ret = self._storage[slice_]
+        cats=self.parameter_type.categories
+        if np.iterable(ret):
+            ret = np.array([cats[x] for x in ret], dtype=object)
+        else:
+            ret = cats[ret.item()]
 
         return ret
 
-    def __setitem__(self, slice_, value):
-        slice_ = fix_slice(slice_, self.shape)
+class RecordValue(AbstractComplexParameterValue):
 
-        self._storage[slice_] = value
+    def __init__(self, parameter_type, domain_set, storage=None, **kwargs):
+        """
+
+        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterValue; see documentation for that class for details
+        """
+        kwc=kwargs.copy()
+        AbstractComplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
+        self._storage.expand(self.shape, 0, self.shape[0])
 
 class VectorValue(AbstractComplexParameterValue):
 
@@ -240,15 +253,3 @@ class ArrayValue(AbstractComplexParameterValue):
         kwc=kwargs.copy()
         AbstractComplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
         self._storage.expand(self.shape, 0, self.shape[0])
-
-    def __getitem__(self, slice_):
-        slice_ = fix_slice(slice_, self.shape)
-
-        ret = self._storage[slice_]
-
-        return ret
-
-    def __setitem__(self, slice_, value):
-        slice_ = fix_slice(slice_, self.shape)
-
-        self._storage[slice_] = value

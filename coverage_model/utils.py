@@ -9,6 +9,7 @@
 
 import numpy as np
 import uuid
+import re
 
 def create_guid():
     """
@@ -16,6 +17,10 @@ def create_guid():
     """
     # guids seem to be more readable if they are UPPERCASE
     return str(uuid.uuid4()).upper()
+
+def is_guid(str_val):
+    guid_match = r'^\w{8}-\w{4}-\w{4}-\w{4}-\w{12}'
+    return re.match(guid_match, str_val) is not None
 
 def prod(lst):
     import operator

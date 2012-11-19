@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 
 """
-@package 
-@file numexpr_try
+@package coverage_model.numexpr_utils
+@file coverage_model/numexpr_utils.py
 @author Christopher Mueller
-@brief 
+@brief Utility functions for building and verifying 'where' expressions for use with numexpr
 """
 
 from ooi.logging import log
@@ -32,21 +32,21 @@ def is_nested_where(value):
 def is_well_formed_nested(value):
     ret = False
     where_count = len(re.findall('where', value))
-    if where_count == len(re.findall(where_match_noelse, value)):
-        expr = r'.*{0}{1}$'.format(digit_or_nan, ('\)'*where_count))
-        if re.match(expr, value) is not None:
-            ret = True
+    if where_count > 1:
+        if where_count == len(re.findall(where_match_noelse, value)):
+            expr = r'.*{0}{1}$'.format(digit_or_nan, ('\)'*where_count))
+            if re.match(expr, value) is not None:
+                ret = True
+            else:
+                log.warn('\'value\' does not end as expected: \'%s\' does not match \'%s\'', value, expr)
         else:
-            log.warn('\'value\' does not end as expected: \'%s\' does not match \'%s\'', value, expr)
-    else:
-        log.warn('\'value\' appears to have malformed where clauses')
+            log.warn('\'value\' appears to have malformed where clauses')
 
     return ret
 
-def denest_wheres(where_expr, else_val=None):
+def denest_wheres(where_expr, else_val=-9999):
     if not is_well_formed_where(where_expr):
         raise ValueError('\'where_expr\' does not pass is_well_formed_where: {0}'.format(where_expr))
-    else_val = else_val or -9999
 
     expr=where_expr
     where_count = len(re.findall('where', expr))
@@ -92,7 +92,7 @@ def nest_wheres(*args):
 
     return ret
 
-def make_range_expr(val, min=None, max=None, min_incl=False, max_incl=True, else_val=None):
+def make_range_expr(val, min=None, max=None, min_incl=False, max_incl=True, else_val=-9999):
     """
     Generate a range expression for use in numexpr via numexpr.evaluate(expr).  Can be used to generate constant and bounded expressions.
 
@@ -136,10 +136,8 @@ def make_range_expr(val, min=None, max=None, min_incl=False, max_incl=True, else
     @param max  The maximum bound
     @param min_incl If True, the minimum bound is included (i.e. 'x >= min'); otherwise it is not (i.e. 'x > min'); default is False
     @param max_incl If True, the maximum bound is included (i.e. 'x <= max'); otherwise it is not (i.e. 'x < max'); default is True
-    @param else_val The value to return if the expression is NOT satisfied; np.nan if not provided
+    @param else_val The value to return if the expression is NOT satisfied; -9999 if not provided
     """
-    else_val = else_val or np.nan
-
     # Neither minimum or maximum provided - CONSTANT
     if min is None and max is None:
         return 'c*{0}'.format(val)
@@ -154,55 +152,3 @@ def make_range_expr(val, min=None, max=None, min_incl=False, max_incl=True, else
 
     # Both min and max provided
     return 'where((x {0} {1}) & (x {2} {3}), {4}, {5})'.format(('>=' if min_incl else '>'), min, ('<=' if max_incl else '<'), max, val, else_val)
-
-def test_mkrng():
-
-    print 'c*10'
-    expr = make_range_expr(10)
-    print '>> {0}\n'.format(expr)
-
-    print 'where(x > 99, 8, -999)'
-    expr = make_range_expr(8, min=99, else_val=-999)
-    print '>> {0}\n'.format(expr)
-
-    print 'where(x >= 99, 8, -999)'
-    expr = make_range_expr(8, min=99, min_incl=True, else_val=-999)
-    print '>> {0}\n'.format(expr)
-
-    print 'where(x < 10, 100, -999)'
-    expr = make_range_expr(100, max=10, max_incl=False, else_val=-999)
-    print '>> {0}\n'.format(expr)
-
-    print 'where(x <= 10, 100, -999)'
-    expr = make_range_expr(100, max=10, else_val=-999)
-    print '>> {0}\n'.format(expr)
-
-    print 'where((x > 0) & (x <= 100), 55, 100)'
-    expr = make_range_expr(55, min=0, max=100, else_val=100)
-    print '>> {0}\n'.format(expr)
-
-    print 'where((x >= 0) & (x <= 100), 55, 100)'
-    expr = make_range_expr(55, min=0, max=100, min_incl=True, else_val=100)
-    print '>> {0}\n'.format(expr)
-
-    print 'where((x >= 0) & (x < 100), 55, 100)'
-    expr = make_range_expr(55, min=0, max=100, min_incl=True, max_incl=False, else_val=100)
-    print '>> {0}\n'.format(expr)
-
-    print 'where((x > 0) & (x < 100), 55, 100)'
-    expr = make_range_expr(55, min=0, max=100, min_incl=False, max_incl=False, else_val=100)
-    print '>> {0}\n'.format(expr)
-
-def test_nest_wheres():
-    nanval=np.nan
-    expr1 = make_range_expr(val=np.nan, max=0, max_incl=False)
-    expr2 = make_range_expr(val=111, min=0, min_incl=True, max=10, max_incl=False)
-    expr3 = make_range_expr(val=222, max=20, max_incl=False, else_val=-999)
-
-    nexpr = nest_wheres(expr1, expr2, expr3, 'should not be included', 'where(also not included)')
-
-    print expr1
-    print expr2
-    print expr3
-    print '\nwhere(x < 0, {0}, where((x >= 0) & (x < 10), 111, where(x < 20, 222, -999)))'.format(nanval)
-    print '>> {0}'.format(nexpr)
