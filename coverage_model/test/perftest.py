@@ -71,7 +71,7 @@ def _fill(scov, size, limit):
     return insert_timer, expand_timer
 
 # run_perf_fill_test(sizes=[1,5,10,15,20,25], limit=300, brick_size=100, chunk_size=25, dtypes=['int64'])
-def run_perf_fill_test(sizes=[100], limit=86400, brick_size=10000, chunk_size=1000, dtypes=all_dtypes):
+def run_perf_fill_test(sizes=[20000], limit=86400, brick_size=10000, chunk_size=1000, dtypes=all_dtypes):
     t = time.localtime()
     str_time = '{0}{1}{2}{3}{4}'.format(t.tm_year,t.tm_mon,t.tm_mday,t.tm_hour,t.tm_min,t.tm_sec)
     output_file = 'perf_result-{0}.csv'.format(str_time)
@@ -102,6 +102,22 @@ def run_perf_fill_test(sizes=[100], limit=86400, brick_size=10000, chunk_size=10
         print 'Folder Size for dtype ({2}) at location {0}: {1}'.format(scov_dict[s], size_dir(scov_dict[s]), s)
 
     return scov_dict
+
+def run_perf_get_test(root_dir, guid):
+    # Open existing coverage
+    scov = SimplexCoverage(root_dir, guid)
+#    pl = scov._persistence_layer
+
+    param_list = scov.list_parameters()
+
+    start = 0
+    end = 100
+    step = 2
+
+    for param in param_list:
+        arr = scov.get_parameter_values(param, slice(start, end, step))
+
+    return arr
 
 def size_dir(d):
     import os

@@ -194,17 +194,48 @@ class BooleanType(AbstractSimplexParameterType):
     def is_valid_value(self, value):
         return isinstance(value, bool)
 
-class CategoryType(AbstractSimplexParameterType):
+class CategoryType(AbstractComplexParameterType):
     """
 
     """
-    def __init__(self, **kwargs):
+
+    SUPPORTED_CATETEGORY_KEY_KINDS = set([np.dtype(int).kind, np.dtype(float).kind, np.dtype(str).kind])
+
+    def __init__(self, categories, key_value_encoding=None, key_fill_value=None, **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractSimplexParameterType; see documentation for that class for details
         """
         kwc=kwargs.copy()
-        AbstractSimplexParameterType.__init__(self, **kwc)
+        AbstractComplexParameterType.__init__(self, value_class='CategoryValue', **kwc)
+
+        if not isinstance(categories, dict) or len(categories.keys()) == 0:
+            raise TypeError('\'categories\' must be of type dict and cannot be empty: {0}'.format(categories))
+
+        if key_value_encoding is None:
+            # Get the type of the first key
+            key_value_encoding = np.asanyarray(categories.keys()[0]).dtype.str
+        else:
+            key_value_encoding = np.dtype(key_value_encoding).str
+
+        want_kind=np.dtype(key_value_encoding).kind
+        if want_kind not in self.SUPPORTED_CATETEGORY_KEY_KINDS:
+            raise TypeError('\'key_value_encoding\' is not supported; supported np.dtype.kinds: {0}'.format(self.SUPPORTED_CATETEGORY_KEY_KINDS))
+
+        for k in categories.keys():
+            if np.asanyarray(k).dtype.kind != want_kind:
+                raise ValueError('A key in \'categories\' ({0}) does not match the specified \'key_value_encoding\' ({1})'.format(k, key_value_encoding))
+
+        if want_kind == 'S':
+            self.base_type = ArrayType()
+        else:
+            self.base_type = QuantityType(value_encoding=key_value_encoding)
+
+        self._template_attrs['categories'] = categories
+        self._gen_template_attrs()
+
+    def is_valid_value(self, value):
+        return value in self.categories.keys()
 
 class CountType(AbstractSimplexParameterType):
     """
