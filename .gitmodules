@@ -3,4 +3,4 @@
 	url = https://github.com/ooici/ion-definitions.git
 [submodule "extern/pyon"]
 	path = extern/pyon
-	url = http://github.com/ooici/pyon.git
+	url = https://github.com/ooici/pyon.git
