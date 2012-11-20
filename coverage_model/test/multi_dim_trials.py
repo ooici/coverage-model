@@ -146,7 +146,6 @@ class MultiDim(object):
 
             if not is_broadcast:
                 value_slice = []
-                td_value_slice = []
                 for x, sl in enumerate(slice_): # Dimensionality
                     vm=v_shp[x] if x < len(v_shp) else 1
                     vs = self.calc_value_slice(sl, bbnds[x], brick_slice=brick_slice[x], brick_sl=brick_mm[x], val_max=vm)
@@ -179,37 +178,46 @@ class MultiDim(object):
         else:
             ts = 0
 
-        #  xmin = max(total_sl.xmin, brick_ext.xmin)
-        td_start = max(ts, brick_ext[0])
-        # xmax = sum(brick_sl.xmax, brick_ext.xmax, -brick_ext.xshp)
-        td_stop = brick_sl[1] + brick_ext[1] + 1 - (brick_ext[1] + 1 - brick_ext[0])
+        val_sl_tn_min = max(ts, brick_ext[0])
+        val_sl_tn_max = brick_sl[1] + brick_ext[1] + 1 -(brick_ext[1] + 1 - brick_ext[0])
 
-        log.warn('td_start==%s\ttd_stop==%s', td_start, td_stop)
+        val_sl_min = val_sl_tn_min - ts
+        val_sl_max = val_sl_tn_max - ts
 
-        # IF(brick_ext.xmin < brick_sl.xmax, brick_ext.xmin, brick_ext.xmin - brick_sl.xmax)
-        if brick_ext[0] < brick_sl[1]:
-            start = brick_ext[0]
-        else:
-            start = brick_ext[0] - brick_sl[1]
-
-        # sum(brick_ext.xmax, -brick_ext.xmin, -brick_sl.xmin)
-        stop = (brick_ext[1]+1) - brick_ext[0] - brick_sl[0]
-
-        if start >= val_max:
-            offset = start - 0
-            start -= offset
-            stop -= offset
-
-        value_slice = slice(start, stop, None)
-        total_domain_value_slice = slice(td_start, td_stop, None)
-
-        log.warn('\n\ttd_value_slice=%s\n\tvalue_slice=%s', total_domain_value_slice, value_slice)
-
-        if isinstance(slice_, slice) and slice_.start is None:
-            log.error('slice_ starts with None, using total_doman_value_slice')
-            value_slice = total_domain_value_slice
-
+        value_slice = slice(val_sl_min, val_sl_max, None)
         return value_slice
+
+#        #  xmin = max(total_sl.xmin, brick_ext.xmin)
+#        td_start = max(ts, brick_ext[0])
+#        # xmax = sum(brick_sl.xmax, brick_ext.xmax, -brick_ext.xshp)
+#        td_stop = brick_sl[1] + brick_ext[1] + 1 - (brick_ext[1] + 1 - brick_ext[0])
+#
+#        log.warn('td_start==%s\ttd_stop==%s', td_start, td_stop)
+#
+#        # IF(brick_ext.xmin < brick_sl.xmax, brick_ext.xmin, brick_ext.xmin - brick_sl.xmax)
+#        if brick_ext[0] < brick_sl[1]:
+#            start = brick_ext[0]
+#        else:
+#            start = brick_ext[0] - brick_sl[1]
+#
+#        # sum(brick_ext.xmax, -brick_ext.xmin, -brick_sl.xmin)
+#        stop = (brick_ext[1]+1) - brick_ext[0] - brick_sl[0]
+#
+#        if start >= val_max:
+#            offset = start - 0
+#            start -= offset
+#            stop -= offset
+#
+#        value_slice = slice(start, stop, None)
+#        total_domain_value_slice = slice(td_start, td_stop, None)
+#
+#        log.warn('\n\ttd_value_slice=%s\n\tvalue_slice=%s', total_domain_value_slice, value_slice)
+#
+#        if isinstance(slice_, slice) and slice_.start is None:
+#            log.error('slice_ starts with None, using total_doman_value_slice')
+#            value_slice = total_domain_value_slice
+#
+#        return value_slice
 
 
     def get_shape_from_slice(self, slice_, max_shp=None):
