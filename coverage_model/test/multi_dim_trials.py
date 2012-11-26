@@ -9,7 +9,7 @@
 from coverage_model.test.multi_dim_trials import *
 md=MultiDim()
 val_arr = np.arange(100).reshape(10,10)
-sl = (0,0)
+sl = (slice(None),slice(None))
 md.put_values_to_bricks(sl, val_arr[sl])
 md.reset_bricks()
 """
@@ -123,8 +123,6 @@ class MultiDim(object):
 
         log.error('value_shape: %s', v_shp)
 
-        boo = [0 for x in slice_]
-#        v_ori = [0 for x in v_shp]
         for b in bricks:
             # b is (brick_id, (brick_bounds per dim...),)
             bid, bbnds = b
@@ -135,11 +133,9 @@ class MultiDim(object):
             for x, sl in enumerate(slice_): # Dimensionality
                 log.info('x=%s  sl=%s', x, sl)
                 log.warn('bbnds[%s]: %s', x, bbnds[x])
-                log.warn('boo[%s]: %s', x, boo[x])
-                bsl, nboo, mm = self.calc_brick_slice(sl, bbnds[x], boo[x])
+                bsl, mm = self.calc_brick_slice(sl, bbnds[x])
                 brick_slice.append(bsl)
                 brick_mm.append(mm)
-                boo[x] = nboo
 
             brick_slice = tuple(brick_slice)
             brick_mm = tuple(brick_mm)
@@ -148,7 +144,7 @@ class MultiDim(object):
                 value_slice = []
                 for x, sl in enumerate(slice_): # Dimensionality
                     vm=v_shp[x] if x < len(v_shp) else 1
-                    vs = self.calc_value_slice(sl, bbnds[x], brick_slice=brick_slice[x], brick_sl=brick_mm[x], val_max=vm)
+                    vs = self.calc_value_slice(sl, bbnds[x], brick_slice=brick_slice[x], brick_sl=brick_mm[x], val_shp_max=vm)
                     value_slice.append(vs)
 
                 value_slice = tuple(value_slice)
@@ -162,63 +158,45 @@ class MultiDim(object):
     def get_values_from_bricks(self, slice_):
         pass
 
-    def calc_value_slice(self, slice_, brick_ext, brick_slice, brick_sl, val_max):
-        log.error('slice_==%s\tbrick_ext==%s\tbrick_slice==%s\tbrick_sl==%s', slice_, brick_ext, brick_slice, brick_sl)
+    def calc_value_slice(self, slice_, brick_ext, brick_slice, brick_sl, val_shp_max):
+        log.error('slice_==%s\tbrick_ext==%s\tbrick_slice==%s\tbrick_sl==%s\tval_shp_max==%s', slice_, brick_ext, brick_slice, brick_sl, val_shp_max)
+
+        brick_ext_min = brick_ext[0]
+        brick_ext_max = brick_ext[1] + 1
+        brick_shp = brick_ext_max - brick_ext[0]
 
         # Value Slice in Total Domain Notation:
         if isinstance(slice_, int):
             ts = slice_
-            es = slice_
         elif isinstance(slice, (list,tuple)):
             ts = slice_[0]
-            es = slice_[-1]
         elif isinstance(slice_, slice):
-            ts = slice_.start if slice_.start is not None else brick_ext[0]
-            es = slice_.stop if slice_.stop is not None else brick_ext[0]
+            ts = slice_.start if slice_.start is not None else 0
+            if slice_.step is None or slice_.step == 1:
+                pass
+            else:
+                brick_ext_min = len(xrange(*slice_.indices(brick_ext_min))) + ts
+                brick_ext_max = len(xrange(*slice_.indices(brick_ext_max))) + ts
+#                if brick_ext_min > 0:
+#                    brick_ext_min = xrange(*slice_.indices(brick_ext_min))[0] + ts
+#                brick_ext_max = xrange(*slice_.indices(brick_ext_max))[-1]
+                log.error('STEP ADJUSTMENT: brick_ext_min=%s\tbrick_ext_max=%s', brick_ext_min, brick_ext_max)
         else:
             ts = 0
 
-        val_sl_tn_min = max(ts, brick_ext[0])
-        val_sl_tn_max = brick_sl[1] + brick_ext[1] + 1 -(brick_ext[1] + 1 - brick_ext[0])
+        log.error('ts = %s', ts)
+
+
+        val_sl_tn_min = max(ts, brick_ext_min)
+        val_sl_tn_max = brick_sl[1] + brick_ext_max - brick_shp
+
+        log.error('val_sl_tn_min/max = %s/%s', val_sl_tn_min, val_sl_tn_max)
 
         val_sl_min = val_sl_tn_min - ts
         val_sl_max = val_sl_tn_max - ts
 
         value_slice = slice(val_sl_min, val_sl_max, None)
         return value_slice
-
-#        #  xmin = max(total_sl.xmin, brick_ext.xmin)
-#        td_start = max(ts, brick_ext[0])
-#        # xmax = sum(brick_sl.xmax, brick_ext.xmax, -brick_ext.xshp)
-#        td_stop = brick_sl[1] + brick_ext[1] + 1 - (brick_ext[1] + 1 - brick_ext[0])
-#
-#        log.warn('td_start==%s\ttd_stop==%s', td_start, td_stop)
-#
-#        # IF(brick_ext.xmin < brick_sl.xmax, brick_ext.xmin, brick_ext.xmin - brick_sl.xmax)
-#        if brick_ext[0] < brick_sl[1]:
-#            start = brick_ext[0]
-#        else:
-#            start = brick_ext[0] - brick_sl[1]
-#
-#        # sum(brick_ext.xmax, -brick_ext.xmin, -brick_sl.xmin)
-#        stop = (brick_ext[1]+1) - brick_ext[0] - brick_sl[0]
-#
-#        if start >= val_max:
-#            offset = start - 0
-#            start -= offset
-#            stop -= offset
-#
-#        value_slice = slice(start, stop, None)
-#        total_domain_value_slice = slice(td_start, td_stop, None)
-#
-#        log.warn('\n\ttd_value_slice=%s\n\tvalue_slice=%s', total_domain_value_slice, value_slice)
-#
-#        if isinstance(slice_, slice) and slice_.start is None:
-#            log.error('slice_ starts with None, using total_doman_value_slice')
-#            value_slice = total_domain_value_slice
-#
-#        return value_slice
-
 
     def get_shape_from_slice(self, slice_, max_shp=None):
         log.debug('Getting array shape for slice_: %s', slice_)
@@ -242,7 +220,7 @@ class MultiDim(object):
         return tuple(shp)
 
 
-    def calc_brick_slice(self, slice_, bounds, brick_origin_offset=0):
+    def calc_brick_slice(self, slice_, bounds):
         log.error('%s  %s', slice_, bounds)
         sl = deepcopy(slice_)
         bo = bounds[0]
@@ -250,13 +228,13 @@ class MultiDim(object):
         bs = bn - bo
         if isinstance(sl, int):
             if bo <= sl < bn:
-                return sl-bo, brick_origin_offset, (sl, sl)
+                return sl-bo, (sl, sl)
             else:
                 raise ValueError('Outside brick bounds: %s <= %s < %s', bo, sl, bn)
         elif isinstance(sl, (list,tuple)):
             filt_slice = [x - bo for x in sl if bo <= x < bn]
             if len(filt_slice) > 0:
-                return filt_slice, brick_origin_offset, (min(filt_slice), max(filt_slice))
+                return filt_slice, (min(filt_slice), max(filt_slice))
             else:
                 raise ValueError('No values within brick bounds: %s <= %s < %s', bo, sl, bn)
         elif isinstance(sl, slice):
@@ -280,29 +258,30 @@ class MultiDim(object):
                 else: #  bo > sl.stop
                     raise ValueError('Slice not in brick: %s > %s', bo, sl.stop)
 
-            log.debug('start=%s, stop=%s', start, stop)
-            log.debug('brick_origin_offset=%s', brick_origin_offset)
-            start += brick_origin_offset
+            log.warn('start=%s, stop=%s', start, stop)
+            if bo != 0 and sl.step is not None and sl.step != 1:
+                try:
+                    ss = 0 if sl.start is None else sl.start
+                    calc_boo = xrange(*slice(ss,bn,sl.step).indices(bo+sl.step))[-1] - bo
+                except:
+                    calc_boo = 0
+                log.warn('calc_boo=%s',calc_boo)
+                start += calc_boo
             log.debug('start=%s, stop=%s', start, stop)
             nbs = slice(start, stop, sl.step)
             nbsi = range(*nbs.indices(stop))
             nbsl = len(nbsi)
             if nbsl == 0: # No values in this brick!!
-                if sl.step is not None:
-                    brick_origin_offset -= bs
-                return None, brick_origin_offset
-            last_index = nbsi[-1]
-            log.debug('last_index=%s',last_index)
+#                if sl.step is not None:
+#                    brick_origin_offset -= bs
+#                return None, brick_origin_offset
+                return None
             log.debug('nbsl=%s',nbsl)
 
-            if sl.step is not None:
-                brick_origin_offset = last_index - bs + sl.step
-                log.debug('brick_origin_offset = %s', brick_origin_offset)
-
             bsl_min = nbs.start
-            bsl_max = last_index + 1 # ?? Is this right ??
+            bsl_max = nbs.stop
 
-            return nbs, brick_origin_offset, (bsl_min, bsl_max)
+            return nbs, (bsl_min, bsl_max)
 
     def do_recurse(self, slice_, depth=None):
         if depth is None:
