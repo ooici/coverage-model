@@ -12,6 +12,34 @@ val_arr = np.arange(100).reshape(10,10)
 sl = (slice(None),slice(None))
 md.put_values_to_bricks(sl, val_arr[sl])
 md.reset_bricks()
+
+
+
+from coverage_model.test.multi_dim_trials import *
+md=MultiDim()
+val_arr = np.arange(100).reshape(10,10)
+
+sl_list = []
+sl_list.append((slice(2,7),slice(3,8)))
+sl_list.append((slice(1,None),slice(4,8)))
+sl_list.append((slice(None),slice(None)))
+sl_list.append((slice(2,8),slice(None)))
+sl_list.append((slice(2,8),slice(3,6)))
+sl_list.append((slice(None,None,3),slice(None,None,2)))
+sl_list.append((slice(1,8,3),slice(3,None,2)))
+sl_list.append((slice(3,None),slice(3,9,2)))
+
+for sl in sl_list:
+    tstr = '*** Slice: {0} ***'.format(sl)
+    print tstr
+    md.reset_bricks()
+    md.put_values_to_bricks(sl, val_arr[sl])
+    print 'bricks:'
+    for b in md.bricks:
+        print '{0}\n{1}'.format(b,md.bricks[b])
+    print '*'*len(tstr)
+
+
 """
 from ooi.logging import log
 from coverage_model import fix_slice
@@ -172,14 +200,9 @@ class MultiDim(object):
             ts = slice_[0]
         elif isinstance(slice_, slice):
             ts = slice_.start if slice_.start is not None else 0
-            if slice_.step is None or slice_.step == 1:
-                pass
-            else:
+            if slice_.step is not None and slice_.step != 1:
                 brick_ext_min = len(xrange(*slice_.indices(brick_ext_min))) + ts
                 brick_ext_max = len(xrange(*slice_.indices(brick_ext_max))) + ts
-#                if brick_ext_min > 0:
-#                    brick_ext_min = xrange(*slice_.indices(brick_ext_min))[0] + ts
-#                brick_ext_max = xrange(*slice_.indices(brick_ext_max))[-1]
                 log.error('STEP ADJUSTMENT: brick_ext_min=%s\tbrick_ext_max=%s', brick_ext_min, brick_ext_max)
         else:
             ts = 0
@@ -279,7 +302,7 @@ class MultiDim(object):
             log.debug('nbsl=%s',nbsl)
 
             bsl_min = nbs.start
-            bsl_max = nbs.stop
+            bsl_max = bs
 
             return nbs, (bsl_min, bsl_max)
 
