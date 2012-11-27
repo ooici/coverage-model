@@ -6,12 +6,13 @@
 @author Christopher Mueller
 @brief 
 """
-from pyon.util.unit_test import PyonTestCase
+
 from nose.plugins.attrib import attr
 import coverage_model.utils as utils
+from unittest import TestCase
 
 @attr('UNIT',group='cov')
-class TestUtilsUnit(PyonTestCase):
+class TestUtilsUnit(TestCase):
 
     def setUp(self):
         pass

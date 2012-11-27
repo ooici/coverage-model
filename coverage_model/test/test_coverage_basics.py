@@ -11,13 +11,14 @@ import shutil
 import tempfile
 
 from pyon.public import log
-from pyon.util.int_test import IonIntegrationTestCase
+
 import numpy as np
 from coverage_model import *
 from nose.plugins.attrib import attr
+from unittest import TestCase
 
 @attr('INT', group='cov')
-class TestCoverageModelBasicsInt(IonIntegrationTestCase):
+class TestCoverageModelBasicsInt(TestCase):
 
     def setUp(self):
         # Create temporary working directory for the persisted coverage tests
