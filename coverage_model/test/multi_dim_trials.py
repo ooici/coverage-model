@@ -133,12 +133,12 @@ class MultiDim(object):
 
         values = np.asanyarray(values)
         v_shp = values.shape
-        log.error('value_shape: %s', v_shp)
+        log.debug('value_shape: %s', v_shp)
         s_shp = self.get_shape_from_slice(slice_)
-        log.error('slice_shape: %s', s_shp)
+        log.debug('slice_shape: %s', s_shp)
         is_broadcast = False
         if v_shp == ():
-            log.info('Broadcast!!')
+            log.debug('Broadcast!!')
             is_broadcast = True
             value_slice = ()
         elif v_shp != s_shp:
@@ -149,18 +149,18 @@ class MultiDim(object):
         else:
             value_slice = None
 
-        log.error('value_shape: %s', v_shp)
+        log.debug('value_shape: %s', v_shp)
 
         for b in bricks:
             # b is (brick_id, (brick_bounds per dim...),)
             bid, bbnds = b
-            log.warn('Determining slice for brick: %s', b)
-            log.info('bid=%s, bbnds=%s', bid, bbnds)
+            log.debug('Determining slice for brick: %s', b)
+            log.debug('bid=%s, bbnds=%s', bid, bbnds)
             brick_slice = []
             brick_mm = []
             for x, sl in enumerate(slice_): # Dimensionality
-                log.info('x=%s  sl=%s', x, sl)
-                log.warn('bbnds[%s]: %s', x, bbnds[x])
+                log.debug('x=%s  sl=%s', x, sl)
+                log.debug('bbnds[%s]: %s', x, bbnds[x])
                 bsl, mm = self.calc_brick_slice(sl, bbnds[x])
                 brick_slice.append(bsl)
                 brick_mm.append(mm)
@@ -180,14 +180,14 @@ class MultiDim(object):
             v = values[value_slice]
             bss = self.get_shape_from_slice(brick_slice, self.brick_extents[bid])
             vss = self.get_shape_from_slice(value_slice, v_shp)
-            log.warn('\nbrick %s:\n\tbrick_slice %s=%s\n\tmin/max=%s\n\tvalue_slice %s=%s\n\tvalues %s=\n%s', b, bss, brick_slice, brick_mm, vss, value_slice, v.shape, v)
+            log.debug('\nbrick %s:\n\tbrick_slice %s=%s\n\tmin/max=%s\n\tvalue_slice %s=%s\n\tvalues %s=\n%s', b, bss, brick_slice, brick_mm, vss, value_slice, v.shape, v)
             self.bricks[bid][brick_slice] = v
 
     def get_values_from_bricks(self, slice_):
         pass
 
     def calc_value_slice(self, slice_, brick_ext, brick_slice, brick_sl, val_shp_max):
-        log.error('slice_==%s\tbrick_ext==%s\tbrick_slice==%s\tbrick_sl==%s\tval_shp_max==%s', slice_, brick_ext, brick_slice, brick_sl, val_shp_max)
+        log.debug('slice_==%s\tbrick_ext==%s\tbrick_slice==%s\tbrick_sl==%s\tval_shp_max==%s', slice_, brick_ext, brick_slice, brick_sl, val_shp_max)
 
         brick_ext_min = brick_ext[0]
         brick_ext_max = brick_ext[1] + 1
@@ -203,17 +203,17 @@ class MultiDim(object):
             if slice_.step is not None and slice_.step != 1:
                 brick_ext_min = len(xrange(*slice_.indices(brick_ext_min))) + ts
                 brick_ext_max = len(xrange(*slice_.indices(brick_ext_max))) + ts
-                log.error('STEP ADJUSTMENT: brick_ext_min=%s\tbrick_ext_max=%s', brick_ext_min, brick_ext_max)
+                log.debug('STEP ADJUSTMENT: brick_ext_min=%s\tbrick_ext_max=%s', brick_ext_min, brick_ext_max)
         else:
             ts = 0
 
-        log.error('ts = %s', ts)
+        log.debug('ts = %s', ts)
 
 
         val_sl_tn_min = max(ts, brick_ext_min)
         val_sl_tn_max = brick_sl[1] + brick_ext_max - brick_shp
 
-        log.error('val_sl_tn_min/max = %s/%s', val_sl_tn_min, val_sl_tn_max)
+        log.debug('val_sl_tn_min/max = %s/%s', val_sl_tn_min, val_sl_tn_max)
 
         val_sl_min = val_sl_tn_min - ts
         val_sl_max = val_sl_tn_max - ts
@@ -244,7 +244,7 @@ class MultiDim(object):
 
 
     def calc_brick_slice(self, slice_, bounds):
-        log.error('%s  %s', slice_, bounds)
+        log.debug('%s  %s', slice_, bounds)
         sl = deepcopy(slice_)
         bo = bounds[0]
         bn = bounds[1] + 1
@@ -281,14 +281,14 @@ class MultiDim(object):
                 else: #  bo > sl.stop
                     raise ValueError('Slice not in brick: %s > %s', bo, sl.stop)
 
-            log.warn('start=%s, stop=%s', start, stop)
+            log.debug('start=%s, stop=%s', start, stop)
             if bo != 0 and sl.step is not None and sl.step != 1:
                 try:
                     ss = 0 if sl.start is None else sl.start
                     calc_boo = xrange(*slice(ss,bn,sl.step).indices(bo+sl.step))[-1] - bo
                 except:
                     calc_boo = 0
-                log.warn('calc_boo=%s',calc_boo)
+                log.debug('calc_boo=%s',calc_boo)
                 start += calc_boo
             log.debug('start=%s, stop=%s', start, stop)
             nbs = slice(start, stop, sl.step)
@@ -315,8 +315,8 @@ class MultiDim(object):
 
         sl=slice_[depth]
 
-        log.warn('depth %s: %s', depth, sl)
-        log.error(self.total_domain[depth])
+        log.debug('depth %s: %s', depth, sl)
+        log.debug(self.total_domain[depth])
 
 
 
