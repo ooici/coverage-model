@@ -34,6 +34,41 @@ def is_valid_constraint(v):
 
     return ret
 
+def find_nearest_index(seq, val):
+    """
+    Returns the index of the value in the array-like object <i>arr</i> nearest to <i>val</i>.
+
+    <i>seq</i> is viewed as a numpy array using numpy.asanyarray()
+
+    If <i>seq</i> contains duplicates, the first match is returned
+
+    @param seq  The array-like object to search
+    @param val  The value to search for
+    @return     The index nearest to <i>val</i>
+    """
+    idx = np.abs(np.asanyarray(seq)-val).argmin()
+    return idx
+
+def find_nearest_value(seq, val):
+    """
+    Returns the value in the array-like object <i>arr</i> nearest to but not greater than <i>val</i>.
+
+    <i>seq</i> is viewed as a numpy array using numpy.asanyarray()
+
+    If <i>seq</i> contains duplicates, the first match is returned
+
+    @param seq  The array-like object to search
+    @param val  The value to search for
+    @return     The value nearest to but not greater than <i>val</i>
+    """
+    a = np.asanyarray(seq)
+    idx = find_nearest_index(a, val)
+    fv = a.flat[idx]
+    if val < fv:
+        return a.flat[idx-1]
+    else:
+        return fv
+
 def _raise_index_error_int(slice_, size, dim):
     if slice_ < 0:
         raise IndexError('On dimension {0}; index cannot be < 0: index => {0}'.format(dim, slice_))
