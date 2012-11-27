@@ -82,7 +82,7 @@ class ParameterContext(AbstractIdentifiable):
              'variable_reports',
 #             'axis', # accounted for as 'axis'
              'references_list',
-             'comment',
+#             'comment', # accounted for as description
              'code_reports',]
 
     def __init__(self, name, param_type=None, axis=None, fill_value=None, variability=None, uom=None, **kwargs):
