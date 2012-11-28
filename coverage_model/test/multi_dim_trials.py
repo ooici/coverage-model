@@ -9,7 +9,9 @@
 from coverage_model.test.multi_dim_trials import *
 md=MultiDim()
 val_arr = np.arange(100).reshape(10,10)
-sl = (slice(None),slice(None))
+#sl = (slice(None),slice(None))
+sl = ([1,2,5,8],2)
+#sl = (2,[1,2,5,8])
 md.put_values_to_bricks(sl, val_arr[sl])
 md.reset_bricks()
 
@@ -20,6 +22,20 @@ md=MultiDim()
 val_arr = np.arange(100).reshape(10,10)
 
 sl_list = []
+# Single value slices
+sl_list.append((0,1))
+sl_list.append((9,3))
+sl_list.append((3,8))
+sl_list.append((8,7))
+
+# List slices
+sl_list.append(([1,2],2))
+sl_list.append(([1,4],6))
+sl_list.append(([6,9],3))
+sl_list.append(([1,2,5,8],5))
+sl_list.append((2,[2,5,6,9]))
+
+# Slice slices
 sl_list.append((slice(2,7),slice(3,8)))
 sl_list.append((slice(1,None),slice(4,8)))
 sl_list.append((slice(None),slice(None)))
@@ -42,7 +58,7 @@ for sl in sl_list:
 
 """
 from ooi.logging import log
-from coverage_model import fix_slice
+from coverage_model import fix_slice, utils
 
 from copy import deepcopy
 import itertools
@@ -142,9 +158,10 @@ class MultiDim(object):
             is_broadcast = True
             value_slice = ()
         elif v_shp != s_shp:
-            # CBM TODO: May be able to leverage np.broadcast() here - raises ValueError if the two arrays can't be broadcast
-            # Must account for missing 1's!!
-            if v_shp != tuple([i for i in s_shp if i != 1]):
+            if v_shp == tuple([i for i in s_shp if i != 1]): # Missing dimensions are singleton, just reshape to fit
+                values = values.reshape(s_shp)
+                v_shp = values.shape
+            else:
                 raise IndexError('Shape of \'value\' is not compatible with \'slice_\': slice_ shp == {0}\tvalue shp == {1}'.format(s_shp, v_shp))
         else:
             value_slice = None
@@ -165,6 +182,9 @@ class MultiDim(object):
                 brick_slice.append(bsl)
                 brick_mm.append(mm)
 
+            if None in brick_slice: # Brick does not contain any of the requested indices
+                continue
+
             brick_slice = tuple(brick_slice)
             brick_mm = tuple(brick_mm)
 
@@ -177,10 +197,11 @@ class MultiDim(object):
 
                 value_slice = tuple(value_slice)
 
-            v = values[value_slice]
             bss = self.get_shape_from_slice(brick_slice, self.brick_extents[bid])
             vss = self.get_shape_from_slice(value_slice, v_shp)
-            log.debug('\nbrick %s:\n\tbrick_slice %s=%s\n\tmin/max=%s\n\tvalue_slice %s=%s\n\tvalues %s=\n%s', b, bss, brick_slice, brick_mm, vss, value_slice, v.shape, v)
+            log.debug('\nbrick %s:\n\tbrick_slice %s=%s\n\tmin/max=%s\n\tvalue_slice %s=%s', b, bss, brick_slice, brick_mm, vss, value_slice)
+            v = values[value_slice]
+            log.debug('\nvalues %s=\n%s', v.shape, v)
             self.bricks[bid][brick_slice] = v
 
     def get_values_from_bricks(self, slice_):
@@ -189,36 +210,45 @@ class MultiDim(object):
     def calc_value_slice(self, slice_, brick_ext, brick_slice, brick_sl, val_shp_max):
         log.debug('slice_==%s\tbrick_ext==%s\tbrick_slice==%s\tbrick_sl==%s\tval_shp_max==%s', slice_, brick_ext, brick_slice, brick_sl, val_shp_max)
 
+        sl = deepcopy(slice_)
         brick_ext_min = brick_ext[0]
         brick_ext_max = brick_ext[1] + 1
         brick_shp = brick_ext_max - brick_ext[0]
 
-        # Value Slice in Total Domain Notation:
-        if isinstance(slice_, int):
-            ts = slice_
-        elif isinstance(slice, (list,tuple)):
-            ts = slice_[0]
-        elif isinstance(slice_, slice):
-            ts = slice_.start if slice_.start is not None else 0
-            if slice_.step is not None and slice_.step != 1:
-                brick_ext_min = len(xrange(*slice_.indices(brick_ext_min))) + ts
-                brick_ext_max = len(xrange(*slice_.indices(brick_ext_max))) + ts
-                log.debug('STEP ADJUSTMENT: brick_ext_min=%s\tbrick_ext_max=%s', brick_ext_min, brick_ext_max)
+        if isinstance(sl, int):
+            ts = sl
+            # Value Slice in Total Domain Notation
+            val_sl_tn_min = max(ts, brick_ext_min)
+            value_slice = val_sl_tn_min - ts
+
+            log.debug('ts=%s\tbrick_ext_min=%s\tval_sl_tn_min=%s\tvalue_slice=%s', ts, brick_ext_min, val_sl_tn_min, value_slice)
+        elif isinstance(sl, (list,tuple)):
+            si = utils.find_nearest_index(sl, brick_sl[0] + brick_ext_min)
+            ei = utils.find_nearest_index(sl, brick_sl[1] + brick_ext_min) + 1 # Slices use exclusive upper!!
+
+            value_slice = slice(si, ei, None)
+            log.debug('si=%s\tei=%s\tvalue_slice=%s', si, ei, value_slice)
+        elif isinstance(sl, slice):
+            ts = sl.start if sl.start is not None else 0
+            if sl.step is not None and sl.step != 1:
+                brick_ext_min = len(xrange(*sl.indices(brick_ext_min))) + ts
+                brick_ext_max = len(xrange(*sl.indices(brick_ext_max))) + ts
+                log.debug('Correct for step: step=%s\tbrick_ext_min=%s\tbrick_ext_max=%s', sl.step, brick_ext_min, brick_ext_max)
+
+            # Value Slice in Total Domain Notation
+            val_sl_tn_min = max(ts, brick_ext_min)
+            val_sl_tn_max = brick_sl[1] + brick_ext_max - brick_shp
+
+
+            val_sl_min = val_sl_tn_min - ts
+            val_sl_max = val_sl_tn_max - ts
+
+            value_slice = slice(val_sl_min, val_sl_max, None)
+            log.debug('ts=%s\tbrick_ext_min=%s\tbrick_ext_max=%s\tval_sl_tn_min=%s\tval_sl_tn_max=%s\tval_sl_min=%s\tval_sl_max=%s\tvalue_slice=%s', ts, brick_ext_min, brick_ext_max, val_sl_tn_min, val_sl_tn_max, val_sl_min, val_sl_max, value_slice)
         else:
-            ts = 0
+            value_slice = ()
+            log.debug('value_slice=%s', value_slice)
 
-        log.debug('ts = %s', ts)
-
-
-        val_sl_tn_min = max(ts, brick_ext_min)
-        val_sl_tn_max = brick_sl[1] + brick_ext_max - brick_shp
-
-        log.debug('val_sl_tn_min/max = %s/%s', val_sl_tn_min, val_sl_tn_max)
-
-        val_sl_min = val_sl_tn_min - ts
-        val_sl_max = val_sl_tn_max - ts
-
-        value_slice = slice(val_sl_min, val_sl_max, None)
         return value_slice
 
     def get_shape_from_slice(self, slice_, max_shp=None):
@@ -244,19 +274,22 @@ class MultiDim(object):
 
 
     def calc_brick_slice(self, slice_, bounds):
-        log.debug('%s  %s', slice_, bounds)
+        log.debug('slice_=%s\tbounds=%s', slice_, bounds)
         sl = deepcopy(slice_)
         bo = bounds[0]
         bn = bounds[1] + 1
         bs = bn - bo
         if isinstance(sl, int):
             if bo <= sl < bn:
-                return sl-bo, (sl, sl)
+                brick_slice = sl-bo
+                log.debug('slice_ is int: bo=%s\tbn=%s\tbrick_slice=%s',bo, bn, brick_slice)
+                return brick_slice, (sl, sl)
             else:
                 raise ValueError('Outside brick bounds: %s <= %s < %s', bo, sl, bn)
         elif isinstance(sl, (list,tuple)):
             filt_slice = [x - bo for x in sl if bo <= x < bn]
             if len(filt_slice) > 0:
+                log.debug('slice_ is list: bo=%s\tbn=%s\tfilt_slice=%s',bo, bn, filt_slice)
                 return filt_slice, (min(filt_slice), max(filt_slice))
             else:
                 raise ValueError('No values within brick bounds: %s <= %s < %s', bo, sl, bn)
@@ -281,30 +314,22 @@ class MultiDim(object):
                 else: #  bo > sl.stop
                     raise ValueError('Slice not in brick: %s > %s', bo, sl.stop)
 
-            log.debug('start=%s, stop=%s', start, stop)
             if bo != 0 and sl.step is not None and sl.step != 1:
+                log.debug('pre-step-adjustment: start=%s\tstop=%s', start, stop)
                 try:
                     ss = 0 if sl.start is None else sl.start
-                    calc_boo = xrange(*slice(ss,bn,sl.step).indices(bo+sl.step))[-1] - bo
+                    brick_origin_offset = xrange(*slice(ss,bn,sl.step).indices(bo+sl.step))[-1] - bo
                 except:
-                    calc_boo = 0
-                log.debug('calc_boo=%s',calc_boo)
-                start += calc_boo
-            log.debug('start=%s, stop=%s', start, stop)
-            nbs = slice(start, stop, sl.step)
-            nbsi = range(*nbs.indices(stop))
-            nbsl = len(nbsi)
-            if nbsl == 0: # No values in this brick!!
-#                if sl.step is not None:
-#                    brick_origin_offset -= bs
-#                return None, brick_origin_offset
-                return None
-            log.debug('nbsl=%s',nbsl)
+                    brick_origin_offset = 0
+                log.debug('brick_origin_offset=%s',brick_origin_offset)
+                start += brick_origin_offset
+                log.debug('post-step-adjustment: start=%s\tstop=%s', start, stop)
+            brick_slice = slice(start, stop, sl.step)
+            if start >= stop: # Brick does not contain any of the requested indices
+                return None, None
 
-            bsl_min = nbs.start
-            bsl_max = bs
-
-            return nbs, (bsl_min, bsl_max)
+            log.debug('slice_ is slice: bo=%s\tbn=%s\tsl=%s\tbrick_slice=%s',bo, bn, sl, brick_slice)
+            return brick_slice, (brick_slice.start, bs)
 
     def do_recurse(self, slice_, depth=None):
         if depth is None:
