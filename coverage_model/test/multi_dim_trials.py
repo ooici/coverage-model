@@ -78,7 +78,9 @@ class MultiDim(object):
         self.total_domain = total_domain
         self.brick_size = tuple(brick_size for x in total_domain)
         self.bricks = {}
-        self.rtree = index.Index()
+        p = index.Property()
+        p.dimension=len(self.total_domain)
+        self.rtree = index.Index(properties=p)
 
         self.calc_brick_origins()
         self.calc_brick_extents()
