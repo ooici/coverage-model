@@ -49,10 +49,17 @@ for sl in sl_list:
     tstr = '*** Slice: {0} ***'.format(sl)
     print tstr
     md.reset_bricks()
-    md.put_values_to_bricks(sl, val_arr[sl])
-    print 'bricks:'
-    for b in md.bricks:
-        print '{0}\n{1}'.format(b,md.bricks[b])
+    vals = val_arr[sl]
+    md.put_values_to_bricks(sl, vals)
+    vo=md.get_values_from_bricks(sl)
+    eq = np.array_equal(vals, vo)
+    print "\tInnie == Outtie:  %s" % (eq,)
+    if not eq:
+        print 'vals in:\n%s' % (vals,)
+        print 'vals out:\n%s' % (vo,)
+#    print 'bricks:'
+#    for b in md.bricks:
+#        print '{0}\n{1}'.format(b,md.bricks[b])
     print '*'*len(tstr)
 
 
@@ -205,7 +212,47 @@ class MultiDim(object):
             self.bricks[bid][brick_slice] = v
 
     def get_values_from_bricks(self, slice_):
-        pass
+        slice_ = fix_slice(slice_, self.total_domain)
+        bricks = self.get_bricks_from_slice(slice_) # this is a list of tuples [(b_id, (bounds...),), ...]
+
+        ret_shp = self.get_shape_from_slice(slice_, self.total_domain)
+        ret_arr = np.empty(ret_shp, dtype='int16')
+
+        for b in bricks:
+            bid, bbnds = b
+            brick_slice = []
+            brick_mm = []
+            for x, sl in enumerate(slice_):
+                bsl, mm = self.calc_brick_slice(sl, bbnds[x])
+                brick_slice.append(bsl)
+                brick_mm.append(mm)
+
+            if None in brick_slice:
+                continue
+
+            brick_slice = tuple(brick_slice)
+            brick_mm = tuple(brick_mm)
+
+            ret_slice = []
+            for x, sl in enumerate(slice_):
+                rm = ret_shp[x] if x < len(ret_shp) else 1
+                rs = self.calc_value_slice(sl, bbnds[x], brick_slice=brick_slice[x], brick_sl=brick_mm[x], val_shp_max=rm)
+                ret_slice.append(rs)
+
+            ret_slice = tuple(ret_slice)
+
+            ret_vals = self.bricks[bid][brick_slice]
+            ret_arr[ret_slice] = ret_vals
+
+        ret_arr = ret_arr.squeeze()
+
+        if ret_arr.size == 1:
+            if ret_arr.ndim==0:
+                ret_arr=ret_arr[()]
+            else:
+                ret_arr=ret_arr[0]
+
+        return ret_arr
 
     def calc_value_slice(self, slice_, brick_ext, brick_slice, brick_sl, val_shp_max):
         log.debug('slice_==%s\tbrick_ext==%s\tbrick_slice==%s\tbrick_sl==%s\tval_shp_max==%s', slice_, brick_ext, brick_slice, brick_sl, val_shp_max)
