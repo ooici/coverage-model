@@ -65,11 +65,10 @@ for sl in sl_list:
 
 """
 from ooi.logging import log
-from coverage_model import fix_slice, utils
+from coverage_model import fix_slice
 from coverage_model import bricking_utils
 
 from copy import deepcopy
-import itertools
 from rtree import index
 import numpy as np
 
@@ -77,85 +76,29 @@ class MultiDim(object):
 
     def __init__(self, total_domain=(10,10), brick_size=5):
         self.total_domain = total_domain
-        self.brick_size = tuple(brick_size for x in total_domain)
+        self.brick_sizes = tuple(brick_size for x in total_domain)
         self.bricks = {}
         p = index.Property()
         p.dimension=len(self.total_domain)
         self.rtree = index.Index(properties=p)
 
-        self.calc_brick_origins()
-        self.calc_brick_extents()
+        self.brick_origins = bricking_utils.calc_brick_origins(self.total_domain, self.brick_sizes)
+        self.brick_extents, self.rtree_extents = bricking_utils.calc_brick_and_rtree_extents(self.brick_origins, self.brick_sizes)
         self.build_bricks()
-        self.populate_rtree()
-
-    def calc_brick_origins(self):
-        bo = list(set(itertools.product(*[range(d)[::self.brick_size[i]] for i,d in enumerate(self.total_domain)])))
-        bo.sort()
-        self.brick_origins = tuple(bo)
-
-    def calc_brick_extents(self):
-        be=[]
-        rte=[]
-        for ori in self.brick_origins:
-            be.append(tuple(zip(ori,map(lambda o,s: o+s-1, ori, self.brick_size))))
-            r = ori+tuple(map(lambda o,s: o+s-1, ori, self.brick_size))
-            if len(ori) == 1:
-                r = tuple([e for ext in zip(r,[0 for x in r]) for e in ext])
-            rte.append(r)
-
-        self.brick_extents = tuple(be)
-        self.rtree_extents = tuple(rte)
+        bricking_utils.populate_rtree(self.rtree, self.rtree_extents, self.brick_extents)
 
     def build_bricks(self):
         for x in xrange(len(self.brick_origins)):
-            self.bricks[x] = np.empty(self.brick_size, dtype='int16')
+            self.bricks[x] = np.empty(self.brick_sizes, dtype='int16')
             self.bricks[x].fill(-1)
 
     def reset_bricks(self):
         for arr in self.bricks.itervalues():
             arr.fill(-1)
 
-    def populate_rtree(self):
-        for i, e in enumerate(self.rtree_extents):
-            self.rtree.insert(i, e, obj=self.brick_extents[i])
-
-    def get_bricks_from_slice(self, slice_):
-        sl = deepcopy(slice_)
-        sl = fix_slice(sl, self.total_domain)
-
-        rank = len(sl)
-        if rank == 1:
-            rank += 1
-            sl += (slice(None),)
-
-        bnds = self.rtree.bounds
-        log.debug('slice_ ==> %s', sl)
-        log.debug('rtree bounds ==> %s', bnds)
-
-        start=[]
-        end=[]
-        for x in xrange(rank):
-            sx=sl[x]
-            if isinstance(sx, slice):
-                si=sx.start if sx.start is not None else bnds[x::rank][0]
-                start.append(si)
-                ei=sx.stop-1 if sx.stop is not None else bnds[x::rank][1]
-                end.append(ei)
-            elif isinstance(sx, (list, tuple)):
-                start.append(min(sx))
-                end.append(max(sx))
-            elif isinstance(sx, int):
-                start.append(sx)
-                end.append(sx)
-
-        bricks = list(self.rtree.intersection(tuple(start+end), objects=True))
-        bricks = [(b.id, b.object) for b in bricks]
-        log.debug('bricks found ==> %s', bricks)
-        return bricks
-
     def put_values_to_bricks(self, slice_, values):
         slice_ = fix_slice(slice_, self.total_domain)
-        bricks = self.get_bricks_from_slice(slice_) # this is a list of tuples [(b_id, (bounds...),), ...]
+        bricks = bricking_utils.get_bricks_from_slice(slice_, self.rtree, self.total_domain) # this is a list of tuples [(b_id, (bounds...),), ...]
 
         values = np.asanyarray(values)
         v_shp = values.shape
@@ -216,7 +159,7 @@ class MultiDim(object):
 
     def get_values_from_bricks(self, slice_):
         slice_ = fix_slice(slice_, self.total_domain)
-        bricks = self.get_bricks_from_slice(slice_) # this is a list of tuples [(b_id, (bounds...),), ...]
+        bricks = bricking_utils.get_bricks_from_slice(slice_, self.rtree, self.total_domain) # this is a list of tuples [(b_id, (bounds...),), ...]
 
         ret_shp = bricking_utils.get_shape_from_slice(slice_, self.total_domain)
         ret_arr = np.empty(ret_shp, dtype='int16')

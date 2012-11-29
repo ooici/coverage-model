@@ -8,8 +8,66 @@
 """
 
 from ooi.logging import log
-from coverage_model import utils
+from coverage_model import fix_slice, utils
 from copy import deepcopy
+import itertools
+
+def calc_brick_origins(total_domain, brick_sizes):
+    bo = list(set(itertools.product(*[range(d)[::brick_sizes[i]] for i,d in enumerate(total_domain)])))
+    bo.sort()
+    return tuple(bo)
+
+def calc_brick_and_rtree_extents(brick_origins, brick_sizes):
+    be=[]
+    rte=[]
+    for ori in brick_origins:
+        be.append(tuple(zip(ori,map(lambda o,s: o+s-1, ori, brick_sizes))))
+        r = ori+tuple(map(lambda o,s: o+s-1, ori, brick_sizes))
+        if len(ori) == 1:
+            r = tuple([e for ext in zip(r,[0 for x in r]) for e in ext])
+        rte.append(r)
+
+    return tuple(be), tuple(rte)
+
+def populate_rtree(rtree, rtree_extents, brick_extents):
+    for i, e in enumerate(rtree_extents):
+        rtree.insert(i, e, obj=brick_extents[i])
+
+
+def get_bricks_from_slice(slice_, rtree, total_domain):
+    sl = deepcopy(slice_)
+    sl = fix_slice(sl, total_domain)
+
+    rank = len(sl)
+    if rank == 1:
+        rank += 1
+        sl += (slice(None),)
+
+    bnds = rtree.bounds
+    log.debug('slice_ ==> %s', sl)
+    log.debug('rtree bounds ==> %s', bnds)
+
+    start=[]
+    end=[]
+    for x in xrange(rank):
+        sx=sl[x]
+        if isinstance(sx, slice):
+            si=sx.start if sx.start is not None else bnds[x::rank][0]
+            start.append(si)
+            ei=sx.stop-1 if sx.stop is not None else bnds[x::rank][1]
+            end.append(ei)
+        elif isinstance(sx, (list, tuple)):
+            start.append(min(sx))
+            end.append(max(sx))
+        elif isinstance(sx, int):
+            start.append(sx)
+            end.append(sx)
+
+    bricks = list(rtree.intersection(tuple(start+end), objects=True))
+    bricks = [(b.id, b.object) for b in bricks]
+    log.debug('bricks found ==> %s', bricks)
+
+    return bricks
 
 def get_shape_from_slice(slice_, max_shp):
     log.debug('Getting array shape for slice_: %s', slice_)
