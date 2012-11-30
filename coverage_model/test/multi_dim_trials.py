@@ -10,8 +10,9 @@ from coverage_model.test.multi_dim_trials import *
 md=MultiDim()
 val_arr = np.arange(100).reshape(10,10)
 #sl = (slice(None),slice(None))
-sl = ([1,2,5,8],2)
+#sl = ([1,2,5,8],2)
 #sl = (2,[1,2,5,8])
+sl = (slice(6,9,2),)
 md.put_values_to_bricks(sl, val_arr[sl])
 md.reset_bricks()
 
@@ -36,6 +37,7 @@ sl_list.append(([1,2,5,8],5))
 sl_list.append((2,[2,5,6,9]))
 
 # Slice slices
+sl_list.append((slice(6,9,2),))
 sl_list.append((slice(2,7),slice(3,8)))
 sl_list.append((slice(1,None),slice(4,8)))
 sl_list.append((slice(None),slice(None)))
@@ -53,7 +55,7 @@ for sl in sl_list:
     md.put_values_to_bricks(sl, vals)
     vo=md.get_values_from_bricks(sl)
     eq = np.array_equal(vals, vo)
-    print "\tInnie == Outtie:  %s" % (eq,)
+    print "Equal" if eq else "Not Equal!!"
     if not eq:
         print 'vals in:\n%s' % (vals,)
         print 'vals out:\n%s' % (vo,)
