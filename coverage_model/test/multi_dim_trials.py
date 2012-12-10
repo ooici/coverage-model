@@ -16,8 +16,6 @@ sl = (slice(6,9,2),)
 md.put_values_to_bricks(sl, val_arr[sl])
 md.reset_bricks()
 
-
-
 from coverage_model.test.multi_dim_trials import *
 md=MultiDim()
 val_arr = np.arange(100).reshape(10,10)
@@ -65,20 +63,52 @@ for sl in sl_list:
     print '*'*len(tstr)
 
 
+
+from coverage_model.test.multi_dim_trials import *
+md=MultiDim(use_hdf=True)
+val_arr = np.arange(100).reshape(10,10)
+sl = (slice(6,9,2),)
+md.put_values_to_bricks(sl, val_arr[sl])
+
+
+
 """
 from ooi.logging import log
 from coverage_model import fix_slice
 from coverage_model import bricking_utils
+from coverage_model import ParameterContext, QuantityType
+from coverage_model.persistence_helpers import MasterManager, ParameterManager
+import os
+from coverage_model import create_guid
 
 from copy import deepcopy
 from rtree import index
 import numpy as np
+import h5py
 
 class MultiDim(object):
 
-    def __init__(self, total_domain=(10,10), brick_size=5):
+    def __init__(self, total_domain=(10,10), brick_size=5, use_hdf=False):
         self.total_domain = total_domain
         self.brick_sizes = tuple(brick_size for x in total_domain)
+        self.use_hdf = use_hdf
+        if self.use_hdf:
+            self.guid = create_guid()
+            self.root_dir = 'multi_dim_trials'
+            if not os.path.exists(self.root_dir):
+                os.makedirs(self.root_dir)
+
+            self.master_manager = MasterManager(self.root_dir, self.guid, name='md_test_{0}'.format(self.guid))
+
+            self.master_manager.flush()
+
+            pc = ParameterContext('test_param', param_type=QuantityType('int16'), fill_value=-1)
+            self.param_manager = ParameterManager(os.path.join(self.root_dir, self.guid, pc.name), pc.name)
+            self.param_manager.parameter_context = pc
+            self.master_manager.create_group(pc.name)
+
+            self.param_manager.flush()
+
         self.bricks = {}
         p = index.Property()
         p.dimension=len(self.total_domain)
@@ -91,12 +121,27 @@ class MultiDim(object):
 
     def build_bricks(self):
         for x in xrange(len(self.brick_origins)):
-            self.bricks[x] = np.empty(self.brick_sizes, dtype='int16')
-            self.bricks[x].fill(-1)
+            if not self.use_hdf:
+                self.bricks[x] = np.empty(self.brick_sizes, dtype='int16')
+                self.bricks[x].fill(-1)
+            else:
+                id=str(x)
+                fn='{0}.hdf5'.format(id)
+                pth = os.path.join(self.param_manager.root_dir, fn)
+                relpth=os.path.join(self.param_manager.root_dir.replace(self.master_manager.root_dir,'.'),fn)
+                lnpth='/{0}/{1}'.format(self.param_manager.parameter_name, id)
+
+                self.master_manager.add_external_link(lnpth, relpth, id)
+                self.bricks[x] = pth
 
     def reset_bricks(self):
-        for arr in self.bricks.itervalues():
-            arr.fill(-1)
+        for i, arr in enumerate(self.bricks.itervalues()):
+            if not self.use_hdf:
+                arr.fill(-1)
+            else:
+                with h5py.File(arr) as f:
+                    ds = f.require_dataset(str(i), shape=self.brick_sizes, dtype='int16', chunks=True, fillvalue=-1)
+                    ds[:] = -1
 
     def put_values_to_bricks(self, slice_, values):
         slice_ = fix_slice(slice_, self.total_domain)
@@ -157,7 +202,13 @@ class MultiDim(object):
             log.debug('\nbrick %s:\n\tbrick_slice %s=%s\n\tmin/max=%s\n\tvalue_slice %s=%s', b, bss, brick_slice, brick_mm, vss, value_slice)
             v = values[value_slice]
             log.debug('\nvalues %s=\n%s', v.shape, v)
-            self.bricks[bid][brick_slice] = v
+            if not self.use_hdf:
+                self.bricks[bid][brick_slice] = v
+            else:
+                fi=self.bricks[bid]
+                with h5py.File(fi) as f:
+                    ds = f.require_dataset(str(bid),shape=self.brick_sizes, dtype='int16', chunks=True, fillvalue=-1)
+                    ds[brick_slice] = v
 
     def get_values_from_bricks(self, slice_):
         slice_ = fix_slice(slice_, self.total_domain)
@@ -189,7 +240,15 @@ class MultiDim(object):
 
             ret_slice = tuple(ret_slice)
 
-            ret_vals = self.bricks[bid][brick_slice]
+            if not self.use_hdf:
+                ret_vals = self.bricks[bid][brick_slice]
+            else:
+                fi=self.bricks[bid]
+                with h5py.File(fi) as f:
+                    ds = f.require_dataset(str(bid),shape=self.brick_sizes, dtype='int16', chunks=True, fillvalue=-1)
+                    ret_vals = ds[brick_slice]
+
+
             ret_arr[ret_slice] = ret_vals
 
         ret_arr = ret_arr.squeeze()
@@ -202,4 +261,56 @@ class MultiDim(object):
 
         return ret_arr
 
+if __name__ == '__main__':
+    from argparse import ArgumentParser
+
+    parser = ArgumentParser(description="Bricking & Persistence Trials")
+    parser.add_argument('-p', '--persist', help='If HDF persistence should be used, otherwise uses numpy', action="store_true")
+
+    args = parser.parse_args()
+
+    md=MultiDim(use_hdf=args.persist)
+    val_arr = np.arange(100).reshape(10,10)
+
+    sl_list = []
+    # Single value slices
+    sl_list.append((0,1))
+    sl_list.append((9,3))
+    sl_list.append((3,8))
+    sl_list.append((8,7))
+
+    # List slices
+    sl_list.append(([1,2],2))
+    sl_list.append(([1,4],6))
+    sl_list.append(([6,9],3))
+    sl_list.append(([1,2,5,8],5))
+    sl_list.append((2,[2,5,6,9]))
+
+    # Slice slices
+    sl_list.append((slice(6,9,2),))
+    sl_list.append((slice(2,7),slice(3,8)))
+    sl_list.append((slice(1,None),slice(4,8)))
+    sl_list.append((slice(None),slice(None)))
+    sl_list.append((slice(2,8),slice(None)))
+    sl_list.append((slice(2,8),slice(3,6)))
+    sl_list.append((slice(None,None,3),slice(None,None,2)))
+    sl_list.append((slice(1,8,3),slice(3,None,2)))
+    sl_list.append((slice(3,None),slice(3,9,2)))
+
+    for sl in sl_list:
+        tstr = '*** Slice: {0} ***'.format(sl)
+        print tstr
+        md.reset_bricks()
+        vals = val_arr[sl]
+        md.put_values_to_bricks(sl, vals)
+        vo=md.get_values_from_bricks(sl)
+        eq = np.array_equal(vals, vo)
+        print "Equal" if eq else "Not Equal!!"
+        if not eq:
+            print 'vals in:\n%s' % (vals,)
+            print 'vals out:\n%s' % (vo,)
+        #    print 'bricks:'
+        #    for b in md.bricks:
+        #        print '{0}\n{1}'.format(b,md.bricks[b])
+        print '*'*len(tstr)
 
