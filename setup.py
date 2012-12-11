@@ -27,7 +27,8 @@ setup(  name = 'coverage-model',
     dependency_links = [
         'http://sddevrepo.oceanobservatories.org/releases/',
         'https://github.com/ooici/pyon/tarball/master#egg=pyon',
-        'https://github.com/nimbusproject/pidantic/tarball/master#egg=pidantic-0.2'
+        'https://github.com/nimbusproject/pidantic/tarball/master#egg=pidantic-0.2',
+        'https://github.com/downloads/lukecampbell/h5py/h5py-2.1.1.tar.gz#egg=h5py',
     ],
     test_suite = '',
     install_requires = [
@@ -36,7 +37,7 @@ setup(  name = 'coverage-model',
         'gevent_zeromq==0.2.5',
         'netCDF4>=0.9.8',
         'numexpr==2.0.1',
-        'h5py==2.1.0',
+        'h5py==2.1.1',
         'rtree==0.7.0',
         'pidantic',
 #        'scipy==0.10.1',
