@@ -701,26 +701,26 @@ class PersistedStorage(AbstractStorage):
                     f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=True, fillvalue=fv)
 
             #region FOR TESTING WITHOUT OUT-OF-BAND WRITES - IN-LINE WRITING OF VALUES
-#            if data_type == '|O8':
-#                data_type = h5py.special_dtype(vlen=str)
-#                # TODO: Uncomment this to properly turn 0 & 1 chunking into True
-#            if 0 in cD or 1 in cD:
-#                cD = True
-#            with h5py.File(brick_file_path, 'a') as f:
-#                # TODO: Due to usage concerns, currently locking chunking to "auto"
-#                f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=True, fillvalue=fv)
-#            if isinstance(brick_slice, tuple):
-#                brick_slice = list(brick_slice)
-#
-#            f[brick_guid].__setitem__(*brick_slice, val=v)
+            if data_type == '|O8':
+                data_type = h5py.special_dtype(vlen=str)
+                # TODO: Uncomment this to properly turn 0 & 1 chunking into True
+            if 0 in cD or 1 in cD:
+                cD = True
+            with h5py.File(brick_file_path, 'a') as f:
+                # TODO: Due to usage concerns, currently locking chunking to "auto"
+                f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=True, fillvalue=fv)
+                if isinstance(brick_slice, tuple):
+                    brick_slice = list(brick_slice)
+
+                f[brick_guid].__setitem__(*brick_slice, val=v)
             #endregion
 
-            if self.auto_flush:
-                # Immediately submit work to the dispatcher
-                self.brick_dispatcher.put_work(work_key, work_metrics, work)
-            else:
-                # Queue the work for later flushing
-                self._queue_work(work_key, work_metrics, work)
+#            if self.auto_flush:
+#                # Immediately submit work to the dispatcher
+#                self.brick_dispatcher.put_work(work_key, work_metrics, work)
+#            else:
+#                # Queue the work for later flushing
+#                self._queue_work(work_key, work_metrics, work)
 
     def _calc_slices(self, slice_, brick_guid, value, val_origin, brick_origin_offset=0):
         """
