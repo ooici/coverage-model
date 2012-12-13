@@ -61,11 +61,12 @@ class PersistenceLayer(object):
         if self.master_manager.is_dirty():
             self.master_manager.flush()
 
-        if self.mode == 'r':
-            self.brick_dispatcher = None
-        else:
-            self.brick_dispatcher = BrickWriterDispatcher(self.write_failure_callback)
-            self.brick_dispatcher.run()
+#        if self.mode == 'r':
+#            self.brick_dispatcher = None
+#        else:
+#            self.brick_dispatcher = BrickWriterDispatcher(self.write_failure_callback)
+#            self.brick_dispatcher.run()
+        self.brick_dispatcher = None
 
         self._closed = False
 
@@ -393,8 +394,16 @@ class PersistenceLayer(object):
         return False
 
     def get_dirty_values_async_result(self):
+        return_now = False
         if self.mode == 'r':
             log.warn('PersistenceLayer not open for writing: mode=%s', self.mode)
+            return_now = True
+
+        if self.brick_dispatcher is None:
+            log.debug('\'brick_dispatcher\' is None')
+            return_now = True
+
+        if return_now:
             from gevent.event import AsyncResult
             ret = AsyncResult()
             ret.set(True)
@@ -447,7 +456,8 @@ class PersistenceLayer(object):
         if not self._closed:
             if self.mode != 'r':
                 self.flush()
-                self.brick_dispatcher.shutdown(force=force, timeout=timeout)
+                if self.brick_dispatcher is not None:
+                    self.brick_dispatcher.shutdown(force=force, timeout=timeout)
 
         self._closed = True
 
@@ -689,21 +699,19 @@ class PersistedStorage(AbstractStorage):
             log.trace('Work metrics: %s', work_metrics)
             log.trace('Work[0]: %s', work[0])
 
-            # If the brick file doesn't exist, 'touch' it to make sure it's immediately available
-            if not os.path.exists(brick_file_path):
-                if data_type == '|O8':
-                    data_type = h5py.special_dtype(vlen=str)
-                # TODO: Uncomment this to properly turn 0 & 1 chunking into True
-                if 0 in cD or 1 in cD:
-                    cD = True
-                with h5py.File(brick_file_path, 'a') as f:
-                    # TODO: Due to usage concerns, currently locking chunking to "auto"
-                    f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=True, fillvalue=fv)
+#            # If the brick file doesn't exist, 'touch' it to make sure it's immediately available
+#            if not os.path.exists(brick_file_path):
+#                if data_type == '|O8':
+#                    data_type = h5py.special_dtype(vlen=str)
+#                if 0 in cD or 1 in cD:
+#                    cD = True
+#                with h5py.File(brick_file_path, 'a') as f:
+#                    # TODO: Due to usage concerns, currently locking chunking to "auto"
+#                    f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=True, fillvalue=fv)
 
             #region FOR TESTING WITHOUT OUT-OF-BAND WRITES - IN-LINE WRITING OF VALUES
             if data_type == '|O8':
                 data_type = h5py.special_dtype(vlen=str)
-                # TODO: Uncomment this to properly turn 0 & 1 chunking into True
             if 0 in cD or 1 in cD:
                 cD = True
             with h5py.File(brick_file_path, 'a') as f:
