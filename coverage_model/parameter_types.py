@@ -24,7 +24,10 @@ from coverage_model.numexpr_utils import digit_match, is_well_formed_where, sing
 import numpy as np
 import re
 
-UNSUPPORTED_DTYPES = set([np.dtype('float16'), np.dtype('complex'), np.dtype('complex64'), np.dtype('complex128'), np.dtype('complex256')])
+UNSUPPORTED_DTYPES = {np.dtype('float16'), np.dtype('complex'), np.dtype('complex64'), np.dtype('complex128')}
+import platform
+if platform.uname()[-2] != 'armv7l':
+    UNSUPPORTED_DTYPES.add(np.dtype('complex256'))
 
 #==================
 # Abstract Parameter Type Objects
