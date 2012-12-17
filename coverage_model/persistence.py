@@ -49,7 +49,7 @@ class PersistenceLayer(object):
         self.master_manager = MasterManager(root, guid, name=name, tdom=tdom, sdom=sdom, global_bricking_scheme=bricking_scheme)
 
         self.mode = mode
-        if not hasattr(self.master_manager, 'auto_flus_values'):
+        if not hasattr(self.master_manager, 'auto_flush_values'):
             self.master_manager.auto_flush_values = auto_flush_values
         if not hasattr(self.master_manager, 'inline_data_writes'):
             self.master_manager.inline_data_writes = inline_data_writes

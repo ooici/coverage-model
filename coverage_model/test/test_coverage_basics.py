@@ -6,6 +6,7 @@
 @author James Case
 @brief Test cases for the coverage_model module
 """
+import random
 import os
 import shutil
 import tempfile
@@ -710,28 +711,36 @@ class TestCoverageModelBasicsInt(TestCase):
         # Loads data into ptypescov parameters, returns SimplexCoverage
 
         # Insert some timesteps (automatically expands other arrays)
-        scov.insert_timesteps(2000)
+        nt = 2000
+        scov.insert_timesteps(nt)
 
         # Add data for each parameter
-        scov.set_parameter_values('quantity_time', value=np.arange(2000))
+        scov.set_parameter_values('quantity_time', value=np.arange(nt))
         scov.set_parameter_values('const_int', value=45.32) # Set a constant directly, with incorrect data type (fixed under the hood)
         scov.set_parameter_values('const_float', value=make_range_expr(-71.11)) # Set with a properly formed constant expression
-        scov.set_parameter_values('quantity', value=np.random.random_sample(2000)*(26-23)+23)
+        scov.set_parameter_values('quantity', value=np.random.random_sample(nt)*(26-23)+23)
 
         #    # Setting three range expressions such that indices 0-2 == 10, 3-7 == 15 and >=8 == 20
         #    scov.set_parameter_values('function', value=make_range_expr(10, 0, 3, min_incl=True, max_incl=False, else_val=-999.9))
         #    scov.set_parameter_values('function', value=make_range_expr(15, 3, 8, min_incl=True, max_incl=False, else_val=-999.9))
         #    scov.set_parameter_values('function', value=make_range_expr(20, 8, min_incl=True, max_incl=False, else_val=-999.9))
 
+        cat = {0:'turkey',1:'duck',2:'chicken',99:'None'}
         arrval = []
         recval = []
+        catval = []
+        catkeys = cat.keys()
         letts='abcdefghijklmnopqrstuvwxyz'
-        for x in xrange(len(letts)):
-            arrval.append(np.random.bytes(np.random.randint(1,len(letts)))) # One value (which is a byte string) for each member of the domain
+        while len(letts) < nt:
+            letts += 'abcdefghijklmnopqrstuvwxyz'
+        for x in xrange(nt):
+            arrval.append(np.random.bytes(np.random.randint(1,20))) # One value (which is a byte string) for each member of the domain
             d = {letts[x]: letts[x:]}
             recval.append(d) # One value (which is a dict) for each member of the domain
+            catval.append(random.choice(catkeys))
         scov.set_parameter_values('array', value=arrval)
         scov.set_parameter_values('record', value=recval)
+        scov.set_parameter_values('category', value=catval)
         scov.get_dirty_values_async_result().get(timeout=30)
         return scov
 
@@ -785,8 +794,12 @@ class TestCoverageModelBasicsInt(TestCase):
         rec_ctxt.long_name = 'example of a parameter of type RecordType, will be filled with dictionaries'
         pdict.add_context(rec_ctxt)
 
+        cat = {0:'turkey',1:'duck',2:'chicken',99:'None'}
+        cat_ctxt = ParameterContext('category', param_type=CategoryType(categories=cat), variability=VariabilityEnum.TEMPORAL)
+        pdict.add_context(cat_ctxt)
+
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-        scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory)
+        scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, in_memory_storage=in_memory)
 
         return scov
 
@@ -877,7 +890,7 @@ class TestCoverageModelBasicsInt(TestCase):
         sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-        scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory)
+        scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, in_memory_storage=in_memory)
         return scov
 
     def _make_oneparamcov(self, save_coverage=False, in_memory=False):
@@ -900,7 +913,7 @@ class TestCoverageModelBasicsInt(TestCase):
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
         bricking_scheme = {'brick_size':1000,'chunk_size':500}
-        scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory_storage=in_memory, bricking_scheme=bricking_scheme)
+        scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, in_memory_storage=in_memory, bricking_scheme=bricking_scheme)
 
         # Insert some timesteps (automatically expands other arrays)
         nt = 2000
@@ -948,7 +961,7 @@ class TestCoverageModelBasicsInt(TestCase):
         pdict.add_context(arr2_ctxt)
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-        scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', pdict, temporal_domain=tdom, in_memory_storage=in_memory)
+        scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, in_memory_storage=in_memory)
 
         # Insert some timesteps (automatically expands other arrays)
         scov.insert_timesteps(10)
@@ -1005,6 +1018,6 @@ class TestCoverageModelBasicsInt(TestCase):
         sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-        scov = SimplexCoverage(self.working_dir, create_guid(), 'empty sample coverage_model', pdict, tdom, sdom, in_memory)
+        scov = SimplexCoverage(self.working_dir, create_guid(), 'empty sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, in_memory_storage=in_memory)
 
         return scov
