@@ -28,7 +28,7 @@ class PersistenceLayer(object):
     The PersistenceLayer class manages the disk-level storage (and retrieval) of the Coverage Model using HDF5 files.
     """
 
-    def __init__(self, root, guid, name=None, tdom=None, sdom=None, mode=None, bricking_scheme=None, auto_flush_values=True, **kwargs):
+    def __init__(self, root, guid, name=None, tdom=None, sdom=None, mode=None, bricking_scheme=None, inline_data_writes=True, auto_flush_values=True, **kwargs):
         """
         Constructor for PersistenceLayer
 
@@ -49,7 +49,10 @@ class PersistenceLayer(object):
         self.master_manager = MasterManager(root, guid, name=name, tdom=tdom, sdom=sdom, global_bricking_scheme=bricking_scheme)
 
         self.mode = mode
-        self.auto_flush_values = auto_flush_values
+        if not hasattr(self.master_manager, 'auto_flush_values'):
+            self.master_manager.auto_flush_values = auto_flush_values
+        if not hasattr(self.master_manager, 'inline_data_writes'):
+            self.master_manager.inline_data_writes = inline_data_writes
         self.value_list = {}
 
         self.parameter_metadata = {} # {parameter_name: [brick_list, parameter_domains, rtree]}
@@ -61,7 +64,7 @@ class PersistenceLayer(object):
         if self.master_manager.is_dirty():
             self.master_manager.flush()
 
-        if self.mode == 'r':
+        if self.mode == 'r' or self.inline_data_writes:
             self.brick_dispatcher = None
         else:
             self.brick_dispatcher = BrickWriterDispatcher(self.write_failure_callback)
@@ -153,7 +156,7 @@ class PersistenceLayer(object):
         pm.tree_rank = tree_rank
         pm.brick_tree = brick_tree
 
-        v = PersistedStorage(pm, self.brick_dispatcher, dtype=parameter_context.param_type.storage_encoding, fill_value=parameter_context.param_type.fill_value, mode=self.mode, auto_flush=self.auto_flush_values)
+        v = PersistedStorage(pm, self.brick_dispatcher, dtype=parameter_context.param_type.storage_encoding, fill_value=parameter_context.param_type.fill_value, mode=self.mode, inline_data_writes=self.inline_data_writes, auto_flush=self.auto_flush_values)
         self.value_list[parameter_name] = v
 
         self.expand_domain(parameter_context)
@@ -393,8 +396,16 @@ class PersistenceLayer(object):
         return False
 
     def get_dirty_values_async_result(self):
+        return_now = False
         if self.mode == 'r':
             log.warn('PersistenceLayer not open for writing: mode=%s', self.mode)
+            return_now = True
+
+        if self.brick_dispatcher is None:
+            log.debug('\'brick_dispatcher\' is None')
+            return_now = True
+
+        if return_now:
             from gevent.event import AsyncResult
             ret = AsyncResult()
             ret.set(True)
@@ -447,7 +458,8 @@ class PersistenceLayer(object):
         if not self._closed:
             if self.mode != 'r':
                 self.flush()
-                self.brick_dispatcher.shutdown(force=force, timeout=timeout)
+                if self.brick_dispatcher is not None:
+                    self.brick_dispatcher.shutdown(force=force, timeout=timeout)
 
         self._closed = True
 
@@ -456,7 +468,7 @@ class PersistedStorage(AbstractStorage):
     A concrete implementation of AbstractStorage utilizing the ParameterManager and brick dispatcher
     """
 
-    def __init__(self, parameter_manager, brick_dispatcher, dtype=None, fill_value=None, mode=None, auto_flush=True, **kwargs):
+    def __init__(self, parameter_manager, brick_dispatcher, dtype=None, fill_value=None, mode=None, inline_data_writes=True, auto_flush=True, **kwargs):
         """
         Constructor for PersistedStorage
 
@@ -485,6 +497,7 @@ class PersistedStorage(AbstractStorage):
         self._pending_values = {}
         self.brick_dispatcher = brick_dispatcher
         self.mode = mode
+        self.inline_data_writes = inline_data_writes
         self.auto_flush = auto_flush
 
     def has_dirty_values(self):
@@ -689,38 +702,35 @@ class PersistedStorage(AbstractStorage):
             log.trace('Work metrics: %s', work_metrics)
             log.trace('Work[0]: %s', work[0])
 
-            # If the brick file doesn't exist, 'touch' it to make sure it's immediately available
-            if not os.path.exists(brick_file_path):
+            if self.inline_data_writes:
                 if data_type == '|O8':
                     data_type = h5py.special_dtype(vlen=str)
-                # TODO: Uncomment this to properly turn 0 & 1 chunking into True
                 if 0 in cD or 1 in cD:
                     cD = True
                 with h5py.File(brick_file_path, 'a') as f:
                     # TODO: Due to usage concerns, currently locking chunking to "auto"
                     f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=True, fillvalue=fv)
+                    if isinstance(brick_slice, tuple):
+                        brick_slice = list(brick_slice)
 
-            #region FOR TESTING WITHOUT OUT-OF-BAND WRITES - IN-LINE WRITING OF VALUES
-#            if data_type == '|O8':
-#                data_type = h5py.special_dtype(vlen=str)
-#                # TODO: Uncomment this to properly turn 0 & 1 chunking into True
-#            if 0 in cD or 1 in cD:
-#                cD = True
-#            with h5py.File(brick_file_path, 'a') as f:
-#                # TODO: Due to usage concerns, currently locking chunking to "auto"
-#                f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=True, fillvalue=fv)
-#            if isinstance(brick_slice, tuple):
-#                brick_slice = list(brick_slice)
-#
-#            f[brick_guid].__setitem__(*brick_slice, val=v)
-            #endregion
-
-            if self.auto_flush:
-                # Immediately submit work to the dispatcher
-                self.brick_dispatcher.put_work(work_key, work_metrics, work)
+                    f[brick_guid].__setitem__(*brick_slice, val=v)
             else:
-                # Queue the work for later flushing
-                self._queue_work(work_key, work_metrics, work)
+                # If the brick file doesn't exist, 'touch' it to make sure it's immediately available
+                if not os.path.exists(brick_file_path):
+                    if data_type == '|O8':
+                        data_type = h5py.special_dtype(vlen=str)
+                    if 0 in cD or 1 in cD:
+                        cD = True
+                    with h5py.File(brick_file_path, 'a') as f:
+                        # TODO: Due to usage concerns, currently locking chunking to "auto"
+                        f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=True, fillvalue=fv)
+
+                if self.auto_flush:
+                    # Immediately submit work to the dispatcher
+                    self.brick_dispatcher.put_work(work_key, work_metrics, work)
+                else:
+                    # Queue the work for later flushing
+                    self._queue_work(work_key, work_metrics, work)
 
     def _calc_slices(self, slice_, brick_guid, value, val_origin, brick_origin_offset=0):
         """
