@@ -1,10 +1,5 @@
 [run]
-branch = True
 source = coverage_model
-include = coverage_model/*
-
-[report]
-ignore_errors = True
 
 [html]
-directory = code_coverage_results
+directory = coverage_results
