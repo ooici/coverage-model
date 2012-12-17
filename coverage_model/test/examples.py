@@ -146,7 +146,7 @@ def param_dict_compare():
     print "Returning: pdict_1, pdict_2, pdict_3, pdict_4"
     return pdict_1, pdict_2, pdict_3, pdict_4
 
-def samplecov(save_coverage=False, in_memory=False):
+def samplecov(save_coverage=False, in_memory=False, inline_data_writes=True):
     # Instantiate a ParameterDictionary
     pdict = ParameterDictionary()
 
@@ -182,7 +182,7 @@ def samplecov(save_coverage=False, in_memory=False):
     sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory)
+    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory)
 
     # Insert some timesteps (automatically expands other arrays)
     nt = 30
@@ -204,7 +204,7 @@ def samplecov(save_coverage=False, in_memory=False):
 
     return scov
 
-def samplecov2(save_coverage=False, in_memory=False):
+def samplecov2(save_coverage=False, in_memory=False, inline_data_writes=True):
     # Instantiate a ParameterDictionary
     pdict = ParameterDictionary()
 
@@ -241,7 +241,7 @@ def samplecov2(save_coverage=False, in_memory=False):
     sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory)
+    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory)
 
     # Insert some timesteps (automatically expands other arrays)
 #    scov.insert_timesteps(10)
@@ -262,7 +262,7 @@ def samplecov2(save_coverage=False, in_memory=False):
 
     return scov
 
-def manyparamcov(save_coverage=False, in_memory=False):
+def manyparamcov(save_coverage=False, in_memory=False, inline_data_writes=True):
     # Instantiate a ParameterDictionary
     pdict = ParameterDictionary()
 
@@ -285,7 +285,7 @@ def manyparamcov(save_coverage=False, in_memory=False):
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
     bricking_scheme = {'brick_size':1000,'chunk_size':500}
-    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory, bricking_scheme=bricking_scheme)
+    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory, bricking_scheme=bricking_scheme)
 
     # Insert some timesteps (automatically expands other arrays)
 #    nt = 1000
@@ -299,7 +299,7 @@ def manyparamcov(save_coverage=False, in_memory=False):
 
     return scov
 
-def oneparamcov(save_coverage=False, in_memory=False):
+def oneparamcov(save_coverage=False, in_memory=False, inline_data_writes=True):
     # Instantiate a ParameterDictionary
     pdict = ParameterDictionary()
 
@@ -319,7 +319,7 @@ def oneparamcov(save_coverage=False, in_memory=False):
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
     bricking_scheme = {'brick_size':1000,'chunk_size':500}
-    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory, bricking_scheme=bricking_scheme)
+    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory, bricking_scheme=bricking_scheme)
 
     # Insert some timesteps (automatically expands other arrays)
     nt = 1000
@@ -333,7 +333,7 @@ def oneparamcov(save_coverage=False, in_memory=False):
 
     return scov
 
-def oneparamcov_noautoflush(save_coverage=False, in_memory=False):
+def oneparamcov_noautoflush(save_coverage=False, in_memory=False, inline_data_writes=True):
     # Instantiate a ParameterDictionary
     pdict = ParameterDictionary()
 
@@ -352,7 +352,7 @@ def oneparamcov_noautoflush(save_coverage=False, in_memory=False):
     sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory, auto_flush_values=False)
+    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory, auto_flush_values=False)
 
     # Insert some timesteps (automatically expands other arrays)
     nt = 100
@@ -366,7 +366,7 @@ def oneparamcov_noautoflush(save_coverage=False, in_memory=False):
 
     return scov
 
-def emptysamplecov(save_coverage=False, in_memory=False):
+def emptysamplecov(save_coverage=False, in_memory=False, inline_data_writes=True):
     # Instantiate a ParameterDictionary
     pdict = ParameterDictionary()
 
@@ -403,14 +403,14 @@ def emptysamplecov(save_coverage=False, in_memory=False):
     sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('test_data', create_guid(), 'empty sample coverage_model', pdict, tdom, sdom, in_memory)
+    scov = SimplexCoverage('test_data', create_guid(), 'empty sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory)
 
     if in_memory and save_coverage:
         SimplexCoverage.pickle_save(scov, 'test_data/emptysample.cov')
 
     return scov
 
-def ptypescov(save_coverage=False, in_memory=False):
+def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True):
     # Construct temporal and spatial Coordinate Reference System objects
     tcrs = CRS([AxisTypeEnum.TIME])
     scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
@@ -462,7 +462,7 @@ def ptypescov(save_coverage=False, in_memory=False):
     pdict.add_context(rec_ctxt)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory)
+    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory)
 
     # Insert some timesteps (automatically expands other arrays)
     nt = 20
@@ -500,7 +500,7 @@ def ptypescov(save_coverage=False, in_memory=False):
 
     return scov
 
-def nospatialcov(save_coverage=False, in_memory=False):
+def nospatialcov(save_coverage=False, in_memory=False, inline_data_writes=True):
     # Construct temporal and spatial Coordinate Reference System objects
     tcrs = CRS([AxisTypeEnum.TIME])
 
@@ -534,7 +534,7 @@ def nospatialcov(save_coverage=False, in_memory=False):
     pdict.add_context(arr2_ctxt)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', pdict, temporal_domain=tdom, in_memory_storage=in_memory)
+    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory)
 
     # Insert some timesteps (automatically expands other arrays)
     nt = 20
@@ -558,7 +558,7 @@ def nospatialcov(save_coverage=False, in_memory=False):
 
     return scov
 
-def ncgrid2cov(save_coverage=False, in_memory=False):
+def ncgrid2cov(save_coverage=False, in_memory=False, inline_data_writes=True):
     if True:
         raise NotImplementedError('Multidimensional support is not available at this time')
     # Open the netcdf dataset
@@ -603,7 +603,7 @@ def ncgrid2cov(save_coverage=False, in_memory=False):
     sdom = GridDomain(GridShape('spatial', [34,57,89]), scrs, MutabilityEnum.IMMUTABLE) # 3d spatial topology (grid)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('test_data', create_guid(), 'sample grid coverage_model', pdict, tdom, sdom, in_memory)
+    scov = SimplexCoverage('test_data', create_guid(), 'sample grid coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory)
 
     # Insert the timesteps (automatically expands other arrays)
     tvar=ds.variables['time']
@@ -633,7 +633,7 @@ def ncgrid2cov(save_coverage=False, in_memory=False):
 
     return scov
 
-def ncstation2cov(save_coverage=False, in_memory=False):
+def ncstation2cov(save_coverage=False, in_memory=False, inline_data_writes=True):
     # Open the netcdf dataset
     ds = Dataset('test_data/usgs.nc')
     # Itemize the variable names that we want to include in the coverage
@@ -680,7 +680,7 @@ def ncstation2cov(save_coverage=False, in_memory=False):
     sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 1d spatial topology (station/trajectory)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('test_data', create_guid(), 'sample station coverage_model', pdict, tdom, sdom, in_memory)
+    scov = SimplexCoverage('test_data', create_guid(), 'sample station coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory)
 
     # Insert the timesteps (automatically expands other arrays)
     tvar=ds.variables['time']
@@ -729,7 +729,7 @@ def benchmark_value_setting(num_params=10, num_insertions=100, repeat=1, bulk_ts
     full_time = time.time()
     for r in xrange(repeat):
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-        cov = SimplexCoverage('test_data', create_guid(), 'empty sample coverage_model', pdict, tdom, sdom)
+        cov = SimplexCoverage('test_data', create_guid(), 'empty sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom)
 
         rep_time = time.time()
         if bulk_ts_insert:
