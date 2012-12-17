@@ -204,7 +204,7 @@ class SimplexCoverage(AbstractCoverage):
     of the AbstractParameterValue class.
 
     """
-    def __init__(self, root_dir, persistence_guid, name=None, parameter_dictionary=None, temporal_domain=None, spatial_domain=None, mode=None, in_memory_storage=False, bricking_scheme=None, auto_flush_values=True):
+    def __init__(self, root_dir, persistence_guid, name=None, parameter_dictionary=None, temporal_domain=None, spatial_domain=None, mode=None, in_memory_storage=False, bricking_scheme=None, inline_data_writes=True, auto_flush_values=True):
         """
         Constructor for SimplexCoverage
 
@@ -244,12 +244,15 @@ class SimplexCoverage(AbstractCoverage):
 
                 self._in_memory_storage = False
 
+                auto_flush_values = self._persistence_layer.auto_flush_values
+                inline_data_writes = self._persistence_layer.inline_data_writes
+
                 from coverage_model.persistence import PersistedStorage
                 for parameter_name in self._persistence_layer.parameter_metadata.keys():
                     md = self._persistence_layer.parameter_metadata[parameter_name]
                     pc = md.parameter_context
                     self._range_dictionary.add_context(pc)
-                    s = PersistedStorage(md, self._persistence_layer.brick_dispatcher, dtype=pc.param_type.storage_encoding, fill_value=pc.param_type.fill_value, mode=self.mode)
+                    s = PersistedStorage(md, self._persistence_layer.brick_dispatcher, dtype=pc.param_type.storage_encoding, fill_value=pc.param_type.fill_value, mode=self.mode, inline_data_writes=inline_data_writes, auto_flush=auto_flush_values)
                     self._range_value[parameter_name] = get_value_class(param_type=pc.param_type, domain_set=pc.dom, storage=s)
 
             if name is None or parameter_dictionary is None:
@@ -300,7 +303,7 @@ class SimplexCoverage(AbstractCoverage):
                 if self._in_memory_storage:
                     self._persistence_layer = InMemoryPersistenceLayer()
                 else:
-                    self._persistence_layer = PersistenceLayer(root_dir, persistence_guid, name=name, tdom=temporal_domain, sdom=spatial_domain, mode=self.mode, bricking_scheme=self._bricking_scheme, auto_flush_values=auto_flush_values)
+                    self._persistence_layer = PersistenceLayer(root_dir, persistence_guid, name=name, tdom=temporal_domain, sdom=spatial_domain, mode=self.mode, bricking_scheme=self._bricking_scheme, inline_data_writes=inline_data_writes, auto_flush_values=auto_flush_values)
 
                 for o, pc in parameter_dictionary.itervalues():
                     self._append_parameter(pc)
