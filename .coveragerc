@@ -1,5 +1,6 @@
 [run]
 source = coverage_model
-
+omit =
+    */test/*
 [html]
 directory = coverage_results
