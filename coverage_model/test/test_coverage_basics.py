@@ -504,6 +504,20 @@ class TestCoverageModelBasicsInt(TestCase):
         pc2 = pc1._fromdict(pc1.dump())
         self.assertEquals(pc1, pc2)
 
+    def test_param_dict_from_dict(self):
+        pdict_1 = ParameterDictionary()
+        pdict_1.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')), is_temporal=True)
+        pdict_1.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
+        pdict_1.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
+        pdict_1.add_context(ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius')))
+        new_pdict = ParameterDictionary._fromdict(pdict_1._todict())
+        self.assertTrue(pdict_1 == new_pdict)
+
+    def test_parameter_properties(self):
+        pc = ParameterContext('pcname')
+        self.assertEquals(pc.name, 'pcname')
+        self.assertFalse(pc.is_coordinate)
+
     def test_params(self):
         # Tests ParameterDictionary and ParameterContext creation
         # Instantiate a ParameterDictionary
@@ -573,6 +587,47 @@ class TestCoverageModelBasicsInt(TestCase):
         log.debug('Should be unequal and compare with both \'temp\' and \'temp2\' in \'temp\' and nothing in the None list')
         self.assertNotEquals(pdict_1,  pdict_4)
         self.assertEquals(pdict_1.compare(pdict_4), {'lat': ['lat'], 'lon': ['lon'], None: [], 'temp': ['temp', 'temp2'], 'time': ['time']})
+
+    def test_get_all_data_metadata(self):
+        scov = self._make_samplecov(in_memory=True, in_line=True, auto_flush=True)
+        res = self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='time')
+        scov.get_data_bounds(parameter_name='time')
+        scov.get_data_bounds_by_axis(axis=AxisTypeEnum.TIME)
+        scov.get_data_extents(parameter_name='time')
+        scov.get_data_extents_by_axis(axis=AxisTypeEnum.TIME)
+        scov.get_data_size(parameter_name='time', slice_=None, in_bytes=False)
+
+    def test_persistence_variation1(self):
+        scov = self._make_samplecov(in_memory=False, in_line=False, auto_flush=True)
+        res = self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='all')
+
+    def test_persistence_variation2(self):
+        scov = self._make_samplecov(in_memory=True, in_line=False, auto_flush=True)
+        res = self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='all')
+
+    def test_persistence_variation3(self):
+        scov = self._make_samplecov(in_memory=True, in_line=True, auto_flush=True)
+        res = self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='all')
+
+    def test_persistence_variation4(self):
+        scov = self._make_samplecov(in_memory=False, in_line=True, auto_flush=True)
+        res = self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='all')
+
+    def test_persistence_variation5(self):
+        scov = self._make_samplecov(in_memory=False, in_line=False, auto_flush=True, mode='w')
+        cov_info_str = scov.info
+        self.assertIsInstance(cov_info_str, str)
+
+    def test_run_test_dispatcher(self):
+        from coverage_model.brick_dispatch import run_test_dispatcher
+        disp=run_test_dispatcher(work_count=20, num_workers=1)
+        self.assertTrue(disp.is_single_worker)
+        self.assertEquals(disp.num_workers, 1)
+        self.assertFalse(disp.has_active_work())
+        self.assertFalse(disp.has_pending_work())
+        self.assertFalse(disp.has_stashed_work())
+        self.assertFalse(disp.is_dirty())
+        self.assertTrue(disp.is_single_worker)
 
     def test_pickle_problems_in_memory(self):
         # Tests saving and loading with both successful and unsuccessful test scenarios
@@ -853,7 +908,7 @@ class TestCoverageModelBasicsInt(TestCase):
         sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
         return sdom
 
-    def _make_samplecov(self, save_coverage=False, in_memory=False):
+    def _make_samplecov(self, in_memory=False, in_line=False, auto_flush=True, mode=None):
         # Instantiate a ParameterDictionary
         pdict = ParameterDictionary()
 
@@ -890,7 +945,8 @@ class TestCoverageModelBasicsInt(TestCase):
         sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-        scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, in_memory_storage=in_memory)
+        #scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, in_memory_storage=in_memory)
+        scov = SimplexCoverage(self.working_dir, create_guid(), name='sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, mode=mode, in_memory_storage=in_memory, bricking_scheme=None, inline_data_writes=in_line, auto_flush_values=auto_flush)
         return scov
 
     def _make_oneparamcov(self, save_coverage=False, in_memory=False):
