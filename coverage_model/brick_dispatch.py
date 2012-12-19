@@ -441,7 +441,10 @@ def run_test_dispatcher(work_count, num_workers=1):
     fv = -9999
     dtype = 'f'
 
-    disp = BrickWriterDispatcher(num_workers=num_workers, pidantic_dir='test_data/pid')
+    def fcb(message, work):
+        log.error('WORK DISCARDED!!!; %s: %s', message, work)
+
+    disp = BrickWriterDispatcher(fcb, num_workers=num_workers, pidantic_dir='test_data/pid')
     disp.run()
 
     def make_work():
