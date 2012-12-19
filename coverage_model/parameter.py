@@ -247,6 +247,8 @@ class ParameterDictionary(AbstractIdentifiable):
         if not isinstance(param_ctxt, ParameterContext):
             raise TypeError('param_ctxt must be a ParameterContext object')
 
+        # CBM TODO: Fix this logic - never reaches "param_ctxt.axis = None",
+        # that line and "if claims_time:" should replace the "raise NameError" which should be turned into a warning
         claims_time = param_ctxt.axis == AxisTypeEnum.TIME
         if is_temporal or claims_time:
             if self.temporal_parameter_name is None:
@@ -341,7 +343,7 @@ class ParameterDictionary(AbstractIdentifiable):
                 if isinstance(v, (tuple,list)) and len(v) == 2 and isinstance(v[0],int) and isinstance(v[1],dict) and 'cm_type' in v[1]:
                     pc = ParameterContext._fromdict(v[1])
                     ret._map[pc.name] = (v[0], pc)
-                elif isinstance(v, dict) and 'cm_type' in v:
+                elif isinstance(v, dict) and 'cm_type' in v: # CBM TODO: Don't think we ever get here?!
                     ms, cs = v['cm_type']
                     module = __import__(ms, fromlist=[cs])
                     classobj = getattr(module, cs)
