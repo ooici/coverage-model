@@ -672,8 +672,8 @@ class SimplexCoverage(AbstractCoverage):
         ret = {}
         for pn in self.__parameter_name_arg_to_params(parameter_name):
             ctxt = self._range_dictionary.get_context(pn)
+            fv = ctxt.fill_value
             if isinstance(ctxt.param_type, QuantityType) or isinstance(ctxt.param_type, ConstantType):
-                fv = ctxt.fill_value
                 varr = np.ma.masked_equal(self._range_value[pn][:], fv, copy=False)
                 r = (varr.min(), varr.max())
                 ret[pn] = tuple([fv if isinstance(x, np.ma.core.MaskedConstant) else x for x in r])

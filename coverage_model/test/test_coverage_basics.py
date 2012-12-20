@@ -758,7 +758,7 @@ class TestCoverageModelBasicsInt(TestCase):
 
         for param in param_list:
             scov.set_parameter_values(param, data, _slice)
-            scov.get_dirty_values_async_result().get(timeout=30)
+            scov.get_dirty_values_async_result().get(timeout=60)
             ret = scov.get_parameter_values(param, _slice)
         return (ret == data).all()
 
@@ -796,7 +796,7 @@ class TestCoverageModelBasicsInt(TestCase):
         scov.set_parameter_values('array', value=arrval)
         scov.set_parameter_values('record', value=recval)
         scov.set_parameter_values('category', value=catval)
-        scov.get_dirty_values_async_result().get(timeout=30)
+        scov.get_dirty_values_async_result().get(timeout=60)
         return scov
 
     def _make_ptypescov(self, save_coverage=False, in_memory=False):
@@ -1034,7 +1034,7 @@ class TestCoverageModelBasicsInt(TestCase):
             arr2val.append(np.random.random_sample(np.random.randint(1,10)))
         scov.set_parameter_values('array', value=arrval)
         scov.set_parameter_values('array2', value=arr2val)
-        scov.get_dirty_values_async_result().get(timeout=30)
+        scov.get_dirty_values_async_result().get(timeout=60)
         return scov
 
     def _make_emptysamplecov(self, save_coverage=False, in_memory=False):
