@@ -423,8 +423,11 @@ class BrickWriterDispatcher(object):
                 pass
 
 def run_test_dispatcher(work_count, num_workers=1):
+    # Set up temporary directories to save data
+    import shutil
+    BASE_DIR = tempfile.mkdtemp()
+    PIDANTIC_DIR = tempfile.mkdtemp()
 
-    BASE_DIR = 'test_data/masonry'
     WORK_KEYS = ['a','b','c','d','e']
 
     for x in [x for x in os.listdir(BASE_DIR) if x.endswith('.h5')]:
@@ -441,7 +444,10 @@ def run_test_dispatcher(work_count, num_workers=1):
     fv = -9999
     dtype = 'f'
 
-    disp = BrickWriterDispatcher(num_workers=num_workers, pidantic_dir='test_data/pid')
+    def fcb(message, work):
+        log.error('WORK DISCARDED!!!; %s: %s', message, work)
+
+    disp = BrickWriterDispatcher(fcb, num_workers=num_workers, pidantic_dir=PIDANTIC_DIR)
     disp.run()
 
     def make_work():
@@ -460,6 +466,10 @@ def run_test_dispatcher(work_count, num_workers=1):
             time.sleep(0.1)
 
     spawn(make_work)
+
+    # Remove temporary directories
+    shutil.rmtree(BASE_DIR)
+    shutil.rmtree(PIDANTIC_DIR)
 
     return disp
 
