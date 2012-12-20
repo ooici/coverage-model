@@ -14,6 +14,8 @@ import numpy as np
 import random
 from unittest import TestCase
 
+# TODO: Revisit this test class and expand/elaborate the tests
+
 @attr('UNIT',group='cov')
 class TestParameterValuesUnit(TestCase):
 
@@ -46,6 +48,9 @@ class TestParameterValuesUnit(TestCase):
         for x in xrange(num_rec):
             aval[x] = np.random.bytes(np.random.randint(1,20)) # One value (which is a byte string) for each member of the domain
 
+        self.assertIsInstance(aval[0], str)
+        self.assertTrue(1 <= len(aval[0]) <= 20)
+
     # RecordType
     def test_record_values(self):
         num_rec = 10
@@ -58,6 +63,8 @@ class TestParameterValuesUnit(TestCase):
         for x in xrange(num_rec):
             rval[x] = {letts[x]: letts[x:]} # One value (which is a dict) for each member of the domain
 
+        self.assertIsInstance(rval[0], dict)
+
     # ConstantType
     def test_constant_values(self):
         num_rec = 10
@@ -66,10 +73,10 @@ class TestParameterValuesUnit(TestCase):
         ctype = ptypes.ConstantType(ptypes.QuantityType(value_encoding=np.dtype('int32')))
         cval = cm.get_value_class(ctype, domain_set=dom)
         cval[0] = 200 # Doesn't matter what index (or indices) you assign this to - it's used everywhere!!
-        self.assertTrue(cval[0] == 200)
-        self.assertTrue(cval[7] == 200)
-        self.assertTrue(cval[2,9] == 200)
-        self.assertTrue(cval[(2,7,)] == 200)
+        self.assertEqual(cval[0], 200)
+        self.assertEqual(cval[7], 200)
+        self.assertEqual(cval[2,9], 200)
+        self.assertTrue(np.array_equal(cval[[2,7],], np.array([200,200], dtype='int32')))
 
     # CategoryType
     def test_category_values(self):
@@ -88,7 +95,7 @@ class TestParameterValuesUnit(TestCase):
         with self.assertRaises(IndexError):
             catval[20]
 
-        self.assertTrue(catval[0] == 'turkey' or 'duck' or 'chicken' or 'None')
+        self.assertTrue(catval[0] in cat.values())
 
     # FunctionType
     def test_function_values(self):
@@ -102,4 +109,6 @@ class TestParameterValuesUnit(TestCase):
         fval[:] = cm.make_range_expr(200, min=4, max=6, min_incl=True, else_val=-9999)
         fval[:] = cm.make_range_expr(300, min=6, else_val=-9999)
 
-        self.assertTrue(fval[0] == 100)
+        self.assertEqual(fval[0], 100)
+        self.assertEqual(fval[5], 200)
+        self.assertEqual(fval[9], 300)

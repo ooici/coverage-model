@@ -15,6 +15,8 @@ import numpy as np
 import random
 from unittest import TestCase
 
+# TODO: Revisit this test class and expand/elaborate the tests
+
 @attr('UNIT',group='cov')
 class TestParameterTypesUnit(TestCase):
 
