@@ -668,11 +668,18 @@ class SimplexCoverage(AbstractCoverage):
 
         @param parameter_name   A string parameter name; may be an iterable of such members
         """
-
+        from coverage_model import QuantityType, ConstantType
         ret = {}
         for pn in self.__parameter_name_arg_to_params(parameter_name):
-            v = self._range_value[pn][:]
-            ret[pn] = (np.min(v), np.max(v))
+            ctxt = self._range_dictionary.get_context(pn)
+            if isinstance(ctxt.param_type, QuantityType) or isinstance(ctxt.param_type, ConstantType):
+                fv = ctxt.fill_value
+                varr = np.ma.masked_equal(self._range_value[pn][:], fv, copy=False)
+                r = (varr.min(), varr.max())
+                ret[pn] = tuple([fv if isinstance(x, np.ma.core.MaskedConstant) else x for x in r])
+            else:
+                # CBM TODO: Sort out if this is an appropriate way to deal with non-numeric types
+                ret[pn] = (fv, fv)
 
         if len(ret) == 1:
             ret = ret.values()[0]
