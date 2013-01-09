@@ -1,29 +1,33 @@
 #!/usr/bin/env python
 
 if __name__ == "__main__":
-    import sys
     import os
     import shutil
     import re
 
+    from argparse import ArgumentParser
+    parser = ArgumentParser(description='Remove coverages from the default or specified directory')
+    parser.add_argument('-v', '--verbose', help='Verbose output', action='store_true')
+    parser.add_argument('loc', help='Location to remove coverages from', nargs='?', default=os.path.dirname(os.path.realpath(__file__)))
+
     guid_match = r'^\w{8}-\w{4}-\w{4}-\w{4}-\w{12}'
 
-    if len(sys.argv) > 1:
-        d = sys.argv[1]
-    else:
-        d = os.path.dirname(os.path.realpath(__file__))
+    args = parser.parse_args()
+    loc = os.path.realpath(args.loc)
 
     pths=[]
-    for x in [x for x in os.listdir(d) if re.match(guid_match, x) is not None]:
-        pt=os.path.join(d,x)
+    for x in [x for x in os.listdir(loc) if re.match(guid_match, x) is not None]:
+        pt=os.path.join(loc,x)
         if os.path.isdir(pt) and '{0}_master.hdf5'.format(x) in os.listdir(pt):
             pths.append(pt)
     
     if len(pths)==0:
-        print 'No coverages found in {0}'.format(d)
+        print 'No coverages found in \'{0}\''.format(loc)
     else:
+        print 'Removing {0} coverages from \'{1}\''.format(len(pths), loc)
         for p in pths:
-            print "Removing: %s" % p
+            if args.verbose:
+                print "Removing: %s" % p
             if os.path.isdir(p):
                 shutil.rmtree(p)
             else:
