@@ -168,3 +168,31 @@ def fix_slice(slice_, shape):
 
     # Finally, make it a tuple
     return tuple(slice_)
+
+def slice_len(slice_, shape):
+    '''
+    Returns a list of sizes of for each dimension
+    @param slice_       A slice, integer or list of indices
+    @param shape        The shape of the data
+    '''
+    fixed_slice = fix_slice(slice_, shape)
+
+    slice_lengths = []
+
+    for s,shape in zip(fixed_slice, shape):
+        if isinstance(s,slice):
+            start, stop, stride = s.indices(shape)
+            arr_len = (stop - start)/stride
+        elif isinstance(s, list):
+            arr_len = len(s)
+        elif isinstance(s, int):
+            arr_len = 1
+        else:
+            raise TypeError('Unsupported slice method') # TODO: Better error message
+        
+        slice_lengths.append(arr_len)
+
+    return tuple(slice_lengths)  
+
+
+

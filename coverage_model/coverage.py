@@ -455,7 +455,7 @@ class SimplexCoverage(AbstractCoverage):
         lst.sort()
         return lst
 
-    def insert_timesteps(self, count, origin=None):
+    def insert_timesteps(self, count, origin=None, oob=True):
         """
         Insert count # of timesteps beginning at the origin
 
@@ -464,6 +464,7 @@ class SimplexCoverage(AbstractCoverage):
 
         @param count    The number of timesteps to insert
         @param origin   The starting location, from which to begin the insertion
+        @param oob      Out of band operations, True will use greenlets, False will be in-band.
         """
         if self.closed:
             raise IOError('I/O operation on closed file')
@@ -494,7 +495,10 @@ class SimplexCoverage(AbstractCoverage):
         # Update the temporal_domain in the master_manager, do NOT flush!!
         self._persistence_layer.update_domain(tdom=self.temporal_domain, do_flush=False)
         # Flush the master_manager & parameter_managers in a separate greenlet
-        spawn(self._persistence_layer.flush)
+        if oob:
+            spawn(self._persistence_layer.flush)
+        else:
+            self._persistence_layer.flush()
 
     def set_time_values(self, value, tdoa=None):
         """
