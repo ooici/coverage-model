@@ -9,7 +9,7 @@
 from ooi.logging import log
 from coverage_model.basic_types import AbstractBase, InMemoryStorage, VariabilityEnum
 from coverage_model.numexpr_utils import is_well_formed_where, nest_wheres
-from coverage_model.utils import fix_slice, prod
+from coverage_model import utils
 import numpy as np
 import numexpr as ne
 
@@ -60,21 +60,21 @@ class AbstractParameterValue(AbstractBase):
             raise NotImplementedError('Expansion of the Spatial Domain is not yet supported')
 
     def __getitem__(self, slice_):
-        slice_ = fix_slice(slice_, self.shape)
+        slice_ = utils.fix_slice(slice_, self.shape)
 
         ret = self._storage[slice_]
 
         return ret
 
     def __setitem__(self, slice_, value):
-        slice_ = fix_slice(slice_, self.shape)
+        slice_ = utils.fix_slice(slice_, self.shape)
 
         self._storage[slice_] = value
 
     def __len__(self):
         # I don't think this is correct - should be the length of the total available set of values, not the length of storage...
 #        return len(self._storage)
-        return prod(self.shape)
+        return utils.prod(self.shape)
 
     def __str__(self):
         return str(self.content)
@@ -145,16 +145,16 @@ class FunctionValue(AbstractComplexParameterValue):
         pass
 
     def __getitem__(self, slice_):
-        slice_ = fix_slice(slice_, self.shape)
+        slice_ = utils.fix_slice(slice_, self.shape)
 
-        total_indices = prod(self.shape)
+        total_indices = utils.prod(self.shape)
         x = np.arange(total_indices).reshape(self.shape)[slice_] # CBM TODO: This is INDEX based evaluation!!!
 
         return ne.evaluate(self.content).astype(self.value_encoding)
 
     def __setitem__(self, slice_, value):
         if is_well_formed_where(value):
-            slice_ = fix_slice(slice_, self.shape)
+            slice_ = utils.fix_slice(slice_, self.shape)
             if len(slice_) == 1 and isinstance(slice_[0], int) and slice_ < len(self._storage[0]):
                 self._storage[0][slice_[0]] = value
             else:
@@ -180,11 +180,12 @@ class ConstantValue(AbstractComplexParameterValue):
         pass
 
     def __getitem__(self, slice_):
-        slice_ = fix_slice(slice_, self.shape)
+        slice_ = utils.fix_slice(slice_, self.shape)
 
-        c = np.ones(self.shape)[slice_] # Make an array of ones of the appropriate shape and slice it as desired
+        ret_shape = utils.get_shape_from_slice(slice_, self.shape)
+        ret = np.empty(ret_shape, dtype=np.dtype(self.value_encoding))
+        ret.fill(self.content)
 
-        ret = ne.evaluate(self.content).astype(self.value_encoding)
         if ret.size==1:
             if ret.ndim==0:
                 ret=ret[()]
@@ -193,10 +194,9 @@ class ConstantValue(AbstractComplexParameterValue):
         return ret
 
     def __setitem__(self, slice_, value):
-        value = str(value) # Ensure we're dealing with a str
         if self.parameter_type.is_valid_value(value):
-            if not value.startswith('c*'):
-                value = 'c*'+str(value)
+            if np.dtype(self.value_encoding).kind == 'S': # If we're dealing with a str
+                value = str(value) # Ensure the value is a str!!
             self._storage[0] = value
 
 class CategoryValue(AbstractComplexParameterValue):
@@ -211,7 +211,7 @@ class CategoryValue(AbstractComplexParameterValue):
         self._storage.expand(self.shape, 0, self.shape[0])
 
     def __getitem__(self, slice_):
-        slice_ = fix_slice(slice_, self.shape)
+        slice_ = utils.fix_slice(slice_, self.shape)
 
         ret = self._storage[slice_]
         cats=self.parameter_type.categories

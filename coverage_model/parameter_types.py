@@ -417,7 +417,7 @@ class FunctionType(AbstractComplexParameterType):
 
 class ConstantType(AbstractComplexParameterType):
 
-    _rematch='^(c\*)?{0}$'.format(digit_match)
+#    _rematch='^(c\*)?{0}$'.format(digit_match)
 
     def __init__(self, base_type=None, **kwargs):
         """
@@ -432,14 +432,22 @@ class ConstantType(AbstractComplexParameterType):
         self.base_type = base_type or QuantityType()
 
         self._template_attrs.update(self.base_type._template_attrs)
-#        self._template_attrs['value_encoding'] = '|O8'
-        self._template_attrs['fill_value'] = None
+#        self._template_attrs['fill_value'] = None
 
         self._gen_template_attrs()
 
+        # Override the _value_encoding - this does NOT need to store objects (vlen-str)!!
+        self._value_encoding = self.base_type.value_encoding
+
     def is_valid_value(self, value):
-        if re.match(self._rematch, value) is None:
-            raise ValueError('\'value\' must be a string matching the form: \'{0}\' ; for example, \'43.2\', \'c*12\', or \'-12.2e4\''.format(self._rematch))
+        dt=np.dtype(self.value_encoding)
+        if dt.kind == 'S' and not isinstance(value, str):
+            raise ValueError('\'value\' must be a string with a max length of {0}; longer strings will be truncated'.format(dt.str[dt.str.index('S')+1:]))
+
+        # TODO: Check numeric??
+
+#        if re.match(self._rematch, value) is None:
+#            raise ValueError('\'value\' must be a string matching the form: \'{0}\' ; for example, \'43.2\', \'c*12\', or \'-12.2e4\''.format(self._rematch))
 
         return True
 

@@ -433,17 +433,21 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True):
     quant_t_ctxt.uom = 'seconds since 01-01-1970'
     pdict.add_context(quant_t_ctxt)
 
+    cnst_flt_ctxt = ParameterContext('const_float', param_type=ConstantType(), variability=VariabilityEnum.NONE)
+    cnst_flt_ctxt.long_name = 'example of a parameter of type ConstantType, base_type float (default)'
+    cnst_flt_ctxt.axis = AxisTypeEnum.LON
+    cnst_flt_ctxt.uom = 'degree_east'
+    pdict.add_context(cnst_flt_ctxt)
+
     cnst_int_ctxt = ParameterContext('const_int', param_type=ConstantType(QuantityType(value_encoding=np.dtype('int32'))), variability=VariabilityEnum.NONE)
     cnst_int_ctxt.long_name = 'example of a parameter of type ConstantType, base_type int32'
     cnst_int_ctxt.axis = AxisTypeEnum.LAT
     cnst_int_ctxt.uom = 'degree_north'
     pdict.add_context(cnst_int_ctxt)
 
-    cnst_flt_ctxt = ParameterContext('const_float', param_type=ConstantType(), variability=VariabilityEnum.NONE)
-    cnst_flt_ctxt.long_name = 'example of a parameter of type QuantityType, base_type float (default)'
-    cnst_flt_ctxt.axis = AxisTypeEnum.LON
-    cnst_flt_ctxt.uom = 'degree_east'
-    pdict.add_context(cnst_flt_ctxt)
+    cnst_str_ctxt = ParameterContext('const_str', param_type=ConstantType(QuantityType(value_encoding=np.dtype('S21'))), fill_value='', variability=VariabilityEnum.NONE)
+    cnst_str_ctxt.long_name = 'example of a parameter of type ConstantType, base_type fixed-len string'
+    pdict.add_context(cnst_str_ctxt)
 
     cat = {0:'turkey',1:'duck',2:'chicken',99:'None'}
     cat_ctxt = ParameterContext('category', param_type=CategoryType(categories=cat), variability=VariabilityEnum.TEMPORAL)
@@ -466,6 +470,10 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True):
     rec_ctxt.long_name = 'example of a parameter of type RecordType, will be filled with dictionaries'
     pdict.add_context(rec_ctxt)
 
+    fstr_ctxt = ParameterContext('fixed_str', param_type=QuantityType(value_encoding=np.dtype('S8')), fill_value='')
+    fstr_ctxt.long_name = 'example of a fixed-length string parameter'
+    pdict.add_context(fstr_ctxt)
+
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
     scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory)
 
@@ -475,8 +483,9 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True):
 
     # Add data for each parameter
     scov.set_parameter_values('quantity_time', value=np.arange(nt))
-    scov.set_parameter_values('const_int', value=45.32) # Set a constant directly, with incorrect data type (fixed under the hood)
-    scov.set_parameter_values('const_float', value=make_range_expr(-71.11)) # Set with a properly formed constant expression
+    scov.set_parameter_values('const_float', value=-71.11) # Set a constant with correct data type
+    scov.set_parameter_values('const_int', value=45.32) # Set a constant with incorrect data type (fixed under the hood)
+    scov.set_parameter_values('const_str', value='constant string value')
     scov.set_parameter_values('quantity', value=np.random.random_sample(nt)*(26-23)+23)
 
 #    # Setting three range expressions such that indices 0-2 == 10, 3-7 == 15 and >=8 == 20
@@ -487,6 +496,7 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True):
     arrval = []
     recval = []
     catval = []
+    fstrval = []
     catkeys = cat.keys()
     letts='abcdefghijklmnopqrstuvwxyz'
     while len(letts) < nt:
@@ -496,9 +506,11 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True):
         d = {letts[x]: letts[x:]}
         recval.append(d) # One value (which is a dict) for each member of the domain
         catval.append(random.choice(catkeys))
+        fstrval.append(''.join([random.choice(letts) for x in xrange(8)])) # A random string of length 8
     scov.set_parameter_values('array', value=arrval)
     scov.set_parameter_values('record', value=recval)
     scov.set_parameter_values('category', value=catval)
+    scov.set_parameter_values('fixed_str', value=fstrval)
 
     if in_memory and save_coverage:
         SimplexCoverage.pickle_save(scov, 'test_data/ptypes.cov')

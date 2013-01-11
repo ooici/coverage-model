@@ -104,6 +104,19 @@ def _raise_index_error_slice(slice_, size, dim):
         if slice_.start >= slice_.stop:
             raise IndexError('On dimension {0}; start index of slice cannot be >= stop index: slice => {1}'.format(dim, slice_))
 
+def get_shape_from_slice(slice_, max_shp):
+    shp=[]
+    for i, s in enumerate(slice_):
+        if isinstance(s, int):
+            shp.append(1)
+        elif isinstance(s, (list,tuple)):
+            shp.append(len(s))
+        elif isinstance(s, slice):
+            st=min(s.stop, max_shp[i]) if s.stop is not None else max_shp[i]
+            shp.append(len(range(*s.indices(st))))
+
+    return tuple(shp)
+
 def fix_slice(slice_, shape):
     # CBM: First swack - see this for more possible checks: http://code.google.com/p/netcdf4-python/source/browse/trunk/netCDF4_utils.py
     if not is_valid_constraint(slice_):
