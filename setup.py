@@ -26,8 +26,6 @@ setup(  name = 'coverage-model',
     packages = find_packages(),
     dependency_links = [
         'http://sddevrepo.oceanobservatories.org/releases/',
-        'https://github.com/ooici/pyon/tarball/master#egg=pyon',
-        'https://github.com/nimbusproject/pidantic/tarball/master#egg=pidantic-0.2',
         'https://dl.dropbox.com/s/hynt60hi38gyjfg/h5py-2.1.0ooi.tar.gz',
     ],
     test_suite = '',
