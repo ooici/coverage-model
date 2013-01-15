@@ -61,8 +61,9 @@ class PersistenceLayer(object):
             log.debug('parameter group: %s', pname)
             self.parameter_metadata[pname] = ParameterManager(os.path.join(self.root_dir, self.guid, pname), pname)
 
-        if self.master_manager.is_dirty():
-            self.master_manager.flush()
+        if self.mode != 'r':
+            if self.master_manager.is_dirty():
+                self.master_manager.flush()
 
         if self.mode == 'r' or self.inline_data_writes:
             self.brick_dispatcher = None
@@ -118,6 +119,8 @@ class PersistenceLayer(object):
         @param bricking_scheme  A dictionary containing the brick and chunk sizes
         @return A PersistedStorage object
         """
+        if self.mode == 'r':
+            raise IOError('PersistenceLayer not open for writing: mode == \'{0}\''.format(self.mode))
 
         parameter_name = parameter_context.name
 
@@ -423,6 +426,9 @@ class PersistenceLayer(object):
         @param sdom     the value to update the Spatial Domain to
         @param do_flush    Flush the MasterManager after updating the value(s); Default is True
         """
+        if self.mode == 'r':
+            raise IOError('PersistenceLayer not open for writing: mode == \'{0}\''.format(self.mode))
+
         # Update the global tdom & sdom as necessary
         if tdom is not None:
             self.master_manager.tdom = tdom
