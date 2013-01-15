@@ -441,8 +441,10 @@ class ConstantType(AbstractComplexParameterType):
 
     def is_valid_value(self, value):
         dt=np.dtype(self.value_encoding)
-        if dt.kind == 'S' and not isinstance(value, str):
-            raise ValueError('\'value\' must be a string with a max length of {0}; longer strings will be truncated'.format(dt.str[dt.str.index('S')+1:]))
+        if dt.kind == 'S':
+            if (isinstance(value, np.ndarray) and value.dtype.kind != 'S') or \
+               (not isinstance(value, np.ndarray) and not isinstance(value, str)):
+                raise ValueError('\'value\' must be a string with a max length of {0}; longer strings will be truncated'.format(dt.str[dt.str.index('S')+1:]))
 
         # TODO: Check numeric??
 
