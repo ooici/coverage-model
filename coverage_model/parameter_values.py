@@ -195,6 +195,8 @@ class ConstantValue(AbstractComplexParameterValue):
 
     def __setitem__(self, slice_, value):
         if self.parameter_type.is_valid_value(value):
+            if np.iterable(value) and not isinstance(value, basestring):
+                value = value[0]
             if np.dtype(self.value_encoding).kind == 'S': # If we're dealing with a str
                 value = str(value) # Ensure the value is a str!!
             self._storage[0] = value
