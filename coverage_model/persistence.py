@@ -62,8 +62,7 @@ class PersistenceLayer(object):
             self.parameter_metadata[pname] = ParameterManager(os.path.join(self.root_dir, self.guid, pname), pname)
 
         if self.mode != 'r':
-            if self.master_manager.is_dirty():
-                self.master_manager.flush()
+            self.master_manager.flush()
 
         if self.mode == 'r' or self.inline_data_writes:
             self.brick_dispatcher = None
@@ -367,8 +366,9 @@ class PersistenceLayer(object):
         # Flush the parameter_metadata
             pm.flush()
             # If necessary (i.e. write_brick has been called), flush the master_manager
-            if self.master_manager.is_dirty():
-                self.master_manager.flush()
+#            if self.master_manager.is_dirty():
+#                self.master_manager.flush()
+            self.master_manager.flush()
 
     # Returns a count of bricks for a parameter
     def parameter_brick_count(self, parameter_name):

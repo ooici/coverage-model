@@ -293,6 +293,8 @@ class SimplexCoverage(AbstractCoverage):
                 if self.mode != 'a':
                     self.mode = 'a'
 
+                if not isinstance(name, basestring):
+                    raise TypeError('\'name\' must be of type basestring')
                 self.name = name
                 if temporal_domain is None:
                     self.temporal_domain = GridDomain(GridShape('temporal',[0]), CRS.standard_temporal(), MutabilityEnum.EXTENSIBLE)

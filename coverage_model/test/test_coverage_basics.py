@@ -252,7 +252,7 @@ class TestCoverageModelBasicsInt(TestCase):
         sdom = self._make_sdom(scrs)
         in_memory = False
         name = np.arange(10) # Numpy array is not a valid coverage name
-        with self.assertRaises(AttributeError):
+        with self.assertRaises(TypeError):
             SimplexCoverage(
                 root_dir=self.working_dir,
                 persistence_guid=create_guid(),
