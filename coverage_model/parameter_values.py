@@ -218,7 +218,7 @@ class CategoryValue(AbstractComplexParameterValue):
         ret = self._storage[slice_]
         cats=self.parameter_type.categories
         if np.iterable(ret):
-            ret = np.array([cats[x] for x in ret], dtype=object)
+            ret = np.array([cats[x] if x is not None else self.parameter_type.fill_value for x in ret], dtype=object)
         else:
             ret = cats[ret.item()]
 
