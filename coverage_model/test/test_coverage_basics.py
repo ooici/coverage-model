@@ -41,8 +41,8 @@ class TestCoverageModelBasicsInt(TestCase):
         base_path = root_path.replace(guid,'')
         scov.close()
         lcov = SimplexCoverage(base_path, guid)
-        lcov.close()
         self.assertIsInstance(lcov, SimplexCoverage)
+        lcov.close()
 
     def test_dot_load_succeeds(self):
         # Creates a valid coverage, inserts data and .load coverage back up from the HDF5 files.
@@ -98,13 +98,6 @@ class TestCoverageModelBasicsInt(TestCase):
             SimplexCoverage.load(base_path, guid)
             self.assertEquals(se.message, 'Cannot find specified coverage: {0}'.format(os.path.join(base_path, guid)))
 
-    def test_load_succeeds(self):
-        scov = self._make_samplecov()
-        scov.close()
-        cov = SimplexCoverage(self.working_dir, scov.persistence_guid)
-        self.assertIsInstance(cov, SimplexCoverage)
-        cov.close()
-
     def test_load_only_pd_raises_error(self):
         scov = self._make_samplecov()
         scov.close()
@@ -134,7 +127,7 @@ class TestCoverageModelBasicsInt(TestCase):
 
     def test_coverage_mode_expand_domain(self):
         scov = self._make_samplecov()
-        self.assertEqual(scov.mode, 'r+')
+        self.assertEqual(scov.mode, 'a')
         scov.close()
         rcov = SimplexCoverage.load(self.working_dir, scov.persistence_guid, mode='r')
         self.assertEqual(rcov.mode, 'r')
@@ -143,7 +136,7 @@ class TestCoverageModelBasicsInt(TestCase):
 
     def test_coverage_mode_set_value(self):
         scov = self._make_samplecov()
-        self.assertEqual(scov.mode, 'r+')
+        self.assertEqual(scov.mode, 'a')
         scov.insert_timesteps(10)
         scov.close()
         rcov = SimplexCoverage.load(self.working_dir, scov.persistence_guid, mode='r')
@@ -235,8 +228,16 @@ class TestCoverageModelBasicsInt(TestCase):
         scrs = self._make_scrs()
         sdom = self._make_sdom(scrs)
         in_memory = False
+        name = 'sample coverage_model'
         with self.assertRaises(SystemError):
-            SimplexCoverage('bad_path', create_guid(), 'sample coverage_model', pdict, tdom, sdom, in_memory)
+            SimplexCoverage(
+                root_dir='bad_dir',
+                persistence_guid=create_guid(),
+                name=name,
+                parameter_dictionary=pdict,
+                temporal_domain=tdom,
+                spatial_domain=sdom,
+                in_memory_storage=in_memory)
 
     def test_create_guid_valid(self):
         # Tests that the create_guid() function outputs a properly formed GUID
@@ -252,7 +253,14 @@ class TestCoverageModelBasicsInt(TestCase):
         in_memory = False
         name = np.arange(10) # Numpy array is not a valid coverage name
         with self.assertRaises(AttributeError):
-            SimplexCoverage(self.working_dir, create_guid(), name, pdict, tdom, sdom, in_memory)
+            SimplexCoverage(
+                root_dir=self.working_dir,
+                persistence_guid=create_guid(),
+                name=name,
+                parameter_dictionary=pdict,
+                temporal_domain=tdom,
+                spatial_domain=sdom,
+                in_memory_storage=in_memory)
 
     def test_create_pdict_invalid(self):
         # Tests condition where the ParameterDictionary is invalid
@@ -264,7 +272,14 @@ class TestCoverageModelBasicsInt(TestCase):
         in_memory = False
         name = 'sample coverage_model'
         with self.assertRaises(TypeError):
-            SimplexCoverage(self.working_dir, create_guid(), name, pdict, tdom, sdom, in_memory)
+            SimplexCoverage(
+                root_dir=self.working_dir,
+                persistence_guid=create_guid(),
+                name=name,
+                parameter_dictionary=pdict,
+                temporal_domain=tdom,
+                spatial_domain=sdom,
+                in_memory_storage=in_memory)
 
     def test_create_tdom_invalid(self):
         # Tests condition where the temporal_domain parameter is invalid
@@ -614,7 +629,7 @@ class TestCoverageModelBasicsInt(TestCase):
         res = self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='all')
 
     def test_persistence_variation5(self):
-        scov = self._make_samplecov(in_memory=False, in_line=False, auto_flush=True, mode='w')
+        scov = self._make_samplecov(in_memory=False, in_line=False, auto_flush=True, mode='a')
         cov_info_str = scov.info
         self.assertIsInstance(cov_info_str, str)
 
@@ -1017,7 +1032,7 @@ class TestCoverageModelBasicsInt(TestCase):
         pdict.add_context(arr2_ctxt)
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-        scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, in_memory_storage=in_memory)
+        scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, mode='a', in_memory_storage=in_memory)
 
         # Insert some timesteps (automatically expands other arrays)
         scov.insert_timesteps(10)
@@ -1074,6 +1089,6 @@ class TestCoverageModelBasicsInt(TestCase):
         sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-        scov = SimplexCoverage(self.working_dir, create_guid(), 'empty sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, in_memory_storage=in_memory)
+        scov = SimplexCoverage(self.working_dir, create_guid(), 'empty sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, mode='a', in_memory_storage=in_memory)
 
         return scov
