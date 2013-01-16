@@ -26,7 +26,7 @@ setup(  name = 'coverage-model',
     packages = find_packages(),
     dependency_links = [
         'http://sddevrepo.oceanobservatories.org/releases/',
-        'https://dl.dropbox.com/s/hynt60hi38gyjfg/h5py-2.1.0ooi.tar.gz',
+        'http://sddevrepo.oceanobservatories.org/releases/h5py-2.1.1a1.tar.gz#egg=h5py',
     ],
     test_suite = '',
     install_requires = [
@@ -35,7 +35,7 @@ setup(  name = 'coverage-model',
         'gevent_zeromq==0.2.5',
         'netCDF4>=0.9.8',
         'numexpr==2.0.1',
-        'h5py', # Tagged version, do NOT install a specific version yet
+        'h5py==2.1.1a1', 
         'rtree==0.7.0',
         'pidantic',
 #        'scipy==0.10.1',
