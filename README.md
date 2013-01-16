@@ -63,9 +63,6 @@ Setup a virtualenv to run coverage-model (use any name you like):
     pip install matplotlib
 
 #Source
-*The coverage model requires that the **pyon** project be available locally in the same directory as coverage-model.  If you don't already have the project:*
-
-    git clone git@github.com:ooici/pyon.git
 
 Obtain the coverage-model project by running:  
 
@@ -74,6 +71,8 @@ Obtain the coverage-model project by running:
 
 #Installation
 **Ensure you are in a virtualenv prior to running the steps below**
+
+***NOTE**: The repository uses submodules for dependent OOI-CI projects.  For more information on submodules, refer [here](http://git-scm.com/book/en/Git-Tools-Submodules)*
 
 From the *coverage-model* directory, run the following commands:
 
@@ -86,18 +85,29 @@ From the *coverage-model* directory, run the following commands:
 Once those steps complete, you should be able to import the coverage model from the python shell:
 
     bin/pycc # or bin/ipython
-    from coverage_model.coverage import SimplexCoverage
+    from coverage_model import *
 
-#Running the example functions
+#Running unit tests (via [nose](https://nose.readthedocs.org/en/latest/))
 
-The *coverage_model/test/examples.py* module contains 2 functions that can be used to generate 'exemplar' coverages from sample netcdf files (in the *test_data* directory).
+From the *coverage-model* directory, run the following command:
 
-Start an ipython shell session from the root *coverage-model* directory:
+    bin/nosetests -v
+
+This will run all UNIT and INT tests for the coverage-model repository.  The **-v** flag denotes verbose output (the name of each test prints as it runs).  For more *nose* options, refer to the [nose documentation](https://nose.readthedocs.org/en/latest/man.html)
+
+#Using the *coverage_model.test.examples* functions
+
+The *coverage_model/test/examples.py* module contains numerous functions that showcase the functionality of the Coverage Model - including generation of exemplar coverages, usage of ParameterTypes and more.  
+***NOTE**:  The functions in this module are NOT guaranteed to work at all times!!*
+
+Start a pycc or ipython shell session from the root *coverage-model* directory:
 
     cd your/code/path/coverage-model
-    ipython
+    bin/pycc # or bin/ipython
 
-From the ipython prompt, run:
+Next, simply import functions from the module and then try them out!
+
+For example:
 
     from coverage_model.test.examples import *
     stn_cov, _ = ncstation2cov() # Generates a coverage from the test_data/usgs.nc file
@@ -106,16 +116,47 @@ From the ipython prompt, run:
     grid_cov, _ = ncgrid2cov() # Generates a coverage from the test_data/ncom.nc file
     print grid_cov
     
-    
-Coverages can be saved and loaded using the respective classmethods of SimplexCoverage:
+#Saving and Loading coverages
 
-    from coverage_model.coverage import SimplexCoverage
+By default, the Coverage Model automatically persists data to disk using HDF5.  The "top level" of a coverage is a directory.  When loading a coverage, **always refer to this top level directory**.  
+Coverages can be loaded in two ways.  Given the following directory structure:
+
+    .../my_data
+    |---ooi_coverages
+        |---cov_one
+            |--- ...
+        |---cov_two
+            |--- ...
+        |---cov_three
+            |--- ...
+
+The coverage *cov_one* can be loaded by:    
+
+    # Load method 1
+    cov = SimplexCoverage.load('.../my_data/ooi_coverages/cov_one')
+
+    # Load method 2
+    cov = SimplexCoverage('.../my_data/ooi_coverages', 'cov_one')
+
+It is also possible to save coverages to single files using python pickle:  
+**WARNING - DEPRECATED: pickle saving is not guaranteed to work and will be removed in future versions**  
+***NOTE**: In order to save a coverage using this method, it MUST be an **in-memory** coverage (see below)*
+
+    cov = SimplexCoverage.load('.../my_data/ooi_coverages/cov_one')
+
+    # Save to a pickle file
+    cov.pickle_save('.../my_data/ooi_coverages/pickled_cov_one.cov')
+
+    # Load from a pickle file
+    cov = SimplexCoverage.pickle_load('.../my_data/ooi_coverages/pickled_cov_one.cov')
+
+
+#In-memory Coverage
+
+Coverages can be created that do not automatically persist to HDF5 by setting the **in\_memory\_storage=True** when constructing the coverage.  
+***NOTE**: Using the Coverage Model in this manner can result in loss of information and should be used sparingly and/or only in certain situations*
+
+    from coverage_model import *
     
-    # Load a saved coverage
-    scov = SimplexCoverage.load('test_data/usgs.cov')
-    
-    # Make some changes, like adding 10 additional timesteps
-    scov.insert_timesteps(10)
-    
-    # Then save the coverage again
-    SimplexCoverage.save(scov, 'test_data/usgs.cov')
+    # Assuming appropriate ParameterDictionary (pdict) and Domain (tdom) objects exist
+    cov = SimplexCoverage('test_data', 'mycov', 'my_coverage_name', parameter_dictionary=pdict, temporal_domain=tdom, in_memory_storage=True)
