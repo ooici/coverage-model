@@ -60,10 +60,10 @@ class AbstractCoverage(AbstractIdentifiable):
         AbstractIdentifiable.__init__(self)
         self._closed = False
 
-        if mode is not None and isinstance(mode, str) and mode[0] in ['r','w','a']:
+        if mode is not None and isinstance(mode, str) and mode[0] in ['r','w','a','r+']:
             self.mode = mode
         else:
-            self.mode = 'r+'
+            self.mode = 'r'
 
     @classmethod
     def pickle_save(cls, cov_obj, file_path, use_ascii=False):
@@ -214,6 +214,11 @@ class SimplexCoverage(AbstractCoverage):
         @param parameter_dictionary    a ParameterDictionary object expected to contain one or more valid ParameterContext objects
         @param spatial_domain  a concrete instance of AbstractDomain for the spatial domain component
         @param temporal_domain a concrete instance of AbstractDomain for the temporal domain component
+        @param mode the file mode for the coverage; one of 'r', 'a', 'r+', or 'w'; defaults to 'r'
+        @param in_memory_storage    if False (default), HDF5 persistence is used; otherwise, nothing is written to disk and all data is held in memory only
+        @param bricking_scheme  the bricking scheme for the coverage; a dict of the form {'brick_size': #, 'chunk_size': #}
+        @param inline_data_writes   if True (default), brick data is written as it is set; otherwise it is written out-of-band by worker processes or threads
+        @param auto_flush_values    if True (default), brick data is flushed immediately; otherwise it is buffered until SimplexCoverage.flush_values() is called
         """
         AbstractCoverage.__init__(self, mode=mode)
         try:
@@ -275,9 +280,11 @@ class SimplexCoverage(AbstractCoverage):
                     _doload(self)
                     return
 
-                # Check the mode - can't make a new coverage in 'r' mode!!
-                if self.mode == 'r':
-                    raise IOError('Coverage not open for writing: mode == \'{0}\''.format(self.mode))
+                # We've checked everything we can - this is a new coverage!!!
+
+                # Check the mode - must be in 'a' for a new coverage
+                if self.mode != 'a':
+                    self.mode = 'a'
 
                 self.name = name
                 if temporal_domain is None:
