@@ -29,9 +29,13 @@ def values_outside_coverage():
     rtype = RecordType()
     rval = get_value_class(rtype, domain_set=dom)
 
-    # ConstantType example
-    ctype = ConstantType(QuantityType(value_encoding=np.dtype('int32')))
-    cval = get_value_class(ctype, domain_set=dom)
+    # ConstantType w/ numeric QuantityType example
+    ctype_n = ConstantType(QuantityType(value_encoding=np.dtype('int32')))
+    cval_n = get_value_class(ctype_n, domain_set=dom)
+
+    # ConstantType w/ fixed_string QuantityType example
+    ctype_s = ConstantType(QuantityType(value_encoding=np.dtype('S21')))
+    cval_s = get_value_class(ctype_s, domain_set=dom)
 
     # FunctionType example
     ftype = FunctionType(QuantityType(value_encoding=np.dtype('float32')))
@@ -45,23 +49,24 @@ def values_outside_coverage():
         aval[x] = np.random.bytes(np.random.randint(1,20)) # One value (which is a byte string) for each member of the domain
         rval[x] = {letts[x]: letts[x:]} # One value (which is a dict) for each member of the domain
 
-    cval[0] = 200 # Doesn't matter what index (or indices) you assign this to - it's used everywhere!!
+    cval_n[0] = 200 # Doesn't matter what index (or indices) you assign this to - it's used everywhere!!
+    cval_s[0] = 'constant string value'
 
     fval[:] = make_range_expr(100, min=0, max=4, min_incl=True, max_incl=False, else_val=-9999)
     fval[:] = make_range_expr(200, min=4, max=6, min_incl=True, else_val=-9999)
     fval[:] = make_range_expr(300, min=6, else_val=-9999)
 
-    if not (aval.shape == rval.shape == cval.shape):# == fval.shape):
+    if not (aval.shape == rval.shape == cval_n.shape):# == fval.shape):
         raise SystemError('Shapes are not equal!!')
 
-    types = (qtype, atype, rtype, ctype, ftype)
-    vals = (qval, aval, rval, cval, fval)
+    types = (qtype, atype, rtype, ctype_n, ctype_s, ftype)
+    vals = (qval, aval, rval, cval_n, cval_s, fval)
 #    for i in xrange(len(vals)):
 #        log.info('Type: %s', types[i])
 #        log.info('\tContent: %s', vals[i].content)
 #        log.info('\tVals: %s', vals[i][:])
 
-    log.info('Returning: qval, aval, rval, cval, fval')
+    log.info('Returning: qval, aval, rval, cval_n, cval_s, fval')
     return vals
 
 def param_dict_dump_load():

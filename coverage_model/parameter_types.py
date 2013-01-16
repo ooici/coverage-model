@@ -20,6 +20,7 @@
 
 from ooi.logging import log
 from coverage_model.basic_types import AbstractIdentifiable
+from coverage_model.parameter_values import ConstantValue
 from coverage_model.numexpr_utils import digit_match, is_well_formed_where, single_where_match
 import numpy as np
 import re
@@ -442,11 +443,17 @@ class ConstantType(AbstractComplexParameterType):
     def is_valid_value(self, value):
         dt=np.dtype(self.value_encoding)
         if dt.kind == 'S':
-            if (isinstance(value, np.ndarray) and value.dtype.kind != 'S') or \
-               (not isinstance(value, np.ndarray) and not isinstance(value, str)):
+            if isinstance(value, ConstantValue):
+                if np.dtype(value.parameter_type.value_encoding).kind != 'S':
+                    raise ValueError('\'value\' is a ConstantValue, with an invalid value_encoding; must be of kind=\'S\', is kind={0}'.format(np.dtype(value.parameter_type.value_encoding).kind))
+            elif isinstance(value, np.ndarray):
+                if value.dtype.kind != 'S':
+                    raise ValueError('\'value\' is a numpy array, with an invalid dtype; must be kind=\'S\', is kind={0}'.format(value.dtype.kind))
+            elif not isinstance(value, str):
                 raise ValueError('\'value\' must be a string with a max length of {0}; longer strings will be truncated'.format(dt.str[dt.str.index('S')+1:]))
-
-        # TODO: Check numeric??
+        else:
+            # TODO: Check numeric??
+            pass
 
 #        if re.match(self._rematch, value) is None:
 #            raise ValueError('\'value\' must be a string matching the form: \'{0}\' ; for example, \'43.2\', \'c*12\', or \'-12.2e4\''.format(self._rematch))
