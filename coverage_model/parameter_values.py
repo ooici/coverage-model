@@ -263,8 +263,10 @@ class CategoryValue(AbstractComplexParameterValue):
         cats=self.parameter_type.categories
         if np.iterable(ret):
             ret = np.array([cats[x] if x is not None else self.parameter_type.fill_value for x in ret], dtype=object)
-        else:
+        elif isinstance(ret, np.ndarray):
             ret = cats[ret.item()]
+        else:
+            ret = cats[ret]
 
         return ret
 

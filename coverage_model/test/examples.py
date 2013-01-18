@@ -44,13 +44,19 @@ def values_outside_coverage():
     crtype = ConstantRangeType(QuantityType(value_encoding=np.dtype('int16')))
     crval = get_value_class(crtype, domain_set=dom)
 
+    cat = {0:'turkey',1:'duck',2:'chicken',99:'None'}
+    cattype = CategoryType(categories=cat)
+    catval = get_value_class(cattype, dom)
+
     # Add data to the values
     qval[:] = np.random.random_sample(num_rec)*(50-20)+20 # array of 10 random values between 20 & 50
 
+    catkeys = cat.keys()
     letts='abcdefghij'
     for x in xrange(num_rec):
         aval[x] = np.random.bytes(np.random.randint(1,20)) # One value (which is a byte string) for each member of the domain
         rval[x] = {letts[x]: letts[x:]} # One value (which is a dict) for each member of the domain
+        catval[x] = random.choice(catkeys)
 
     # Doesn't matter what index (or indices) you assign these 3 - the same value is used everywhere!!
     cval_n[0] = 200
@@ -64,14 +70,14 @@ def values_outside_coverage():
     if not (aval.shape == rval.shape == cval_n.shape):# == fval.shape):
         raise SystemError('Shapes are not equal!!')
 
-    types = (qtype, atype, rtype, ctype_n, ctype_s, ftype)
-    vals = (qval, aval, rval, cval_n, cval_s, crval, fval)
+    types = (qtype, atype, rtype, ctype_n, ctype_s, cattype, ftype)
+    vals = (qval, aval, rval, cval_n, cval_s, crval, catval, fval)
 #    for i in xrange(len(vals)):
 #        log.info('Type: %s', types[i])
 #        log.info('\tContent: %s', vals[i].content)
 #        log.info('\tVals: %s', vals[i][:])
 
-    log.info('Returning: qval, aval, rval, cval_n, cval_s, crval, fval')
+    log.info('Returning: qval, aval, rval, cval_n, cval_s, crval, catval, fval')
     return vals
 
 def param_dict_dump_load():
