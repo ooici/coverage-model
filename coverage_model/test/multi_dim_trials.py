@@ -74,6 +74,7 @@ md.put_values_to_bricks(sl, val_arr[sl])
 
 """
 from ooi.logging import log
+from coverage_model import utils
 from coverage_model import fix_slice
 from coverage_model import bricking_utils
 from coverage_model import ParameterContext, QuantityType
@@ -111,7 +112,8 @@ class MultiDim(object):
 
         self.bricks = {}
         p = index.Property()
-        p.dimension=len(self.total_domain)
+        tdl = len(self.total_domain)
+        p.dimension = tdl if tdl > 1 else tdl + 1
         self.rtree = index.Index(properties=p)
 
         self.brick_origins = bricking_utils.calc_brick_origins(self.total_domain, self.brick_sizes)
@@ -261,15 +263,59 @@ class MultiDim(object):
 
         return ret_arr
 
-if __name__ == '__main__':
-    from argparse import ArgumentParser
+def _run_test_slices(md, sl_list, val_arr):
+    for sl in sl_list:
+        tstr = '*** Slice: {0} ***'.format(sl)
+        print '\n' + tstr
+        print 'Slice Shape: {0}'.format(utils.slice_len(sl, md.total_domain))
+        md.reset_bricks()
+        vals = val_arr[sl]
+        md.put_values_to_bricks(sl, vals)
+        vo=md.get_values_from_bricks(sl)
+        if not np.array_equal(vals, vo):
+            # Squeeze and try again
+            if not np.array_equal(vals.squeeze(), vo):
+                print "Equal" if eq else "!!!!!!!! NOT EQUAL !!!!!!!!"
+                print 'vals in:\n%s' % (vals,)
+                print 'vals out:\n%s' % (vo,)
+                #    print 'bricks:'
+            #    for b in md.bricks:
+            #        print '{0}\n{1}'.format(b,md.bricks[b])
+        print '\n' + '*'*len(tstr)
 
-    parser = ArgumentParser(description="Bricking & Persistence Trials")
-    parser.add_argument('-p', '--persist', help='If HDF persistence should be used, otherwise uses numpy', action="store_true")
+def test_1d(persist):
+    md = MultiDim(total_domain=(100,), brick_size=10, use_hdf=persist)
+    val_arr = np.arange(100)
 
-    args = parser.parse_args()
+    sl_list = []
+    # Single value slices
+    sl_list.append(0)
+    sl_list.append(9)
+    sl_list.append(39)
+    sl_list.append(88)
 
-    md=MultiDim(use_hdf=args.persist)
+    # List slices
+    sl_list.append(([1,2],))
+    sl_list.append(([1,4],))
+    sl_list.append(([6,9],))
+    sl_list.append(([1,2,5,8],))
+    sl_list.append(([2,5,6,9],))
+
+    # Slice slices
+    sl_list.append((slice(6,9,2),))
+    sl_list.append((slice(2,7),))
+    sl_list.append((slice(1,None),))
+    sl_list.append((slice(None),))
+    sl_list.append((slice(2,8),))
+    sl_list.append(slice(2,8))
+    sl_list.append(slice(None,None,3))
+    sl_list.append(slice(1,8,3))
+    sl_list.append(slice(3,None))
+
+    _run_test_slices(md, sl_list, val_arr)
+
+def test_2d(persist):
+    md=MultiDim(total_domain=(10,10), brick_size=5, use_hdf=persist)
     val_arr = np.arange(100).reshape(10,10)
 
     sl_list = []
@@ -297,20 +343,62 @@ if __name__ == '__main__':
     sl_list.append((slice(1,8,3),slice(3,None,2)))
     sl_list.append((slice(3,None),slice(3,9,2)))
 
-    for sl in sl_list:
-        tstr = '*** Slice: {0} ***'.format(sl)
-        print tstr
-        md.reset_bricks()
-        vals = val_arr[sl]
-        md.put_values_to_bricks(sl, vals)
-        vo=md.get_values_from_bricks(sl)
-        eq = np.array_equal(vals, vo)
-        print "Equal" if eq else "Not Equal!!"
-        if not eq:
-            print 'vals in:\n%s' % (vals,)
-            print 'vals out:\n%s' % (vo,)
-        #    print 'bricks:'
-        #    for b in md.bricks:
-        #        print '{0}\n{1}'.format(b,md.bricks[b])
-        print '*'*len(tstr)
+    _run_test_slices(md, sl_list, val_arr)
 
+def test_3d(persist):
+    md=MultiDim(total_domain=(10,10,10), brick_size=5, use_hdf=persist)
+    val_arr = np.arange(1000).reshape(10,10,10)
+
+    sl_list = []
+    # Single value slices
+    sl_list.append((0,1,8))
+    sl_list.append((9,3,2))
+    sl_list.append((3,8,6))
+    sl_list.append((8,7,0))
+
+    # List slices
+    sl_list.append(([1,2],2,0))
+    sl_list.append(([1,4],6,9))
+    sl_list.append(([6,9],3,4))
+    sl_list.append(([1,2,5,8],5,8))
+    sl_list.append((2,[2,5,6,9],3))
+    sl_list.append((2,4,[2,5,6,9]))
+
+    # Slice slices
+    sl_list.append((slice(6,9,2),))
+    sl_list.append((slice(2,7),slice(3,8),slice(0,5)))
+    sl_list.append((slice(1,None),slice(4,8),slice(None,6)))
+    sl_list.append((slice(None),slice(None),slice(None)))
+    sl_list.append((slice(2,8),slice(None),slice(5,7)))
+    sl_list.append((slice(2,8),slice(3,6),slice(7,8)))
+    sl_list.append((slice(None,None,3),slice(None,None,2),slice(None,None,4)))
+    sl_list.append((slice(1,8,3),slice(3,None,2),slice(4,9,4)))
+    sl_list.append((slice(3,None),slice(3,9,2),slice(None,None,2)))
+
+    _run_test_slices(md, sl_list, val_arr)
+
+if __name__ == '__main__':
+    from argparse import ArgumentParser
+
+    parser = ArgumentParser(description="Bricking & Persistence Trials")
+    parser.add_argument('-p', '--persist', help='If HDF persistence should be used, otherwise uses numpy', action="store_true")
+    parser.add_argument('-d1', '--onedim', help='Run 1D test', action="store_true")
+    parser.add_argument('-d2', '--twodim', help='Run 2D test', action="store_true")
+    parser.add_argument('-d3', '--threedim', help='Run 3D test', action="store_true")
+
+    args = parser.parse_args()
+
+    one_picked = np.any([args.onedim, args.twodim, args.threedim])
+    if args.onedim or not one_picked:
+        print ">>> Start 1D Test >>>"
+        test_1d(args.persist)
+        print ">>>> End 1D Test >>>>\n"
+    if args.twodim:
+        print ">>> Start 2D Test >>>"
+        test_2d(args.persist)
+        print ">>>> End 2D Test >>>>\n"
+    if args.threedim:
+        print ">>> Start 3D Test >>>"
+#        print "Not built yet..."
+        test_3d(args.persist)
+        print ">>>> End 3D Test >>>>\n"
