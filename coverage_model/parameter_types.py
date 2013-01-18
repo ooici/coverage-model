@@ -467,6 +467,36 @@ class ConstantType(AbstractComplexParameterType):
 
         return False
 
+
+class ConstantRangeType(AbstractComplexParameterType):
+    """
+
+    """
+    def __init__(self, base_type=None, **kwargs):
+        """
+
+        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterType; see documentation for that class for details
+        """
+        kwc=kwargs.copy()
+        AbstractComplexParameterType.__init__(self, value_class='ConstantRangeValue', **kwc)
+        if base_type is not None and not isinstance(base_type, QuantityType):
+            raise TypeError('\'base_type\' must be an instance of QuantityType')
+
+        self.base_type = base_type or QuantityType()
+        self._template_attrs.update(self.base_type._template_attrs)
+        self._template_attrs['fill_value'] = None
+
+        self._gen_template_attrs()
+
+    def is_valid_value(self, value):
+        if isinstance(value, (list, tuple)) and len(value) >= 2:
+            my_kind=np.dtype(self.value_encoding).kind
+            for v in value[:2]:
+                if np.asanyarray(v).dtype.kind != my_kind:
+                    raise ValueError('\'value\' must be a list or tuple of size >= 2 and kind={0}; value={1}'.format(my_kind, value))
+
+        return True
+
 class RecordType(AbstractComplexParameterType):
     """
     Heterogeneous set of named things (dict)

@@ -13,10 +13,10 @@ from coverage_model import utils
 import numpy as np
 import numexpr as ne
 
-def get_value_class(param_type, **kwargs):
+def get_value_class(param_type, domain_set, **kwargs):
     module = __import__(param_type._value_module, fromlist=[param_type._value_class])
     classobj = getattr(module, param_type._value_class)
-    return classobj(parameter_type=param_type, **kwargs)
+    return classobj(parameter_type=param_type, domain_set=domain_set, **kwargs)
 
 #=========================
 # Abstract Parameter Value Objects
@@ -201,6 +201,50 @@ class ConstantValue(AbstractComplexParameterValue):
                 value = str(value) # Ensure the value is a str!!
             self._storage[0] = value
 
+class ConstantRangeValue(AbstractComplexParameterValue):
+
+    def __init__(self, parameter_type, domain_set, storage=None, **kwargs):
+        """
+
+        @param parameter_type:
+        @param domain_set:
+        @param storage:
+        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterValue; see documentation for that class for details
+        @return:
+        """
+        kwc=kwargs.copy()
+        AbstractComplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
+        self._storage.expand((1,), 0, 1)
+
+    @property
+    def content(self):
+        import ast
+        return ast.literal_eval(self._storage[0])
+
+    def expand_content(self, domain, origin, expansion):
+        # No op storage is always 1 - appropriate domain applied during retrieval of data
+        pass
+
+    def __getitem__(self, slice_):
+        slice_ = utils.fix_slice(slice_, self.shape)
+
+        ret_shape = utils.get_shape_from_slice(slice_, self.shape)
+        ret = np.empty(ret_shape, dtype=np.dtype(object)) # Always object type because it's 2 values / element!!
+        ret.fill(self.content)
+
+        if ret.size==1:
+            if ret.ndim==0:
+                ret=ret[()]
+            else:
+                ret=ret[0]
+        return ret
+
+    def __setitem__(self, slice_, value):
+        if self.parameter_type.is_valid_value(value):
+            # We already know it's either a list or tuple, that it's length is >= 2, and that both of
+            # the first two values are of the correct type...so...
+            self._storage[0] = str(tuple(value[:2]))
+
 class CategoryValue(AbstractComplexParameterValue):
 
     def __init__(self, parameter_type, domain_set, storage=None, **kwargs):
@@ -244,6 +288,7 @@ class VectorValue(AbstractComplexParameterValue):
         """
         kwc=kwargs.copy()
         AbstractComplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
+        self._storage.expand(self.shape, 0, self.shape[0])
 
 class ArrayValue(AbstractComplexParameterValue):
 

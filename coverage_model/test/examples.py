@@ -41,6 +41,9 @@ def values_outside_coverage():
     ftype = FunctionType(QuantityType(value_encoding=np.dtype('float32')))
     fval = get_value_class(ftype, domain_set=dom)
 
+    crtype = ConstantRangeType(QuantityType(value_encoding=np.dtype('int16')))
+    crval = get_value_class(crtype, domain_set=dom)
+
     # Add data to the values
     qval[:] = np.random.random_sample(num_rec)*(50-20)+20 # array of 10 random values between 20 & 50
 
@@ -49,8 +52,10 @@ def values_outside_coverage():
         aval[x] = np.random.bytes(np.random.randint(1,20)) # One value (which is a byte string) for each member of the domain
         rval[x] = {letts[x]: letts[x:]} # One value (which is a dict) for each member of the domain
 
-    cval_n[0] = 200 # Doesn't matter what index (or indices) you assign this to - it's used everywhere!!
+    # Doesn't matter what index (or indices) you assign these 3 - the same value is used everywhere!!
+    cval_n[0] = 200
     cval_s[0] = 'constant string value'
+    crval[0] = (10, 50)
 
     fval[:] = make_range_expr(100, min=0, max=4, min_incl=True, max_incl=False, else_val=-9999)
     fval[:] = make_range_expr(200, min=4, max=6, min_incl=True, else_val=-9999)
@@ -60,13 +65,13 @@ def values_outside_coverage():
         raise SystemError('Shapes are not equal!!')
 
     types = (qtype, atype, rtype, ctype_n, ctype_s, ftype)
-    vals = (qval, aval, rval, cval_n, cval_s, fval)
+    vals = (qval, aval, rval, cval_n, cval_s, crval, fval)
 #    for i in xrange(len(vals)):
 #        log.info('Type: %s', types[i])
 #        log.info('\tContent: %s', vals[i].content)
 #        log.info('\tVals: %s', vals[i][:])
 
-    log.info('Returning: qval, aval, rval, cval_n, cval_s, fval')
+    log.info('Returning: qval, aval, rval, cval_n, cval_s, crval, fval')
     return vals
 
 def param_dict_dump_load():
@@ -454,6 +459,14 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True):
     cnst_str_ctxt.long_name = 'example of a parameter of type ConstantType, base_type fixed-len string'
     pdict.add_context(cnst_str_ctxt)
 
+    cnst_rng_flt_ctxt = ParameterContext('const_rng_flt', param_type=ConstantRangeType(), variability=VariabilityEnum.NONE)
+    cnst_rng_flt_ctxt.long_name = 'example of a parameter of type ConstantRangeType, base_type float (default)'
+    pdict.add_context(cnst_rng_flt_ctxt)
+
+    cnst_rng_int_ctxt = ParameterContext('const_rng_int', param_type=ConstantRangeType(QuantityType(value_encoding='int16')), variability=VariabilityEnum.NONE)
+    cnst_rng_int_ctxt.long_name = 'example of a parameter of type ConstantRangeType, base_type int16'
+    pdict.add_context(cnst_rng_int_ctxt)
+
     cat = {0:'turkey',1:'duck',2:'chicken',99:'None'}
     cat_ctxt = ParameterContext('category', param_type=CategoryType(categories=cat), variability=VariabilityEnum.TEMPORAL)
     pdict.add_context(cat_ctxt)
@@ -490,7 +503,10 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True):
     scov.set_parameter_values('quantity_time', value=np.arange(nt))
     scov.set_parameter_values('const_float', value=-71.11) # Set a constant with correct data type
     scov.set_parameter_values('const_int', value=45.32) # Set a constant with incorrect data type (fixed under the hood)
-    scov.set_parameter_values('const_str', value='constant string value')
+    scov.set_parameter_values('const_str', value='constant string value') # Set with a string
+    scov.set_parameter_values('const_rng_flt', value=(12.8, 55.2)) # Set with a tuple
+    scov.set_parameter_values('const_rng_int', value=[-10, 10]) # Set with a list
+
     scov.set_parameter_values('quantity', value=np.random.random_sample(nt)*(26-23)+23)
 
 #    # Setting three range expressions such that indices 0-2 == 10, 3-7 == 15 and >=8 == 20
