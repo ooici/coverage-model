@@ -239,7 +239,11 @@ class CategoryType(AbstractComplexParameterType):
         self._gen_template_attrs()
 
     def is_valid_value(self, value):
-        return value in self.categories.keys()
+        if not isinstance(value, basestring) and np.iterable(value):
+            for v in value:
+                self.is_valid_value(v)
+        else:
+            return value in self.categories.keys() or value in self.categories.values()
 
 class CountType(AbstractSimplexParameterType):
     """
