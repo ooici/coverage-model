@@ -219,7 +219,7 @@ class ConstantRangeValue(AbstractComplexParameterValue):
     @property
     def content(self):
         import ast
-        return ast.literal_eval(self._storage[0])
+        return None if self._storage[0] is None else ast.literal_eval(self._storage[0])
 
     def expand_content(self, domain, origin, expansion):
         # No op storage is always 1 - appropriate domain applied during retrieval of data
