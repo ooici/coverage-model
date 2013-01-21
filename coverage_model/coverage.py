@@ -93,8 +93,15 @@ class AbstractCoverage(AbstractIdentifiable):
 
     @classmethod
     def load(cls, root_dir, persistence_guid=None, mode=None):
+        if not isinstance(root_dir, basestring):
+            raise ValueError('\'root_dir\' must be a string')
+
         if persistence_guid is None:
+            if root_dir.endswith(os.path.sep): # Strip trailing separator if it exists
+                root_dir = root_dir[:-1]
             root_dir, persistence_guid = os.path.split(root_dir)
+        elif not isinstance(persistence_guid, basestring):
+            raise ValueError('\'persistence_guid\' must be a string')
 
         return SimplexCoverage(root_dir, persistence_guid, mode=mode)
 
