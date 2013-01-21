@@ -97,8 +97,9 @@ def _raise_index_error_slice(slice_, size, dim):
             raise IndexError('On dimension {0}; stop index of slice cannot be == 0 when the start index is None: slice => {1}, size => {2}'.format(dim, slice_, size))
         if slice_.stop < 0:
             raise IndexError('On dimension {0}; stop index of slice cannot be < 0: slice => {1}, size => {2}'.format(dim, slice_, size))
-        if slice_.stop > size:
-            raise IndexError('On dimension {0}; stop index of slice cannot be > size: slice => {1}, size => {2}'.format(dim, slice_, size))
+        # This case seems to be counter to how numpy functions - if a slice is longer than the shape, it's simply truncated to the appropriate size...
+#        if slice_.stop > size:
+#            raise IndexError('On dimension {0}; stop index of slice cannot be > size: slice => {1}, size => {2}'.format(dim, slice_, size))
     if slice_.start is not None and slice_.stop is not None:
         if slice_.start >= slice_.stop:
             raise IndexError('On dimension {0}; start index of slice cannot be >= stop index: slice => {1}'.format(dim, slice_))

@@ -438,14 +438,23 @@ class TestCoverageModelBasicsInt(TestCase):
         log.debug('IndexError slices: %s\n%s', len(index_errors), index_errors)
         self.assertTrue(len(results)+len(index_errors) == 0)
 
-    def test_slice_raises_index_error_in_out(self):
+    def test_slice_stop_greater_than_size(self):
         # Tests that a slice defined outside the coverage data bounds raises an error when attempting retrieval
         brick_size = 1000
         time_steps = 5000
         scov = self._create_multi_bricks_cov(brick_size, time_steps)
-        _slice = slice(4999, 5020, None)
-        with self.assertRaises(IndexError):
-            scov.get_parameter_values('temp', _slice)
+        _slice = slice(4998, 5020, None)
+        ret = scov.get_parameter_values('temp', _slice)
+        self.assertTrue(np.array_equal(ret, np.arange(4998, 5000, dtype=scov.get_parameter_context('temp').param_type.value_encoding)))
+
+    def test_slice_stop_greater_than_size_with_step(self):
+        # Tests that a slice (with step) defined outside the coverage data bounds raises an error when attempting retrieval
+        brick_size = 1000
+        time_steps = 5000
+        scov = self._create_multi_bricks_cov(brick_size, time_steps)
+        _slice = slice(4000, 5020, 5)
+        ret = scov.get_parameter_values('temp', _slice)
+        self.assertTrue(np.array_equal(ret, np.arange(4000, 5000, 5, dtype=scov.get_parameter_context('temp').param_type.value_encoding)))
 
     def test_slice_raises_index_error_out_out(self):
         # Tests that an array defined totally outside the coverage data bounds raises an error when attempting retrieval
@@ -453,15 +462,6 @@ class TestCoverageModelBasicsInt(TestCase):
         time_steps = 5000
         scov = self._create_multi_bricks_cov(brick_size, time_steps)
         _slice = slice(5010, 5020, None)
-        with self.assertRaises(IndexError):
-            scov.get_parameter_values('temp', _slice)
-
-    def test_slice_raises_index_error_in_out_step(self):
-        # Tests that a slice (with step) defined outside the coverage data bounds raises an error when attempting retrieval
-        brick_size = 1000
-        time_steps = 5000
-        scov = self._create_multi_bricks_cov(brick_size, time_steps)
-        _slice = slice(4000, 5020, 5)
         with self.assertRaises(IndexError):
             scov.get_parameter_values('temp', _slice)
 
