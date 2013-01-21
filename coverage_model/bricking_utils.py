@@ -69,21 +69,6 @@ def get_bricks_from_slice(slice_, rtree, total_domain):
 
     return bricks
 
-def get_shape_from_slice(slice_, max_shp):
-    log.debug('Getting array shape for slice_: %s', slice_)
-
-    shp=[]
-    for i, s in enumerate(slice_):
-        if isinstance(s, int):
-            shp.append(1)
-        elif isinstance(s, (list,tuple)):
-            shp.append(len(s))
-        elif isinstance(s, slice):
-            st=min(s.stop, max_shp[i]) if s.stop is not None else max_shp[i]
-            shp.append(len(range(*s.indices(st))))
-
-    return tuple(shp)
-
 def calc_brick_slice(slice_, bounds):
     log.debug('slice_=%s\tbounds=%s', slice_, bounds)
     sl = deepcopy(slice_)

@@ -9,7 +9,6 @@
 """
 from ooi.logging import log
 from coverage_model import utils
-from coverage_model import fix_slice
 from coverage_model import bricking_utils
 from coverage_model import ParameterContext, QuantityType
 from coverage_model.persistence_helpers import MasterManager, ParameterManager
@@ -84,13 +83,13 @@ class MultiDim(object):
                     ds[:] = -1
 
     def put_values_to_bricks(self, slice_, values):
-        slice_ = fix_slice(slice_, self.total_domain)
+        slice_ = utils.fix_slice(slice_, self.total_domain)
         bricks = bricking_utils.get_bricks_from_slice(slice_, self.rtree, self.total_domain) # this is a list of tuples [(b_id, (bounds...),), ...]
 
         values = np.asanyarray(values)
         v_shp = values.shape
         log.debug('value_shape: %s', v_shp)
-        s_shp = bricking_utils.get_shape_from_slice(slice_, self.total_domain)
+        s_shp = utils.slice_shape(slice_, self.total_domain)
         log.debug('slice_shape: %s', s_shp)
         is_broadcast = False
         if v_shp == ():
@@ -137,8 +136,8 @@ class MultiDim(object):
 
                 value_slice = tuple(value_slice)
 
-            bss = bricking_utils.get_shape_from_slice(brick_slice, self.brick_extents[bid])
-            vss = bricking_utils.get_shape_from_slice(value_slice, v_shp)
+            bss = utils.slice_shape(brick_slice, self.brick_extents[bid][0][1]+1)
+            vss = utils.slice_shape(value_slice, v_shp)
             log.debug('\nbrick %s:\n\tbrick_slice %s=%s\n\tmin/max=%s\n\tvalue_slice %s=%s', b, bss, brick_slice, brick_mm, vss, value_slice)
             v = values[value_slice]
             log.debug('\nvalues %s=\n%s', v.shape, v)
@@ -151,10 +150,10 @@ class MultiDim(object):
                     ds[brick_slice] = v
 
     def get_values_from_bricks(self, slice_):
-        slice_ = fix_slice(slice_, self.total_domain)
+        slice_ = utils.fix_slice(slice_, self.total_domain)
         bricks = bricking_utils.get_bricks_from_slice(slice_, self.rtree, self.total_domain) # this is a list of tuples [(b_id, (bounds...),), ...]
 
-        ret_shp = bricking_utils.get_shape_from_slice(slice_, self.total_domain)
+        ret_shp = utils.slice_shape(slice_, self.total_domain)
         ret_arr = np.empty(ret_shp, dtype='int16')
 
         for b in bricks:
@@ -209,7 +208,7 @@ def _run_test_slices(md, sl_list, val_arr, verbose):
         tstr = '*** Slice: {0} ***'.format(sl)
         if verbose:
             print '\n' + tstr
-            print 'Slice Shape: {0}'.format(utils.slice_len(sl, md.total_domain))
+            print 'Slice Shape: {0}'.format(utils.slice_shape(sl, md.total_domain))
 
         md.reset_bricks()
         vals = val_arr[sl]
