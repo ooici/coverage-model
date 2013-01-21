@@ -21,7 +21,7 @@ from rtree import index
 import numpy as np
 import h5py
 
-class MultiDim(object):
+class BrickingAssessor(object):
 
     def __init__(self, total_domain=(10,10), brick_size=5, use_hdf=False, root_dir='test_data/multi_dim_trials', guid=None):
         self.total_domain = total_domain
@@ -237,7 +237,7 @@ def _run_test_slices(md, sl_list, val_arr, verbose):
     print
 
 def test_1d(persist, verbose):
-    md = MultiDim(total_domain=(100,), brick_size=10, use_hdf=persist, guid='1d_trial')
+    md = BrickingAssessor(total_domain=(100,), brick_size=10, use_hdf=persist, guid='1d_trial')
     val_arr = np.arange(100)
 
     sl_list = []
@@ -267,8 +267,10 @@ def test_1d(persist, verbose):
 
     _run_test_slices(md, sl_list, val_arr, verbose)
 
+    return md, val_arr
+
 def test_2d(persist, verbose):
-    md=MultiDim(total_domain=(10,10), brick_size=5, use_hdf=persist, guid='2d_trial')
+    md=BrickingAssessor(total_domain=(10,10), brick_size=5, use_hdf=persist, guid='2d_trial')
     val_arr = np.arange(100).reshape(10,10)
 
     sl_list = []
@@ -298,8 +300,10 @@ def test_2d(persist, verbose):
 
     _run_test_slices(md, sl_list, val_arr, verbose)
 
+    return md, val_arr
+
 def test_3d(persist, verbose):
-    md=MultiDim(total_domain=(10,10,10), brick_size=5, use_hdf=persist, guid='3d_trial')
+    md=BrickingAssessor(total_domain=(10,10,10), brick_size=5, use_hdf=persist, guid='3d_trial')
     val_arr = np.arange(1000).reshape(10,10,10)
 
     sl_list = []
@@ -329,6 +333,8 @@ def test_3d(persist, verbose):
     sl_list.append((slice(3,None),slice(3,9,2),slice(None,None,2)))
 
     _run_test_slices(md, sl_list, val_arr, verbose)
+
+    return md, val_arr
 
 if __name__ == '__main__':
     from argparse import ArgumentParser
