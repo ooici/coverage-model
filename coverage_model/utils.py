@@ -10,6 +10,7 @@
 import numpy as np
 import uuid
 import re
+import math
 
 def create_guid():
     """
@@ -113,6 +114,10 @@ def fix_slice(slice_, shape):
     elif not isinstance(slice_,list):
         slice_ = list(slice_)
 
+    # If shape is an integer, tuplize it
+    if isinstance(shape, int):
+        shape = (shape,)
+
     # Then make sure it's the correct rank
     rank = len(shape)
     slen = len(slice_)
@@ -169,30 +174,34 @@ def fix_slice(slice_, shape):
     # Finally, make it a tuple
     return tuple(slice_)
 
-def slice_len(slice_, shape):
-    '''
-    Returns a list of sizes of for each dimension
-    @param slice_       A slice, integer or list of indices
+def slice_shape(slice_, shape):
+    """
+    Returns a tuple containing the length of each dimension
+    @param slice_       A slice, integer or list/tuple of indices
     @param shape        The shape of the data
-    '''
+    """
+    # If shape is an integer, tuplize it
+    if isinstance(shape, int):
+        shape = (shape,)
+
     fixed_slice = fix_slice(slice_, shape)
 
-    slice_lengths = []
+    dim_lengths = []
 
     for s,shape in zip(fixed_slice, shape):
         if isinstance(s,slice):
             start, stop, stride = s.indices(shape)
-            arr_len = (stop - start)/stride
-        elif isinstance(s, list):
-            arr_len = len(s)
+            dim_len = int(math.ceil((stop - start) / float(stride)))
+        elif isinstance(s, (list,tuple)):
+            dim_len = len(s)
         elif isinstance(s, int):
-            arr_len = 1
+            dim_len = 1
         else:
             raise TypeError('Unsupported slice method') # TODO: Better error message
         
-        slice_lengths.append(arr_len)
+        dim_lengths.append(dim_len)
 
-    return tuple(slice_lengths)  
+    return tuple(dim_lengths)
 
 
 
