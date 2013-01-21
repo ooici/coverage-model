@@ -6,72 +6,6 @@
 @author Christopher Mueller
 @brief
 
-from coverage_model.test.multi_dim_trials import *
-md=MultiDim()
-val_arr = np.arange(100).reshape(10,10)
-#sl = (slice(None),slice(None))
-#sl = ([1,2,5,8],2)
-#sl = (2,[1,2,5,8])
-sl = (slice(6,9,2),)
-md.put_values_to_bricks(sl, val_arr[sl])
-md.reset_bricks()
-
-from coverage_model.test.multi_dim_trials import *
-md=MultiDim()
-val_arr = np.arange(100).reshape(10,10)
-
-sl_list = []
-# Single value slices
-sl_list.append((0,1))
-sl_list.append((9,3))
-sl_list.append((3,8))
-sl_list.append((8,7))
-
-# List slices
-sl_list.append(([1,2],2))
-sl_list.append(([1,4],6))
-sl_list.append(([6,9],3))
-sl_list.append(([1,2,5,8],5))
-sl_list.append((2,[2,5,6,9]))
-
-# Slice slices
-sl_list.append((slice(6,9,2),))
-sl_list.append((slice(2,7),slice(3,8)))
-sl_list.append((slice(1,None),slice(4,8)))
-sl_list.append((slice(None),slice(None)))
-sl_list.append((slice(2,8),slice(None)))
-sl_list.append((slice(2,8),slice(3,6)))
-sl_list.append((slice(None,None,3),slice(None,None,2)))
-sl_list.append((slice(1,8,3),slice(3,None,2)))
-sl_list.append((slice(3,None),slice(3,9,2)))
-
-for sl in sl_list:
-    tstr = '*** Slice: {0} ***'.format(sl)
-    print tstr
-    md.reset_bricks()
-    vals = val_arr[sl]
-    md.put_values_to_bricks(sl, vals)
-    vo=md.get_values_from_bricks(sl)
-    eq = np.array_equal(vals, vo)
-    print "Equal" if eq else "Not Equal!!"
-    if not eq:
-        print 'vals in:\n%s' % (vals,)
-        print 'vals out:\n%s' % (vo,)
-#    print 'bricks:'
-#    for b in md.bricks:
-#        print '{0}\n{1}'.format(b,md.bricks[b])
-    print '*'*len(tstr)
-
-
-
-from coverage_model.test.multi_dim_trials import *
-md=MultiDim(use_hdf=True)
-val_arr = np.arange(100).reshape(10,10)
-sl = (slice(6,9,2),)
-md.put_values_to_bricks(sl, val_arr[sl])
-
-
-
 """
 from ooi.logging import log
 from coverage_model import utils
@@ -80,6 +14,7 @@ from coverage_model import bricking_utils
 from coverage_model import ParameterContext, QuantityType
 from coverage_model.persistence_helpers import MasterManager, ParameterManager
 import os
+import shutil
 from coverage_model import create_guid
 
 from copy import deepcopy
@@ -89,15 +24,18 @@ import h5py
 
 class MultiDim(object):
 
-    def __init__(self, total_domain=(10,10), brick_size=5, use_hdf=False):
+    def __init__(self, total_domain=(10,10), brick_size=5, use_hdf=False, root_dir='test_data/multi_dim_trials', guid=None):
         self.total_domain = total_domain
         self.brick_sizes = tuple(brick_size for x in total_domain)
         self.use_hdf = use_hdf
         if self.use_hdf:
-            self.guid = create_guid()
-            self.root_dir = 'multi_dim_trials'
+            self.guid = guid or create_guid()
+            self.root_dir = root_dir
             if not os.path.exists(self.root_dir):
                 os.makedirs(self.root_dir)
+
+            if os.path.exists(os.path.join(self.root_dir, self.guid)):
+                shutil.rmtree(os.path.join(self.root_dir, self.guid))
 
             self.master_manager = MasterManager(self.root_dir, self.guid, name='md_test_{0}'.format(self.guid))
 
@@ -263,28 +201,44 @@ class MultiDim(object):
 
         return ret_arr
 
-def _run_test_slices(md, sl_list, val_arr):
+def _run_test_slices(md, sl_list, val_arr, verbose):
+    if not verbose:
+        from sys import stdout
+
     for sl in sl_list:
         tstr = '*** Slice: {0} ***'.format(sl)
-        print '\n' + tstr
-        print 'Slice Shape: {0}'.format(utils.slice_len(sl, md.total_domain))
+        if verbose:
+            print '\n' + tstr
+            print 'Slice Shape: {0}'.format(utils.slice_len(sl, md.total_domain))
+
         md.reset_bricks()
         vals = val_arr[sl]
         md.put_values_to_bricks(sl, vals)
         vo=md.get_values_from_bricks(sl)
-        if not np.array_equal(vals, vo):
-            # Squeeze and try again
-            if not np.array_equal(vals.squeeze(), vo):
-                print "Equal" if eq else "!!!!!!!! NOT EQUAL !!!!!!!!"
-                print 'vals in:\n%s' % (vals,)
-                print 'vals out:\n%s' % (vo,)
-                #    print 'bricks:'
-            #    for b in md.bricks:
-            #        print '{0}\n{1}'.format(b,md.bricks[b])
-        print '\n' + '*'*len(tstr)
+        eq = np.array_equal(vals, vo)
+        seq = np.array_equal(vals.squeeze(), vo)
+        if not eq and not seq:
+            print "\n!!!!!!!! NOT EQUAL !!!!!!!!"
+            print 'vals in:\n%s' % (vals,)
+            print 'vals out:\n%s' % (vo,)
+        else:
+            if verbose:
+                print "Value Shape: {0}".format(vo.shape)
+                print "Equal{0}!".format(' (w/squeeze)' if not eq else '')
+            else:
+                if not eq:
+                    stdout.write('s')
+                else:
+                    stdout.write('.')
 
-def test_1d(persist):
-    md = MultiDim(total_domain=(100,), brick_size=10, use_hdf=persist)
+                stdout.flush()
+        if verbose:
+            print '\n' + '*'*len(tstr)
+
+    print
+
+def test_1d(persist, verbose):
+    md = MultiDim(total_domain=(100,), brick_size=10, use_hdf=persist, guid='1d_trial')
     val_arr = np.arange(100)
 
     sl_list = []
@@ -312,10 +266,10 @@ def test_1d(persist):
     sl_list.append(slice(1,8,3))
     sl_list.append(slice(3,None))
 
-    _run_test_slices(md, sl_list, val_arr)
+    _run_test_slices(md, sl_list, val_arr, verbose)
 
-def test_2d(persist):
-    md=MultiDim(total_domain=(10,10), brick_size=5, use_hdf=persist)
+def test_2d(persist, verbose):
+    md=MultiDim(total_domain=(10,10), brick_size=5, use_hdf=persist, guid='2d_trial')
     val_arr = np.arange(100).reshape(10,10)
 
     sl_list = []
@@ -343,10 +297,10 @@ def test_2d(persist):
     sl_list.append((slice(1,8,3),slice(3,None,2)))
     sl_list.append((slice(3,None),slice(3,9,2)))
 
-    _run_test_slices(md, sl_list, val_arr)
+    _run_test_slices(md, sl_list, val_arr, verbose)
 
-def test_3d(persist):
-    md=MultiDim(total_domain=(10,10,10), brick_size=5, use_hdf=persist)
+def test_3d(persist, verbose):
+    md=MultiDim(total_domain=(10,10,10), brick_size=5, use_hdf=persist, guid='3d_trial')
     val_arr = np.arange(1000).reshape(10,10,10)
 
     sl_list = []
@@ -375,30 +329,37 @@ def test_3d(persist):
     sl_list.append((slice(1,8,3),slice(3,None,2),slice(4,9,4)))
     sl_list.append((slice(3,None),slice(3,9,2),slice(None,None,2)))
 
-    _run_test_slices(md, sl_list, val_arr)
+    _run_test_slices(md, sl_list, val_arr, verbose)
 
 if __name__ == '__main__':
     from argparse import ArgumentParser
 
     parser = ArgumentParser(description="Bricking & Persistence Trials")
     parser.add_argument('-p', '--persist', help='If HDF persistence should be used, otherwise uses numpy', action="store_true")
+    parser.add_argument('-v', '--verbose', help='Print verbose information', action='store_true')
+    parser.add_argument('-a', '--all', help='Run all tests', action="store_true")
     parser.add_argument('-d1', '--onedim', help='Run 1D test', action="store_true")
     parser.add_argument('-d2', '--twodim', help='Run 2D test', action="store_true")
     parser.add_argument('-d3', '--threedim', help='Run 3D test', action="store_true")
 
     args = parser.parse_args()
 
+    if args.all:
+        args.onedim = True
+        args.twodim = True
+        args.threedim = True
+
     one_picked = np.any([args.onedim, args.twodim, args.threedim])
     if args.onedim or not one_picked:
         print ">>> Start 1D Test >>>"
-        test_1d(args.persist)
-        print ">>>> End 1D Test >>>>\n"
+        test_1d(args.persist, args.verbose)
+        print "<<<< End 1D Test <<<<\n"
     if args.twodim:
         print ">>> Start 2D Test >>>"
-        test_2d(args.persist)
-        print ">>>> End 2D Test >>>>\n"
+        test_2d(args.persist, args.verbose)
+        print "<<<< End 2D Test <<<<\n"
     if args.threedim:
         print ">>> Start 3D Test >>>"
 #        print "Not built yet..."
-        test_3d(args.persist)
-        print ">>>> End 3D Test >>>>\n"
+        test_3d(args.persist, args.verbose)
+        print "<<<< End 3D Test <<<<\n"
