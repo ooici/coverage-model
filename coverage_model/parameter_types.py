@@ -246,6 +246,12 @@ class CategoryType(AbstractComplexParameterType):
         else:
             return value in self.categories.keys() or value in self.categories.values()
 
+    def _todict(self):
+        ret = super(CategoryType, self)._todict()
+        ret['categories'] = {str(k):v for k, v in ret['categories'].iteritems()}
+
+        return ret
+
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
         ret = super(CategoryType, cls)._fromdict(cmdict, arg_masks=arg_masks)
