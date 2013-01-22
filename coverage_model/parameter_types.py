@@ -222,6 +222,7 @@ class CategoryType(AbstractComplexParameterType):
         else:
             key_value_encoding = np.dtype(key_value_encoding).str
 
+        self._key_dtype = np.dtype(key_value_encoding).str
         want_kind=np.dtype(key_value_encoding).kind
         if want_kind not in self.SUPPORTED_CATETEGORY_KEY_KINDS:
             raise TypeError('\'key_value_encoding\' is not supported; supported np.dtype.kinds: {0}'.format(self.SUPPORTED_CATETEGORY_KEY_KINDS))
@@ -244,6 +245,15 @@ class CategoryType(AbstractComplexParameterType):
                 self.is_valid_value(v)
         else:
             return value in self.categories.keys() or value in self.categories.values()
+
+    @classmethod
+    def _fromdict(cls, cmdict, arg_masks=None):
+        ret = super(CategoryType, cls)._fromdict(cmdict, arg_masks=arg_masks)
+        dt = np.dtype(ret._key_dtype)
+        ret.categories = {dt.type(k):v for k, v in ret.categories.iteritems()}
+
+        return ret
+
 
 class CountType(AbstractSimplexParameterType):
     """
