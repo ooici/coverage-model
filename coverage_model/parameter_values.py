@@ -35,7 +35,7 @@ class AbstractParameterValue(AbstractBase):
         AbstractBase.__init__(self, **kwc)
         self.parameter_type = parameter_type
         self.domain_set = domain_set
-        self._storage = storage or InMemoryStorage(dtype=self.parameter_type.storage_encoding, fill_value=self.parameter_type.fill_value)
+        self._storage = storage if storage is not None else InMemoryStorage(dtype=self.parameter_type.storage_encoding, fill_value=self.parameter_type.fill_value)
 
     @property
     def shape(self):
@@ -213,6 +213,10 @@ class ConstantRangeValue(AbstractComplexParameterValue):
         @return:
         """
         kwc=kwargs.copy()
+        # Special handling for this type due to the stringification TODO: reconsider after slicing is reworked
+        if storage is None:
+            storage = InMemoryStorage(dtype=parameter_type.storage_encoding, fill_value=str(parameter_type.fill_value))
+
         AbstractComplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
         self._storage.expand((1,), 0, 1)
 

@@ -66,7 +66,7 @@ class AbstractParameterType(AbstractIdentifiable):
         if hasattr(self, 'value_encoding'):
             dt = np.dtype(self.value_encoding)
             dtk = dt.kind
-            if dtk == 'O' or isinstance(self, ConstantRangeType): # object & ConstantRangeType, must be None for now...
+            if dtk == 'O' or isinstance(self, ConstantRangeType): # object & CategoryRangeType must be None for now...
                 self._fill_value = None
 
             elif dtk == 'u': # Unsigned integer's must be positive
@@ -526,7 +526,6 @@ class ConstantRangeType(AbstractComplexParameterType):
 
         self.base_type = base_type or QuantityType()
         self._template_attrs.update(self.base_type._template_attrs)
-        self._template_attrs['fill_value'] = None
 
         self._gen_template_attrs()
 
