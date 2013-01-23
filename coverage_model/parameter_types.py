@@ -236,8 +236,13 @@ class CategoryType(AbstractComplexParameterType):
             self.base_type = ArrayType()
         else:
             self.base_type = QuantityType(value_encoding=key_value_encoding)
+            self._value_encoding = key_value_encoding
+
+        if key_fill_value is None or key_fill_value not in categories:
+            key_fill_value = categories.keys()[0]
 
         self._template_attrs['categories'] = categories
+        self._template_attrs['fill_value'] = key_fill_value
         self._gen_template_attrs()
 
     def is_valid_value(self, value):
