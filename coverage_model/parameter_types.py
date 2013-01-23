@@ -89,6 +89,7 @@ class AbstractParameterType(AbstractIdentifiable):
     def _gen_template_attrs(self):
         for k, v in self._template_attrs.iteritems():
             setattr(self,k,v)
+            self._template_attrs[k] = None # Leave the key, but replace the value - avoid replicates
 
     def __eq__(self, other):
         return self.__class__.__instancecheck__(other)
