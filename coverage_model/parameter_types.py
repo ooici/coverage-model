@@ -64,13 +64,29 @@ class AbstractParameterType(AbstractIdentifiable):
     @fill_value.setter
     def fill_value(self, value):
         if hasattr(self, 'value_encoding'):
-            dtk = np.dtype(self.value_encoding).kind
-            if dtk == 'u': # Unsigned integer's must be positive
-                self._fill_value = abs(value)
-            elif dtk == 'O': # object, must be None for now...
+            dt = np.dtype(self.value_encoding)
+            dtk = dt.kind
+            if dtk == 'O' or isinstance(self, ConstantRangeType): # object & ConstantRangeType, must be None for now...
                 self._fill_value = None
+
+            elif dtk == 'u': # Unsigned integer's must be positive
+                if value is not None:
+                    self._fill_value = abs(value)
+                else:
+                    self._fill_value = np.iinfo(dt).max
+
+            elif dtk == 'S': # must be a string value
+                self._fill_value = str(value)
+
             else:
-                self._fill_value = value
+                if value is not None:
+                    self._fill_value = value
+                else:
+                    if dtk == 'i':
+                        self._fill_value = np.iinfo(dt).max
+                    elif dtk == 'f':
+                        self._fill_value = np.finfo(dt).max
+
         else:
             self._fill_value = value
 

@@ -410,6 +410,8 @@ class TestCoverageModelBasicsInt(TestCase):
         results.append((ptypes_cov_loaded._range_value.quantity_time[:] == np.arange(2000)).any())
         # ConstantType
         results.append(ptypes_cov_loaded._range_value.const_int[0] == 45)
+        # ConstantRangeType
+        results.append(ptypes_cov_loaded._range_value.const_rng_int[0] == (-10, 10))
         ptypes_cov.close()
         ptypes_cov_loaded.close()
         self.assertTrue(False not in results)
@@ -797,6 +799,8 @@ class TestCoverageModelBasicsInt(TestCase):
         scov.set_parameter_values('const_int', value=45.32) # Set a constant with incorrect data type (fixed under the hood)
         scov.set_parameter_values('const_str', value='constant string value')
         scov.set_parameter_values('quantity', value=np.random.random_sample(nt)*(26-23)+23)
+        scov.set_parameter_values('const_rng_flt', value=(12.8, 55.2)) # Set with a tuple
+        scov.set_parameter_values('const_rng_int', value=[-10, 10]) # Set with a list
 
         #    # Setting three range expressions such that indices 0-2 == 10, 3-7 == 15 and >=8 == 20
         #    scov.set_parameter_values('function', value=make_range_expr(10, 0, 3, min_incl=True, max_incl=False, else_val=-999.9))
@@ -861,6 +865,14 @@ class TestCoverageModelBasicsInt(TestCase):
         cnst_str_ctxt = ParameterContext('const_str', param_type=ConstantType(QuantityType(value_encoding=np.dtype('S21'))), fill_value='', variability=VariabilityEnum.NONE)
         cnst_str_ctxt.long_name = 'example of a parameter of type ConstantType, base_type fixed-len string'
         pdict.add_context(cnst_str_ctxt)
+
+        cnst_rng_flt_ctxt = ParameterContext('const_rng_flt', param_type=ConstantRangeType(), variability=VariabilityEnum.NONE)
+        cnst_rng_flt_ctxt.long_name = 'example of a parameter of type ConstantRangeType, base_type float (default)'
+        pdict.add_context(cnst_rng_flt_ctxt)
+
+        cnst_rng_int_ctxt = ParameterContext('const_rng_int', param_type=ConstantRangeType(QuantityType(value_encoding='int16')), variability=VariabilityEnum.NONE)
+        cnst_rng_int_ctxt.long_name = 'example of a parameter of type ConstantRangeType, base_type int16'
+        pdict.add_context(cnst_rng_int_ctxt)
 
         cat = {0:'turkey',1:'duck',2:'chicken',99:'None'}
         cat_ctxt = ParameterContext('category', param_type=CategoryType(categories=cat), variability=VariabilityEnum.TEMPORAL)
