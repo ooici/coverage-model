@@ -31,6 +31,11 @@ class AnalysisResult(object):
         self._bricks = {}
 
         self._results = {}
+        self._metrics = {}
+
+    def _safe_del_metrics(self, key):
+        if self._metrics.has_key(key):
+            del self._metrics[key]
 
     @property
     def master_status(self):
@@ -41,12 +46,22 @@ class AnalysisResult(object):
             raise TypeError('Unknown status: {0}'.format(status))
         self._results['master'] = (pth, status, size_ratio)
 
+        # Remove the total entries from _metrics so they can be regenerated
+        self._safe_del_metrics('tfc')
+        self._safe_del_metrics('tcorr')
+        self._safe_del_metrics('tsr')
+
     def add_param_status(self, pname, ppth, status, size_ratio=None):
         if not StatusEnum.has_member(status):
             raise TypeError('Unknown status: {0}'.format(status))
 
         self._results[pname] = {'param': (ppth, status, size_ratio),
                                   'bricks': []}
+
+        # Remove the parameter entries from _metrics so they can be regenerated
+        self._safe_del_metrics('pfc')
+        self._safe_del_metrics('pcorr')
+        self._safe_del_metrics('psr')
 
     def add_brick_status(self, pname, bpth, status, size_ratio=None):
         if not StatusEnum.has_member(status):
@@ -57,97 +72,126 @@ class AnalysisResult(object):
 
         self._results[pname]['bricks'].append((bpth, status, size_ratio))
 
+        # Remove the brick entries from _metrics so they can be regenerated
+        self._safe_del_metrics('bfc')
+        self._safe_del_metrics('bcorr')
+        self._safe_del_metrics('bsr')
+
     @property
     def total_file_count(self):
-        return sum([1, self.brick_file_count, self.param_file_count])
+        if not 'tfc' in self._metrics:
+            self._metrics['tfc'] = sum([1, self.brick_file_count, self.param_file_count])
+        return self._metrics['tfc']
 
     @property
     def brick_file_count(self):
-        return sum([len(self._results[p]['bricks']) for p in self._results.keys() if p != 'master'])
+        if not 'bfc' in self._metrics:
+            self._metrics['bfc'] = sum([len(self._results[p]['bricks']) for p in self._results.keys() if p != 'master'])
+
+        return self._metrics['bfc']
 
     @property
     def param_file_count(self):
-        return len(self._results) - 1 # Length of results minus 1 for 'master'
+        if not 'pfc' in self._metrics:
+            self._metrics['pfc'] = len(self._results) - 1 # Length of results minus 1 for 'master'
+        return self._metrics['pfc']
 
     def get_master_corruption(self):
-        corruptions = set()
-        if self._results['master'][1] == StatusEnum.CORRUPT:
-            corruptions.add(self._results['master'][0])
+        if not 'mcorr' in self._metrics:
+            corruptions = set()
+            if self._results['master'][1] == StatusEnum.CORRUPT:
+                corruptions.add(self._results['master'][0])
 
-        return list(corruptions)
+            self._metrics['mcorr'] = list(corruptions)
+        return self._metrics['mcorr']
 
     def get_param_corruptions(self):
-        corruptions = set()
+        if not 'pcorr' in self._metrics:
+            corruptions = set()
 
-        corruptions.update([self._results[p]['param'][0] for p in self._results if p != 'master' and self._results[p]['param'][1] == StatusEnum.CORRUPT])
+            corruptions.update([self._results[p]['param'][0] for p in self._results if p != 'master' and self._results[p]['param'][1] == StatusEnum.CORRUPT])
 
-        ret = list(corruptions)
-        ret.sort()
-        return ret
+            ret = list(corruptions)
+            ret.sort()
+            self._metrics['pcorr'] = ret
+        return self._metrics['pcorr']
 
     def get_brick_corruptions(self):
-        corruptions = set()
+        if not 'bcorr' in self._metrics:
+            corruptions = set()
 
-        for p in self._results:
-            if p != 'master':
-                for b in self._results[p]['bricks']:
-                    if b[1] == StatusEnum.CORRUPT:
-                        corruptions.add(b[0])
+            for p in self._results:
+                if p != 'master':
+                    for b in self._results[p]['bricks']:
+                        if b[1] == StatusEnum.CORRUPT:
+                            corruptions.add(b[0])
 
-#        corruptions.update([b[0] for p in self._results for b in self._results[p]['bricks'] if p != 'master' and b[1] == StatusEnum.CORRUPT])
+    #        corruptions.update([b[0] for p in self._results for b in self._results[p]['bricks'] if p != 'master' and b[1] == StatusEnum.CORRUPT])
 
-        ret = list(corruptions)
-        ret.sort()
-        return ret
+            ret = list(corruptions)
+            ret.sort()
+            self._metrics['bcorr'] = ret
+        return self._metrics['bcorr']
 
     def get_corruptions(self):
-        corruptions = set()
-        corruptions.update(self.get_master_corruption())
-        corruptions.update(self.get_param_corruptions())
-        corruptions.update(self.get_brick_corruptions())
+        if not 'tcorr' in self._metrics:
+            corruptions = set()
+            corruptions.update(self.get_master_corruption())
+            corruptions.update(self.get_param_corruptions())
+            corruptions.update(self.get_brick_corruptions())
 
-        ret = list(corruptions)
-        ret.sort()
-        return ret
+            ret = list(corruptions)
+            ret.sort()
+            self._metrics['tcorr'] = ret
+        return self._metrics['tcorr']
 
     def get_master_size_ratio(self):
-        ratios = set()
+        if not 'msr' in self._metrics:
+            ratios = set()
 
-        ratios.add((self._results['master'][0], self._results['master'][2]))
+            ratios.add((self._results['master'][0], self._results['master'][2]))
 
-        return list(ratios)
+            self._metrics['msr'] = list(ratios)
+        return self._metrics['msr']
 
     def get_param_size_ratios(self):
-        ratios = set()
-        ratios.update([(self._results[p]['param'][0], self._results[p]['param'][2]) for p in self._results if p != 'master'])
+        if not 'psr' in self._metrics:
+            ratios = set()
 
-        ret = list(ratios)
-        ret.sort()
-        return ret
+            ratios.update([(self._results[p]['param'][0], self._results[p]['param'][2]) for p in self._results if p != 'master'])
+
+            ret = list(ratios)
+            ret.sort()
+            self._metrics['psr'] = ret
+        return self._metrics['psr']
 
     def get_brick_size_ratios(self):
-        ratios = set()
+        if not 'bsr' in self._metrics:
+            ratios = set()
 
-        for p in self._results:
-            if p != 'master':
-                for b in self._results[p]['bricks']:
-                    ratios.add((b[0],b[2]))
+            for p in self._results:
+                if p != 'master':
+                    for b in self._results[p]['bricks']:
+                        ratios.add((b[0],b[2]))
 
-#        ratios.update([(b[0], b[1]) for p in self._results for b in self._results[p]['bricks'] if p != 'master'])
+    #        ratios.update([(b[0], b[1]) for p in self._results for b in self._results[p]['bricks'] if p != 'master'])
 
-        ret = list(ratios)
-        ret.sort()
-        return ret
+            ret = list(ratios)
+            ret.sort()
+            self._metrics['bsr'] = ret
+        return self._metrics['bsr']
 
     def get_size_ratios(self):
-        ratios = set()
-        ratios.update(self.get_master_size_ratio())
-        ratios.update(self.get_param_size_ratios())
-        ratios.update(self.get_brick_size_ratios())
+        if not 'tsr' in self._metrics:
+            ratios = set()
+            ratios.update(self.get_master_size_ratio())
+            ratios.update(self.get_param_size_ratios())
+            ratios.update(self.get_brick_size_ratios())
 
-        ret = list(ratios)
-        ret.sort()
-        return ret
+            ret = list(ratios)
+            ret.sort()
+            self._metrics['tsr'] = list(ratios)
+        return self._metrics['tsr']
 
     @property
     def is_corrupt(self):
@@ -169,13 +213,27 @@ class CoverageDoctor(object):
 #            raise TypeError('\'dataset_obj\' must be an instance of DataSet')
 
         self.cov_pth = coverage_path
-        self.dp = data_product_obj
-        self.ds = dataset_obj
+        self._dpo = data_product_obj
+        self._dso = dataset_obj
 
         self._ar = None
-        self._master_path = None
 
-    def _do_analysis(self, incl_bricks=False):
+    @property
+    def total_file_count(self):
+        if self._ar:
+            return self._ar.total_file_count
+
+    @property
+    def brick_file_count(self):
+        if self._ar:
+            return self._ar.brick_file_count
+
+    @property
+    def param_file_count(self):
+        if self._ar:
+            return self._ar.param_file_count
+
+    def _do_analysis(self, analyze_bricks=False):
         ar = AnalysisResult()
 
         root, guid = os.path.split(self.cov_pth)
@@ -192,17 +250,21 @@ class CoverageDoctor(object):
             st = StatusEnum.CORRUPT if hdf_utils.has_corruption(p_pth) else StatusEnum.NORMAL
             sz=hdf_utils.space_ratio(p_pth)
             ar.add_param_status(p, p_pth, st, sz)
-            if incl_bricks:
-                for b_pth in [os.path.join(pdir, x) for x in os.listdir(pdir) if not p in x]:
+            for b_pth in [os.path.join(pdir, x) for x in os.listdir(pdir) if not p in x]:
+                if analyze_bricks:
                     st = StatusEnum.CORRUPT if hdf_utils.has_corruption(b_pth) else StatusEnum.NORMAL
                     sz=hdf_utils.space_ratio(b_pth)
-                    ar.add_brick_status(p, b_pth, st, sz)
+                else:
+                    st = StatusEnum.UNKNOWN
+                    sz = StatusEnum.UNKNOWN
+
+                ar.add_brick_status(p, b_pth, st, sz)
 
         return ar
 
-    def analyze(self, reanalyze=False, incl_bricks=False):
+    def analyze(self, analyze_bricks=False, reanalyze=False):
         if self._ar is None or reanalyze:
-            ar = self._do_analysis(incl_bricks=incl_bricks)
+            ar = self._do_analysis(analyze_bricks=analyze_bricks)
             self._ar = ar
         return self._ar
 
@@ -212,32 +274,21 @@ class CoverageDoctor(object):
 
         if self._ar.is_corrupt:
             if len(self._ar.get_brick_corruptions()) > 0:
-                corr = self._ar.get_corruptions()
-                if len(corr) > 1 and self._ar.get_master_corruption() is not None:
+                if len(self._ar.get_corruptions()) > 1 and len(self._ar.get_master_corruption()) == 1:
                     print 'Corruption in master and one or more parameters.  Cannot repair at this time!! :('
                 else:
+                    # Rename the top level directory
+
+                    # Repair the corrupt file(s)
                     print 'Repairing the coverage!!! :D'
+
+                    # Rename the top level directory back to it's original value
             else:
                 print 'Brick corruption.  Cannot repair at this time!!! :('
         else:
             print 'Coverage is not corrupt, nothing to repair!! :)'
 
         return True
-
-    @property
-    def total_file_count(self):
-        if self._ar:
-            return self._ar.total_file_count
-
-    @property
-    def brick_file_count(self):
-        if self._ar:
-            return self._ar.brick_file_count
-
-    @property
-    def param_file_count(self):
-        if self._ar:
-            return self._ar.param_file_count
 
     def repack_above(self, min_size_ratio=0.33):
         if self._ar is None:
