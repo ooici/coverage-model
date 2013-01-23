@@ -8,10 +8,22 @@
 """
 
 from coverage_model import hdf_utils
-from coverage_model.coverage import AbstractCoverage
+from coverage_model.persistence_helpers import pack
 from coverage_model.basic_types import BaseEnum
-from interface.objects import DataProduct, DataSet
 import os
+import h5py
+
+
+MASTER_ATTRS = [
+    'auto_flush_values',
+    'file_path',
+    'global_bricking_scheme',
+    'guid',
+    'inline_data_writes',
+    'name',
+    'root_dir',
+    'sdom',
+    'tdom',]
 
 class StatusEnum(BaseEnum):
     UNSET = 'UNSET'
@@ -269,26 +281,68 @@ class CoverageDoctor(object):
         return self._ar
 
     def repair(self, reanalyze=False):
-        if not self._ar is None or reanalyze:
+        if self._ar is None or reanalyze:
             self._ar = self._do_analysis()
 
         if self._ar.is_corrupt:
-            if len(self._ar.get_brick_corruptions()) > 0:
+            if len(self._ar.get_brick_corruptions()) == 0:
                 if len(self._ar.get_corruptions()) > 1 and len(self._ar.get_master_corruption()) == 1:
-                    print 'Corruption in master and one or more parameters.  Cannot repair at this time!! :('
+                    raise NotImplementedError('Corruption in master and one or more parameters.  Cannot repair at this time!! :(')
                 else:
                     # Rename the top level directory
 
                     # Repair the corrupt file(s)
-                    print 'Repairing the coverage!!! :D'
+                    if len(self._ar.get_master_corruption()) == 1:
+                        # Get the path to the master file
+                        mfile = self._ar.get_master_corruption()[0]
+                        # Sort out which attributes are bad and which aren't
+                        good, bad = self._retrieve_uncorrupt_attrs(mfile)
+                        if len(bad) == 0:
+                            print 'Attributes all appear good!!'
+                        else:
+                            mfile_out = mfile.replace('.hdf5','_new.hdf5')
+                            with h5py.File(mfile_out) as f:
+                                for a in good:
+                                    f.attrs[a] = good[a]
+
+                                for a in bad:
+                                    f.attrs[a] = self._get_master_attribute(a)
+
+                            print 'Fixed Master!  New file at: %s' % mfile_out
+
+                    elif len(self._ar.get_param_corruptions()) > 0:
+                        raise NotImplementedError('Param repair not ready yet')
+                    else:
+                        raise NotImplementedError('Don\'t really know how you got here!!')
 
                     # Rename the top level directory back to it's original value
             else:
-                print 'Brick corruption.  Cannot repair at this time!!! :('
+                raise NotImplementedError('Brick corruption.  Cannot repair at this time!!! :(')
         else:
             print 'Coverage is not corrupt, nothing to repair!! :)'
 
         return True
+
+    def _get_master_attribute(self, att):
+        if att == 'inline_data_writes' or 'auto_flush_values':
+            return pack(True)
+        else:
+            raise NotImplementedError('Not sure what to do with attribute: {0}'.format(att))
+
+    def _retrieve_uncorrupt_attrs(self, fpath, atts=None):
+        if atts is None:
+            atts = MASTER_ATTRS
+
+        good_atts = {}
+        bad_atts = []
+        for a in atts:
+            try:
+                with h5py.File(fpath, 'r') as f:
+                    good_atts[a] = f.attrs[a]
+            except:
+                bad_atts.append(a)
+
+        return good_atts, bad_atts
 
     def repack_above(self, min_size_ratio=0.33):
         if self._ar is None:
