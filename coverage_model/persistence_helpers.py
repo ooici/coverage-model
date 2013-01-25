@@ -141,7 +141,7 @@ class MasterManager(BaseManager):
         self.guid = guid
 
         # Add attributes that should NEVER be flushed
-        self._ignore.add('param_groups')
+        self._ignore.update(['param_groups', 'guid', 'file_path', 'root_dir'])
         if not hasattr(self, 'param_groups'):
             self.param_groups = set()
 
@@ -168,7 +168,7 @@ class ParameterManager(BaseManager):
         self.parameter_name = parameter_name
 
         # Add attributes that should NEVER be flushed
-        self._ignore.add('brick_tree')
+        self._ignore.update(['brick_tree', 'file_path', 'root_dir'])
 
     def thin_origins(self, origins):
         pass
