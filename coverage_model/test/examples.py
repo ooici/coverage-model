@@ -431,7 +431,7 @@ def emptysamplecov(save_coverage=False, in_memory=False, inline_data_writes=True
 
     return scov
 
-def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True):
+def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True, make_empty=False):
     # Construct temporal and spatial Coordinate Reference System objects
     tcrs = CRS([AxisTypeEnum.TIME])
     scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
@@ -502,6 +502,9 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True):
     scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory)
 
     # Insert some timesteps (automatically expands other arrays)
+    if make_empty:
+        return scov
+
     nt = 20
     scov.insert_timesteps(nt)
 

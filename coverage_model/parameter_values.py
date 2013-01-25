@@ -223,6 +223,12 @@ class ConstantRangeValue(AbstractComplexParameterValue):
     @property
     def content(self):
         import ast
+        # CBM TODO: Remove this check once slicing is fixed
+        if self._storage[0] is None:
+            return None
+        if isinstance(self._storage[0], np.ndarray) and self._storage[0].size == 0:
+            return self.parameter_type.fill_value
+
         return ast.literal_eval(self._storage[0])
 
     def expand_content(self, domain, origin, expansion):
