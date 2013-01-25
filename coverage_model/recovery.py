@@ -6,13 +6,12 @@
 @author Christopher Mueller
 @brief Contains utility functions for attempting to recover corrupted coverages
 """
-
+from ooi.logging import log
 from coverage_model import hdf_utils
 from coverage_model.persistence_helpers import pack
 from coverage_model.basic_types import BaseEnum
 import os
 import h5py
-
 
 MASTER_ATTRS = [
     'auto_flush_values',
@@ -24,6 +23,15 @@ MASTER_ATTRS = [
     'root_dir',
     'sdom',
     'tdom',]
+
+PARAMETER_ATTRS = [
+    'brick_domains',
+    'brick_list',
+    'file_path',
+    'parameter_context',
+    'parameter_name',
+    'root_dir',
+    'tree_rank',]
 
 class StatusEnum(BaseEnum):
     UNSET = 'UNSET'
@@ -225,6 +233,8 @@ class CoverageDoctor(object):
 #            raise TypeError('\'dataset_obj\' must be an instance of DataSet')
 
         self.cov_pth = coverage_path
+        self._root, self._guid = os.path.split(self.cov_pth)
+        self._inner_dir = os.path.join(self.cov_pth, self._guid)
         self._dpo = data_product_obj
         self._dso = dataset_obj
 
@@ -248,21 +258,22 @@ class CoverageDoctor(object):
     def _do_analysis(self, analyze_bricks=False):
         ar = AnalysisResult()
 
-        root, guid = os.path.split(self.cov_pth)
-        inner_dir = os.path.join(self.cov_pth, guid)
-        master_pth = os.path.join(self.cov_pth, guid + '_master.hdf5')
+        master_pth = os.path.join(self.cov_pth, self._guid + '_master.hdf5')
 
         st = StatusEnum.CORRUPT if hdf_utils.has_corruption(master_pth) else StatusEnum.NORMAL
         sz=hdf_utils.space_ratio(master_pth)
         ar.set_master_status(master_pth, st, sz)
 
-        for p in os.walk(inner_dir).next()[1]:
-            pdir = os.path.join(inner_dir, p)
-            p_pth = os.path.join(pdir, p + '.hdf5')
-            st = StatusEnum.CORRUPT if hdf_utils.has_corruption(p_pth) else StatusEnum.NORMAL
-            sz=hdf_utils.space_ratio(p_pth)
-            ar.add_param_status(p, p_pth, st, sz)
-            for b_pth in [os.path.join(pdir, x) for x in os.listdir(pdir) if not p in x]:
+        for p in os.walk(self._inner_dir).next()[1]:
+            pset = self._get_parameter_fileset(p)
+
+            # Check parameter file
+            st = StatusEnum.CORRUPT if hdf_utils.has_corruption(pset['param']) else StatusEnum.NORMAL
+            sz=hdf_utils.space_ratio(pset['param'])
+            ar.add_param_status(p, pset['param'], st, sz)
+
+            # Check each brick file
+            for b_pth in pset['bricks']:
                 if analyze_bricks:
                     st = StatusEnum.CORRUPT if hdf_utils.has_corruption(b_pth) else StatusEnum.NORMAL
                     sz=hdf_utils.space_ratio(b_pth)
@@ -292,26 +303,55 @@ class CoverageDoctor(object):
                     # Rename the top level directory
 
                     # Repair the corrupt file(s)
+
+                    # Repair master file corruption
                     if len(self._ar.get_master_corruption()) == 1:
                         # Get the path to the master file
-                        mfile = self._ar.get_master_corruption()[0]
-                        # Sort out which attributes are bad and which aren't
-                        good, bad = self._retrieve_uncorrupt_attrs(mfile)
-                        if len(bad) == 0:
-                            print 'Attributes all appear good!!'
-                        else:
-                            mfile_out = mfile.replace('.hdf5','_new.hdf5')
-                            with h5py.File(mfile_out) as f:
-                                for a in good:
-                                    f.attrs[a] = good[a]
+                        m_orig = self._ar.get_master_corruption()[0]
+                        # Make the path to the repr file
+                        m_repr = self._get_repr_file_path(m_orig)
 
-                                for a in bad:
-                                    f.attrs[a] = self._get_master_attribute(a)
+                        # Fix any bad attributes
+                        self._repair_file_attrs(m_orig, m_repr, self._get_master_attribute, MASTER_ATTRS)
 
-                            print 'Fixed Master!  New file at: %s' % mfile_out
+                        # Copy all groups (and subgroups) to the new file
+                        have_groups=[]
+                        error_groups=[]
+                        have_datasets={}
+                        with h5py.File(m_orig, 'r') as orig:
+                            with h5py.File(m_repr) as new:
+                                for k in orig.keys():
+                                    try:
+                                        orig.copy(k, new)
+                                        have_groups.append(k)
+                                        have_datasets[k]=orig[k].keys()
+                                    except IOError:
+                                        error_groups.append(k)
+
+                        #TODO: Now look at the files in the directory tree and make sure we've accounted for everything
+                        missing = self._compare_to_tree(have_groups, have_datasets, error_groups)
+                        if len(missing) > 0: # There are files present in the tree that are missing from the coverage!!!
+                            log.error('Files missing from coverage!!!: {0}'.format(missing))
+
+                        # Rename the original
+                        m_old = m_orig.replace('.hdf5', '_old.hdf5')
+                        os.rename(m_orig, m_old)
+                        # Rename the fixed
+                        os.rename(m_repr, m_orig)
+
+                        log.info('Fixed Master!  Original file moved to: %s' % m_old)
 
                     elif len(self._ar.get_param_corruptions()) > 0:
-                        raise NotImplementedError('Param repair not ready yet')
+                        for p_orig in self._ar.get_param_corruptions():
+                            p_repr = self._get_repr_file_path(p_orig)
+
+                            # Fix any bad attributes
+                            self._repair_file_attrs(p_orig, p_repr, self._get_parameter_attribute, PARAMETER_ATTRS)
+
+                            # Fix the rtree dataset
+                            # TODO: How do we know if it's corrupt or if something is missing?!? :o
+
+
                     else:
                         raise NotImplementedError('Don\'t really know how you got here!!')
 
@@ -319,9 +359,25 @@ class CoverageDoctor(object):
             else:
                 raise NotImplementedError('Brick corruption.  Cannot repair at this time!!! :(')
         else:
-            print 'Coverage is not corrupt, nothing to repair!! :)'
+            log.info('Coverage is not corrupt, nothing to repair!! :)')
 
-        return True
+    def _get_repr_file_path(self, orig):
+        return orig.replace('.hdf5','_repr.hdf5')
+
+    def _repair_file_attrs(self, orig_file, rpr_file, attr_callback, attr_list):
+        # Sort out which attributes are bad and which aren't
+        good_atts, bad_atts = self._diagnose_attrs(orig_file, attr_list)
+        with h5py.File(rpr_file) as f:
+            # Copy the good attributes
+            for a in good_atts:
+                f.attrs[a] = good_atts[a]
+
+            # Add new values for the bad attributes
+            for a in bad_atts:
+                f.attrs[a] = attr_callback(a)
+
+    def _get_parameter_attribute(self, att):
+        raise NotImplementedError('Not sure what to do with attribute: {0}'.format(att))
 
     def _get_master_attribute(self, att):
         if att == 'inline_data_writes' or 'auto_flush_values':
@@ -329,20 +385,44 @@ class CoverageDoctor(object):
         else:
             raise NotImplementedError('Not sure what to do with attribute: {0}'.format(att))
 
-    def _retrieve_uncorrupt_attrs(self, fpath, atts=None):
-        if atts is None:
-            atts = MASTER_ATTRS
-
+    def _diagnose_attrs(self, fpath, atts):
         good_atts = {}
         bad_atts = []
         for a in atts:
-            try:
-                with h5py.File(fpath, 'r') as f:
+            with h5py.File(fpath, 'r') as f:
+                try:
                     good_atts[a] = f.attrs[a]
-            except:
-                bad_atts.append(a)
+                except IOError:
+                    bad_atts.append(a)
 
         return good_atts, bad_atts
+
+    def _get_parameter_fileset(self, pname):
+        pset = {}
+        pdir = os.path.join(self._inner_dir, pname)
+        pset['param'] = os.path.join(pdir, pname + '.hdf5')
+        pset['bricks'] = [os.path.join(pdir, x) for x in os.listdir(pdir) if not pname in x]
+        return pset
+
+    def _compare_to_tree(self, have_groups, have_datasets, error_groups):
+        missing = []
+
+        for p in os.walk(self._inner_dir).next()[1]:
+            pset = self._get_parameter_fileset(p)
+            if p in have_groups:
+                pset.pop('param')
+            else:
+                missing.append(pset.pop('param'))
+
+            if p in have_datasets:
+                for b in list(pset['bricks']):
+                    bid = os.path.split(os.path.splitext(b)[0])[1]
+                    if bid not in have_datasets[p]:
+                        missing.append(b)
+            else:
+                missing.extend(pset['bricks'])
+
+        return missing
 
     def repack_above(self, min_size_ratio=0.33):
         if self._ar is None:
