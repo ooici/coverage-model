@@ -23,25 +23,27 @@ import h5py
 
 class BrickingAssessor(object):
 
-    def __init__(self, total_domain=(10,10), brick_size=5, use_hdf=False, root_dir='test_data/multi_dim_trials', guid=None):
+    def __init__(self, total_domain=(10,10), brick_size=5, use_hdf=False, root_dir='test_data/multi_dim_trials', guid=None, dtype='int16'):
         self.total_domain = total_domain
         self.brick_sizes = tuple(brick_size for x in total_domain)
         self.use_hdf = use_hdf
+        self.dtype = np.dtype(dtype).name
         if self.use_hdf:
             self.guid = guid or create_guid()
+            name= '%s_%s' % (self.guid, self.dtype)
             self.root_dir = root_dir
             if not os.path.exists(self.root_dir):
                 os.makedirs(self.root_dir)
 
-            if os.path.exists(os.path.join(self.root_dir, self.guid)):
-                shutil.rmtree(os.path.join(self.root_dir, self.guid))
+            if os.path.exists(os.path.join(self.root_dir, name)):
+                shutil.rmtree(os.path.join(self.root_dir, name))
 
-            self.master_manager = MasterManager(self.root_dir, self.guid, name='md_test_{0}'.format(self.guid))
+            self.master_manager = MasterManager(self.root_dir, name, name='md_test_{0}'.format(name))
 
             self.master_manager.flush()
 
-            pc = ParameterContext('test_param', param_type=QuantityType('int16'), fill_value=-1)
-            self.param_manager = ParameterManager(os.path.join(self.root_dir, self.guid, pc.name), pc.name)
+            pc = ParameterContext('test_param', param_type=QuantityType(self.dtype), fill_value=-1)
+            self.param_manager = ParameterManager(os.path.join(self.root_dir, name, pc.name), pc.name)
             self.param_manager.parameter_context = pc
             self.master_manager.create_group(pc.name)
 
@@ -58,10 +60,16 @@ class BrickingAssessor(object):
         self.build_bricks()
         bricking_utils.populate_rtree(self.rtree, self.rtree_extents, self.brick_extents)
 
+    def _get_numpy_array(self, shape):
+        if not isinstance(shape, tuple):
+            shape = tuple(shape)
+
+        return np.arange(utils.prod(shape), dtype=self.dtype).reshape(shape)
+
     def build_bricks(self):
         for x in xrange(len(self.brick_origins)):
             if not self.use_hdf:
-                self.bricks[x] = np.empty(self.brick_sizes, dtype='int16')
+                self.bricks[x] = np.empty(self.brick_sizes, dtype=self.dtype)
                 self.bricks[x].fill(-1)
             else:
                 id=str(x)
@@ -79,7 +87,7 @@ class BrickingAssessor(object):
                 arr.fill(-1)
             else:
                 with h5py.File(arr) as f:
-                    ds = f.require_dataset(str(i), shape=self.brick_sizes, dtype='int16', chunks=True, fillvalue=-1)
+                    ds = f.require_dataset(str(i), shape=self.brick_sizes, dtype=self.dtype, chunks=True, fillvalue=-1)
                     ds[:] = -1
 
     def put_values_to_bricks(self, slice_, values):
@@ -146,7 +154,7 @@ class BrickingAssessor(object):
             else:
                 fi=self.bricks[bid]
                 with h5py.File(fi) as f:
-                    ds = f.require_dataset(str(bid),shape=self.brick_sizes, dtype='int16', chunks=True, fillvalue=-1)
+                    ds = f.require_dataset(str(bid),shape=self.brick_sizes, dtype=self.dtype, chunks=True, fillvalue=-1)
                     ds[brick_slice] = v
 
     def get_values_from_bricks(self, slice_):
@@ -154,7 +162,7 @@ class BrickingAssessor(object):
         bricks = bricking_utils.get_bricks_from_slice(slice_, self.rtree, self.total_domain) # this is a list of tuples [(b_id, (bounds...),), ...]
 
         ret_shp = utils.slice_shape(slice_, self.total_domain)
-        ret_arr = np.empty(ret_shp, dtype='int16')
+        ret_arr = np.empty(ret_shp, dtype=self.dtype)
 
         for b in bricks:
             bid, bbnds = b
@@ -184,7 +192,7 @@ class BrickingAssessor(object):
             else:
                 fi=self.bricks[bid]
                 with h5py.File(fi) as f:
-                    ds = f.require_dataset(str(bid),shape=self.brick_sizes, dtype='int16', chunks=True, fillvalue=-1)
+                    ds = f.require_dataset(str(bid),shape=self.brick_sizes, dtype=self.dtype, chunks=True, fillvalue=-1)
                     ret_vals = ds[brick_slice]
 
 
@@ -200,7 +208,7 @@ class BrickingAssessor(object):
 
         return ret_arr
 
-def _run_test_slices(md, sl_list, val_arr, verbose):
+def _run_test_slices(ba, sl_list, val_arr, verbose):
     if not verbose:
         from sys import stdout
 
@@ -208,12 +216,12 @@ def _run_test_slices(md, sl_list, val_arr, verbose):
         tstr = '*** Slice: {0} ***'.format(sl)
         if verbose:
             print '\n' + tstr
-            print 'Slice Shape: {0}'.format(utils.slice_shape(sl, md.total_domain))
+            print 'Slice Shape: {0}'.format(utils.slice_shape(sl, ba.total_domain))
 
-        md.reset_bricks()
+        ba.reset_bricks()
         vals = val_arr[sl]
-        md.put_values_to_bricks(sl, vals)
-        vo=md.get_values_from_bricks(sl)
+        ba.put_values_to_bricks(sl, vals)
+        vo=ba.get_values_from_bricks(sl)
         eq = np.array_equal(vals, vo)
         seq = np.array_equal(vals.squeeze(), vo)
         if not eq and not seq:
@@ -236,9 +244,10 @@ def _run_test_slices(md, sl_list, val_arr, verbose):
 
     print
 
-def test_1d(persist, verbose):
-    md = BrickingAssessor(total_domain=(100,), brick_size=10, use_hdf=persist, guid='1d_trial')
-    val_arr = np.arange(100)
+def test_1d(persist=False, verbose=False, dtype='int16'):
+    shp = (100,)
+    ba = BrickingAssessor(total_domain=shp, brick_size=10, use_hdf=persist, guid='1d_trial', dtype=dtype)
+    val_arr = ba._get_numpy_array(shp)
 
     sl_list = []
     # Single value slices
@@ -265,13 +274,14 @@ def test_1d(persist, verbose):
     sl_list.append(slice(1,8,3))
     sl_list.append(slice(3,None))
 
-    _run_test_slices(md, sl_list, val_arr, verbose)
+    _run_test_slices(ba, sl_list, val_arr, verbose)
 
-    return md, val_arr
+    return ba, val_arr
 
-def test_2d(persist, verbose):
-    md=BrickingAssessor(total_domain=(10,10), brick_size=5, use_hdf=persist, guid='2d_trial')
-    val_arr = np.arange(100).reshape(10,10)
+def test_2d(persist=False, verbose=False, dtype='int16'):
+    shp = (10,10)
+    ba=BrickingAssessor(total_domain=shp, brick_size=2, use_hdf=persist, guid='2d_trial', dtype=dtype)
+    val_arr = ba._get_numpy_array(shp)
 
     sl_list = []
     # Single value slices
@@ -298,13 +308,14 @@ def test_2d(persist, verbose):
     sl_list.append((slice(1,8,3),slice(3,None,2)))
     sl_list.append((slice(3,None),slice(3,9,2)))
 
-    _run_test_slices(md, sl_list, val_arr, verbose)
+    _run_test_slices(ba, sl_list, val_arr, verbose)
 
-    return md, val_arr
+    return ba, val_arr
 
-def test_3d(persist, verbose):
-    md=BrickingAssessor(total_domain=(10,10,10), brick_size=5, use_hdf=persist, guid='3d_trial')
-    val_arr = np.arange(1000).reshape(10,10,10)
+def test_3d(persist=False, verbose=False, dtype='int16'):
+    shp = (10,10,10)
+    ba=BrickingAssessor(total_domain=shp, brick_size=5, use_hdf=persist, guid='3d_trial', dtype=dtype)
+    val_arr = ba._get_numpy_array(shp)
 
     sl_list = []
     # Single value slices
@@ -332,9 +343,9 @@ def test_3d(persist, verbose):
     sl_list.append((slice(1,8,3),slice(3,None,2),slice(4,9,4)))
     sl_list.append((slice(3,None),slice(3,9,2),slice(None,None,2)))
 
-    _run_test_slices(md, sl_list, val_arr, verbose)
+    _run_test_slices(ba, sl_list, val_arr, verbose)
 
-    return md, val_arr
+    return ba, val_arr
 
 if __name__ == '__main__':
     from argparse import ArgumentParser
@@ -342,6 +353,7 @@ if __name__ == '__main__':
     parser = ArgumentParser(description="Bricking & Persistence Trials")
     parser.add_argument('-p', '--persist', help='If HDF persistence should be used, otherwise uses numpy', action="store_true")
     parser.add_argument('-v', '--verbose', help='Print verbose information', action='store_true')
+    parser.add_argument('-d', '--dtype', help='Data type for values', nargs=1, default='int16')
     parser.add_argument('-a', '--all', help='Run all tests', action="store_true")
     parser.add_argument('-d1', '--onedim', help='Run 1D test', action="store_true")
     parser.add_argument('-d2', '--twodim', help='Run 2D test', action="store_true")
@@ -357,14 +369,14 @@ if __name__ == '__main__':
     one_picked = np.any([args.onedim, args.twodim, args.threedim])
     if args.onedim or not one_picked:
         print ">>> Start 1D Test >>>"
-        test_1d(args.persist, args.verbose)
+        test_1d(args.persist, args.verbose, args.dtype[0])
         print "<<<< End 1D Test <<<<\n"
     if args.twodim:
         print ">>> Start 2D Test >>>"
-        test_2d(args.persist, args.verbose)
+        test_2d(args.persist, args.verbose, args.dtype[0])
         print "<<<< End 2D Test <<<<\n"
     if args.threedim:
         print ">>> Start 3D Test >>>"
 #        print "Not built yet..."
-        test_3d(args.persist, args.verbose)
+        test_3d(args.persist, args.verbose, args.dtype[0])
         print "<<<< End 3D Test <<<<\n"
