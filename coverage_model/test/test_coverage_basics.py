@@ -18,17 +18,24 @@ from coverage_model import *
 from nose.plugins.attrib import attr
 from unittest import TestCase
 
+TEST_DIR = os.path.join(tempfile.gettempdir(), 'cov_mdl_tests')
+
 @attr('INT', group='cov')
 class TestCoverageModelBasicsInt(TestCase):
 
-    def setUp(self):
-        # Create temporary working directory for the persisted coverage tests
-        self.working_dir = tempfile.mkdtemp()
+    @classmethod
+    def setUpClass(cls):
+        os.mkdir(TEST_DIR)
 
-    def tearDown(self):
+    @classmethod
+    def tearDownClass(cls):
         # Removes temporary files
         # Comment this out if you need to inspect the HDF5 files.
-        shutil.rmtree(self.working_dir)
+        shutil.rmtree(TEST_DIR)
+
+    def setUp(self):
+        # Create temporary working directory for the persisted coverage tests
+        self.working_dir = TEST_DIR
 
     # Loading Coverage Tests
     def test_load_succeeds(self):
