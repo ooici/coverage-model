@@ -313,7 +313,7 @@ class SimplexCoverage(AbstractCoverage):
                 self._range_dictionary = ParameterDictionary()
                 self._range_value = RangeValues()
 
-                self._bricking_scheme = bricking_scheme or {'brick_size':10000,'chunk_size':500}
+                self._bricking_scheme = bricking_scheme or {'brick_size':100000,'chunk_size':100000}
 
                 self._in_memory_storage = in_memory_storage
                 if self._in_memory_storage:
