@@ -715,7 +715,7 @@ class PersistedStorage(AbstractStorage):
                     cD = True
                 with h5py.File(brick_file_path, 'a') as f:
                     # TODO: Due to usage concerns, currently locking chunking to "auto"
-                    f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=True, fillvalue=fv)
+                    f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=None, fillvalue=fv)
                     if isinstance(brick_slice, tuple):
                         brick_slice = list(brick_slice)
 
@@ -729,7 +729,7 @@ class PersistedStorage(AbstractStorage):
                         cD = True
                     with h5py.File(brick_file_path, 'a') as f:
                         # TODO: Due to usage concerns, currently locking chunking to "auto"
-                        f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=True, fillvalue=fv)
+                        f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=None, fillvalue=fv)
 
                 if self.auto_flush:
                     # Immediately submit work to the dispatcher
