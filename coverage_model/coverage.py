@@ -688,6 +688,9 @@ class SimplexCoverage(AbstractCoverage):
 
         @param parameter_name   A string parameter name; may be an iterable of such members
         """
+        if self.num_timesteps == 0:
+            raise ValueError('The coverage has no data!')
+
         from coverage_model import QuantityType, ConstantType
         ret = {}
         for pn in self.__parameter_name_arg_to_params(parameter_name):
