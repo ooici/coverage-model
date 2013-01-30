@@ -37,6 +37,19 @@ class TestParameterValuesUnit(TestCase):
         qval[:] = data
         self.assertTrue(np.array_equal(data, qval[:]))
 
+    # BooleanType
+    def test_boolean_values(self):
+        num_rec = 10
+
+        dom = cm.SimpleDomainSet((num_rec,))
+
+        btype = ptypes.BooleanType()
+        bval = cm.get_value_class(btype, domain_set=dom)
+
+        data = [True, False, True, False, False, True, False, True, True, True]
+        bval[:] = data
+        self.assertTrue(np.array_equal(data, bval[:]))
+
     # ArrayType
     def test_array_values(self):
         num_rec = 10

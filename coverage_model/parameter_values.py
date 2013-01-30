@@ -119,6 +119,23 @@ class NumericValue(AbstractSimplexParameterValue):
         AbstractSimplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
         self._storage.expand(self.shape, 0, self.shape[0])
 
+class BooleanValue(AbstractSimplexParameterValue):
+
+    def __init__(self, parameter_type, domain_set, storage=None, **kwargs):
+        """
+
+        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractSimplexParameterValue; see documentation for that class for details
+        """
+        kwc=kwargs.copy()
+        AbstractSimplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
+        self._storage.expand(self.shape, 0, self.shape[0])
+
+    def __setitem__(self, slice_, value):
+        slice_ = utils.fix_slice(slice_, self.shape)
+
+        if self.parameter_type.is_valid_value(value):
+            self._storage[slice_] = np.asanyarray(value, dtype='bool')
+
 class FunctionValue(AbstractComplexParameterValue):
     # CBM TODO: There are 2 'classes' of Function - those that operate against an INDEX, and those that operate against a VALUE
     # CBM TODO: Does this actually end up as a subclass of VectorValue?  basically a 2 member tuple?

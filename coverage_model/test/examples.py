@@ -29,6 +29,10 @@ def values_outside_coverage():
     rtype = RecordType()
     rval = get_value_class(rtype, domain_set=dom)
 
+    # BooleanType example
+    btype = BooleanType()
+    bval = get_value_class(btype, domain_set=dom)
+
     # ConstantType w/ numeric QuantityType example
     ctype_n = ConstantType(QuantityType(value_encoding=np.dtype('int32')))
     cval_n = get_value_class(ctype_n, domain_set=dom)
@@ -70,14 +74,14 @@ def values_outside_coverage():
     if not (aval.shape == rval.shape == cval_n.shape):# == fval.shape):
         raise SystemError('Shapes are not equal!!')
 
-    types = (qtype, atype, rtype, ctype_n, ctype_s, cattype, ftype)
-    vals = (qval, aval, rval, cval_n, cval_s, crval, catval, fval)
+    types = (qtype, atype, rtype, btype, ctype_n, ctype_s, cattype, ftype)
+    vals = (qval, aval, rval, bval, cval_n, cval_s, crval, catval, fval)
 #    for i in xrange(len(vals)):
 #        log.info('Type: %s', types[i])
 #        log.info('\tContent: %s', vals[i].content)
 #        log.info('\tVals: %s', vals[i][:])
 
-    log.info('Returning: qval, aval, rval, cval_n, cval_s, crval, catval, fval')
+    log.info('Returning: qval, aval, rval, bval, cval_n, cval_s, crval, catval, fval')
     return vals
 
 def param_dict_dump_load():
@@ -449,6 +453,9 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True, mak
     quant_t_ctxt.uom = 'seconds since 01-01-1970'
     pdict.add_context(quant_t_ctxt)
 
+    bool_ctxt = ParameterContext('boolean', param_type=BooleanType(), variability=VariabilityEnum.TEMPORAL)
+    pdict.add_context(bool_ctxt)
+
     cnst_flt_ctxt = ParameterContext('const_float', param_type=ConstantType(), variability=VariabilityEnum.NONE)
     cnst_flt_ctxt.long_name = 'example of a parameter of type ConstantType, base_type float (default)'
     cnst_flt_ctxt.axis = AxisTypeEnum.LON
@@ -510,6 +517,7 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True, mak
 
     # Add data for each parameter
     scov.set_parameter_values('quantity_time', value=np.arange(nt))
+    scov.set_parameter_values('boolean', value=[True, True, True], tdoa=[[2,4,14]])
     scov.set_parameter_values('const_float', value=-71.11) # Set a constant with correct data type
     scov.set_parameter_values('const_int', value=45.32) # Set a constant with incorrect data type (fixed under the hood)
     scov.set_parameter_values('const_str', value='constant string value') # Set with a string

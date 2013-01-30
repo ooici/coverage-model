@@ -206,14 +206,15 @@ class BooleanType(AbstractSimplexParameterType):
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractSimplexParameterType; see documentation for that class for details
         """
         kwc=kwargs.copy()
-        AbstractSimplexParameterType.__init__(self, **kwc)
+        AbstractSimplexParameterType.__init__(self, value_class='BooleanValue', **kwc)
 
         self._template_attrs['fill_value'] = False
+        self.value_encoding = 'bool'
 
         self._gen_template_attrs()
 
     def is_valid_value(self, value):
-        return isinstance(value, bool)
+        return np.asanyarray(value, 'bool').dtype.kind == 'b'
 
 class CategoryType(AbstractComplexParameterType):
     """
