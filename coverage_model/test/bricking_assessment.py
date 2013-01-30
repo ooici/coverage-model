@@ -119,21 +119,32 @@ class BrickingAssessor(object):
             # b is (brick_id, (brick_bounds per dim...),)
             bid, bbnds = b
             log.debug('Determining slice for brick: %s', b)
-            log.debug('bid=%s, bbnds=%s', bid, bbnds)
+            bexts = tuple([x+1 for x in zip(*bbnds)[1]]) # Shift from index to size
+            log.debug('bid=%s, bbnds=%s, bexts=%s', bid, bbnds, bexts)
             brick_slice = []
             brick_mm = []
             for x, sl in enumerate(slice_): # Dimensionality
                 log.debug('x=%s  sl=%s', x, sl)
                 log.debug('bbnds[%s]: %s', x, bbnds[x])
-                bsl, mm = bricking_utils.calc_brick_slice(sl, bbnds[x])
-                brick_slice.append(bsl)
-                brick_mm.append(mm)
+                try:
+                    bsl, mm = bricking_utils.calc_brick_slice(sl, bbnds[x])
+                    brick_slice.append(bsl)
+                    brick_mm.append(mm)
+                except ValueError:
+                    continue
 
             if None in brick_slice: # Brick does not contain any of the requested indices
+                log.debug('Brick does not contain any of the requested indices: Move to next brick')
                 continue
 
             brick_slice = tuple(brick_slice)
             brick_mm = tuple(brick_mm)
+
+            try:
+                brick_slice = utils.fix_slice(brick_slice, bexts)
+            except IndexError:
+                log.debug('Malformed brick_slice: move to next brick')
+                continue
 
             if not is_broadcast:
                 value_slice = []
@@ -144,9 +155,13 @@ class BrickingAssessor(object):
 
                 value_slice = tuple(value_slice)
 
-            bss = utils.slice_shape(brick_slice, self.brick_extents[bid][0][1]+1)
-            vss = utils.slice_shape(value_slice, v_shp)
-            log.debug('\nbrick %s:\n\tbrick_slice %s=%s\n\tmin/max=%s\n\tvalue_slice %s=%s', b, bss, brick_slice, brick_mm, vss, value_slice)
+                try:
+                    value_slice = utils.fix_slice(value_slice, v_shp)
+                except IndexError:
+                    log.debug('Malformed value_slice: move to next brick')
+                    continue
+
+            log.debug('\nbrick %s:\n\tbrick_slice %s=%s\n\tmin/max=%s\n\tvalue_slice %s=%s', b, utils.slice_shape(brick_slice, bexts), brick_slice, brick_mm, utils.slice_shape(value_slice, v_shp), value_slice)
             v = values[value_slice]
             log.debug('\nvalues %s=\n%s', v.shape, v)
             if not self.use_hdf:
@@ -306,6 +321,7 @@ def test_2d(persist=False, verbose=False, dtype='int16'):
     sl_list.append((slice(2,8),slice(3,6)))
     sl_list.append((slice(None,None,3),slice(None,None,2)))
     sl_list.append((slice(1,8,3),slice(3,None,2)))
+    sl_list.append((slice(2,6,3),slice(3,None,6)))
     sl_list.append((slice(3,None),slice(3,9,2)))
 
     _run_test_slices(ba, sl_list, val_arr, verbose)
@@ -340,6 +356,8 @@ def test_3d(persist=False, verbose=False, dtype='int16'):
     sl_list.append((slice(2,8),slice(None),slice(5,7)))
     sl_list.append((slice(2,8),slice(3,6),slice(7,8)))
     sl_list.append((slice(None,None,3),slice(None,None,2),slice(None,None,4)))
+    sl_list.append((slice(None,None,3),slice(None,None,2),slice(None,None,7)))
+    sl_list.append((slice(5,None,6),slice(None,8,3),slice(None,None,7)))
     sl_list.append((slice(1,8,3),slice(3,None,2),slice(4,9,4)))
     sl_list.append((slice(3,None),slice(3,9,2),slice(None,None,2)))
 

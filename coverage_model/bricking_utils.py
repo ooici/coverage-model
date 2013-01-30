@@ -80,15 +80,17 @@ def calc_brick_slice(slice_, bounds):
             brick_slice = sl-bo
             log.debug('slice_ is int: bo=%s\tbn=%s\tbrick_slice=%s',bo, bn, brick_slice)
             return brick_slice, (sl, sl)
-        else:
-            raise ValueError('Outside brick bounds: %s <= %s < %s', bo, sl, bn)
+        else:# Brick does not contain any of the requested indices
+            log.debug('Outside brick bounds: %s <= %s < %s', bo, sl, bn)
+            return None, None
     elif isinstance(sl, (list,tuple)):
         filt_slice = [x - bo for x in sl if bo <= x < bn]
         if len(filt_slice) > 0:
             log.debug('slice_ is list: bo=%s\tbn=%s\tfilt_slice=%s',bo, bn, filt_slice)
             return filt_slice, (min(filt_slice), max(filt_slice))
-        else:
-            raise ValueError('No values within brick bounds: %s <= %s < %s', bo, sl, bn)
+        else:# Brick does not contain any of the requested indices
+            log.debug('No values within brick bounds: %s <= %s < %s', bo, sl, bn)
+            return None, None
     elif isinstance(sl, slice):
         if sl.start is None:
             start = 0
@@ -97,8 +99,9 @@ def calc_brick_slice(slice_, bounds):
                 start = sl.start - bo
             elif bo > sl.start:
                 start = 0
-            else:
-                raise ValueError('Slice not in brick: %s > %s', sl.start, bn)
+            else:# Brick does not contain any of the requested indices
+                log.debug('Slice not in brick: %s > %s', sl.start, bn)
+                return None, None
 
         if sl.stop is None:
             stop = bs
@@ -108,7 +111,9 @@ def calc_brick_slice(slice_, bounds):
             elif sl.stop > bn:
                 stop = bs
             else: #  bo > sl.stop
-                raise ValueError('Slice not in brick: %s > %s', bo, sl.stop)
+                # Brick does not contain any of the requested indices
+                log.debug('Slice not in brick: %s > %s', bo, sl.stop)
+                return None, None
 
         if bo != 0 and sl.step is not None and sl.step != 1:
             log.debug('pre-step-adjustment: start=%s\tstop=%s', start, stop)
@@ -126,6 +131,7 @@ def calc_brick_slice(slice_, bounds):
             log.debug('post-step-adjustment: start=%s\tstop=%s', start, stop)
         brick_slice = slice(start, stop, sl.step)
         if start >= stop: # Brick does not contain any of the requested indices
+            log.debug('Slice does not contain any of the requested indices: %s', brick_slice)
             return None, None
 
         log.debug('slice_ is slice: bo=%s\tbn=%s\tsl=%s\tbrick_slice=%s',bo, bn, sl, brick_slice)
