@@ -70,7 +70,7 @@ class Dictable(object):
         @param arg_masks    Allows masking of required constructor arguments - see MASKING above
         """
         arg_masks = arg_masks or {}
-        log.trace('_fromdict: cls=%s',cls)
+#        log.trace('_fromdict: cls=%s',cls)
         if isinstance(cmdict, dict) and 'cm_type' in cmdict and cmdict['cm_type']:
             cmd = cmdict.copy()
             import inspect
