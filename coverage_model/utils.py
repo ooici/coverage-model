@@ -219,7 +219,7 @@ def slice_shape(slice_, shape):
 
 def hash_any(value, hv=None):
     hv = hv or 0
-    if value is None or isinstance(value, (str, unicode, int, long, float, bool)):
+    if value is None or isinstance(value, (str, unicode, int, long, float, bool)) or np.isscalar(value):
     #            log.debug('is primitive:  value=%s  hv=%s', value, hv)
         hv = hash(value) ^ hv
     elif isinstance(value, (list, tuple, set)):
