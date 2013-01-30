@@ -119,7 +119,7 @@ def calc_brick_slice(slice_, bounds):
             log.debug('pre-step-adjustment: start=%s\tstop=%s', start, stop)
             try:
                 ss = 0 if sl.start is None else sl.start
-                sli = range(*slice(ss,bn,sl.step).indices(bo+sl.step))
+                sli = xrange(*slice(ss,bn,sl.step).indices(bo+sl.step))
                 if len(sli) > 1:
                     brick_origin_offset = sli[-1] - bo
                 else:

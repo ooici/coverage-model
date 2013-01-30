@@ -87,7 +87,7 @@ class BrickingAssessor(object):
                 arr.fill(-1)
             else:
                 with h5py.File(arr) as f:
-                    ds = f.require_dataset(str(i), shape=self.brick_sizes, dtype=self.dtype, chunks=True, fillvalue=-1)
+                    ds = f.require_dataset(str(i), shape=self.brick_sizes, dtype=self.dtype, chunks=None, fillvalue=-1)
                     ds[:] = -1
 
     def put_values_to_bricks(self, slice_, values):
@@ -169,7 +169,7 @@ class BrickingAssessor(object):
             else:
                 fi=self.bricks[bid]
                 with h5py.File(fi) as f:
-                    ds = f.require_dataset(str(bid),shape=self.brick_sizes, dtype=self.dtype, chunks=True, fillvalue=-1)
+                    ds = f.require_dataset(str(bid),shape=self.brick_sizes, dtype=self.dtype, chunks=None, fillvalue=-1)
                     ds[brick_slice] = v
 
     def get_values_from_bricks(self, slice_):
@@ -207,7 +207,7 @@ class BrickingAssessor(object):
             else:
                 fi=self.bricks[bid]
                 with h5py.File(fi) as f:
-                    ds = f.require_dataset(str(bid),shape=self.brick_sizes, dtype=self.dtype, chunks=True, fillvalue=-1)
+                    ds = f.require_dataset(str(bid),shape=self.brick_sizes, dtype=self.dtype, chunks=None, fillvalue=-1)
                     ret_vals = ds[brick_slice]
 
 
