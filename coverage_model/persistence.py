@@ -62,8 +62,7 @@ class PersistenceLayer(object):
             self.parameter_metadata[pname] = ParameterManager(os.path.join(self.root_dir, self.guid, pname), pname)
 
         if self.mode != 'r':
-            if self.master_manager.is_dirty():
-                self.master_manager.flush()
+            self.master_manager.flush()
 
         if self.mode == 'r' or self.inline_data_writes:
             self.brick_dispatcher = None
@@ -367,8 +366,9 @@ class PersistenceLayer(object):
         # Flush the parameter_metadata
             pm.flush()
             # If necessary (i.e. write_brick has been called), flush the master_manager
-            if self.master_manager.is_dirty():
-                self.master_manager.flush()
+#            if self.master_manager.is_dirty():
+#                self.master_manager.flush()
+            self.master_manager.flush()
 
     # Returns a count of bricks for a parameter
     def parameter_brick_count(self, parameter_name):
@@ -715,7 +715,7 @@ class PersistedStorage(AbstractStorage):
                     cD = True
                 with h5py.File(brick_file_path, 'a') as f:
                     # TODO: Due to usage concerns, currently locking chunking to "auto"
-                    f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=True, fillvalue=fv)
+                    f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=None, fillvalue=fv)
                     if isinstance(brick_slice, tuple):
                         brick_slice = list(brick_slice)
 
@@ -729,7 +729,7 @@ class PersistedStorage(AbstractStorage):
                         cD = True
                     with h5py.File(brick_file_path, 'a') as f:
                         # TODO: Due to usage concerns, currently locking chunking to "auto"
-                        f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=True, fillvalue=fv)
+                        f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=None, fillvalue=fv)
 
                 if self.auto_flush:
                     # Immediately submit work to the dispatcher

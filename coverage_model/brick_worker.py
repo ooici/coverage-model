@@ -81,7 +81,7 @@ class BrickWriterWorker(object):
 #                            cD = True
                         with h5py.File(brick_path, 'a') as f:
                             # TODO: Due to usage concerns, currently locking chunking to "auto"
-                            f.require_dataset(brick_key, shape=bD, dtype=data_type, chunks=True, fillvalue=fill_value)
+                            f.require_dataset(brick_key, shape=bD, dtype=data_type, chunks=None, fillvalue=fill_value)
                             for w in list(work): # Iterate a copy - WARN, this is NOT deep, if the list contains objects, they're NOT copied
                                 brick_slice, value = w
                                 if isinstance(brick_slice, tuple):
