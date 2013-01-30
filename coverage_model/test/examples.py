@@ -366,7 +366,7 @@ def oneparamcov_noautoflush(save_coverage=False, in_memory=False, inline_data_wr
 
     return scov
 
-def emptysamplecov(save_coverage=False, in_memory=False, inline_data_writes=True):
+def emptysamplecov(save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None):
     # Instantiate a ParameterDictionary
     pdict = ParameterDictionary()
 
@@ -402,8 +402,13 @@ def emptysamplecov(save_coverage=False, in_memory=False, inline_data_writes=True
     tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
     sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
 
+    if brick_size is not None:
+        bricking_scheme = {'brick_size':brick_size, 'chunk_size':10}
+    else:
+        bricking_scheme = None
+
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('test_data', create_guid(), 'empty sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory)
+    scov = SimplexCoverage('test_data', create_guid(), 'empty sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory, bricking_scheme=bricking_scheme)
 
     if in_memory and save_coverage:
         SimplexCoverage.pickle_save(scov, 'test_data/emptysample.cov')
