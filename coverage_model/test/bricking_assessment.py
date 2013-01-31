@@ -288,6 +288,7 @@ def test_1d(persist=False, verbose=False, dtype='int16'):
     sl_list.append(slice(None,None,3))
     sl_list.append(slice(1,8,3))
     sl_list.append(slice(3,None))
+    sl_list.append(slice(None,80,15))
 
     _run_test_slices(ba, sl_list, val_arr, verbose)
 
@@ -321,6 +322,7 @@ def test_2d(persist=False, verbose=False, dtype='int16'):
     sl_list.append((slice(2,8),slice(3,6)))
     sl_list.append((slice(None,None,3),slice(None,None,2)))
     sl_list.append((slice(1,8,3),slice(3,None,2)))
+    sl_list.append((slice(6,None,10),slice(0,None,2)))
     sl_list.append((slice(2,6,3),slice(3,None,6)))
     sl_list.append((slice(3,None),slice(3,9,2)))
 
@@ -359,6 +361,7 @@ def test_3d(persist=False, verbose=False, dtype='int16'):
     sl_list.append((slice(None,None,3),slice(None,None,2),slice(None,None,7)))
     sl_list.append((slice(5,None,6),slice(None,8,3),slice(None,None,7)))
     sl_list.append((slice(1,8,3),slice(3,None,2),slice(4,9,4)))
+    sl_list.append((slice(None,None,6),slice(None,None,None),slice(4,9,5)))
     sl_list.append((slice(3,None),slice(3,9,2),slice(None,None,2)))
 
     _run_test_slices(ba, sl_list, val_arr, verbose)
