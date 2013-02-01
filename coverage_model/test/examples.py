@@ -29,39 +29,59 @@ def values_outside_coverage():
     rtype = RecordType()
     rval = get_value_class(rtype, domain_set=dom)
 
-    # ConstantType example
-    ctype = ConstantType(QuantityType(value_encoding=np.dtype('int32')))
-    cval = get_value_class(ctype, domain_set=dom)
+    # BooleanType example
+    btype = BooleanType()
+    bval = get_value_class(btype, domain_set=dom)
+
+    # ConstantType w/ numeric QuantityType example
+    ctype_n = ConstantType(QuantityType(value_encoding=np.dtype('int32')))
+    cval_n = get_value_class(ctype_n, domain_set=dom)
+
+    # ConstantType w/ fixed_string QuantityType example
+    ctype_s = ConstantType(QuantityType(value_encoding=np.dtype('S21')))
+    cval_s = get_value_class(ctype_s, domain_set=dom)
 
     # FunctionType example
     ftype = FunctionType(QuantityType(value_encoding=np.dtype('float32')))
     fval = get_value_class(ftype, domain_set=dom)
 
+    crtype = ConstantRangeType(QuantityType(value_encoding=np.dtype('int16')))
+    crval = get_value_class(crtype, domain_set=dom)
+
+    cat = {0:'turkey',1:'duck',2:'chicken',99:'None'}
+    cattype = CategoryType(categories=cat)
+    catval = get_value_class(cattype, dom)
+
     # Add data to the values
     qval[:] = np.random.random_sample(num_rec)*(50-20)+20 # array of 10 random values between 20 & 50
 
+    catkeys = cat.keys()
     letts='abcdefghij'
     for x in xrange(num_rec):
         aval[x] = np.random.bytes(np.random.randint(1,20)) # One value (which is a byte string) for each member of the domain
         rval[x] = {letts[x]: letts[x:]} # One value (which is a dict) for each member of the domain
+        catval[x] = random.choice(catkeys)
 
-    cval[0] = 200 # Doesn't matter what index (or indices) you assign this to - it's used everywhere!!
+    # Doesn't matter what index (or indices) you assign these 3 - the same value is used everywhere!!
+    cval_n[0] = 200
+    cval_s[0] = 'constant string value'
+    crval[0] = (10, 50)
 
     fval[:] = make_range_expr(100, min=0, max=4, min_incl=True, max_incl=False, else_val=-9999)
     fval[:] = make_range_expr(200, min=4, max=6, min_incl=True, else_val=-9999)
     fval[:] = make_range_expr(300, min=6, else_val=-9999)
 
-    if not (aval.shape == rval.shape == cval.shape):# == fval.shape):
+    if not (aval.shape == rval.shape == cval_n.shape):# == fval.shape):
         raise SystemError('Shapes are not equal!!')
 
-    types = (qtype, atype, rtype, ctype, ftype)
-    vals = (qval, aval, rval, cval, fval)
+    types = (qtype, atype, rtype, btype, ctype_n, ctype_s, cattype, ftype)
+    vals = (qval, aval, rval, bval, cval_n, cval_s, crval, catval, fval)
 #    for i in xrange(len(vals)):
 #        log.info('Type: %s', types[i])
 #        log.info('\tContent: %s', vals[i].content)
 #        log.info('\tVals: %s', vals[i][:])
 
-    log.info('Returning: qval, aval, rval, cval, fval')
+    log.info('Returning: qval, aval, rval, bval, cval_n, cval_s, crval, catval, fval')
     return vals
 
 def param_dict_dump_load():
@@ -415,7 +435,7 @@ def emptysamplecov(save_coverage=False, in_memory=False, inline_data_writes=True
 
     return scov
 
-def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True):
+def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True, make_empty=False):
     # Construct temporal and spatial Coordinate Reference System objects
     tcrs = CRS([AxisTypeEnum.TIME])
     scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
@@ -433,17 +453,32 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True):
     quant_t_ctxt.uom = 'seconds since 01-01-1970'
     pdict.add_context(quant_t_ctxt)
 
+    bool_ctxt = ParameterContext('boolean', param_type=BooleanType(), variability=VariabilityEnum.TEMPORAL)
+    pdict.add_context(bool_ctxt)
+
+    cnst_flt_ctxt = ParameterContext('const_float', param_type=ConstantType(), variability=VariabilityEnum.NONE)
+    cnst_flt_ctxt.long_name = 'example of a parameter of type ConstantType, base_type float (default)'
+    cnst_flt_ctxt.axis = AxisTypeEnum.LON
+    cnst_flt_ctxt.uom = 'degree_east'
+    pdict.add_context(cnst_flt_ctxt)
+
     cnst_int_ctxt = ParameterContext('const_int', param_type=ConstantType(QuantityType(value_encoding=np.dtype('int32'))), variability=VariabilityEnum.NONE)
     cnst_int_ctxt.long_name = 'example of a parameter of type ConstantType, base_type int32'
     cnst_int_ctxt.axis = AxisTypeEnum.LAT
     cnst_int_ctxt.uom = 'degree_north'
     pdict.add_context(cnst_int_ctxt)
 
-    cnst_flt_ctxt = ParameterContext('const_float', param_type=ConstantType(), variability=VariabilityEnum.NONE)
-    cnst_flt_ctxt.long_name = 'example of a parameter of type QuantityType, base_type float (default)'
-    cnst_flt_ctxt.axis = AxisTypeEnum.LON
-    cnst_flt_ctxt.uom = 'degree_east'
-    pdict.add_context(cnst_flt_ctxt)
+    cnst_str_ctxt = ParameterContext('const_str', param_type=ConstantType(QuantityType(value_encoding=np.dtype('S21'))), fill_value='', variability=VariabilityEnum.NONE)
+    cnst_str_ctxt.long_name = 'example of a parameter of type ConstantType, base_type fixed-len string'
+    pdict.add_context(cnst_str_ctxt)
+
+    cnst_rng_flt_ctxt = ParameterContext('const_rng_flt', param_type=ConstantRangeType(), variability=VariabilityEnum.NONE)
+    cnst_rng_flt_ctxt.long_name = 'example of a parameter of type ConstantRangeType, base_type float (default)'
+    pdict.add_context(cnst_rng_flt_ctxt)
+
+    cnst_rng_int_ctxt = ParameterContext('const_rng_int', param_type=ConstantRangeType(QuantityType(value_encoding='int16')), variability=VariabilityEnum.NONE)
+    cnst_rng_int_ctxt.long_name = 'example of a parameter of type ConstantRangeType, base_type int16'
+    pdict.add_context(cnst_rng_int_ctxt)
 
     cat = {0:'turkey',1:'duck',2:'chicken',99:'None'}
     cat_ctxt = ParameterContext('category', param_type=CategoryType(categories=cat), variability=VariabilityEnum.TEMPORAL)
@@ -466,17 +501,29 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True):
     rec_ctxt.long_name = 'example of a parameter of type RecordType, will be filled with dictionaries'
     pdict.add_context(rec_ctxt)
 
+    fstr_ctxt = ParameterContext('fixed_str', param_type=QuantityType(value_encoding=np.dtype('S8')), fill_value='')
+    fstr_ctxt.long_name = 'example of a fixed-length string parameter'
+    pdict.add_context(fstr_ctxt)
+
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
     scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory)
 
     # Insert some timesteps (automatically expands other arrays)
+    if make_empty:
+        return scov
+
     nt = 20
     scov.insert_timesteps(nt)
 
     # Add data for each parameter
     scov.set_parameter_values('quantity_time', value=np.arange(nt))
-    scov.set_parameter_values('const_int', value=45.32) # Set a constant directly, with incorrect data type (fixed under the hood)
-    scov.set_parameter_values('const_float', value=make_range_expr(-71.11)) # Set with a properly formed constant expression
+    scov.set_parameter_values('boolean', value=[True, True, True], tdoa=[[2,4,14]])
+    scov.set_parameter_values('const_float', value=-71.11) # Set a constant with correct data type
+    scov.set_parameter_values('const_int', value=45.32) # Set a constant with incorrect data type (fixed under the hood)
+    scov.set_parameter_values('const_str', value='constant string value') # Set with a string
+    scov.set_parameter_values('const_rng_flt', value=(12.8, 55.2)) # Set with a tuple
+    scov.set_parameter_values('const_rng_int', value=[-10, 10]) # Set with a list
+
     scov.set_parameter_values('quantity', value=np.random.random_sample(nt)*(26-23)+23)
 
 #    # Setting three range expressions such that indices 0-2 == 10, 3-7 == 15 and >=8 == 20
@@ -487,6 +534,7 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True):
     arrval = []
     recval = []
     catval = []
+    fstrval = []
     catkeys = cat.keys()
     letts='abcdefghijklmnopqrstuvwxyz'
     while len(letts) < nt:
@@ -496,9 +544,11 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True):
         d = {letts[x]: letts[x:]}
         recval.append(d) # One value (which is a dict) for each member of the domain
         catval.append(random.choice(catkeys))
+        fstrval.append(''.join([random.choice(letts) for x in xrange(8)])) # A random string of length 8
     scov.set_parameter_values('array', value=arrval)
     scov.set_parameter_values('record', value=recval)
     scov.set_parameter_values('category', value=catval)
+    scov.set_parameter_values('fixed_str', value=fstrval)
 
     if in_memory and save_coverage:
         SimplexCoverage.pickle_save(scov, 'test_data/ptypes.cov')

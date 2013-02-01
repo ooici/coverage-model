@@ -20,6 +20,7 @@
 
 from ooi.logging import log
 from coverage_model.basic_types import AbstractIdentifiable
+from coverage_model.parameter_values import ConstantValue
 from coverage_model.numexpr_utils import digit_match, is_well_formed_where, single_where_match
 import numpy as np
 import re
@@ -63,13 +64,29 @@ class AbstractParameterType(AbstractIdentifiable):
     @fill_value.setter
     def fill_value(self, value):
         if hasattr(self, 'value_encoding'):
-            dtk = np.dtype(self.value_encoding).kind
-            if dtk == 'u': # Unsigned integer's must be positive
-                self._fill_value = abs(value)
-            elif dtk == 'O': # object, must be None for now...
+            dt = np.dtype(self.value_encoding)
+            dtk = dt.kind
+            if dtk == 'O' or isinstance(self, ConstantRangeType): # object & CategoryRangeType must be None for now...
                 self._fill_value = None
+
+            elif dtk == 'u': # Unsigned integer's must be positive
+                if value is not None:
+                    self._fill_value = abs(value)
+                else:
+                    self._fill_value = np.iinfo(dt).max
+
+            elif dtk == 'S': # must be a string value
+                self._fill_value = str(value)
+
             else:
-                self._fill_value = value
+                if value is not None:
+                    self._fill_value = value
+                else:
+                    if dtk == 'i':
+                        self._fill_value = np.iinfo(dt).max
+                    elif dtk == 'f':
+                        self._fill_value = np.finfo(dt).max
+
         else:
             self._fill_value = value
 
@@ -88,6 +105,7 @@ class AbstractParameterType(AbstractIdentifiable):
     def _gen_template_attrs(self):
         for k, v in self._template_attrs.iteritems():
             setattr(self,k,v)
+            self._template_attrs[k] = None # Leave the key, but replace the value - avoid replicates
 
     def __eq__(self, other):
         return self.__class__.__instancecheck__(other)
@@ -188,14 +206,15 @@ class BooleanType(AbstractSimplexParameterType):
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractSimplexParameterType; see documentation for that class for details
         """
         kwc=kwargs.copy()
-        AbstractSimplexParameterType.__init__(self, **kwc)
+        AbstractSimplexParameterType.__init__(self, value_class='BooleanValue', **kwc)
 
         self._template_attrs['fill_value'] = False
+        self.value_encoding = 'bool'
 
         self._gen_template_attrs()
 
     def is_valid_value(self, value):
-        return isinstance(value, bool)
+        return np.asanyarray(value, 'bool').dtype.kind == 'b'
 
 class CategoryType(AbstractComplexParameterType):
     """
@@ -221,6 +240,7 @@ class CategoryType(AbstractComplexParameterType):
         else:
             key_value_encoding = np.dtype(key_value_encoding).str
 
+        self._key_dtype = np.dtype(key_value_encoding).str
         want_kind=np.dtype(key_value_encoding).kind
         if want_kind not in self.SUPPORTED_CATETEGORY_KEY_KINDS:
             raise TypeError('\'key_value_encoding\' is not supported; supported np.dtype.kinds: {0}'.format(self.SUPPORTED_CATETEGORY_KEY_KINDS))
@@ -233,12 +253,36 @@ class CategoryType(AbstractComplexParameterType):
             self.base_type = ArrayType()
         else:
             self.base_type = QuantityType(value_encoding=key_value_encoding)
+            self._value_encoding = key_value_encoding
+
+        if key_fill_value is None or key_fill_value not in categories:
+            key_fill_value = categories.keys()[0]
 
         self._template_attrs['categories'] = categories
+        self._template_attrs['fill_value'] = key_fill_value
         self._gen_template_attrs()
 
     def is_valid_value(self, value):
-        return value in self.categories.keys()
+        if not isinstance(value, basestring) and np.iterable(value):
+            for v in value:
+                self.is_valid_value(v)
+        else:
+            return value in self.categories.keys() or value in self.categories.values()
+
+    def _todict(self):
+        ret = super(CategoryType, self)._todict()
+        ret['categories'] = {str(k):v for k, v in ret['categories'].iteritems()}
+
+        return ret
+
+    @classmethod
+    def _fromdict(cls, cmdict, arg_masks=None):
+        ret = super(CategoryType, cls)._fromdict(cmdict, arg_masks=arg_masks)
+        dt = np.dtype(ret._key_dtype)
+        ret.categories = {dt.type(k):v for k, v in ret.categories.iteritems()}
+
+        return ret
+
 
 class CountType(AbstractSimplexParameterType):
     """
@@ -417,7 +461,7 @@ class FunctionType(AbstractComplexParameterType):
 
 class ConstantType(AbstractComplexParameterType):
 
-    _rematch='^(c\*)?{0}$'.format(digit_match)
+#    _rematch='^(c\*)?{0}$'.format(digit_match)
 
     def __init__(self, base_type=None, **kwargs):
         """
@@ -432,14 +476,30 @@ class ConstantType(AbstractComplexParameterType):
         self.base_type = base_type or QuantityType()
 
         self._template_attrs.update(self.base_type._template_attrs)
-#        self._template_attrs['value_encoding'] = '|O8'
-        self._template_attrs['fill_value'] = None
+#        self._template_attrs['fill_value'] = None
 
         self._gen_template_attrs()
 
+        # Override the _value_encoding - this does NOT need to store objects (vlen-str)!!
+        self._value_encoding = self.base_type.value_encoding
+
     def is_valid_value(self, value):
-        if re.match(self._rematch, value) is None:
-            raise ValueError('\'value\' must be a string matching the form: \'{0}\' ; for example, \'43.2\', \'c*12\', or \'-12.2e4\''.format(self._rematch))
+        dt=np.dtype(self.value_encoding)
+        if dt.kind == 'S':
+            if isinstance(value, ConstantValue):
+                if np.dtype(value.parameter_type.value_encoding).kind != 'S':
+                    raise ValueError('\'value\' is a ConstantValue, with an invalid value_encoding; must be of kind=\'S\', is kind={0}'.format(np.dtype(value.parameter_type.value_encoding).kind))
+            elif isinstance(value, np.ndarray):
+                if value.dtype.kind != 'S':
+                    raise ValueError('\'value\' is a numpy array, with an invalid dtype; must be kind=\'S\', is kind={0}'.format(value.dtype.kind))
+            elif not isinstance(value, str):
+                raise ValueError('\'value\' must be a string with a max length of {0}; longer strings will be truncated'.format(dt.str[dt.str.index('S')+1:]))
+        else:
+            # TODO: Check numeric??
+            pass
+
+#        if re.match(self._rematch, value) is None:
+#            raise ValueError('\'value\' must be a string matching the form: \'{0}\' ; for example, \'43.2\', \'c*12\', or \'-12.2e4\''.format(self._rematch))
 
         return True
 
@@ -449,6 +509,35 @@ class ConstantType(AbstractComplexParameterType):
                 return True
 
         return False
+
+
+class ConstantRangeType(AbstractComplexParameterType):
+    """
+
+    """
+    def __init__(self, base_type=None, **kwargs):
+        """
+
+        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterType; see documentation for that class for details
+        """
+        kwc=kwargs.copy()
+        AbstractComplexParameterType.__init__(self, value_class='ConstantRangeValue', **kwc)
+        if base_type is not None and not isinstance(base_type, QuantityType):
+            raise TypeError('\'base_type\' must be an instance of QuantityType')
+
+        self.base_type = base_type or QuantityType()
+        self._template_attrs.update(self.base_type._template_attrs)
+
+        self._gen_template_attrs()
+
+    def is_valid_value(self, value):
+        if isinstance(value, (list, tuple)) and len(value) >= 2:
+            my_kind=np.dtype(self.value_encoding).kind
+            for v in value[:2]:
+                if np.asanyarray(v).dtype.kind != my_kind:
+                    raise ValueError('\'value\' must be a list or tuple of size >= 2 and kind={0}; value={1}'.format(my_kind, value))
+
+        return True
 
 class RecordType(AbstractComplexParameterType):
     """

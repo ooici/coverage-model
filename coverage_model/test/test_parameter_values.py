@@ -37,6 +37,19 @@ class TestParameterValuesUnit(TestCase):
         qval[:] = data
         self.assertTrue(np.array_equal(data, qval[:]))
 
+    # BooleanType
+    def test_boolean_values(self):
+        num_rec = 10
+
+        dom = cm.SimpleDomainSet((num_rec,))
+
+        btype = ptypes.BooleanType()
+        bval = cm.get_value_class(btype, domain_set=dom)
+
+        data = [True, False, True, False, False, True, False, True, True, True]
+        bval[:] = data
+        self.assertTrue(np.array_equal(data, bval[:]))
+
     # ArrayType
     def test_array_values(self):
         num_rec = 10
@@ -78,6 +91,21 @@ class TestParameterValuesUnit(TestCase):
         self.assertEqual(cval[2,9], 200)
         self.assertTrue(np.array_equal(cval[[2,7],], np.array([200,200], dtype='int32')))
 
+    # ConstantRangeType
+    def test_constant_range_values(self):
+        num_rec = 10
+        dom = cm.SimpleDomainSet((num_rec,))
+
+        crtype = ptypes.ConstantRangeType(ptypes.QuantityType(value_encoding=np.dtype('int16')))
+        crval = cm.get_value_class(crtype, domain_set=dom)
+        crval[:] = (-10, 10)
+        self.assertEqual(crval[0], (-10, 10))
+        self.assertEqual(crval[6], (-10, 10))
+        comp=np.empty(2,dtype='object')
+        comp.fill((-10,10))
+
+        self.assertTrue(np.array_equal(crval[[2,7],], comp))
+
     # CategoryType
     def test_category_values(self):
         num_rec = 10
@@ -90,7 +118,7 @@ class TestParameterValuesUnit(TestCase):
 
         catkeys = cat.keys()
         for x in xrange(num_rec):
-            catval[x] = [random.choice(catkeys)]
+            catval[x] = random.choice(catkeys)
 
         with self.assertRaises(IndexError):
             catval[20]

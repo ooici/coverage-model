@@ -77,11 +77,12 @@ class ParameterContext(AbstractIdentifiable):
              'standard_name',
              'long_name',
              'ooi_short_name',
+             'display_name',
 #             'missing_value', # accounted for as 'fill_value'
              'cdm_data_type',
              'variable_reports',
 #             'axis', # accounted for as 'axis'
-             'references_list',
+             'references',
 #             'comment', # accounted for as description
              'code_reports',]
 
