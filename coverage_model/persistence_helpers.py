@@ -8,7 +8,9 @@
 """
 
 from pyon.core.interceptor.encode import encode_ion, decode_ion
+from ooi.logging import log
 from coverage_model.basic_types import Dictable
+from coverage_model import utils
 
 import os
 import rtree
@@ -25,9 +27,11 @@ def unpack(msg):
 class BaseManager(object):
 
     def __init__(self, root_dir, file_name, **kwargs):
+        super(BaseManager, self).__setattr__('_hmap',{})
+        super(BaseManager, self).__setattr__('_dirty',set())
+        super(BaseManager, self).__setattr__('_ignore',set())
         self.root_dir = root_dir
         self.file_path = os.path.join(root_dir, file_name)
-        self._ignore = set()
 
         if not os.path.exists(self.root_dir):
             os.makedirs(self.root_dir)
@@ -43,18 +47,25 @@ class BaseManager(object):
             setattr(self, k, v)
 
     def flush(self):
-        with h5py.File(self.file_path, 'a') as f:
-            atts = [x for x in self.__dict__ if x not in self._ignore and not x.startswith('_')]
-            for k in atts:
-                v = getattr(self, k)
-                if isinstance(v, Dictable):
-                    prefix='DICTABLE|{0}:{1}|'.format(v.__module__, v.__class__.__name__)
-                    value = prefix + pack(v.dump())
-                else:
-                    value = pack(v)
+        if self.is_dirty(True):
+            with h5py.File(self.file_path, 'a') as f:
+                for k in list(self._dirty):
+                    v = getattr(self, k)
+#                    log.debug('FLUSH: key=%s  v=%s', k, v)
+                    if isinstance(v, Dictable):
+                        prefix='DICTABLE|{0}:{1}|'.format(v.__module__, v.__class__.__name__)
+                        value = prefix + pack(v.dump())
+                    else:
+                        value = pack(v)
 
+                    f.attrs[k] = value
 
-                f.attrs[k] = value
+                    # Update the hash_value in _hmap
+                    self._hmap[k] = utils.hash_any(v)
+                    # Remove the key from the _dirty set
+                    self._dirty.remove(k)
+
+            super(BaseManager, self).__setattr__('_is_dirty',False)
 
     def _load(self):
         raise NotImplementedError('Not implemented by base class')
@@ -78,6 +89,31 @@ class BaseManager(object):
                 value = list(value)
 
             setattr(self, key, value)
+
+    def is_dirty(self, force_deep=False):
+        """
+        Tells if the object has attributes that have changed since the last flush
+
+        @return: True if the BaseMananager object is dirty and should be flushed
+        """
+        if not force_deep and self._is_dirty: # Something new was set, easy-peasy
+            return True
+        else: # Nothing new has been set, need to check hashes
+            self._dirty.difference_update(self._ignore) # Ensure any ignored attrs are gone...
+            for k, v in [(k,v) for k, v in self.__dict__.iteritems() if not k in self._ignore and not k.startswith('_')]:
+                chv = utils.hash_any(v)
+                log.trace('key=%s:  cached hash value=%s  current hash value=%s', k, self._hmap[k], chv)
+                if self._hmap[k] != chv:
+                    self._dirty.add(k)
+
+            return len(self._dirty) != 0
+
+    def __setattr__(self, key, value):
+        super(BaseManager, self).__setattr__(key, value)
+        if not key in self._ignore and not key.startswith('_'):
+            self._hmap[key] = utils.hash_any(value)
+            self._dirty.add(key)
+            super(BaseManager, self).__setattr__('_is_dirty',True)
 
 class MasterManager(BaseManager):
 
