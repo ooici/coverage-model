@@ -10,6 +10,7 @@
 from pyon.core.interceptor.encode import encode_ion, decode_ion
 from ooi.logging import log
 from coverage_model.basic_types import Dictable
+from coverage_model import utils
 
 import os
 import rtree
@@ -60,7 +61,7 @@ class BaseManager(object):
                     f.attrs[k] = value
 
                     # Update the hash_value in _hmap
-                    self._hmap[k] = self._dohash(v)
+                    self._hmap[k] = utils.hash_any(v)
                     # Remove the key from the _dirty set
                     self._dirty.remove(k)
 
@@ -100,37 +101,17 @@ class BaseManager(object):
         else: # Nothing new has been set, need to check hashes
             self._dirty.difference_update(self._ignore) # Ensure any ignored attrs are gone...
             for k, v in [(k,v) for k, v in self.__dict__.iteritems() if not k in self._ignore and not k.startswith('_')]:
-                chv = self._dohash(v)
+                chv = utils.hash_any(v)
                 log.trace('key=%s:  cached hash value=%s  current hash value=%s', k, self._hmap[k], chv)
                 if self._hmap[k] != chv:
                     self._dirty.add(k)
 
             return len(self._dirty) != 0
 
-    def _dohash(self, value, hv=None):
-        hv = hv or 0
-        if value is None or isinstance(value, (str, unicode, int, long, float, bool)):
-#            log.debug('is primitive:  value=%s  hv=%s', value, hv)
-            hv = hash(value) ^ hv
-        elif isinstance(value, (list, tuple, set)):
-#            log.debug('is list/tuple/set:  value=%s  hv=%s', value, hv)
-            for x in value:
-                hv = self._dohash(x, hv)
-        elif isinstance(value, dict):
-#            log.debug('is dict:  value=%s  hv=%s', value, hv)
-            for k,v in value.iteritems():
-                hv = self._dohash(k, hv)
-                hv = self._dohash(v, hv)
-        elif isinstance(value, object):
-#            log.debug('is object:  value=%s  hv=%s', value, hv)
-            hv = self._dohash(value.__dict__, hv)
-
-        return hv
-
     def __setattr__(self, key, value):
         super(BaseManager, self).__setattr__(key, value)
         if not key in self._ignore and not key.startswith('_'):
-            self._hmap[key] = self._dohash(value)
+            self._hmap[key] = utils.hash_any(value)
             self._dirty.add(key)
             super(BaseManager, self).__setattr__('_is_dirty',True)
 
