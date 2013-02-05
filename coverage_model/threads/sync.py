@@ -47,6 +47,12 @@ class _Event(gevent.event.Event):
                     self._pipe_read)
         self._core_event.add()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self._close()
+
     def _pipe(self):
         r,w = os.pipe()
         fcntl.fcntl(r, fcntl.F_SETFD, os.O_NONBLOCK)
@@ -73,21 +79,57 @@ class _Event(gevent.event.Event):
         gevent.event.Event.set(self)
         os.write(self._w, '\0')
 
+    def _close(self):
+        if getattr(self,'_core_event',None):
+            try:
+                self._core_event.cancel()
+            except:
+                pass
+        if getattr(self, '_r', None):
+            try:
+                os.close(self._r)
+            except:
+                pass
+        if getattr(self, '_w', None):
+            try:
+                os.close(self._w)
+            except:
+                pass
 
 
 class AsyncDispatcher(object):
     '''
     Used to synchronize a result obtained in a pythread to a gevent thread
+    To use:
+
+    with AsyncDispatcher(callback, arg1, arg2, keyword=argument) as dispatcher:
+        v = dispatcher.wait(10)
+
+    The concurrency is NOT thread safe, do not attempt to modify shared regions inside the
+    dispatcher's context, it is solely meant to allow os threads to operate concurently
+    with greenlets.
     '''
     _value     = None
     _exception = None
     _set       = None
+    event      = None
 
     def __init__(self, callback, *args, **kwargs):
+        self.callback = callback
+        self.args     = args
+        self.kwargs   = kwargs
 
+
+    def __enter__(self):
         self.event = _Event()
+        self.event.__enter__()
         pythread = get_pythread()
-        self._thread = pythread.start_new_thread(self.dispatch,(callback,) + args,kwargs)
+        self._thread = pythread.start_new_thread(self.dispatch,(self.callback,) + self.args,self.kwargs)
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.event.__exit__(type,value,traceback)
+
         
 
     def dispatch(self, callback, *args, **kwargs):

@@ -5,7 +5,6 @@
 @date Tue Feb  5 10:29:12 EST 2013
 '''
 
-from pyon.util.unit_test import PyonTestCase
 from nose.plugins.attrib import attr
 
 from gevent.monkey import patch_all
@@ -18,12 +17,13 @@ import os
 import numpy as np
 import time
 import gevent
+import unittest
 
 
 
 
 @attr('UNIT',group='cov')
-class TestThreads(PyonTestCase):
+class TestThreads(unittest.TestCase):
     
     filepath = '/tmp/test_threads.hdf'
     def setUp(self):
@@ -44,20 +44,38 @@ class TestThreads(PyonTestCase):
 
     def test_gevent_friendly(self):
 
+        # Used to verify that file descriptors aren't consumed
+        r,w = os.pipe()
+        os.close(r)
+        os.close(w)
+
+        # Get a good benchmark without any concurrent actions
         t1 = time.time()
-        dispatcher = AsyncDispatcher(self.block_stuff)
-        v = dispatcher.wait(5)
+        with AsyncDispatcher(self.block_stuff) as dispatcher:
+            v = dispatcher.wait(5)
         dt = time.time() - t1
 
+        # Check that it takes less than 5 seconds and that it's the right value
         self.assertTrue(dt < 5)
         self.assertTrue(np.array_equal(v,np.arange(20)))
 
+        # Try it again but this time with a gevent sleep that should run
+        # Concurrently with the dispatcher thread
         t1 = time.time()
-        dispatcher = AsyncDispatcher(self.block_stuff)
-        gevent.sleep(1)
-        v = dispatcher.wait(5)
+        with AsyncDispatcher(self.block_stuff) as dispatcher:
+            gevent.sleep(1)
+            v = dispatcher.wait(5)
         ndt = time.time() - t1
 
+        # There is ususally some difference but should definitely be less than
+        # one second
         self.assertTrue( abs(dt - ndt) < 1)
+
+        try:
+            # Make sure we're not losing file descriptors to maintain thread synchronization
+            self.assertEquals((r,w), os.pipe())
+        finally:
+            os.close(r)
+            os.close(w)
 
 
