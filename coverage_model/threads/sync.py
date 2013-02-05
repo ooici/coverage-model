@@ -28,18 +28,19 @@ def get_pythread():
 
     return _pythread
 
-def _pipe_read_callback(event, eventtype):
-    try:
-        os.read(event.fd, 1)
-    except EnvironmentError: #O_NONBLOCK sets errno, we're just using it for nonblock.
-        pass
-
 
 class _Event(gevent.event.Event):
+    '''
+    A gevent-friendly event to be signaled by os thread and respected by 
+    the gevent context manager
+    '''
 
     def __init__(self):
         gevent.event.Event.__init__(self)
         self._r, self._w = self._pipe()
+
+        # Create a new gevent core object that will observe the
+        # nonblocking pipe file descriptor for a value
         self._core_event = gevent.core.event(
                     gevent.core.EV_READ | gevent.core.EV_PERSIST,
                     self._r, 
@@ -50,7 +51,6 @@ class _Event(gevent.event.Event):
         r,w = os.pipe()
         fcntl.fcntl(r, fcntl.F_SETFD, os.O_NONBLOCK)
         fcntl.fcntl(w, fcntl.F_SETFD, os.O_NONBLOCK)
-
         return r,w
 
     def _pipe_read(self, event, eventtype):
@@ -61,9 +61,15 @@ class _Event(gevent.event.Event):
         try:
             os.read(event.fd,1)
         except EnvironmentError:
+            # file descriptors set with O_NONBLOCK return -1 and set errno to 
+            # EAGAIN, we just want to ignore it and try again later
             pass
 
     def set(self):
+        '''
+        Sets the event value and writes a value to the pipe to
+        trigger the gevent core event
+        '''
         gevent.event.Event.set(self)
         os.write(self._w, '\0')
 
@@ -85,6 +91,10 @@ class AsyncDispatcher(object):
         
 
     def dispatch(self, callback, *args, **kwargs):
+        '''
+        Runs a callback, either sets an asynchronous value or an exception
+        When the os thread completes, the event is set to signal gevent that it's complete
+        '''
         try:
             retval = callback(*args, **kwargs)
             self._value = retval
@@ -93,6 +103,11 @@ class AsyncDispatcher(object):
         self.event.set()
 
     def wait(self,timeout=None):
+        '''
+        Blocks the current gevent greenlet until a value is set or the timeout expires.
+        If the timeout expires a Timeout is raised.
+        If the callback raised an exception in the os thread, an exception is raised here.
+        '''
         if self.event.wait(timeout):
             if self._exception:
                 raise self._exception
