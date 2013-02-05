@@ -263,6 +263,8 @@ class SimplexCoverage(AbstractCoverage):
                 for parameter_name in self._persistence_layer.parameter_metadata.keys():
                     md = self._persistence_layer.parameter_metadata[parameter_name]
                     pc = md.parameter_context
+                    if hasattr(pc, '_pval_callback'):
+                        pc._pval_callback = self.get_parameter_values
                     self._range_dictionary.add_context(pc)
                     s = PersistedStorage(md, self._persistence_layer.brick_dispatcher, dtype=pc.param_type.storage_encoding, fill_value=pc.param_type.fill_value, mode=self.mode, inline_data_writes=inline_data_writes, auto_flush=auto_flush_values)
                     self._range_value[parameter_name] = get_value_class(param_type=pc.param_type, domain_set=pc.dom, storage=s)
@@ -430,6 +432,10 @@ class SimplexCoverage(AbstractCoverage):
             dom.crs.axes[pcontext.axis] = pcontext.name
         elif not no_sdom and (pcontext.axis in self.spatial_domain.crs.axes):
             dom.crs.axes[pcontext.axis] = pcontext.name
+
+        # If this is a ParameterFunctionType parameter, provide a callback to the coverage's _range_value
+        if hasattr(pcontext, '_pval_callback'): # CBM TODO: Need to sort out how to do this - can't store it...
+            pcontext._pval_callback = self.get_parameter_values
 
         self._range_dictionary.add_context(pcontext)
         s = self._persistence_layer.init_parameter(pcontext, self._bricking_scheme)

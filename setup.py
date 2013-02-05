@@ -38,6 +38,7 @@ setup(  name = 'coverage-model',
         'h5py==2.1.1a1', 
         'rtree==0.7.0',
         'pidantic',
+        'gsw==3.0.1',
 #        'scipy==0.10.1',
     ],
 )

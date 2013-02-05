@@ -177,6 +177,64 @@ class FunctionValue(AbstractComplexParameterValue):
             else:
                 self._storage[0].append(value)
 
+class AbstractExpression(AbstractBase):
+    def __init__(self):
+        AbstractBase.__init__(self)
+
+    def evaluate(self, *args):
+        raise NotImplementedError('Not implemented in abstract class')
+
+class PythonExpression(AbstractExpression):
+    def __init__(self, callable):
+        AbstractExpression.__init__(self)
+        self._callable = callable
+
+    def evaluate(self, pval_callback, ptype, slice_):
+        args=[pval_callback(p, slice_) for v, p in ptype.parameter_map.iteritems()]
+        return self._callable(*args)
+
+class NumexprExpression(AbstractExpression):
+    def __init__(self, expression):
+        AbstractExpression.__init__(self)
+        self._expr = expression
+
+    def evaluate(self, pval_callback, ptype, slice_):
+        ld={v:pval_callback(p, slice_) for v, p in ptype.parameter_map.iteritems()}
+
+        return ne.evaluate(self._expr, local_dict=ld)
+
+class ParameterFunctionValue(AbstractSimplexParameterValue):
+
+    def __init__(self, parameter_type, domain_set, storage=None, **kwargs):
+        """
+
+        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterValue; see documentation for that class for details
+        """
+        kwc=kwargs.copy()
+        AbstractSimplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
+        # Do NOT expand storage - no need to store anything here!!
+
+        # Grab a local pointer to the coverage's _cov_range_value object
+        self._pval_callback = self.parameter_type._pval_callback
+
+    @property
+    def content(self):
+        return self.parameter_type.function_str
+
+    def expand_content(self, domain, origin, expansion):
+        # No op, storage is always 0 - domain applied during retrieval
+        pass
+
+    def __getitem__(self, slice_):
+        slice_ = utils.fix_slice(slice_, self.shape)
+
+        ld={v:self._pval_callback(p, slice_) for v, p in self.parameter_type.parameter_map.iteritems()}
+
+        return ne.evaluate(self.content, local_dict=ld)
+
+    def __setitem__(self, slice_, value):
+        raise ValueError('Values cannot be set against ParameterFunctionValues!')
+
 class ConstantValue(AbstractComplexParameterValue):
 
     def __init__(self, parameter_type, domain_set, storage=None, **kwargs):

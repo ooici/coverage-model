@@ -39,15 +39,17 @@ class Dictable(object):
         """
         return cls._fromdict(fromdict)
 
-    def _todict(self):
+    def _todict(self, exclude=None):
         """
         Retrieve a standard python dict representing the Dictable object and any Dictable sub-objects.
 
         This function may be overridden in subclasses to handle special functionality
 
+        @param exclude   A list of attributes to exclude from the resulting dictionary
         @returns    A python dictionary representation of the object
         """
-        ret = dict((k,v._todict() if hasattr(v, '_todict') else v) for k, v in self.__dict__.iteritems())
+        exclude = exclude if exclude is not None else []
+        ret = dict((k,v._todict() if hasattr(v, '_todict') else v) for k, v in self.__dict__.iteritems() if k not in exclude)
 
         ret['cm_type'] = (self.__module__, self.__class__.__name__)
         return ret
@@ -69,7 +71,7 @@ class Dictable(object):
         @param cmdict    A python dict representation of a valid Dictable; may contain other Dictable objects
         @param arg_masks    Allows masking of required constructor arguments - see MASKING above
         """
-        arg_masks = arg_masks or {}
+        arg_masks = arg_masks if arg_masks is not None else {}
 #        log.trace('_fromdict: cls=%s',cls)
         if isinstance(cmdict, dict) and 'cm_type' in cmdict and cmdict['cm_type']:
             cmd = cmdict.copy()

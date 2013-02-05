@@ -48,6 +48,13 @@ def values_outside_coverage():
     crtype = ConstantRangeType(QuantityType(value_encoding=np.dtype('int16')))
     crval = get_value_class(crtype, domain_set=dom)
 
+    pftype=ParameterFunctionType('t*10', {'t':'temp'})
+    def _get_pvals(name, *args, **kwargs):
+        if name == 'temp':
+            return np.array([1,3,5,6,23])
+    pftype._pval_callback = _get_pvals
+    pfval=get_value_class(pftype, SimpleDomainSet((5,)))
+
     cat = {0:'turkey',1:'duck',2:'chicken',99:'None'}
     cattype = CategoryType(categories=cat)
     catval = get_value_class(cattype, dom)
@@ -74,14 +81,10 @@ def values_outside_coverage():
     if not (aval.shape == rval.shape == cval_n.shape):# == fval.shape):
         raise SystemError('Shapes are not equal!!')
 
-    types = (qtype, atype, rtype, btype, ctype_n, ctype_s, cattype, ftype)
-    vals = (qval, aval, rval, bval, cval_n, cval_s, crval, catval, fval)
-#    for i in xrange(len(vals)):
-#        log.info('Type: %s', types[i])
-#        log.info('\tContent: %s', vals[i].content)
-#        log.info('\tVals: %s', vals[i][:])
+    types = (qtype, atype, rtype, btype, ctype_n, ctype_s, cattype, ftype, pftype)
+    vals = (qval, aval, rval, bval, cval_n, cval_s, crval, catval, fval, pfval)
 
-    log.info('Returning: qval, aval, rval, bval, cval_n, cval_s, crval, catval, fval')
+    log.info('Returning: qval, aval, rval, bval, cval_n, cval_s, crval, catval, fval, pfval')
     return vals
 
 def param_dict_dump_load():
@@ -480,6 +483,10 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True, mak
     cnst_rng_int_ctxt.long_name = 'example of a parameter of type ConstantRangeType, base_type int16'
     pdict.add_context(cnst_rng_int_ctxt)
 
+    pfunc_ctxt = ParameterContext('parameter_function', param_type=ParameterFunctionType('q*10', {'q':'quantity'}), variability=VariabilityEnum.TEMPORAL)
+    pfunc_ctxt.long_name = 'example of a parameter of type ParameterFunctionType'
+    pdict.add_context(pfunc_ctxt)
+
     cat = {0:'turkey',1:'duck',2:'chicken',99:'None'}
     cat_ctxt = ParameterContext('category', param_type=CategoryType(categories=cat), variability=VariabilityEnum.TEMPORAL)
     pdict.add_context(cat_ctxt)
@@ -554,6 +561,95 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True, mak
         SimplexCoverage.pickle_save(scov, 'test_data/ptypes.cov')
 
     return scov
+
+def ctdsamplecov():
+    # Construct temporal and spatial Coordinate Reference System objects
+    tcrs = CRS([AxisTypeEnum.TIME])
+    scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+    # Construct temporal and spatial Domain objects
+    tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE)
+
+    # Instantiate a ParameterDictionary
+    pdict = ParameterDictionary()
+
+    ## time,port_timestamp,driver_timestamp,internal_timestamp,preferred_timestamp,lat,lon,pressure,conductivity,temp,salinity,density,quality_flag
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
+    t_ctxt.uom = 'seconds since 01-01-1900'
+    pdict.add_context(t_ctxt, is_temporal=True)
+
+    lat_ctxt = ParameterContext('lat', param_type=ConstantType(QuantityType(value_encoding=np.dtype('float32'))))
+    lat_ctxt.axis = AxisTypeEnum.LAT
+    lat_ctxt.uom = 'degree_north'
+    pdict.add_context(lat_ctxt)
+
+    lon_ctxt = ParameterContext('lon', param_type=ConstantType(QuantityType(value_encoding=np.dtype('float32'))))
+    lon_ctxt.axis = AxisTypeEnum.LON
+    lon_ctxt.uom = 'degree_east'
+    pdict.add_context(lon_ctxt)
+
+    # Independent Parameters
+
+    temp_ctxt = ParameterContext('TEMPWAT_L0', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    temp_ctxt.uom = 'deg_C'
+    pdict.add_context(temp_ctxt)
+
+    cond_ctxt = ParameterContext('CONDWAT_L0', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    cond_ctxt.uom = 'S m-1'
+    pdict.add_context(cond_ctxt)
+
+    press_ctxt = ParameterContext('pressure', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    press_ctxt.uom = 'dbar'
+    pdict.add_context(press_ctxt)
+
+
+    # Dependent Parameters
+
+    tl1_func = '(TEMPWAT_L0 / 10000) - 10'
+    tl1_pmap = {'TEMPWAT_L0':'TEMPWAT_L0'}
+    tempL1_ctxt = ParameterContext('TEMPWAT_L1', param_type=ParameterFunctionType(function_str=tl1_func, parameter_map=tl1_pmap), variability=VariabilityEnum.TEMPORAL)
+    tempL1_ctxt.uom = 'deg_C'
+    pdict.add_context(tempL1_ctxt)
+
+    cl1_func = '(CONDWAT_L0 / 100000) - 0.5'
+    cl1_pmap = {'CONDWAT_L0':'CONDWAT_L0'}
+    condL1_ctxt = ParameterContext('CONDWAT_L1', param_type=ParameterFunctionType(function_str=cl1_func, parameter_map=cl1_pmap), variability=VariabilityEnum.TEMPORAL)
+    condL1_ctxt.uom = 'S m-1'
+    pdict.add_context(condL1_ctxt)
+
+    den_func = '1'
+    dens_ctxt = ParameterContext('density', param_type=ParameterFunctionType(function_str=den_func, parameter_map={}), variability=VariabilityEnum.TEMPORAL)
+    dens_ctxt.uom = 'kg m-3'
+    pdict.add_context(dens_ctxt)
+
+    sal_func = '1'
+    sal_ctxt = ParameterContext('salinity', param_type=ParameterFunctionType(function_str=sal_func, parameter_map={}), variability=VariabilityEnum.TEMPORAL)
+    sal_ctxt.uom = 'g kg-1'
+    pdict.add_context(sal_ctxt)
+
+    # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom)
+
+    # Insert some timesteps (automatically expands other arrays)
+    nt = 30
+    scov.insert_timesteps(nt)
+
+    # Add data for each parameter
+    scov.set_parameter_values('time', value=np.arange(nt))
+    scov.set_parameter_values('lat', value=45)
+    scov.set_parameter_values('lon', value=-71)
+    # make a random sample of 10 values between 23 and 26
+    # Ref: http://docs.scipy.org/doc/numpy/reference/generated/numpy.random.random_sample.html#numpy.random.random_sample
+    # --> To sample  multiply the output of random_sample by (b-a) and add a
+    scov.set_parameter_values('TEMPWAT_L0', value=np.random.random_sample(nt)*(26-23)+23)
+    scov.set_parameter_values('CONDWAT_L0', value=np.random.random_sample(nt)*(7-3)+3)
+
+
+    return scov
+
+
 
 def nospatialcov(save_coverage=False, in_memory=False, inline_data_writes=True):
     # Construct temporal and spatial Coordinate Reference System objects

@@ -424,6 +424,44 @@ class TimeRangeType(AbstractSimplexParameterType):
         kwc=kwargs.copy()
         AbstractSimplexParameterType.__init__(self, **kwc)
 
+class ParameterFunctionType(AbstractSimplexParameterType):
+
+    def __init__(self, function_str, parameter_map, **kwargs):
+        """
+
+        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractSimplexParameterType; see documentation for that class for details
+        """
+        kwc=kwargs.copy()
+        AbstractSimplexParameterType.__init__(self, value_class='ParameterFunctionValue', **kwc)
+
+        if not isinstance(function_str, basestring):
+            raise TypeError('\'function_str\' must be an instance of basestring')
+        if not isinstance(parameter_map, dict):
+            raise TypeError('\'parameter_map\' must be a dict')
+
+        self._template_attrs['function_str'] = function_str
+        self._template_attrs['parameter_map'] = parameter_map
+
+        self._template_attrs['_pval_callback'] = None
+
+        self._gen_template_attrs()
+
+        # TODO: Find a way to allow a parameter to NOT be stored at all....basically, storage == None
+        # Just make it object - not used anyhow...
+        self._value_encoding = 'O8'
+        self._fill_value = None
+
+    def _todict(self, exclude=None):
+        # Must exclude _cov_range_value from persistence
+        return super(ParameterFunctionType, self)._todict(exclude=['_pval_callback'])
+
+    @classmethod
+    def _fromdict(cls, cmdict, arg_masks=None):
+        ret = super(ParameterFunctionType, cls)._fromdict(cmdict, arg_masks=arg_masks)
+        # Add the _cov_range_value attribute, initialized to None
+        ret._cov_range_value = None
+        return ret
+
 class FunctionType(AbstractComplexParameterType):
     """
 
