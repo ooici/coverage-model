@@ -11,6 +11,7 @@ import numpy as np
 import uuid
 import re
 import math
+from putil.hash import hash_any
 
 def create_guid():
     """
@@ -216,24 +217,3 @@ def slice_shape(slice_, shape):
         dim_lengths.append(dim_len)
 
     return tuple(dim_lengths)
-
-def hash_any(value, hv=None):
-    hv = hv or 0
-    if value is None or isinstance(value, (str, unicode, int, long, float, bool)) or np.isscalar(value):
-    #            log.debug('is primitive:  value=%s  hv=%s', value, hv)
-        hv = hash(value) ^ hv
-    elif isinstance(value, (list, tuple, set)):
-    #            log.debug('is list/tuple/set:  value=%s  hv=%s', value, hv)
-        for x in value:
-            hv = hash_any(x, hv)
-    elif isinstance(value, dict):
-    #            log.debug('is dict:  value=%s  hv=%s', value, hv)
-        for k,v in value.iteritems():
-            hv = hash_any(k, hv)
-            hv = hash_any(v, hv)
-    elif isinstance(value, object):
-    #            log.debug('is object:  value=%s  hv=%s', value, hv)
-        hv = hash_any(value.__dict__, hv)
-
-    return hv
-
