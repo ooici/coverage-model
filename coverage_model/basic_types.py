@@ -49,7 +49,23 @@ class Dictable(object):
         @returns    A python dictionary representation of the object
         """
         exclude = exclude if exclude is not None else []
-        ret = dict((k,v._todict() if hasattr(v, '_todict') else v) for k, v in self.__dict__.iteritems() if k not in exclude)
+
+        def walk(obj):
+            if hasattr(obj, '_todict'):
+                return obj._todict()
+            elif isinstance(obj, (list, tuple)):
+                r=[]
+                for x in obj:
+                    r.append(walk(x))
+                return r if isinstance(obj, list) else tuple(r)
+            else:
+                return obj
+
+#        ret = dict((k,v._todict() if hasattr(v, '_todict') else v) for k, v in self.__dict__.iteritems() if k not in exclude)
+        ret = {}
+        for k, v in self.__dict__.iteritems():
+            if k not in exclude:
+                ret[k] = walk(v)
 
         ret['cm_type'] = (self.__module__, self.__class__.__name__)
         return ret
@@ -88,31 +104,34 @@ class Dictable(object):
                 for i in spec.defaults:
                     args.remove(args[-1])
             kwa={}
+
+            def walk(obj):
+                if isinstance(obj, dict) and 'cm_type' in obj:
+                    ms, cs = obj['cm_type']
+                    module = __import__(ms, fromlist=[cs])
+                    classobj = getattr(module, cs)
+                    return classobj._fromdict(obj)
+                elif isinstance(obj, (list, tuple)):
+                    r=[]
+                    for vi in obj:
+                        r.append(walk(vi))
+                    return r if isinstance(obj, list) else tuple(r)
+                else:
+                    return obj
+
             for a in args:
                 # Apply any argument masking
                 am = arg_masks[a] if a in arg_masks else a
                 if am in cmd:
                     val = cmd.pop(am)
-                    if isinstance(val, dict) and 'cm_type' in val:
-                        ms, cs = val['cm_type']
-                        module = __import__(ms, fromlist=[cs])
-                        classobj = getattr(module, cs)
-                        kwa[a] = classobj._fromdict(val)
-                    else:
-                        kwa[a] = val
+                    kwa[a] = walk(val)
                 else:
                     kwa[a] = None
 
             ret = ptcls(**kwa)
-            for k,v in cmd.iteritems():
-                if isinstance(v, dict) and 'cm_type' in v:
-                    ms, cs = v['cm_type']
-                    module = __import__(ms, fromlist=[cs])
-                    classobj = getattr(module, cs)
-                    setattr(ret,k,classobj._fromdict(v))
-                else:
-                    setattr(ret,k,v)
 
+            for k,v in cmd.iteritems():
+                setattr(ret,k,walk(v))
 
             return ret
         else:
