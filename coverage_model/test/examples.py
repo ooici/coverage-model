@@ -7,6 +7,8 @@
 @brief Exemplar functions for creation, manipulation, and basic visualization of coverages
 """
 import random
+from coverage_model import PythonExpression, NumexprExpression
+from coverage_model.parameter_expressions import NumexprExpression
 
 from ooi.logging import log
 from netCDF4 import Dataset
@@ -483,7 +485,8 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True, mak
     cnst_rng_int_ctxt.long_name = 'example of a parameter of type ConstantRangeType, base_type int16'
     pdict.add_context(cnst_rng_int_ctxt)
 
-    pfunc_ctxt = ParameterContext('parameter_function', param_type=ParameterFunctionType('q*10', {'q':'quantity'}), variability=VariabilityEnum.TEMPORAL)
+    expr = NumexprExpression(expression='q*10', param_map={'q':'quantity'})
+    pfunc_ctxt = ParameterContext('parameter_function', param_type=ParameterFunctionType(expression=expr), variability=VariabilityEnum.TEMPORAL)
     pfunc_ctxt.long_name = 'example of a parameter of type ParameterFunctionType'
     pdict.add_context(pfunc_ctxt)
 
@@ -562,7 +565,7 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True, mak
 
     return scov
 
-def ctdsamplecov():
+def sbe37im_samplecov(num_timesteps=100000):
     # Construct temporal and spatial Coordinate Reference System objects
     tcrs = CRS([AxisTypeEnum.TIME])
     scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
@@ -600,51 +603,87 @@ def ctdsamplecov():
     cond_ctxt.uom = 'S m-1'
     pdict.add_context(cond_ctxt)
 
-    press_ctxt = ParameterContext('pressure', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    press_ctxt = ParameterContext('PRESWAT_L0', param_type=QuantityType(value_encoding=np.dtype('float32')))
     press_ctxt.uom = 'dbar'
     pdict.add_context(press_ctxt)
 
 
     # Dependent Parameters
 
+    # TEMPWAT_L1 = (TEMPWAT_L0 / 10000) - 10
     tl1_func = '(TEMPWAT_L0 / 10000) - 10'
     tl1_pmap = {'TEMPWAT_L0':'TEMPWAT_L0'}
-    tempL1_ctxt = ParameterContext('TEMPWAT_L1', param_type=ParameterFunctionType(function_str=tl1_func, parameter_map=tl1_pmap), variability=VariabilityEnum.TEMPORAL)
+    expr = NumexprExpression(tl1_func, tl1_pmap)
+    tempL1_ctxt = ParameterContext('TEMPWAT_L1', param_type=ParameterFunctionType(expression=expr), variability=VariabilityEnum.TEMPORAL)
     tempL1_ctxt.uom = 'deg_C'
     pdict.add_context(tempL1_ctxt)
 
+    # CONDWAT_L1 = (CONDWAT_L0 / 100000) - 0.5
     cl1_func = '(CONDWAT_L0 / 100000) - 0.5'
     cl1_pmap = {'CONDWAT_L0':'CONDWAT_L0'}
-    condL1_ctxt = ParameterContext('CONDWAT_L1', param_type=ParameterFunctionType(function_str=cl1_func, parameter_map=cl1_pmap), variability=VariabilityEnum.TEMPORAL)
+    expr = NumexprExpression(cl1_func, cl1_pmap)
+    condL1_ctxt = ParameterContext('CONDWAT_L1', param_type=ParameterFunctionType(expression=expr), variability=VariabilityEnum.TEMPORAL)
     condL1_ctxt.uom = 'S m-1'
     pdict.add_context(condL1_ctxt)
 
-    den_func = '1'
-    dens_ctxt = ParameterContext('density', param_type=ParameterFunctionType(function_str=den_func, parameter_map={}), variability=VariabilityEnum.TEMPORAL)
-    dens_ctxt.uom = 'kg m-3'
-    pdict.add_context(dens_ctxt)
+    # Equation uses p_range, which is a calibration coefficient - Fixing to 679.34040721
+    #   PRESWAT_L1 = (PRESWAT_L0 * p_range / (0.85 * 65536)) - (0.05 * p_range)
+    pl1_func = '(PRESWAT_L0 * 679.34040721 / (0.85 * 65536)) - (0.05 * 679.34040721)'
+    pl1_pmap = {'PRESWAT_L0':'PRESWAT_L0'}
+    expr = NumexprExpression(pl1_func, pl1_pmap)
+    presL1_ctxt = ParameterContext('PRESWAT_L1', param_type=ParameterFunctionType(expression=expr), variability=VariabilityEnum.TEMPORAL)
+    presL1_ctxt.uom = 'S m-1'
+    pdict.add_context(presL1_ctxt)
 
-    sal_func = '1'
-    sal_ctxt = ParameterContext('salinity', param_type=ParameterFunctionType(function_str=sal_func, parameter_map={}), variability=VariabilityEnum.TEMPORAL)
+    # Density & practical salinity calucluated using the Gibbs Seawater library - available via python-gsw project:
+    #       https://code.google.com/p/python-gsw/ & http://pypi.python.org/pypi/gsw/3.0.1
+
+    # PRACSAL = gsw.SP_from_C((CONDWAT_L1 * 10), TEMPWAT_L1, PRESWAT_L1)
+    owner = 'gsw'
+    sal_func = 'SP_from_C'
+    sal_arglist = [NumexprExpression('C*10', {'C':'CONDWAT_L1'}), 'TEMPWAT_L1', 'PRESWAT_L1']
+    sal_kwargmap = None
+    expr = PythonExpression(owner, sal_func, sal_arglist, sal_kwargmap)
+    sal_ctxt = ParameterContext('PRACSAL', param_type=ParameterFunctionType(expr), variability=VariabilityEnum.TEMPORAL)
     sal_ctxt.uom = 'g kg-1'
     pdict.add_context(sal_ctxt)
 
+    # absolute_salinity = gsw.SA_from_SP(PRACSAL, PRESWAT_L1, longitude, latitude)
+    # conservative_temperature = gsw.CT_from_t(absolute_salinity, TEMPWAT_L1, PRESWAT_L1)
+    # DENSITY = gsw.rho(absolute_salinity, conservative_temperature, PRESWAT_L1)
+    owner = 'gsw'
+    abs_sal_expr = PythonExpression(owner, 'SA_from_SP', ['PRACSAL', 'PRESWAT_L1', 'lon','lat'], None)
+    cons_temp_expr = PythonExpression(owner, 'CT_from_t', [abs_sal_expr, 'TEMPWAT_L1', 'PRESWAT_L1'], None)
+    dens_expr = PythonExpression(owner, 'rho', [abs_sal_expr, cons_temp_expr, 'PRESWAT_L1'], None)
+    dens_ctxt = ParameterContext('DENSITY', param_type=ParameterFunctionType(dens_expr), variability=VariabilityEnum.TEMPORAL)
+    dens_ctxt.uom = 'kg m-3'
+    pdict.add_context(dens_ctxt)
+
+
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom)
+    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage for an SBE 37IM', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom)
 
     # Insert some timesteps (automatically expands other arrays)
-    nt = 30
+    nt = num_timesteps
     scov.insert_timesteps(nt)
 
     # Add data for each parameter
     scov.set_parameter_values('time', value=np.arange(nt))
     scov.set_parameter_values('lat', value=45)
     scov.set_parameter_values('lon', value=-71)
-    # make a random sample of 10 values between 23 and 26
-    # Ref: http://docs.scipy.org/doc/numpy/reference/generated/numpy.random.random_sample.html#numpy.random.random_sample
-    # --> To sample  multiply the output of random_sample by (b-a) and add a
-    scov.set_parameter_values('TEMPWAT_L0', value=np.random.random_sample(nt)*(26-23)+23)
-    scov.set_parameter_values('CONDWAT_L0', value=np.random.random_sample(nt)*(7-3)+3)
+
+    # Make a bunch of data to assign to the dependent parameters.  This would be added to the coverage via ingestion
+    # From DPS info:
+    #   here: https://confluence.oceanobservatories.org/display/science/Data+Product+Specifications
+    #   and here: https://alfresco.oceanobservatories.org/alfresco/d/d/workspace/SpacesStore/466c4915-c777-429a-8946-c90a8f0945b0/1341-10004_Data_Product_SPEC_GLBLRNG_OOI.pdf
+    # and the seabird website here: http://www.seabird.com/products/spec_sheets/37imdata.htm
+
+    # SBE 37IM - temperature in 't_dec' example range between 280000 and 350000
+    scov.set_parameter_values('TEMPWAT_L0', value=np.random.random_sample(nt)*(350000-280000)+280000)
+    # SBE 37IM - conductivity, ranging between 100000 & 750000 (not 0 because never 0 in seawater)
+    scov.set_parameter_values('CONDWAT_L0', value=np.random.random_sample(nt)*(750000-100000)+100000)
+    # SBE 37IM - pressure, ranging between 2789 and 10000 (couldn't find a range in the DPS, this seems reasonable!)
+    scov.set_parameter_values('PRESWAT_L0', value=np.random.random_sample(nt)*(10000-2789)+2789)
 
 
     return scov

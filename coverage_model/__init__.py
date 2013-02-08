@@ -1,5 +1,6 @@
 from basic_types import AxisTypeEnum, MutabilityEnum, VariabilityEnum
 from coverage import SimplexCoverage, SimpleDomainSet, GridDomain, GridShape, CRS
+from coverage_model.parameter_expressions import PythonExpression, NumexprExpression
 from parameter import ParameterContext, ParameterDictionary
 from parameter_types import ArrayType, BooleanType, CategoryRangeType, CategoryType, ConstantType, CountRangeType, CountType, FunctionType, QuantityRangeType, QuantityType, RecordType, ReferenceType, TextType, TimeRangeType, TimeType, VectorType, ConstantRangeType, ParameterFunctionType
 from parameter_values import get_value_class
@@ -13,7 +14,9 @@ _types = ['ArrayType', 'BooleanType', 'CategoryRangeType', 'CategoryType', 'Cons
           'CountRangeType', 'CountType', 'FunctionType', 'QuantityRangeType', 'QuantityType',
           'RecordType', 'ReferenceType', 'TextType', 'TimeRangeType', 'TimeType', 'VectorType', 'ConstantRangeType', 'ParameterFunctionType']
 
+_expressions = ['NumexprExpression', 'PythonExpression']
+
 _utils = ['make_range_expr', 'create_guid', 'get_value_class', 'fix_slice']
 
 # Determines the set of things imported by using:  from coverage_model import *
-__all__ = _core + _types + _utils
+__all__ = _core + _types + _utils + _expressions

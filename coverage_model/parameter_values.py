@@ -6,7 +6,6 @@
 @author Christopher Mueller
 @brief Abstract and concrete value objects for parameters
 """
-from ooi.logging import log
 from coverage_model.basic_types import AbstractBase, InMemoryStorage, VariabilityEnum
 from coverage_model.numexpr_utils import is_well_formed_where, nest_wheres
 from coverage_model import utils
@@ -177,32 +176,6 @@ class FunctionValue(AbstractComplexParameterValue):
             else:
                 self._storage[0].append(value)
 
-class AbstractExpression(AbstractBase):
-    def __init__(self):
-        AbstractBase.__init__(self)
-
-    def evaluate(self, *args):
-        raise NotImplementedError('Not implemented in abstract class')
-
-class PythonExpression(AbstractExpression):
-    def __init__(self, callable):
-        AbstractExpression.__init__(self)
-        self._callable = callable
-
-    def evaluate(self, pval_callback, ptype, slice_):
-        args=[pval_callback(p, slice_) for v, p in ptype.parameter_map.iteritems()]
-        return self._callable(*args)
-
-class NumexprExpression(AbstractExpression):
-    def __init__(self, expression):
-        AbstractExpression.__init__(self)
-        self._expr = expression
-
-    def evaluate(self, pval_callback, ptype, slice_):
-        ld={v:pval_callback(p, slice_) for v, p in ptype.parameter_map.iteritems()}
-
-        return ne.evaluate(self._expr, local_dict=ld)
-
 class ParameterFunctionValue(AbstractSimplexParameterValue):
 
     def __init__(self, parameter_type, domain_set, storage=None, **kwargs):
@@ -219,7 +192,7 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
 
     @property
     def content(self):
-        return self.parameter_type.function_str
+        return self.parameter_type.expression
 
     def expand_content(self, domain, origin, expansion):
         # No op, storage is always 0 - domain applied during retrieval
@@ -228,9 +201,7 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
     def __getitem__(self, slice_):
         slice_ = utils.fix_slice(slice_, self.shape)
 
-        ld={v:self._pval_callback(p, slice_) for v, p in self.parameter_type.parameter_map.iteritems()}
-
-        return ne.evaluate(self.content, local_dict=ld)
+        return self.content.evaluate(self._pval_callback, self.parameter_type, slice_)
 
     def __setitem__(self, slice_, value):
         raise ValueError('Values cannot be set against ParameterFunctionValues!')

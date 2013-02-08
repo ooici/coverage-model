@@ -17,6 +17,7 @@
 #def is_coordinate(self, value):
 #    if isinstance(value, bool):
 #        self.__is_coordinate = value
+from coverage_model.parameter_expressions import AbstractExpression
 
 from ooi.logging import log
 from coverage_model.basic_types import AbstractIdentifiable
@@ -426,21 +427,17 @@ class TimeRangeType(AbstractSimplexParameterType):
 
 class ParameterFunctionType(AbstractSimplexParameterType):
 
-    def __init__(self, function_str, parameter_map, **kwargs):
+    def __init__(self, expression, **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractSimplexParameterType; see documentation for that class for details
         """
         kwc=kwargs.copy()
         AbstractSimplexParameterType.__init__(self, value_class='ParameterFunctionValue', **kwc)
+        if not isinstance(expression, AbstractExpression):
+            raise TypeError('\'expression\' must be a subclass of AbstractExpression')
 
-        if not isinstance(function_str, basestring):
-            raise TypeError('\'function_str\' must be an instance of basestring')
-        if not isinstance(parameter_map, dict):
-            raise TypeError('\'parameter_map\' must be a dict')
-
-        self._template_attrs['function_str'] = function_str
-        self._template_attrs['parameter_map'] = parameter_map
+        self._template_attrs['expression'] = expression
 
         self._template_attrs['_pval_callback'] = None
 
@@ -458,8 +455,8 @@ class ParameterFunctionType(AbstractSimplexParameterType):
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
         ret = super(ParameterFunctionType, cls)._fromdict(cmdict, arg_masks=arg_masks)
-        # Add the _cov_range_value attribute, initialized to None
-        ret._cov_range_value = None
+        # Add the _pval_callback attribute, initialized to None
+        ret._pval_callback = None
         return ret
 
 class FunctionType(AbstractComplexParameterType):
