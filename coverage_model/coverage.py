@@ -34,21 +34,20 @@
 #        self.__spatial_domain = value
 
 from ooi.logging import log
+from pyon.util.async import spawn
 
 from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_DomainOfApplication, Dictable, InMemoryStorage
 from coverage_model.parameter import Parameter, ParameterDictionary, ParameterContext
 from coverage_model.parameter_values import get_value_class, AbstractParameterValue
 from coverage_model.persistence import PersistenceLayer, InMemoryPersistenceLayer
-import coverage_model.utils as utils
+from coverage_model import utils
 from copy import deepcopy
 import numpy as np
-import pickle
-import os
+import os, collections, pickle
 
 #=========================
 # Coverage Objects
 #=========================
-from pyon.util.async import spawn
 
 class AbstractCoverage(AbstractIdentifiable):
     """
@@ -211,7 +210,10 @@ class SimplexCoverage(AbstractCoverage):
     of the AbstractParameterValue class.
 
     """
-    def __init__(self, root_dir, persistence_guid, name=None, parameter_dictionary=None, temporal_domain=None, spatial_domain=None, mode=None, in_memory_storage=False, bricking_scheme=None, inline_data_writes=True, auto_flush_values=True):
+
+    VALUE_CACHE_LIMIT = 30
+
+    def __init__(self, root_dir, persistence_guid, name=None, parameter_dictionary=None, temporal_domain=None, spatial_domain=None, mode=None, in_memory_storage=False, bricking_scheme=None, inline_data_writes=True, auto_flush_values=True, value_caching=True):
         """
         Constructor for SimplexCoverage
 
@@ -226,6 +228,7 @@ class SimplexCoverage(AbstractCoverage):
         @param bricking_scheme  the bricking scheme for the coverage; a dict of the form {'brick_size': #, 'chunk_size': #}
         @param inline_data_writes   if True (default), brick data is written as it is set; otherwise it is written out-of-band by worker processes or threads
         @param auto_flush_values    if True (default), brick data is flushed immediately; otherwise it is buffered until SimplexCoverage.flush_values() is called
+        @param value_caching  if True (default), up to 30 value requests are cached for rapid duplicate retrieval
         """
         AbstractCoverage.__init__(self, mode=mode)
         try:
@@ -258,6 +261,9 @@ class SimplexCoverage(AbstractCoverage):
 
                 auto_flush_values = self._persistence_layer.auto_flush_values
                 inline_data_writes = self._persistence_layer.inline_data_writes
+                self.value_caching = self._persistence_layer.value_caching
+                if self.value_caching:
+                    self._value_cache = collections.OrderedDict()
 
                 from coverage_model.persistence import PersistedStorage
                 for parameter_name in self._persistence_layer.parameter_metadata.keys():
@@ -317,11 +323,15 @@ class SimplexCoverage(AbstractCoverage):
 
                 self._bricking_scheme = bricking_scheme or {'brick_size':100000,'chunk_size':100000}
 
+                self.value_caching = value_caching
+                if self.value_caching:
+                    self._value_cache = collections.OrderedDict()
+
                 self._in_memory_storage = in_memory_storage
                 if self._in_memory_storage:
                     self._persistence_layer = InMemoryPersistenceLayer()
                 else:
-                    self._persistence_layer = PersistenceLayer(root_dir, persistence_guid, name=name, tdom=temporal_domain, sdom=spatial_domain, mode=self.mode, bricking_scheme=self._bricking_scheme, inline_data_writes=inline_data_writes, auto_flush_values=auto_flush_values)
+                    self._persistence_layer = PersistenceLayer(root_dir, persistence_guid, name=name, tdom=temporal_domain, sdom=spatial_domain, mode=self.mode, bricking_scheme=self._bricking_scheme, inline_data_writes=inline_data_writes, auto_flush_values=auto_flush_values, value_caching=value_caching)
 
                 for o, pc in parameter_dictionary.itervalues():
                     self._append_parameter(pc)
@@ -609,19 +619,43 @@ class SimplexCoverage(AbstractCoverage):
 
         slice_ = []
 
-        tdoa = get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
+        total_shape = self.temporal_domain.shape.extents
+        tdoa = get_valid_DomainOfApplication(tdoa, total_shape)
         log.debug('Temporal doa: %s', tdoa.slices)
         slice_.extend(tdoa.slices)
 
         if self.spatial_domain is not None:
-            sdoa = get_valid_DomainOfApplication(sdoa, self.spatial_domain.shape.extents)
+            total_shape += self.spatial_domain.shape.extents
+            sdoa = get_valid_DomainOfApplication(sdoa, total_shape[1:])
             log.debug('Spatial doa: %s', sdoa.slices)
             slice_.extend(sdoa.slices)
 
+        slice_ = utils.fix_slice(slice_, total_shape)
         log.debug('Getting slice: %s', slice_)
 
-        return_value = self._range_value[param_name][slice_]
+        if self.value_caching:
+            # Make slice_ fully expressed such that there are no "None" entries - this lets us ignore domain growth
+            slk = utils.express_slice(slice_, total_shape)
+            key=(param_name, utils.hash_any(slk))
+            try:
+                return_value = self._value_cache.pop(key)
+#                print 'Vals from cache for \'%s\'' % param_name
+            except KeyError:
+#                print 'New vals for \'%s\'' % param_name
+                return_value = self._range_value[param_name][slice_]
+                if len(self._value_cache) >= self.VALUE_CACHE_LIMIT:
+                    k, v = self._value_cache.popitem(0)
+                    v=None
+                    del k, v
+            self._value_cache[key] = return_value
+        else:
+            return_value = self._range_value[param_name][slice_]
+
         return return_value
+
+    def clear_value_cache(self):
+        if self.value_caching:
+            self._value_cache.clear()
 
     def get_parameter_context(self, param_name):
         """
@@ -1061,6 +1095,8 @@ class AbstractShape(AbstractIdentifiable):
         AbstractIdentifiable.__init__(self)
         self.name = name
         self.extents = extents or [0]
+        if not isinstance(self.extents, tuple):
+            self.extents = tuple(self.extents)
 
     @property
     def rank(self):

@@ -28,7 +28,7 @@ class PersistenceLayer(object):
     The PersistenceLayer class manages the disk-level storage (and retrieval) of the Coverage Model using HDF5 files.
     """
 
-    def __init__(self, root, guid, name=None, tdom=None, sdom=None, mode=None, bricking_scheme=None, inline_data_writes=True, auto_flush_values=True, **kwargs):
+    def __init__(self, root, guid, name=None, tdom=None, sdom=None, mode=None, bricking_scheme=None, inline_data_writes=True, auto_flush_values=True, value_caching=True, **kwargs):
         """
         Constructor for PersistenceLayer
 
@@ -39,6 +39,7 @@ class PersistenceLayer(object):
         @param sdom Concrete instance of AbstractDomain for the spatial domain component
         @param bricking_scheme  A dictionary containing the brick and chunk sizes
         @param auto_flush_values    True = Values flushed to HDF5 files automatically, False = Manual
+        @param value_caching  if True (default), value requests should be cached for rapid duplicate retrieval
         @param kwargs
         @return None
         """
@@ -53,6 +54,9 @@ class PersistenceLayer(object):
             self.master_manager.auto_flush_values = auto_flush_values
         if not hasattr(self.master_manager, 'inline_data_writes'):
             self.master_manager.inline_data_writes = inline_data_writes
+        if not hasattr(self.master_manager, 'value_caching'):
+            self.master_manager.value_caching = value_caching
+
         self.value_list = {}
 
         self.parameter_metadata = {} # {parameter_name: [brick_list, parameter_domains, rtree]}

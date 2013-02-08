@@ -565,7 +565,7 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True, mak
 
     return scov
 
-def sbe37im_samplecov(num_timesteps=100000):
+def sbe37im_samplecov(num_timesteps=100000, value_caching=True):
     # Construct temporal and spatial Coordinate Reference System objects
     tcrs = CRS([AxisTypeEnum.TIME])
     scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
@@ -661,7 +661,7 @@ def sbe37im_samplecov(num_timesteps=100000):
 
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage for an SBE 37IM', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom)
+    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage for an SBE 37IM', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, value_caching=value_caching)
 
     # Insert some timesteps (automatically expands other arrays)
     nt = num_timesteps
