@@ -52,11 +52,11 @@ class TestThreads(unittest.TestCase):
         # Get a good benchmark without any concurrent actions
         t1 = time.time()
         with AsyncDispatcher(self.block_stuff) as dispatcher:
-            v = dispatcher.wait(5)
+            v = dispatcher.wait(10)
         dt = time.time() - t1
 
         # Check that it takes less than 5 seconds and that it's the right value
-        self.assertTrue(dt < 5)
+        self.assertTrue(dt < 10)
         self.assertTrue(np.array_equal(v,np.arange(20)))
 
         # Try it again but this time with a gevent sleep that should run
@@ -64,7 +64,7 @@ class TestThreads(unittest.TestCase):
         t1 = time.time()
         with AsyncDispatcher(self.block_stuff) as dispatcher:
             gevent.sleep(1)
-            v = dispatcher.wait(5)
+            v = dispatcher.wait(10)
         ndt = time.time() - t1
 
         # There is ususally some difference but should definitely be less than
