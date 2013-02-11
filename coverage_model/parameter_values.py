@@ -189,6 +189,7 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
 
         # Grab a local pointer to the coverage's _cov_range_value object
         self._pval_callback = self.parameter_type._pval_callback
+        self._memoized_values = None
 
     @property
     def content(self):
@@ -199,12 +200,16 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
         pass
 
     def __getitem__(self, slice_):
-        slice_ = utils.fix_slice(slice_, self.shape)
+        if self._memoized_values is not None:
+            return self._memoized_values
+        else:
+            slice_ = utils.fix_slice(slice_, self.shape)
 
-        return self.content.evaluate(self._pval_callback, self.parameter_type, slice_)
+            return self.content.evaluate(self._pval_callback, self.parameter_type, slice_)
 
     def __setitem__(self, slice_, value):
-        raise ValueError('Values cannot be set against ParameterFunctionValues!')
+        self._memoized_values = value
+#        raise ValueError('Values cannot be set against ParameterFunctionValues!')
 
 class ConstantValue(AbstractComplexParameterValue):
 

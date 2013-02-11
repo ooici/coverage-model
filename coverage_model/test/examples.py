@@ -595,14 +595,17 @@ def sbe37im_samplecov(num_timesteps=100000, value_caching=True):
 
     # Independent Parameters
 
+    # Temperature - values expected to be the decimal results of conversion from hex
     temp_ctxt = ParameterContext('TEMPWAT_L0', param_type=QuantityType(value_encoding=np.dtype('float32')))
     temp_ctxt.uom = 'deg_C'
     pdict.add_context(temp_ctxt)
 
+    # Conductivity - values expected to be the decimal results of conversion from hex
     cond_ctxt = ParameterContext('CONDWAT_L0', param_type=QuantityType(value_encoding=np.dtype('float32')))
     cond_ctxt.uom = 'S m-1'
     pdict.add_context(cond_ctxt)
 
+    # Pressure - values expected to be the decimal results of conversion from hex
     press_ctxt = ParameterContext('PRESWAT_L0', param_type=QuantityType(value_encoding=np.dtype('float32')))
     press_ctxt.uom = 'dbar'
     pdict.add_context(press_ctxt)
