@@ -473,6 +473,57 @@ class ParameterFunctionType(AbstractSimplexParameterType):
             self._fmap = self.expression.get_function_map(self._pctxt_callback)
 
         return self._fmap
+
+    def get_dependency_graph(self):
+        try:
+            import pydot
+        except ImportError:
+            raise 'pydot dependency not available'
+
+        graph = pydot.Dot('Function graph for {0}'.format(self.expression.name),
+            graph_type='digraph',
+            strict=True)
+
+        def fmap_to_graph(fmap, graph, pnode=None):
+            for k,v in fmap.iteritems():
+                if 'arg' not in k:
+                    if k.startswith('[') and k.endswith(']'):
+                        n = pydot.Node(k[1:-1], color='blue', shape='box')
+                    else:
+                        n = pydot.Node(k)
+
+                    graph.add_node(n)
+
+                    if pnode is not None:
+                        graph.add_edge(pydot.Edge(pnode, n))
+                else:
+                    n = pnode
+
+                if isinstance(v, dict):
+                    fmap_to_graph(v, graph, n)
+                else:
+                    if v.startswith('<') and v.endswith('>'):
+                        n = pydot.Node(v[1:-1], color='red', shape='hexagon')
+                    elif v.startswith('[') and v.endswith(']'):
+                        n = pydot.Node(v[1:-1], color='blue', shape='box')
+                    else:
+                        n = pydot.Node(v)
+
+                    graph.add_node(n)
+
+                    graph.add_edge(pydot.Edge(pnode, n))
+
+        fmap = self.get_function_map()
+        fmap_to_graph(fmap, graph)
+
+        return graph
+
+    def write_dependency_graph(self, outpath, graph=None):
+        if graph is None:
+            graph = self.get_dependency_graph()
+
+        return graph.write_raw(outpath)
+
     def _todict(self, exclude=None):
         # Must exclude _cov_range_value from persistence
         return super(ParameterFunctionType, self)._todict(exclude=['_pval_callback', '_pctxt_callback', '_fmap', '_iparams'])
