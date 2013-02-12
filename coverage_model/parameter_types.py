@@ -440,6 +440,9 @@ class ParameterFunctionType(AbstractSimplexParameterType):
         self._template_attrs['expression'] = expression
 
         self._template_attrs['_pval_callback'] = None
+        self._template_attrs['_pctxt_callback'] = None
+        self._fmap = None
+        self._iparams = None
 
         self._gen_template_attrs()
 
@@ -448,9 +451,31 @@ class ParameterFunctionType(AbstractSimplexParameterType):
         self._value_encoding = 'O8'
         self._fill_value = None
 
+    def get_independent_parameters(self):
+        if self._iparams is None:
+            fmap = self.get_function_map()
+            def walk(fmap, ipset):
+                for k,v in fmap.iteritems():
+                    if isinstance(v, dict):
+                        walk(v, ipset)
+                    else:
+                        if v.startswith('<') and v.endswith('>'):
+                            ipset.add(v[1:-1])
+
+            ipset = set()
+            walk(fmap, ipset)
+            self._iparams = list(ipset)
+
+        return self._iparams
+
+    def get_function_map(self):
+        if self._fmap is None:
+            self._fmap = self.expression.get_function_map(self._pctxt_callback)
+
+        return self._fmap
     def _todict(self, exclude=None):
         # Must exclude _cov_range_value from persistence
-        return super(ParameterFunctionType, self)._todict(exclude=['_pval_callback'])
+        return super(ParameterFunctionType, self)._todict(exclude=['_pval_callback', '_pctxt_callback', '_fmap', '_iparams'])
 
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):

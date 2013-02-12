@@ -616,7 +616,7 @@ def sbe37im_samplecov(num_timesteps=100000, value_caching=True):
     # TEMPWAT_L1 = (TEMPWAT_L0 / 10000) - 10
     tl1_func = '(TEMPWAT_L0 / 10000) - 10'
     tl1_pmap = {'TEMPWAT_L0':'TEMPWAT_L0'}
-    expr = NumexprExpression(tl1_func, tl1_pmap)
+    expr = NumexprExpression('TEMPWAT_L1', tl1_func, tl1_pmap)
     tempL1_ctxt = ParameterContext('TEMPWAT_L1', param_type=ParameterFunctionType(expression=expr), variability=VariabilityEnum.TEMPORAL)
     tempL1_ctxt.uom = 'deg_C'
     pdict.add_context(tempL1_ctxt)
@@ -624,7 +624,7 @@ def sbe37im_samplecov(num_timesteps=100000, value_caching=True):
     # CONDWAT_L1 = (CONDWAT_L0 / 100000) - 0.5
     cl1_func = '(CONDWAT_L0 / 100000) - 0.5'
     cl1_pmap = {'CONDWAT_L0':'CONDWAT_L0'}
-    expr = NumexprExpression(cl1_func, cl1_pmap)
+    expr = NumexprExpression('CONDWAT_L1', cl1_func, cl1_pmap)
     condL1_ctxt = ParameterContext('CONDWAT_L1', param_type=ParameterFunctionType(expression=expr), variability=VariabilityEnum.TEMPORAL)
     condL1_ctxt.uom = 'S m-1'
     pdict.add_context(condL1_ctxt)
@@ -633,7 +633,7 @@ def sbe37im_samplecov(num_timesteps=100000, value_caching=True):
     #   PRESWAT_L1 = (PRESWAT_L0 * p_range / (0.85 * 65536)) - (0.05 * p_range)
     pl1_func = '(PRESWAT_L0 * 679.34040721 / (0.85 * 65536)) - (0.05 * 679.34040721)'
     pl1_pmap = {'PRESWAT_L0':'PRESWAT_L0'}
-    expr = NumexprExpression(pl1_func, pl1_pmap)
+    expr = NumexprExpression('PRESWAT_L1', pl1_func, pl1_pmap)
     presL1_ctxt = ParameterContext('PRESWAT_L1', param_type=ParameterFunctionType(expression=expr), variability=VariabilityEnum.TEMPORAL)
     presL1_ctxt.uom = 'S m-1'
     pdict.add_context(presL1_ctxt)
@@ -644,9 +644,9 @@ def sbe37im_samplecov(num_timesteps=100000, value_caching=True):
     # PRACSAL = gsw.SP_from_C((CONDWAT_L1 * 10), TEMPWAT_L1, PRESWAT_L1)
     owner = 'gsw'
     sal_func = 'SP_from_C'
-    sal_arglist = [NumexprExpression('C*10', {'C':'CONDWAT_L1'}), 'TEMPWAT_L1', 'PRESWAT_L1']
+    sal_arglist = [NumexprExpression('CONDWAT_L1*10', 'C*10', {'C':'CONDWAT_L1'}), 'TEMPWAT_L1', 'PRESWAT_L1']
     sal_kwargmap = None
-    expr = PythonExpression(owner, sal_func, sal_arglist, sal_kwargmap)
+    expr = PythonExpression('PRACSAL', owner, sal_func, sal_arglist, sal_kwargmap)
     sal_ctxt = ParameterContext('PRACSAL', param_type=ParameterFunctionType(expr), variability=VariabilityEnum.TEMPORAL)
     sal_ctxt.uom = 'g kg-1'
     pdict.add_context(sal_ctxt)
@@ -655,9 +655,9 @@ def sbe37im_samplecov(num_timesteps=100000, value_caching=True):
     # conservative_temperature = gsw.CT_from_t(absolute_salinity, TEMPWAT_L1, PRESWAT_L1)
     # DENSITY = gsw.rho(absolute_salinity, conservative_temperature, PRESWAT_L1)
     owner = 'gsw'
-    abs_sal_expr = PythonExpression(owner, 'SA_from_SP', ['PRACSAL', 'PRESWAT_L1', 'lon','lat'], None)
-    cons_temp_expr = PythonExpression(owner, 'CT_from_t', [abs_sal_expr, 'TEMPWAT_L1', 'PRESWAT_L1'], None)
-    dens_expr = PythonExpression(owner, 'rho', [abs_sal_expr, cons_temp_expr, 'PRESWAT_L1'], None)
+    abs_sal_expr = PythonExpression('abs_sal', owner, 'SA_from_SP', ['PRACSAL', 'PRESWAT_L1', 'lon','lat'], None)
+    cons_temp_expr = PythonExpression('cons_temp', owner, 'CT_from_t', [abs_sal_expr, 'TEMPWAT_L1', 'PRESWAT_L1'], None)
+    dens_expr = PythonExpression('DENSITY', owner, 'rho', [abs_sal_expr, cons_temp_expr, 'PRESWAT_L1'], None)
     dens_ctxt = ParameterContext('DENSITY', param_type=ParameterFunctionType(dens_expr), variability=VariabilityEnum.TEMPORAL)
     dens_ctxt.uom = 'kg m-3'
     pdict.add_context(dens_ctxt)

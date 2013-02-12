@@ -196,7 +196,7 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
         return self.parameter_type.expression
 
     def expand_content(self, domain, origin, expansion):
-        # No op, storage is always 0 - domain applied during retrieval
+        # No op, storage is not used
         pass
 
     def __getitem__(self, slice_):

@@ -12,16 +12,19 @@ import numexpr as ne
 from coverage_model.basic_types import AbstractBase
 
 class AbstractExpression(AbstractBase):
-    def __init__(self):
+    def __init__(self, name):
         AbstractBase.__init__(self)
+        self.name = name
 
     def evaluate(self, *args):
         raise NotImplementedError('Not implemented in abstract class')
 
+    def get_function_map(self, pctxt_callback):
+        raise NotImplementedError('Not implemented in abstract class')
 
 class PythonExpression(AbstractExpression):
-    def __init__(self, owner, callable, arg_list, kwarg_map=None):
-        AbstractExpression.__init__(self)
+    def __init__(self, name, owner, callable, arg_list, kwarg_map=None):
+        AbstractExpression.__init__(self, name)
         self.owner = owner
         self.callable = callable
         self.arg_list = arg_list
@@ -41,9 +44,42 @@ class PythonExpression(AbstractExpression):
             else:
                 args.append(pval_callback(a, slice_))
 
-        # TODO: Add similar handling for kwargs
         if self.kwarg_map is None:
             return self._callable(*args)
+        else:
+            raise NotImplementedError('Handling for kwargs not yet implemented')
+            # TODO: Add handling for kwargs
+#            return self._callable(*args, **kwargs)
+
+    def get_function_map(self, pctxt_callback):
+        ret={}
+        for i, a in enumerate(self.arg_list):
+            if isinstance(a, AbstractExpression):
+                ret['arg_{0}'.format(i)] = a.get_function_map(pctxt_callback)
+            else:
+                # Check to see if the argument is a ParameterFunctionType
+                try:
+                    spc = pctxt_callback(a)
+                    if hasattr(spc.param_type, 'get_function_map'):
+                        a = spc.param_type.get_function_map()
+                    else:
+                        # An independent parameter argument
+                        a = '<{0}>'.format(a)
+                except KeyError:
+                    # An intermediate expression
+                    a = '[{0}]'.format(a)
+
+                ret['arg_{0}'.format(i)] = a
+
+        # Check to see if this expression represents a parameter
+        try:
+            pctxt_callback(self.name)
+            n = self.name
+        except KeyError:
+            # It is an intermediate expression
+            n = '[{0}]'.format(self.name)
+
+        return {n:ret}
 
     def _todict(self, exclude=None):
         return super(PythonExpression, self)._todict(exclude=['_callable'])
@@ -54,10 +90,9 @@ class PythonExpression(AbstractExpression):
         ret._setup()
         return ret
 
-
 class NumexprExpression(AbstractExpression):
-    def __init__(self, expression, param_map):
-        AbstractExpression.__init__(self)
+    def __init__(self, name, expression, param_map):
+        AbstractExpression.__init__(self, name)
         self._expr = expression
         self._param_map = param_map
 
@@ -65,3 +100,30 @@ class NumexprExpression(AbstractExpression):
         ld={v:pval_callback(p, slice_) for v, p in self._param_map.iteritems()}
 
         return ne.evaluate(self._expr, local_dict=ld)
+
+    def get_function_map(self, pctxt_callback):
+        ret = {}
+        for i, a in enumerate(self._param_map.values()):
+            # Check to see if the argument is a ParameterFunctionType
+            try:
+                spc = pctxt_callback(a)
+                if hasattr(spc.param_type, 'get_function_map'):
+                    a = spc.param_type.get_function_map()
+                else:
+                    # An independent parameter argument
+                    a = '<{0}>'.format(a)
+            except KeyError:
+                # An intermediate expression
+                a = '[{0}]'.format(a)
+
+            ret['arg_{0}'.format(i)] = a
+
+        # Check to see if this expression represents a parameter
+        try:
+            pctxt_callback(self.name)
+            n = self.name
+        except KeyError:
+            # It is an intermediate expression
+            n = '[{0}]'.format(self.name)
+
+        return {n:ret}
