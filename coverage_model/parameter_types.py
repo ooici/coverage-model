@@ -443,6 +443,7 @@ class ParameterFunctionType(AbstractSimplexParameterType):
         self._template_attrs['_pctxt_callback'] = None
         self._fmap = None
         self._iparams = None
+        self._dparams = None
 
         self._gen_template_attrs()
 
@@ -451,22 +452,43 @@ class ParameterFunctionType(AbstractSimplexParameterType):
         self._value_encoding = 'O8'
         self._fill_value = None
 
+    def _calc_param_sets(self):
+        fmap = self.get_function_map()
+        def walk(fmap, ipset, dpset):
+            for k,v in fmap.iteritems():
+                # if not an 'arg_#' or intermediate 'non-parameter' - add to dpset
+                if 'arg' not in k and not (k.startswith('[') and k.endswith(']')):
+                    dpset.add(k)
+                if isinstance(v, dict):
+                    walk(v, ipset, dpset)
+                else:
+                    if v.startswith('<') and v.endswith('>'):
+                        # independent parameter
+                        ipset.add(v[1:-1])
+                    elif k.startswith('[') and k.endswith(']'):
+                        # intermediate 'non-parameter' - continue
+                        continue
+                    else:
+                        # dependent parameter
+                        dpset.add(v)
+
+        ipset = set()
+        dpset = set()
+        walk(fmap, ipset, dpset)
+        self._iparams = tuple(ipset)
+        self._dparams = tuple(dpset)
+
     def get_independent_parameters(self):
         if self._iparams is None:
-            fmap = self.get_function_map()
-            def walk(fmap, ipset):
-                for k,v in fmap.iteritems():
-                    if isinstance(v, dict):
-                        walk(v, ipset)
-                    else:
-                        if v.startswith('<') and v.endswith('>'):
-                            ipset.add(v[1:-1])
-
-            ipset = set()
-            walk(fmap, ipset)
-            self._iparams = list(ipset)
+            self._calc_param_sets()
 
         return self._iparams
+
+    def get_dependent_parameters(self):
+        if self._dparams is None:
+            self._calc_param_sets()
+
+        return self._dparams
 
     def get_function_map(self):
         if self._fmap is None:
@@ -526,7 +548,7 @@ class ParameterFunctionType(AbstractSimplexParameterType):
 
     def _todict(self, exclude=None):
         # Must exclude _cov_range_value from persistence
-        return super(ParameterFunctionType, self)._todict(exclude=['_pval_callback', '_pctxt_callback', '_fmap', '_iparams'])
+        return super(ParameterFunctionType, self)._todict(exclude=['_pval_callback', '_pctxt_callback', '_fmap', '_iparams', '_dparams'])
 
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
