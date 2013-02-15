@@ -40,6 +40,7 @@ setup(  name = 'coverage-model',
         'pidantic',
         'gsw==3.0.1',
         'pydot==1.0.28',
+        'networkx==1.7',
 #        'scipy==0.10.1',
     ],
 )

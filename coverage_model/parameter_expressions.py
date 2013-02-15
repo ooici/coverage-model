@@ -66,8 +66,7 @@ class PythonExpression(AbstractExpression):
                         # An independent parameter argument
                         a = '<{0}>'.format(a)
                 except KeyError:
-                    # An intermediate expression
-                    a = '[{0}]'.format(a)
+                    a = 'MISSING:!{0}!'.format(a)
 
                 ret['arg_{0}'.format(i)] = a
 
@@ -113,8 +112,7 @@ class NumexprExpression(AbstractExpression):
                     # An independent parameter argument
                     a = '<{0}>'.format(a)
             except KeyError:
-                # An intermediate expression
-                a = '[{0}]'.format(a)
+                a = 'MISSING:!{0}!'.format(a)
 
             ret['arg_{0}'.format(i)] = a
 

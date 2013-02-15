@@ -24,6 +24,7 @@ from coverage_model.basic_types import AbstractIdentifiable
 from coverage_model.parameter_values import ConstantValue
 from coverage_model.numexpr_utils import digit_match, is_well_formed_where, single_where_match
 import numpy as np
+import networkx as nx
 import re
 
 UNSUPPORTED_DTYPES = {np.dtype('float16'), np.dtype('complex'), np.dtype('complex64'), np.dtype('complex128')}
@@ -51,6 +52,7 @@ class AbstractParameterType(AbstractIdentifiable):
         self._template_attrs = {}
         self._value_module = value_module or 'coverage_model.parameter_values'
         self._value_class = value_class or 'NumericValue'
+        self.name = None
 
     def is_valid_value(self, value):
         raise NotImplementedError('Function not implemented by abstract class')
@@ -102,6 +104,35 @@ class AbstractParameterType(AbstractIdentifiable):
     @property
     def storage_encoding(self):
         return self._value_encoding
+
+    def _add_graph_node(self, graph, name):
+        if name.startswith('<') and name.endswith('>'):
+            n = name[1:-1]
+            graph.add_node(n, color='forestgreen', fontcolor='forestgreen')
+        elif name.startswith('[') and name.endswith(']'):
+            n = name[1:-1]
+            graph.add_node(n, color='blue', fontcolor='blue')
+        elif name.startswith('MISSING') and name.endswith('!'):
+            n = name[9:-1]
+            graph.add_node(n, color='red', fontcolor='red')
+        else:
+            n = name
+            graph.add_node(n, color='black')
+
+        return n
+
+    def get_dependency_graph(self):
+        graph = nx.DiGraph()
+
+        self._add_graph_node(graph, '<{0}>'.format(self.name))
+
+        return graph
+
+    def write_dependency_graph(self, outpath, graph=None):
+        if graph is None:
+            graph = self.get_dependency_graph()
+
+        return nx.write_dot(graph, outpath)
 
     def _gen_template_attrs(self):
         for k, v in self._template_attrs.iteritems():
@@ -496,55 +527,30 @@ class ParameterFunctionType(AbstractSimplexParameterType):
 
         return self._fmap
 
-    def get_dependency_graph(self):
-        try:
-            import pydot
-        except ImportError:
-            raise 'pydot dependency not available'
-
-        graph = pydot.Dot('Function graph for {0}'.format(self.expression.name),
-            graph_type='digraph',
-            strict=True)
+    def get_dependency_graph(self, name=None):
+        graph = nx.DiGraph()
 
         def fmap_to_graph(fmap, graph, pnode=None):
             for k,v in fmap.iteritems():
                 if 'arg' not in k:
-                    if k.startswith('[') and k.endswith(']'):
-                        n = pydot.Node(k[1:-1], color='blue', shape='box')
-                    else:
-                        n = pydot.Node(k)
-
-                    graph.add_node(n)
+                    n = self._add_graph_node(graph, k)
 
                     if pnode is not None:
-                        graph.add_edge(pydot.Edge(pnode, n))
+                        graph.add_edge(pnode, n)
                 else:
                     n = pnode
 
                 if isinstance(v, dict):
                     fmap_to_graph(v, graph, n)
                 else:
-                    if v.startswith('<') and v.endswith('>'):
-                        n = pydot.Node(v[1:-1], color='red', shape='hexagon')
-                    elif v.startswith('[') and v.endswith(']'):
-                        n = pydot.Node(v[1:-1], color='blue', shape='box')
-                    else:
-                        n = pydot.Node(v)
+                    n = self._add_graph_node(graph, v)
 
-                    graph.add_node(n)
-
-                    graph.add_edge(pydot.Edge(pnode, n))
+                    graph.add_edge(pnode, n)
 
         fmap = self.get_function_map()
         fmap_to_graph(fmap, graph)
 
         return graph
-
-    def write_dependency_graph(self, outpath, graph=None):
-        if graph is None:
-            graph = self.get_dependency_graph()
-
-        return graph.write_raw(outpath)
 
     def _todict(self, exclude=None):
         # Must exclude _cov_range_value from persistence
