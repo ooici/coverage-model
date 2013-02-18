@@ -11,7 +11,7 @@
 import numexpr as ne
 from coverage_model.basic_types import AbstractBase
 
-class AbstractExpression(AbstractBase):
+class AbstractFunction(AbstractBase):
     def __init__(self, name):
         AbstractBase.__init__(self)
         self.name = name
@@ -22,24 +22,24 @@ class AbstractExpression(AbstractBase):
     def get_function_map(self, pctxt_callback):
         raise NotImplementedError('Not implemented in abstract class')
 
-class PythonExpression(AbstractExpression):
+class PythonFunction(AbstractFunction):
     def __init__(self, name, owner, callable, arg_list, kwarg_map=None):
-        AbstractExpression.__init__(self, name)
+        AbstractFunction.__init__(self, name)
         self.owner = owner
         self.callable = callable
         self.arg_list = arg_list
         self.kwarg_map = kwarg_map
 
-        self._setup()
-
-    def _setup(self):
+    def _import_func(self):
         module = __import__(self.owner)
         self._callable = getattr(module, self.callable)
 
     def evaluate(self, pval_callback, ptype, slice_):
+        self._import_func()
+
         args = []
         for a in self.arg_list:
-            if isinstance(a, AbstractExpression):
+            if isinstance(a, AbstractFunction):
                 args.append(a.evaluate(pval_callback, ptype, slice_))
             else:
                 args.append(pval_callback(a, slice_))
@@ -54,7 +54,7 @@ class PythonExpression(AbstractExpression):
     def get_function_map(self, pctxt_callback):
         ret={}
         for i, a in enumerate(self.arg_list):
-            if isinstance(a, AbstractExpression):
+            if isinstance(a, AbstractFunction):
                 ret['arg_{0}'.format(i)] = a.get_function_map(pctxt_callback)
             else:
                 # Check to see if the argument is a ParameterFunctionType
@@ -81,17 +81,17 @@ class PythonExpression(AbstractExpression):
         return {n:ret}
 
     def _todict(self, exclude=None):
-        return super(PythonExpression, self)._todict(exclude=['_callable'])
+        return super(PythonFunction, self)._todict(exclude=['_callable'])
 
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
-        ret = super(PythonExpression, cls)._fromdict(cmdict, arg_masks=arg_masks)
+        ret = super(PythonFunction, cls)._fromdict(cmdict, arg_masks=arg_masks)
         ret._setup()
         return ret
 
-class NumexprExpression(AbstractExpression):
+class NumexprFunction(AbstractFunction):
     def __init__(self, name, expression, param_map):
-        AbstractExpression.__init__(self, name)
+        AbstractFunction.__init__(self, name)
         self._expr = expression
         self._param_map = param_map
 

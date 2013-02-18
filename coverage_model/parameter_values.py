@@ -193,7 +193,7 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
 
     @property
     def content(self):
-        return self.parameter_type.expression
+        return self.parameter_type.function
 
     def expand_content(self, domain, origin, expansion):
         # No op, storage is not used

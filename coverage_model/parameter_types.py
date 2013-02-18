@@ -17,11 +17,11 @@
 #def is_coordinate(self, value):
 #    if isinstance(value, bool):
 #        self.__is_coordinate = value
-from coverage_model.parameter_expressions import AbstractExpression
 
 from ooi.logging import log
 from coverage_model.basic_types import AbstractIdentifiable
 from coverage_model.parameter_values import ConstantValue
+from coverage_model.parameter_functions import AbstractFunction
 from coverage_model.numexpr_utils import digit_match, is_well_formed_where, single_where_match
 import numpy as np
 import networkx as nx
@@ -458,17 +458,32 @@ class TimeRangeType(AbstractSimplexParameterType):
 
 class ParameterFunctionType(AbstractSimplexParameterType):
 
-    def __init__(self, expression, **kwargs):
+    def __init__(self, function, value_encoding=None, **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractSimplexParameterType; see documentation for that class for details
         """
         kwc=kwargs.copy()
         AbstractSimplexParameterType.__init__(self, value_class='ParameterFunctionValue', **kwc)
-        if not isinstance(expression, AbstractExpression):
-            raise TypeError('\'expression\' must be a subclass of AbstractExpression')
+        if not isinstance(function, AbstractFunction):
+            raise TypeError('\'function\' must be a subclass of AbstractFunction')
 
-        self._template_attrs['expression'] = expression
+        if value_encoding is None:
+            self._value_encoding = np.dtype('float32').str
+        else:
+            try:
+                dt = np.dtype(value_encoding)
+                if dt.isbuiltin not in (0,1):
+                    raise TypeError('\'value_encoding\' must be a valid numpy dtype: {0}'.format(value_encoding))
+                if dt in UNSUPPORTED_DTYPES:
+                    raise TypeError('\'value_encoding\' {0} is not supported by H5py: UNSUPPORTED types ==> {1}'.format(value_encoding, UNSUPPORTED_DTYPES))
+
+                self._value_encoding = dt.str
+
+            except TypeError:
+                raise
+
+        self._template_attrs['function'] = function
 
         self._template_attrs['_pval_callback'] = None
         self._template_attrs['_pctxt_callback'] = None
@@ -479,9 +494,7 @@ class ParameterFunctionType(AbstractSimplexParameterType):
         self._gen_template_attrs()
 
         # TODO: Find a way to allow a parameter to NOT be stored at all....basically, storage == None
-        # Just make it object - not used anyhow...
-        self._value_encoding = 'O8'
-        self._fill_value = None
+        # For now, just use whatever the _value_encoding and _fill_value say it should be...
 
     def _calc_param_sets(self):
         fmap = self.get_function_map()
@@ -523,7 +536,7 @@ class ParameterFunctionType(AbstractSimplexParameterType):
 
     def get_function_map(self):
         if self._fmap is None:
-            self._fmap = self.expression.get_function_map(self._pctxt_callback)
+            self._fmap = self.function.get_function_map(self._pctxt_callback)
 
         return self._fmap
 
