@@ -49,10 +49,10 @@ def values_outside_coverage():
     crtype = ConstantRangeType(QuantityType(value_encoding=np.dtype('int16')))
     crval = get_value_class(crtype, domain_set=dom)
 
-    pftype=ParameterFunctionType('t*10', {'t':'temp'})
+    pftype=ParameterFunctionType(NumexprFunction('t*10', 't*10', {'t': 'temp'}))
     def _get_pvals(name, *args, **kwargs):
         if name == 'temp':
-            return np.array([1,3,5,6,23])
+            return np.array([1, 3, 5, 6, 23])
     pftype._pval_callback = _get_pvals
     pfval=get_value_class(pftype, SimpleDomainSet((5,)))
 

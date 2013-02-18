@@ -6,6 +6,7 @@
 @author Christopher Mueller
 @brief Abstract and concrete value objects for parameters
 """
+
 from coverage_model.basic_types import AbstractBase, InMemoryStorage, VariabilityEnum
 from coverage_model.numexpr_utils import is_well_formed_where, nest_wheres
 from coverage_model import utils
@@ -75,8 +76,8 @@ class AbstractParameterValue(AbstractBase):
 #        return len(self._storage)
         return utils.prod(self.shape)
 
-    def __str__(self):
-        return str(self.content)
+    # def __str__(self):
+    #     return str(self.content)
 
 class AbstractSimplexParameterValue(AbstractParameterValue):
     """
@@ -176,6 +177,11 @@ class FunctionValue(AbstractComplexParameterValue):
             else:
                 self._storage[0].append(value)
 
+class ParameterFunctionException(Exception):
+    def __init__(self, message, original_type=None):
+        Exception.__init__(message=message)
+        self.original_type = original_type
+
 class ParameterFunctionValue(AbstractSimplexParameterValue):
 
     def __init__(self, parameter_type, domain_set, storage=None, **kwargs):
@@ -206,22 +212,23 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
             slice_ = utils.fix_slice(slice_, self.shape)
 
             try:
-                r = self.content.evaluate(self._pval_callback, self.parameter_type, slice_)
-            except Exception:
-                # Exception performing calculation - return array of fill_value
-                es = utils.slice_shape(slice_, self.shape)
-                ret = np.empty(es, dtype=self.parameter_type.value_encoding)
-                ret.fill(self.parameter_type.fill_value)
-                if False:
-                    it = np.nditer(ret, flags=['multi_index'], op_flags=['readwrite'])
-                    while not it.finished:
-                        try:
-                            it[0] = self.content.evaluate(self._pval_callback, self.parameter_type, it.multi_index)
-                        except Exception:
-                            pass
-                        it.iternext()
-
-                r = ret
+                r = self.content.evaluate(self._pval_callback, slice_, self.parameter_type.fill_value)
+            except Exception as ex:
+                raise ParameterFunctionException(ex.message, type(ex))
+                # # Exception performing calculation - return array of fill_value
+                # es = utils.slice_shape(slice_, self.shape)
+                # ret = np.empty(es, dtype=self.parameter_type.value_encoding)
+                # ret.fill(self.parameter_type.fill_value)
+                # if False:
+                #     it = np.nditer(ret, flags=['multi_index'], op_flags=['readwrite'])
+                #     while not it.finished:
+                #         try:
+                #             it[0] = self.content.evaluate(self._pval_callback, it.multi_index, self.parameter_type.fill_value)
+                #         except Exception:
+                #             pass
+                #         it.iternext()
+                #
+                # r = ret
 
             # Replace any NaN values with fill_value
             np.putmask(r, np.isnan(r), self.parameter_type.fill_value)

@@ -24,27 +24,29 @@ class AbstractFunction(AbstractBase):
         raise NotImplementedError('Not implemented in abstract class')
 
 class PythonFunction(AbstractFunction):
-    def __init__(self, name, owner, callable, arg_list, kwarg_map=None):
+    def __init__(self, name, owner, func_name, arg_list, kwarg_map=None):
         AbstractFunction.__init__(self, name)
         self.owner = owner
-        self.callable = callable
+        self.func_name = func_name
         self.arg_list = arg_list
         self.kwarg_map = kwarg_map
 
     def _import_func(self):
-        module = __import__(self.owner)
-        self._callable = getattr(module, self.callable)
+        import importlib
+        module = importlib.import_module(self.owner)
+        self._callable = getattr(module, self.func_name)
 
-    def evaluate(self, pval_callback, ptype, slice_):
+    def evaluate(self, pval_callback, slice_, fill_value=-9999):
         self._import_func()
 
         args = []
         for a in self.arg_list:
             if isinstance(a, AbstractFunction):
-                args.append(a.evaluate(pval_callback, ptype, slice_))
+                args.append(a.evaluate(pval_callback, slice_, fill_value))
             else:
                 v = pval_callback(a, slice_)
-                np.putmask(v, v == ptype.fill_value, np.nan)
+                if v.dtype.kind == 'f':
+                    np.putmask(v, v == fill_value, np.nan)
                 args.append(v)
 
         if self.kwarg_map is None:
@@ -98,8 +100,13 @@ class NumexprFunction(AbstractFunction):
         self._expr = expression
         self._param_map = param_map
 
-    def evaluate(self, pval_callback, ptype, slice_):
-        ld={v:pval_callback(p, slice_) for v, p in self._param_map.iteritems()}
+    def evaluate(self, pval_callback, slice_, fill_value=-9999):
+        ld = {}
+        for v,p in self._param_map.iteritems():
+            if isinstance(p, AbstractFunction):
+                ld[v] = p.evaluate(pval_callback, slice_, fill_value)
+            else:
+                ld[v] = pval_callback(p, slice_)
 
         return ne.evaluate(self._expr, local_dict=ld)
 
