@@ -8,6 +8,7 @@
 @brief Classes for holding expressions evaluated against parameters
 """
 
+import numpy as np
 import numexpr as ne
 from coverage_model.basic_types import AbstractBase
 
@@ -42,7 +43,9 @@ class PythonFunction(AbstractFunction):
             if isinstance(a, AbstractFunction):
                 args.append(a.evaluate(pval_callback, ptype, slice_))
             else:
-                args.append(pval_callback(a, slice_))
+                v = pval_callback(a, slice_)
+                np.putmask(v, v == ptype.fill_value, np.nan)
+                args.append(v)
 
         if self.kwarg_map is None:
             return self._callable(*args)
