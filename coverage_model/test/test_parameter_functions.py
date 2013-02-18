@@ -80,35 +80,37 @@ class TestParameterFunctionsUnit(TestCase):
         self.assertTrue(np.array_equal(ret, np.array([1,  16,  81, 256, 625])))
 
 
-def _get_param_vals(name, slice_):
-    shp = utils.slice_shape(slice_, (10,))
-    def _getarr(vmin, shp, vmax=None,):
-        if vmax is None:
-            return np.empty(shp).fill(vmin)
-        return np.arange(vmin, vmax, (vmax - vmin) / int(utils.prod(shp)), dtype='float32').reshape(shp)
-
-    if name == 'LAT':
-        ret = np.empty(shp)
-        ret.fill(45)
-    elif name == 'LON':
-        ret = np.empty(shp)
-        ret.fill(-71)
-    elif name == 'TEMPWAT_L0':
-        ret = _getarr(280000, shp, 350000)
-    elif name == 'CONDWAT_L0':
-        ret = _getarr(100000, shp, 750000)
-    elif name == 'PRESWAT_L0':
-        ret = _getarr(3000, shp, 10000)
-    else:
-        ret = np.zeros(shp)
-
-    return ret
-
 @attr('INT',group='cov')
 class TestParameterFunctionsInt(TestCase):
 
     def setUp(self):
         self.contexts = None
+
+    def _get_param_vals(self, name, slice_):
+        shp = utils.slice_shape(slice_, (10,))
+        def _getarr(vmin, shp, vmax=None,):
+            if vmax is None:
+                return np.empty(shp).fill(vmin)
+            return np.arange(vmin, vmax, (vmax - vmin) / int(utils.prod(shp)), dtype='float32').reshape(shp)
+
+        if name == 'LAT':
+            ret = np.empty(shp)
+            ret.fill(45)
+        elif name == 'LON':
+            ret = np.empty(shp)
+            ret.fill(-71)
+        elif name == 'TEMPWAT_L0':
+            ret = _getarr(280000, shp, 350000)
+        elif name == 'CONDWAT_L0':
+            ret = _getarr(100000, shp, 750000)
+        elif name == 'PRESWAT_L0':
+            ret = _getarr(3000, shp, 10000)
+        elif name in self.value_classes: # Non-L0 parameters
+            ret = self.value_classes[name][:]
+        else:
+            return np.zeros(shp)
+
+        return ret
 
     def _get_pc_dict(self, *pnames):
         all_pc = self._create_all_params()
@@ -122,52 +124,87 @@ class TestParameterFunctionsInt(TestCase):
         return self.contexts[context_name]
 
     def test_L1_params(self):
-        self.contexts = self._get_pc_dict(
-            'TIME', 'LAT', 'LON', 'TEMPWAT_L0', 'CONDWAT_L0', 'PRESWAT_L0',
-            'TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1')
-
-        # Add the callback for retrieving values
-        for p in self.contexts.values():
-            if hasattr(p, '_pval_callback'):
-                p._pval_callback = _get_param_vals
-                p._ctxt_callback = self._ctxt_callback
+        self.contexts = self._get_pc_dict('TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1')
+        self.value_classes = {}
 
         dom_set = SimpleDomainSet((10,))
 
-        # Not really necessary....only needed for validating output
-        # latval = get_value_class(self.contexts['LAT'].param_type, dom_set)
-        # lonval = get_value_class(self.contexts['LON'].param_type, dom_set)
-        # t0val = get_value_class(self.contexts['TEMPWAT_L0'].param_type, dom_set)
-        # c0val = get_value_class(self.contexts['CONDWAT_L0'].param_type, dom_set)
-        # p0val = get_value_class(self.contexts['PRESWAT_L0'].param_type, dom_set)
-        # latval[:] = _get_param_vals('LAT', slice(None))
-        # lonval[:] = _get_param_vals('LON', slice(None))
-        # t0val[:] = _get_param_vals('TEMPWAT_L0', slice(None))
-        # c0val[:] = _get_param_vals('CONDWAT_L0', slice(None))
-        # p0val[:] = _get_param_vals('PRESWAT_L0', slice(None))
+        # Add the callback for retrieving values
+        for n, p in self.contexts.iteritems():
+            if hasattr(p, '_pval_callback'):
+                p._pval_callback = self._get_param_vals
+                p._ctxt_callback = self._ctxt_callback
+                self.value_classes[n] = get_value_class(p.param_type, dom_set)
 
+        # Get the L1 data
         t1val = get_value_class(self.contexts['TEMPWAT_L1'].param_type, dom_set)
         c1val = get_value_class(self.contexts['CONDWAT_L1'].param_type, dom_set)
         p1val = get_value_class(self.contexts['PRESWAT_L1'].param_type, dom_set)
 
-        self.assertTrue(
-            np.allclose(t1val[:], np.array(
-                [18.0, 18.70000076, 19.39999962, 20.10000038, 20.79999924,
-                 21.5, 22.20000076, 22.90000153, 23.59999847, 24.29999924]
-            ))
-        )
-        self.assertTrue(
-            np.allclose(c1val[:], np.array(
-                [0.5, 1.14999998, 1.79999995, 2.45000005, 3.0999999,
-                 3.75, 4.4000001, 5.05000019, 5.69999981, 6.3499999]
-            ))
-        )
-        self.assertTrue(
-            np.allclose(p1val[:], np.array(
-                [2.61855132, 11.15518471, 19.6918181,  28.22845149, 36.76508488,
-                 45.30171827, 53.83835167, 62.37498506, 70.91161845, 79.44825184]
-            ))
-        )
+        # Perform assertions - involves "manual" calculation of values
+        # Get the L0 data needed for validating output
+        t0vals = self._get_param_vals('TEMPWAT_L0', slice(None))
+        c0vals = self._get_param_vals('CONDWAT_L0', slice(None))
+        p0vals = self._get_param_vals('PRESWAT_L0', slice(None))
+
+        # TEMPWAT_L1 = (TEMPWAT_L0 / 10000) - 10
+        t1 = (t0vals / 10000) - 10
+        self.assertTrue(np.allclose(t1val[:], t1))
+
+        # CONDWAT_L1 = (CONDWAT_L0 / 100000) - 0.5
+        c1 = (c0vals / 100000) - 0.5
+        self.assertTrue(np.allclose(c1val[:], c1))
+
+        # Equation uses p_range, which is a calibration coefficient - Fixing to 679.34040721
+        #   PRESWAT_L1 = (PRESWAT_L0 * p_range / (0.85 * 65536)) - (0.05 * p_range)
+        p1 = (p0vals * 679.34040721 / (0.85 * 65536)) - (0.05 * 679.34040721)
+        self.assertTrue(np.allclose(p1val[:], p1))
+
+    def test_L2_params(self):
+        self.contexts = self._get_pc_dict('TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1',
+                                          'PRACSAL', 'DENSITY')
+
+        self.value_classes = {}
+
+        dom_set = SimpleDomainSet((10,))
+
+        # Add the callback for retrieving values
+        for n, p in self.contexts.iteritems():
+            if hasattr(p, '_pval_callback'):
+                p._pval_callback = self._get_param_vals
+                p._ctxt_callback = self._ctxt_callback
+                self.value_classes[n] = get_value_class(p.param_type, dom_set)
+
+        # Get the L2 data
+        psval = get_value_class(self.contexts['PRACSAL'].param_type, dom_set)
+        rhoval = get_value_class(self.contexts['DENSITY'].param_type, dom_set)
+
+        # Perform assertions - involves "manual" calculation of values
+        # Get the L0 data needed for validating output
+        latvals = self._get_param_vals('LAT', slice(None))
+        lonvals = self._get_param_vals('LON', slice(None))
+
+        # Get the L1 data needed for validating output
+        t1val = get_value_class(self.contexts['TEMPWAT_L1'].param_type, dom_set)
+        c1val = get_value_class(self.contexts['CONDWAT_L1'].param_type, dom_set)
+        p1val = get_value_class(self.contexts['PRESWAT_L1'].param_type, dom_set)
+
+        # Density & practical salinity calucluated using the Gibbs Seawater library - available via python-gsw project:
+        #       https://code.google.com/p/python-gsw/ & http://pypi.python.org/pypi/gsw/3.0.1
+
+        # PRACSAL = gsw.SP_from_C((CONDWAT_L1 * 10), TEMPWAT_L1, PRESWAT_L1)
+        import gsw
+        ps = gsw.SP_from_C((c1val[:] * 10.), t1val[:], p1val[:])
+        self.assertTrue(np.allclose(psval[:], ps))
+
+        # absolute_salinity = gsw.SA_from_SP(PRACSAL, PRESWAT_L1, longitude, latitude)
+        # conservative_temperature = gsw.CT_from_t(absolute_salinity, TEMPWAT_L1, PRESWAT_L1)
+        # DENSITY = gsw.rho(absolute_salinity, conservative_temperature, PRESWAT_L1)
+        abs_sal = gsw.SA_from_SP(psval[:], p1val[:], lonvals, latvals)
+        cons_temp = gsw.CT_from_t(abs_sal, t1val[:], p1val[:])
+        rho = gsw.rho(abs_sal, cons_temp, p1val[:])
+        self.assertTrue(np.allclose(rhoval[:], rho))
+
 
     def _create_all_params(self):
         '''
@@ -273,3 +310,6 @@ class TestParameterFunctionsInt(TestCase):
         contexts['DENSITY'] = dens_ctxt
 
         return contexts
+
+
+

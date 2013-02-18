@@ -179,8 +179,10 @@ class FunctionValue(AbstractComplexParameterValue):
 
 class ParameterFunctionException(Exception):
     def __init__(self, message, original_type=None):
-        Exception.__init__(message=message)
         self.original_type = original_type
+        if self.original_type is not None:
+            message = '{0} :: original_type = {1}'.format(message, str(original_type))
+        Exception.__init__(self, message)
 
 class ParameterFunctionValue(AbstractSimplexParameterValue):
 
