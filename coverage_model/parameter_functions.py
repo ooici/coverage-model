@@ -12,6 +12,13 @@ import numpy as np
 import numexpr as ne
 from coverage_model.basic_types import AbstractBase
 
+class ParameterFunctionException(Exception):
+    def __init__(self, message, original_type=None):
+        self.original_type = original_type
+        if self.original_type is not None:
+            message = '{0} :: original_type = {1}'.format(message, str(original_type))
+        Exception.__init__(self, message)
+
 class AbstractFunction(AbstractBase):
     def __init__(self, name):
         AbstractBase.__init__(self)

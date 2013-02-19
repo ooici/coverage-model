@@ -15,9 +15,9 @@ _types = ['ArrayType', 'BooleanType', 'CategoryRangeType', 'CategoryType', 'Cons
           'CountRangeType', 'CountType', 'FunctionType', 'QuantityRangeType', 'QuantityType',
           'RecordType', 'ReferenceType', 'TextType', 'TimeRangeType', 'TimeType', 'VectorType', 'ConstantRangeType', 'ParameterFunctionType']
 
-_expressions = ['NumexprFunction', 'PythonFunction']
+_functions = ['NumexprFunction', 'PythonFunction']
 
 _utils = ['utils', 'make_range_expr', 'create_guid', 'get_value_class', 'fix_slice']
 
 # Determines the set of things imported by using:  from coverage_model import *
-__all__ = _core + _types + _utils + _expressions
+__all__ = _core + _types + _utils + _functions

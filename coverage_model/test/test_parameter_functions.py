@@ -10,6 +10,7 @@
 
 from nose.plugins.attrib import attr
 from coverage_model import *
+from coverage_model.parameter_functions import ParameterFunctionException
 import numpy as np
 from unittest import TestCase
 
@@ -117,7 +118,7 @@ class TestParameterFunctionsInt(TestCase):
         return self.contexts[context_name]
 
     def test_L1_params(self):
-        self.contexts = self._get_pc_dict('TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1')
+        self.contexts = _get_pc_dict('TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1')
         self.value_classes = {}
 
         dom_set = SimpleDomainSet((10,))
@@ -154,8 +155,8 @@ class TestParameterFunctionsInt(TestCase):
         self.assertTrue(np.allclose(p1val[:], p1))
 
     def test_L2_params(self):
-        self.contexts = self._get_pc_dict('TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1',
-                                          'PRACSAL', 'DENSITY')
+        self.contexts = _get_pc_dict('TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1',
+                                     'PRACSAL', 'DENSITY')
 
         self.value_classes = {}
 
@@ -206,7 +207,6 @@ class TestParameterValidatorInt(TestCase):
         pass
 
     def test_simple_passthrough(self):
-
         in_values = _get_pc_list('TIME', 'LAT', 'LON', 'TEMPWAT_L0', 'CONDWAT_L0', 'PRESWAT_L0')
         in_contexts = in_values
         out_contexts = _get_pc_list('TIME', 'LAT', 'LON', 'TEMPWAT_L0', 'CONDWAT_L0', 'PRESWAT_L0')
@@ -266,6 +266,38 @@ class TestParameterValidatorInt(TestCase):
             g = pfv.validate(o)
             self.assertIsInstance(g, nx.DiGraph)
 
+    def test_L1_from_L0_fail_missing_L0(self):
+        in_values = _get_pc_list('TIME', 'LAT', 'LON')
+        in_contexts = in_values
+        out_contexts = _get_pc_list('TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1')
+        out_values = [p.name for p in out_contexts]
+
+        pfv = ParameterFunctionValidator(in_values, in_contexts, out_contexts)
+
+        for o in out_values:
+            self.assertRaises(ParameterFunctionException, pfv.validate, o)
+
+    def test_L2_from_L0_fail_missing_L0(self):
+        in_values = _get_pc_list('TIME', 'LAT', 'LON')
+        in_contexts = in_values
+        out_contexts = _get_pc_list('DENSITY', 'PRACSAL', 'TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1')
+        out_values = ['DENSITY', 'PRACSAL']
+
+        pfv = ParameterFunctionValidator(in_values, in_contexts, out_contexts)
+
+        for o in out_values:
+            self.assertRaises(ParameterFunctionException, pfv.validate, o)
+
+    def test_L2_from_L0_fail_missing_L1(self):
+        in_values = _get_pc_list('TIME', 'LAT', 'LON', 'TEMPWAT_L0', 'CONDWAT_L0', 'PRESWAT_L0')
+        in_contexts = in_values
+        out_contexts = _get_pc_list('DENSITY', 'PRACSAL')
+        out_values = [p.name for p in out_contexts]
+
+        pfv = ParameterFunctionValidator(in_values, in_contexts, out_contexts)
+
+        for o in out_values:
+            self.assertRaises(ParameterFunctionException, pfv.validate, o)
 
 def _get_pc_dict(*pnames):
     all_pc = _create_all_params()

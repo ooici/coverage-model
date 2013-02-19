@@ -10,6 +10,7 @@
 from ooi.logging import log
 from coverage_model.basic_types import AbstractIdentifiable, VariabilityEnum, AxisTypeEnum
 from coverage_model.parameter_types import AbstractParameterType, QuantityType
+from coverage_model.parameter_functions import ParameterFunctionException
 from collections import OrderedDict
 import copy
 
@@ -484,42 +485,45 @@ class ParameterFunctionValidator(object):
 
         @param context_name the name of the parameter to validate, must be a member of self._ctxts
         """
-        # Attempt to build the graph
-        g = self._ctxts[context_name].param_type.get_dependency_graph()
+        try:
+            # Attempt to build the graph
+            g = self._ctxts[context_name].param_type.get_dependency_graph()
 
-        # First ensure all of the things we have values for are made forestgreen
-        for n in [n for n in self._cwvn if n in g.node]:
-            g.node[n]['color'] = g.node[n]['fontcolor'] = 'forestgreen'
+            # First ensure all of the things we have values for are made forestgreen
+            for n in [n for n in self._cwvn if n in g.node]:
+                g.node[n]['color'] = g.node[n]['fontcolor'] = 'forestgreen'
 
-        def _prune(g, n, parent_green=False, ind=''):
-#            print '{0}node: {1}'.format(ind,n)
-            for s in g.successors(n):
-                preds=g.predecessors(s)
-#                print '{0}succ: {1}'.format(ind,s)
-                c = g.node[n]['color']
-                if c == 'forestgreen' or parent_green:
-#                    print '{0}is_green'.format(ind)
-                    _prune(g, s, True, ind=ind+'  ')
-                    if len(preds) == 1:
-                        if c != 'forestgreen':
-#                            print '{0}remove: {1}'.format(ind,s)
-                            g.remove_node(s)
-                else:
-                    _prune(g, s, parent_green, ind=ind+'  ')
+            def _prune(g, n, parent_green=False, ind=''):
+    #            print '{0}node: {1}'.format(ind,n)
+                for s in g.successors(n):
+                    preds=g.predecessors(s)
+    #                print '{0}succ: {1}'.format(ind,s)
+                    c = g.node[n]['color']
+                    if c == 'forestgreen' or parent_green:
+    #                    print '{0}is_green'.format(ind)
+                        _prune(g, s, True, ind=ind+'  ')
+                        if len(preds) == 1:
+                            if c != 'forestgreen':
+    #                            print '{0}remove: {1}'.format(ind,s)
+                                g.remove_node(s)
+                    else:
+                        _prune(g, s, parent_green, ind=ind+'  ')
 
-            preds=g.predecessors(n)
-            if len(g.successors(n)) == 0 and len(preds) == 1 and g.node[preds[0]]['color'] == 'forestgreen':
-                g.remove_node(n)
+                preds=g.predecessors(n)
+                if len(g.successors(n)) == 0 and len(preds) == 1 and g.node[preds[0]]['color'] == 'forestgreen':
+                    g.remove_node(n)
 
-        _prune(g, context_name)
+            _prune(g, context_name)
 
-        # Get the leaf nodes again - if any AREN'T green, we have a problem
-        missing = [n for n,d in g.out_degree().items() if d==0 and g.node[n]['color'] != 'forestgreen']
+            # Get the leaf nodes again - if any AREN'T green, we have a problem
+            missing = [n for n,d in g.out_degree().items() if d==0 and g.node[n]['color'] != 'forestgreen']
 
-        if len(missing) > 0:
-            raise ValueError('Unable to calculate \'{0}\', missing values or functions: {1}'.format(context_name, list(missing)))
+            if len(missing) > 0:
+                raise ValueError('Unable to calculate \'{0}\', missing values or functions: {1}'.format(context_name, list(missing)))
 
-        return g
+            return g
+        except Exception as ex:
+            raise ParameterFunctionException(ex.message, type(ex))
 
 
 

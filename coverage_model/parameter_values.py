@@ -9,6 +9,7 @@
 
 from coverage_model.basic_types import AbstractBase, InMemoryStorage, VariabilityEnum
 from coverage_model.numexpr_utils import is_well_formed_where, nest_wheres
+from coverage_model.parameter_functions import ParameterFunctionException
 from coverage_model import utils
 import numpy as np
 import numexpr as ne
@@ -176,13 +177,6 @@ class FunctionValue(AbstractComplexParameterValue):
                 self._storage[0][slice_[0]] = value
             else:
                 self._storage[0].append(value)
-
-class ParameterFunctionException(Exception):
-    def __init__(self, message, original_type=None):
-        self.original_type = original_type
-        if self.original_type is not None:
-            message = '{0} :: original_type = {1}'.format(message, str(original_type))
-        Exception.__init__(self, message)
 
 class ParameterFunctionValue(AbstractSimplexParameterValue):
 
