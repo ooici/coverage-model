@@ -379,8 +379,8 @@ def _create_all_params():
 
     # Equation uses p_range, which is a calibration coefficient - Fixing to 679.34040721
     #   PRESWAT_L1 = (PRESWAT_L0 * p_range / (0.85 * 65536)) - (0.05 * p_range)
-    pl1_func = '(P_L0 * 679.34040721 / (0.85 * 65536)) - (0.05 * 679.34040721)'
-    pl1_pmap = {'P_L0': 'PRESWAT_L0'}
+    pl1_func = '(P_L0 * p_range / (0.85 * 65536)) - (0.05 * p_range)'
+    pl1_pmap = {'P_L0': 'PRESWAT_L0', 'p_range': 679.34040721}
     expr = NumexprFunction('PRESWAT_L1', pl1_func, pl1_pmap)
     presL1_ctxt = ParameterContext('PRESWAT_L1', param_type=ParameterFunctionType(function=expr), variability=VariabilityEnum.TEMPORAL)
     presL1_ctxt.uom = 'S m-1'

@@ -53,6 +53,8 @@ class Dictable(object):
         def walk(obj):
             if hasattr(obj, '_todict'):
                 return obj._todict()
+            elif isinstance(obj, dict):
+                return {k: walk(v) for k, v in obj.iteritems()}
             elif isinstance(obj, (list, tuple)):
                 r=[]
                 for x in obj:
@@ -106,11 +108,14 @@ class Dictable(object):
             kwa={}
 
             def walk(obj):
-                if isinstance(obj, dict) and 'cm_type' in obj:
-                    ms, cs = obj['cm_type']
-                    module = __import__(ms, fromlist=[cs])
-                    classobj = getattr(module, cs)
-                    return classobj._fromdict(obj)
+                if isinstance(obj, dict):
+                    if 'cm_type' in obj:
+                        ms, cs = obj['cm_type']
+                        module = __import__(ms, fromlist=[cs])
+                        classobj = getattr(module, cs)
+                        return classobj._fromdict(obj)
+                    else:
+                        return {k: walk(v) for k, v in obj.iteritems()}
                 elif isinstance(obj, (list, tuple)):
                     r=[]
                     for vi in obj:

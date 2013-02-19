@@ -10,6 +10,7 @@
 
 import numpy as np
 import numexpr as ne
+from numbers import Number
 from coverage_model.basic_types import AbstractBase
 
 class ParameterFunctionException(Exception):
@@ -114,32 +115,37 @@ class PythonFunction(AbstractFunction):
 class NumexprFunction(AbstractFunction):
     def __init__(self, name, expression, param_map):
         AbstractFunction.__init__(self, name)
-        self._expr = expression
-        self._param_map = param_map
+        self.expression = expression
+        self.param_map = param_map
 
     def evaluate(self, pval_callback, slice_, fill_value=-9999):
         ld = {}
-        for v,p in self._param_map.iteritems():
+        for v, p in self.param_map.iteritems():
             if isinstance(p, AbstractFunction):
                 ld[v] = p.evaluate(pval_callback, slice_, fill_value)
+            elif isinstance(p, Number):
+                ld[v] = p
             else:
                 ld[v] = pval_callback(p, slice_)
 
-        return ne.evaluate(self._expr, local_dict=ld)
+        return ne.evaluate(self.expression, local_dict=ld)
 
     def get_function_map(self, pctxt_callback):
         ret = {}
-        for i, a in enumerate(self._param_map.values()):
-            # Check to see if the argument is a ParameterFunctionType
-            try:
-                spc = pctxt_callback(a)
-                if hasattr(spc.param_type, 'get_function_map'):
-                    a = spc.param_type.get_function_map()
-                else:
-                    # An independent parameter argument
-                    a = '<{0}>'.format(a)
-            except KeyError:
-                a = 'MISSING:!{0}!'.format(a)
+        for i, a in enumerate(self.param_map.values()):
+            if isinstance(a, Number): # Treat numerical arguments as independents
+                a = '<{0}>'.format(a)
+            else:
+                # Check to see if the argument is a ParameterFunctionType
+                try:
+                    spc = pctxt_callback(a)
+                    if hasattr(spc.param_type, 'get_function_map'):
+                        a = spc.param_type.get_function_map()
+                    else:
+                        # An independent parameter argument
+                        a = '<{0}>'.format(a)
+                except KeyError:
+                    a = 'MISSING:!{0}!'.format(a)
 
             ret['arg_{0}'.format(i)] = a
 

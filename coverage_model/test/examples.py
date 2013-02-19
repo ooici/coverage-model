@@ -576,91 +576,12 @@ def sbe37im_samplecov(num_timesteps=100000, value_caching=True):
     # Instantiate a ParameterDictionary
     pdict = ParameterDictionary()
 
-    ## time,port_timestamp,driver_timestamp,internal_timestamp,preferred_timestamp,lat,lon,pressure,conductivity,temp,salinity,density,quality_flag
     # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
-    t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
-    t_ctxt.uom = 'seconds since 01-01-1900'
-    pdict.add_context(t_ctxt, is_temporal=True)
-
-    lat_ctxt = ParameterContext('lat', param_type=ConstantType(QuantityType(value_encoding=np.dtype('float32'))))
-    lat_ctxt.axis = AxisTypeEnum.LAT
-    lat_ctxt.uom = 'degree_north'
-    pdict.add_context(lat_ctxt)
-
-    lon_ctxt = ParameterContext('lon', param_type=ConstantType(QuantityType(value_encoding=np.dtype('float32'))))
-    lon_ctxt.axis = AxisTypeEnum.LON
-    lon_ctxt.uom = 'degree_east'
-    pdict.add_context(lon_ctxt)
-
-    # Independent Parameters
-
-    # Temperature - values expected to be the decimal results of conversion from hex
-    temp_ctxt = ParameterContext('TEMPWAT_L0', param_type=QuantityType(value_encoding=np.dtype('float32')))
-    temp_ctxt.uom = 'deg_C'
-    pdict.add_context(temp_ctxt)
-
-    # Conductivity - values expected to be the decimal results of conversion from hex
-    cond_ctxt = ParameterContext('CONDWAT_L0', param_type=QuantityType(value_encoding=np.dtype('float32')))
-    cond_ctxt.uom = 'S m-1'
-    pdict.add_context(cond_ctxt)
-
-    # Pressure - values expected to be the decimal results of conversion from hex
-    press_ctxt = ParameterContext('PRESWAT_L0', param_type=QuantityType(value_encoding=np.dtype('float32')))
-    press_ctxt.uom = 'dbar'
-    pdict.add_context(press_ctxt)
-
-
-    # Dependent Parameters
-
-    # TEMPWAT_L1 = (TEMPWAT_L0 / 10000) - 10
-    tl1_func = '(TEMPWAT_L0 / 10000) - 10'
-    tl1_pmap = {'TEMPWAT_L0':'TEMPWAT_L0'}
-    func = NumexprFunction('TEMPWAT_L1', tl1_func, tl1_pmap)
-    tempL1_ctxt = ParameterContext('TEMPWAT_L1', param_type=ParameterFunctionType(function=func), variability=VariabilityEnum.TEMPORAL)
-    tempL1_ctxt.uom = 'deg_C'
-    pdict.add_context(tempL1_ctxt)
-
-    # CONDWAT_L1 = (CONDWAT_L0 / 100000) - 0.5
-    cl1_func = '(CONDWAT_L0 / 100000) - 0.5'
-    cl1_pmap = {'CONDWAT_L0':'CONDWAT_L0'}
-    func = NumexprFunction('CONDWAT_L1', cl1_func, cl1_pmap)
-    condL1_ctxt = ParameterContext('CONDWAT_L1', param_type=ParameterFunctionType(function=func), variability=VariabilityEnum.TEMPORAL)
-    condL1_ctxt.uom = 'S m-1'
-    pdict.add_context(condL1_ctxt)
-
-    # Equation uses p_range, which is a calibration coefficient - Fixing to 679.34040721
-    #   PRESWAT_L1 = (PRESWAT_L0 * p_range / (0.85 * 65536)) - (0.05 * p_range)
-    pl1_func = '(PRESWAT_L0 * 679.34040721 / (0.85 * 65536)) - (0.05 * 679.34040721)'
-    pl1_pmap = {'PRESWAT_L0':'PRESWAT_L0'}
-    func = NumexprFunction('PRESWAT_L1', pl1_func, pl1_pmap)
-    presL1_ctxt = ParameterContext('PRESWAT_L1', param_type=ParameterFunctionType(function=func), variability=VariabilityEnum.TEMPORAL)
-    presL1_ctxt.uom = 'S m-1'
-    pdict.add_context(presL1_ctxt)
-
-    # Density & practical salinity calucluated using the Gibbs Seawater library - available via python-gsw project:
-    #       https://code.google.com/p/python-gsw/ & http://pypi.python.org/pypi/gsw/3.0.1
-
-    # PRACSAL = gsw.SP_from_C((CONDWAT_L1 * 10), TEMPWAT_L1, PRESWAT_L1)
-    owner = 'gsw'
-    sal_func = 'SP_from_C'
-    sal_arglist = [NumexprFunction('CONDWAT_L1*10', 'C*10', {'C':'CONDWAT_L1'}), 'TEMPWAT_L1', 'PRESWAT_L1']
-    sal_kwargmap = None
-    func = PythonFunction('PRACSAL', owner, sal_func, sal_arglist, sal_kwargmap)
-    sal_ctxt = ParameterContext('PRACSAL', param_type=ParameterFunctionType(func), variability=VariabilityEnum.TEMPORAL)
-    sal_ctxt.uom = 'g kg-1'
-    pdict.add_context(sal_ctxt)
-
-    # absolute_salinity = gsw.SA_from_SP(PRACSAL, PRESWAT_L1, longitude, latitude)
-    # conservative_temperature = gsw.CT_from_t(absolute_salinity, TEMPWAT_L1, PRESWAT_L1)
-    # DENSITY = gsw.rho(absolute_salinity, conservative_temperature, PRESWAT_L1)
-    owner = 'gsw'
-    abs_sal_func = PythonFunction('abs_sal', owner, 'SA_from_SP', ['PRACSAL', 'PRESWAT_L1', 'lon','lat'], None)
-    cons_temp_func = PythonFunction('cons_temp', owner, 'CT_from_t', [abs_sal_func, 'TEMPWAT_L1', 'PRESWAT_L1'], None)
-    dens_func = PythonFunction('DENSITY', owner, 'rho', [abs_sal_func, cons_temp_func, 'PRESWAT_L1'], None)
-    dens_ctxt = ParameterContext('DENSITY', param_type=ParameterFunctionType(dens_func), variability=VariabilityEnum.TEMPORAL)
-    dens_ctxt.uom = 'kg m-3'
-    pdict.add_context(dens_ctxt)
-
+    from coverage_model.test.test_parameter_functions import _create_all_params
+    contexts = _create_all_params()
+    pdict.add_context(contexts.pop('TIME'), is_temporal=True)  # Add time
+    map(pdict.add_context, contexts.values())  # Add others
+    print pdict.keys()
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
     scov = SimplexCoverage('test_data', create_guid(), 'sample coverage for an SBE 37IM', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, value_caching=value_caching)
@@ -670,9 +591,9 @@ def sbe37im_samplecov(num_timesteps=100000, value_caching=True):
     scov.insert_timesteps(nt)
 
     # Add data for each parameter
-    scov.set_parameter_values('time', value=np.arange(nt))
-    scov.set_parameter_values('lat', value=45)
-    scov.set_parameter_values('lon', value=-71)
+    scov.set_parameter_values('TIME', value=np.arange(nt))
+    scov.set_parameter_values('LAT', value=45)
+    scov.set_parameter_values('LON', value=-71)
 
     # Make a bunch of data to assign to the dependent parameters.  This would be added to the coverage via ingestion
     # From DPS info:
