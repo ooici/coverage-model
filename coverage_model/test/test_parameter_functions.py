@@ -363,7 +363,7 @@ def _create_all_params():
 
     # TEMPWAT_L1 = (TEMPWAT_L0 / 10000) - 10
     tl1_func = '(T_L0 / 10000) - 10'
-    tl1_pmap = {'T_L0':'TEMPWAT_L0'}
+    tl1_pmap = {'T_L0': 'TEMPWAT_L0'}
     expr = NumexprFunction('TEMPWAT_L1', tl1_func, tl1_pmap)
     tempL1_ctxt = ParameterContext('TEMPWAT_L1', param_type=ParameterFunctionType(function=expr), variability=VariabilityEnum.TEMPORAL)
     tempL1_ctxt.uom = 'deg_C'
@@ -371,7 +371,7 @@ def _create_all_params():
 
     # CONDWAT_L1 = (CONDWAT_L0 / 100000) - 0.5
     cl1_func = '(C_L0 / 100000) - 0.5'
-    cl1_pmap = {'C_L0':'CONDWAT_L0'}
+    cl1_pmap = {'C_L0': 'CONDWAT_L0'}
     expr = NumexprFunction('CONDWAT_L1', cl1_func, cl1_pmap)
     condL1_ctxt = ParameterContext('CONDWAT_L1', param_type=ParameterFunctionType(function=expr), variability=VariabilityEnum.TEMPORAL)
     condL1_ctxt.uom = 'S m-1'
@@ -380,7 +380,7 @@ def _create_all_params():
     # Equation uses p_range, which is a calibration coefficient - Fixing to 679.34040721
     #   PRESWAT_L1 = (PRESWAT_L0 * p_range / (0.85 * 65536)) - (0.05 * p_range)
     pl1_func = '(P_L0 * 679.34040721 / (0.85 * 65536)) - (0.05 * 679.34040721)'
-    pl1_pmap = {'P_L0':'PRESWAT_L0'}
+    pl1_pmap = {'P_L0': 'PRESWAT_L0'}
     expr = NumexprFunction('PRESWAT_L1', pl1_func, pl1_pmap)
     presL1_ctxt = ParameterContext('PRESWAT_L1', param_type=ParameterFunctionType(function=expr), variability=VariabilityEnum.TEMPORAL)
     presL1_ctxt.uom = 'S m-1'
@@ -392,9 +392,10 @@ def _create_all_params():
     # PRACSAL = gsw.SP_from_C((CONDWAT_L1 * 10), TEMPWAT_L1, PRESWAT_L1)
     owner = 'gsw'
     sal_func = 'SP_from_C'
-    sal_arglist = [NumexprFunction('CONDWAT_L1*10', 'C*10', {'C':'CONDWAT_L1'}), 'TEMPWAT_L1', 'PRESWAT_L1']
+    sal_arglist = ['C10', 'T_L1', 'P_L1']
+    sal_pmap = {'C10': NumexprFunction('CONDWAT_L1*10', 'C*10', {'C': 'CONDWAT_L1'}), 'T_L1': 'TEMPWAT_L1', 'P_L1': 'PRESWAT_L1'}
     sal_kwargmap = None
-    expr = PythonFunction('PRACSAL', owner, sal_func, sal_arglist, sal_kwargmap)
+    expr = PythonFunction('PRACSAL', owner, sal_func, sal_arglist, sal_kwargmap, sal_pmap)
     sal_ctxt = ParameterContext('PRACSAL', param_type=ParameterFunctionType(expr), variability=VariabilityEnum.TEMPORAL)
     sal_ctxt.uom = 'g kg-1'
     contexts['PRACSAL'] = sal_ctxt
@@ -403,9 +404,9 @@ def _create_all_params():
     # conservative_temperature = gsw.CT_from_t(absolute_salinity, TEMPWAT_L1, PRESWAT_L1)
     # DENSITY = gsw.rho(absolute_salinity, conservative_temperature, PRESWAT_L1)
     owner = 'gsw'
-    abs_sal_expr = PythonFunction('abs_sal', owner, 'SA_from_SP', ['PRACSAL', 'PRESWAT_L1', 'LON','LAT'], None)
-    cons_temp_expr = PythonFunction('cons_temp', owner, 'CT_from_t', [abs_sal_expr, 'TEMPWAT_L1', 'PRESWAT_L1'], None)
-    dens_expr = PythonFunction('DENSITY', owner, 'rho', [abs_sal_expr, cons_temp_expr, 'PRESWAT_L1'], None)
+    abs_sal_expr = PythonFunction('abs_sal', owner, 'SA_from_SP', ['PRACSAL', 'PRESWAT_L1', 'LON','LAT'])
+    cons_temp_expr = PythonFunction('cons_temp', owner, 'CT_from_t', [abs_sal_expr, 'TEMPWAT_L1', 'PRESWAT_L1'])
+    dens_expr = PythonFunction('DENSITY', owner, 'rho', [abs_sal_expr, cons_temp_expr, 'PRESWAT_L1'])
     dens_ctxt = ParameterContext('DENSITY', param_type=ParameterFunctionType(dens_expr), variability=VariabilityEnum.TEMPORAL)
     dens_ctxt.uom = 'kg m-3'
     contexts['DENSITY'] = dens_ctxt

@@ -31,12 +31,23 @@ class AbstractFunction(AbstractBase):
         raise NotImplementedError('Not implemented in abstract class')
 
 class PythonFunction(AbstractFunction):
-    def __init__(self, name, owner, func_name, arg_list, kwarg_map=None):
+    def __init__(self, name, owner, func_name, arg_list, kwarg_map=None, param_map=None):
         AbstractFunction.__init__(self, name)
         self.owner = owner
         self.func_name = func_name
         self.arg_list = arg_list
         self.kwarg_map = kwarg_map
+        self.param_map = param_map
+        if param_map is not None:
+            keyset = set(param_map.keys())
+            argset = set(arg_list)
+            if not keyset.issubset(argset):
+                raise KeyError('\'param_map\' does not contain keys for all items in \'arg_list\'; missing keys = {0}'.format(keyset.difference(arg_list)))
+
+            self.mapped_arg_list = [self.param_map[a] for a in self.arg_list]
+        else:
+            self.mapped_arg_list = self.arg_list
+
 
     def _import_func(self):
         import importlib
@@ -47,7 +58,7 @@ class PythonFunction(AbstractFunction):
         self._import_func()
 
         args = []
-        for a in self.arg_list:
+        for a in self.mapped_arg_list:
             if isinstance(a, AbstractFunction):
                 args.append(a.evaluate(pval_callback, slice_, fill_value))
             else:
@@ -65,7 +76,7 @@ class PythonFunction(AbstractFunction):
 
     def get_function_map(self, pctxt_callback):
         ret={}
-        for i, a in enumerate(self.arg_list):
+        for i, a in enumerate(self.mapped_arg_list):
             if isinstance(a, AbstractFunction):
                 ret['arg_{0}'.format(i)] = a.get_function_map(pctxt_callback)
             else:
@@ -98,7 +109,6 @@ class PythonFunction(AbstractFunction):
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
         ret = super(PythonFunction, cls)._fromdict(cmdict, arg_masks=arg_masks)
-        ret._setup()
         return ret
 
 class NumexprFunction(AbstractFunction):
