@@ -7,6 +7,7 @@
 @brief Exemplar functions for creation, manipulation, and basic visualization of coverages
 """
 import random
+from coverage_model import PythonFunction, NumexprFunction
 
 from ooi.logging import log
 from netCDF4 import Dataset
@@ -48,6 +49,13 @@ def values_outside_coverage():
     crtype = ConstantRangeType(QuantityType(value_encoding=np.dtype('int16')))
     crval = get_value_class(crtype, domain_set=dom)
 
+    pftype=ParameterFunctionType(NumexprFunction('t*10', 't*10', {'t': 'temp'}))
+    def _get_pvals(name, *args, **kwargs):
+        if name == 'temp':
+            return np.array([1, 3, 5, 6, 23])
+    pftype._pval_callback = _get_pvals
+    pfval=get_value_class(pftype, SimpleDomainSet((5,)))
+
     cat = {0:'turkey',1:'duck',2:'chicken',99:'None'}
     cattype = CategoryType(categories=cat)
     catval = get_value_class(cattype, dom)
@@ -74,14 +82,10 @@ def values_outside_coverage():
     if not (aval.shape == rval.shape == cval_n.shape):# == fval.shape):
         raise SystemError('Shapes are not equal!!')
 
-    types = (qtype, atype, rtype, btype, ctype_n, ctype_s, cattype, ftype)
-    vals = (qval, aval, rval, bval, cval_n, cval_s, crval, catval, fval)
-#    for i in xrange(len(vals)):
-#        log.info('Type: %s', types[i])
-#        log.info('\tContent: %s', vals[i].content)
-#        log.info('\tVals: %s', vals[i][:])
+    types = (qtype, atype, rtype, btype, ctype_n, ctype_s, cattype, ftype, pftype)
+    vals = (qval, aval, rval, bval, cval_n, cval_s, crval, catval, fval, pfval)
 
-    log.info('Returning: qval, aval, rval, bval, cval_n, cval_s, crval, catval, fval')
+    log.info('Returning: qval, aval, rval, bval, cval_n, cval_s, crval, catval, fval, pfval')
     return vals
 
 def param_dict_dump_load():
@@ -480,6 +484,11 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True, mak
     cnst_rng_int_ctxt.long_name = 'example of a parameter of type ConstantRangeType, base_type int16'
     pdict.add_context(cnst_rng_int_ctxt)
 
+    func = NumexprFunction(expression='q*10', param_map={'q':'quantity'})
+    pfunc_ctxt = ParameterContext('parameter_function', param_type=ParameterFunctionType(function=func), variability=VariabilityEnum.TEMPORAL)
+    pfunc_ctxt.long_name = 'example of a parameter of type ParameterFunctionType'
+    pdict.add_context(pfunc_ctxt)
+
     cat = {0:'turkey',1:'duck',2:'chicken',99:'None'}
     cat_ctxt = ParameterContext('category', param_type=CategoryType(categories=cat), variability=VariabilityEnum.TEMPORAL)
     pdict.add_context(cat_ctxt)
@@ -554,6 +563,54 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True, mak
         SimplexCoverage.pickle_save(scov, 'test_data/ptypes.cov')
 
     return scov
+
+def sbe37im_samplecov(num_timesteps=100000, value_caching=True):
+    # Construct temporal and spatial Coordinate Reference System objects
+    tcrs = CRS([AxisTypeEnum.TIME])
+    scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+    # Construct temporal and spatial Domain objects
+    tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE)
+
+    # Instantiate a ParameterDictionary
+    pdict = ParameterDictionary()
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    from coverage_model.test.test_parameter_functions import _create_all_params
+    contexts = _create_all_params()
+    pdict.add_context(contexts.pop('TIME'), is_temporal=True)  # Add time
+    map(pdict.add_context, contexts.values())  # Add others
+
+    # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage for an SBE 37IM', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, value_caching=value_caching)
+
+    # Insert some timesteps (automatically expands other arrays)
+    nt = num_timesteps
+    scov.insert_timesteps(nt)
+
+    # Add data for each parameter
+    scov.set_parameter_values('TIME', value=np.arange(nt))
+    scov.set_parameter_values('LAT', value=45)
+    scov.set_parameter_values('LON', value=-71)
+
+    # Make a bunch of data to assign to the dependent parameters.  This would be added to the coverage via ingestion
+    # From DPS info:
+    #   here: https://confluence.oceanobservatories.org/display/science/Data+Product+Specifications
+    #   and here: https://alfresco.oceanobservatories.org/alfresco/d/d/workspace/SpacesStore/466c4915-c777-429a-8946-c90a8f0945b0/1341-10004_Data_Product_SPEC_GLBLRNG_OOI.pdf
+    # and the seabird website here: http://www.seabird.com/products/spec_sheets/37imdata.htm
+
+    # SBE 37IM - temperature in 't_dec' example range between 280000 and 350000
+    scov.set_parameter_values('TEMPWAT_L0', value=np.random.random_sample(nt)*(350000-280000)+280000)
+    # SBE 37IM - conductivity, ranging between 100000 & 750000 (not 0 because never 0 in seawater)
+    scov.set_parameter_values('CONDWAT_L0', value=np.random.random_sample(nt)*(750000-100000)+100000)
+    # SBE 37IM - pressure, ranging between 2789 and 10000 (couldn't find a range in the DPS, this seems reasonable!)
+    scov.set_parameter_values('PRESWAT_L0', value=np.random.random_sample(nt)*(10000-2789)+2789)
+
+
+    return scov
+
+
 
 def nospatialcov(save_coverage=False, in_memory=False, inline_data_writes=True):
     # Construct temporal and spatial Coordinate Reference System objects

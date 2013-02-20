@@ -10,6 +10,7 @@
 from ooi.logging import log
 from coverage_model.basic_types import AbstractIdentifiable, VariabilityEnum, AxisTypeEnum
 from coverage_model.parameter_types import AbstractParameterType, QuantityType
+from coverage_model.parameter_functions import ParameterFunctionException
 from collections import OrderedDict
 import copy
 
@@ -131,6 +132,9 @@ class ParameterContext(AbstractIdentifiable):
             else:
                 self.param_type = copy.deepcopy(param_context.param_type)
 
+            # Ensure the param_type's name is the same as yours
+            self.param_type.name = self.name
+
             self.axis = axis or param_context.axis
             if uom is not None:
                 self.uom = uom
@@ -149,6 +153,9 @@ class ParameterContext(AbstractIdentifiable):
             if param_type and not isinstance(param_type, AbstractParameterType):
                 raise SystemError('\'param_type\' must be a concrete subclass of AbstractParameterType')
             self.param_type = param_type or QuantityType()
+
+            # Ensure the param_type's name is the same as yours
+            self.param_type.name = self.name
 
             self.axis = axis or None
             if uom is not None:
@@ -436,6 +443,89 @@ class ParameterDictionary(AbstractIdentifiable):
 
     def __ne__(self, other):
         return not self == other
+
+class ParameterFunctionValidator(object):
+    """
+    Class for validating that the union of multiple sets of parameter contexts
+    is capable of fulfilling given dependent parameters
+    """
+
+    def __init__(self, contexts_with_values, *pd_contexts):
+        """
+        Constructor for ParameterFunctionValidator
+
+        @param contexts_with_values single or iterable of ParameterContext objects that have obtainable values
+        @param pd_contexts  one or more iterable sets of ParameterContext objects
+        @return a FunctionValidator instance
+        """
+        self._ctxts = {}
+        if not hasattr(contexts_with_values, '__iter__'):
+            contexts_with_values = [contexts_with_values]
+        self._cwv = [p for p in contexts_with_values if isinstance(p, ParameterContext)]
+        self._cwvn = [p.name for p in self._cwv]
+
+        import itertools
+        ctxts = contexts_with_values
+        ctxts += [c for c in itertools.chain(*pd_contexts)]
+
+        for p in [p for p in ctxts if isinstance(p, ParameterContext)]:
+            if p.name not in self._ctxts:
+                np = ParameterContext(p) # Copy
+                if hasattr(np.param_type, '_pctxt_callback'):
+                    np._pctxt_callback = self._ctxt_callback
+                self._ctxts[p.name] = np
+
+    def _ctxt_callback(self, context_name):
+        return self._ctxts[context_name]
+
+    def validate(self, context_name):
+        """
+        Validate that the ParameterContext indicated by <i>context_name</i> can be fulfilled by the set of ParameterContexts
+        available to this ParameterFunctionValidator
+
+        @param context_name the name of the parameter to validate, must be a member of self._ctxts
+        """
+        try:
+            # Attempt to build the graph
+            g = self._ctxts[context_name].param_type.get_dependency_graph()
+
+            # First ensure all of the things we have values for are made forestgreen
+            for n in [n for n in self._cwvn if n in g.node]:
+                g.node[n]['color'] = g.node[n]['fontcolor'] = 'forestgreen'
+
+            def _prune(g, n, parent_green=False, ind=''):
+    #            print '{0}node: {1}'.format(ind,n)
+                for s in g.successors(n):
+                    preds=g.predecessors(s)
+    #                print '{0}succ: {1}'.format(ind,s)
+                    c = g.node[n]['color']
+                    if c == 'forestgreen' or parent_green:
+    #                    print '{0}is_green'.format(ind)
+                        _prune(g, s, True, ind=ind+'  ')
+                        if len(preds) == 1:
+                            if c != 'forestgreen':
+    #                            print '{0}remove: {1}'.format(ind,s)
+                                g.remove_node(s)
+                    else:
+                        _prune(g, s, parent_green, ind=ind+'  ')
+
+                preds=g.predecessors(n)
+                if len(g.successors(n)) == 0 and len(preds) == 1 and g.node[preds[0]]['color'] == 'forestgreen':
+                    g.remove_node(n)
+
+            _prune(g, context_name)
+
+            # Get the leaf nodes again - if any AREN'T green, we have a problem
+            missing = [n for n,d in g.out_degree().items() if d==0 and g.node[n]['color'] != 'forestgreen']
+
+            if len(missing) > 0:
+                raise ValueError('Unable to calculate \'{0}\', missing values or functions: {1}'.format(context_name, list(missing)))
+
+            return g
+        except Exception as ex:
+            raise ParameterFunctionException(ex.message, type(ex))
+
+
 
 """
 
