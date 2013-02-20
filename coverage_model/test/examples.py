@@ -7,6 +7,7 @@
 @brief Exemplar functions for creation, manipulation, and basic visualization of coverages
 """
 import random
+from coverage_model import PythonFunction, NumexprFunction
 
 from ooi.logging import log
 from netCDF4 import Dataset
@@ -48,6 +49,13 @@ def values_outside_coverage():
     crtype = ConstantRangeType(QuantityType(value_encoding=np.dtype('int16')))
     crval = get_value_class(crtype, domain_set=dom)
 
+    pftype=ParameterFunctionType('t*10', {'t':'temp'})
+    def _get_pvals(name, *args, **kwargs):
+        if name == 'temp':
+            return np.array([1,3,5,6,23])
+    pftype._pval_callback = _get_pvals
+    pfval=get_value_class(pftype, SimpleDomainSet((5,)))
+
     cat = {0:'turkey',1:'duck',2:'chicken',99:'None'}
     cattype = CategoryType(categories=cat)
     catval = get_value_class(cattype, dom)
@@ -74,14 +82,10 @@ def values_outside_coverage():
     if not (aval.shape == rval.shape == cval_n.shape):# == fval.shape):
         raise SystemError('Shapes are not equal!!')
 
-    types = (qtype, atype, rtype, btype, ctype_n, ctype_s, cattype, ftype)
-    vals = (qval, aval, rval, bval, cval_n, cval_s, crval, catval, fval)
-#    for i in xrange(len(vals)):
-#        log.info('Type: %s', types[i])
-#        log.info('\tContent: %s', vals[i].content)
-#        log.info('\tVals: %s', vals[i][:])
+    types = (qtype, atype, rtype, btype, ctype_n, ctype_s, cattype, ftype, pftype)
+    vals = (qval, aval, rval, bval, cval_n, cval_s, crval, catval, fval, pfval)
 
-    log.info('Returning: qval, aval, rval, bval, cval_n, cval_s, crval, catval, fval')
+    log.info('Returning: qval, aval, rval, bval, cval_n, cval_s, crval, catval, fval, pfval')
     return vals
 
 def param_dict_dump_load():
@@ -480,6 +484,11 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True, mak
     cnst_rng_int_ctxt.long_name = 'example of a parameter of type ConstantRangeType, base_type int16'
     pdict.add_context(cnst_rng_int_ctxt)
 
+    func = NumexprFunction(expression='q*10', param_map={'q':'quantity'})
+    pfunc_ctxt = ParameterContext('parameter_function', param_type=ParameterFunctionType(function=func), variability=VariabilityEnum.TEMPORAL)
+    pfunc_ctxt.long_name = 'example of a parameter of type ParameterFunctionType'
+    pdict.add_context(pfunc_ctxt)
+
     cat = {0:'turkey',1:'duck',2:'chicken',99:'None'}
     cat_ctxt = ParameterContext('category', param_type=CategoryType(categories=cat), variability=VariabilityEnum.TEMPORAL)
     pdict.add_context(cat_ctxt)
@@ -554,6 +563,134 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True, mak
         SimplexCoverage.pickle_save(scov, 'test_data/ptypes.cov')
 
     return scov
+
+def sbe37im_samplecov(num_timesteps=100000, value_caching=True):
+    # Construct temporal and spatial Coordinate Reference System objects
+    tcrs = CRS([AxisTypeEnum.TIME])
+    scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+    # Construct temporal and spatial Domain objects
+    tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE)
+
+    # Instantiate a ParameterDictionary
+    pdict = ParameterDictionary()
+
+    ## time,port_timestamp,driver_timestamp,internal_timestamp,preferred_timestamp,lat,lon,pressure,conductivity,temp,salinity,density,quality_flag
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
+    t_ctxt.uom = 'seconds since 01-01-1900'
+    pdict.add_context(t_ctxt, is_temporal=True)
+
+    lat_ctxt = ParameterContext('lat', param_type=ConstantType(QuantityType(value_encoding=np.dtype('float32'))))
+    lat_ctxt.axis = AxisTypeEnum.LAT
+    lat_ctxt.uom = 'degree_north'
+    pdict.add_context(lat_ctxt)
+
+    lon_ctxt = ParameterContext('lon', param_type=ConstantType(QuantityType(value_encoding=np.dtype('float32'))))
+    lon_ctxt.axis = AxisTypeEnum.LON
+    lon_ctxt.uom = 'degree_east'
+    pdict.add_context(lon_ctxt)
+
+    # Independent Parameters
+
+    # Temperature - values expected to be the decimal results of conversion from hex
+    temp_ctxt = ParameterContext('TEMPWAT_L0', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    temp_ctxt.uom = 'deg_C'
+    pdict.add_context(temp_ctxt)
+
+    # Conductivity - values expected to be the decimal results of conversion from hex
+    cond_ctxt = ParameterContext('CONDWAT_L0', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    cond_ctxt.uom = 'S m-1'
+    pdict.add_context(cond_ctxt)
+
+    # Pressure - values expected to be the decimal results of conversion from hex
+    press_ctxt = ParameterContext('PRESWAT_L0', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    press_ctxt.uom = 'dbar'
+    pdict.add_context(press_ctxt)
+
+
+    # Dependent Parameters
+
+    # TEMPWAT_L1 = (TEMPWAT_L0 / 10000) - 10
+    tl1_func = '(TEMPWAT_L0 / 10000) - 10'
+    tl1_pmap = {'TEMPWAT_L0':'TEMPWAT_L0'}
+    func = NumexprFunction('TEMPWAT_L1', tl1_func, tl1_pmap)
+    tempL1_ctxt = ParameterContext('TEMPWAT_L1', param_type=ParameterFunctionType(function=func), variability=VariabilityEnum.TEMPORAL)
+    tempL1_ctxt.uom = 'deg_C'
+    pdict.add_context(tempL1_ctxt)
+
+    # CONDWAT_L1 = (CONDWAT_L0 / 100000) - 0.5
+    cl1_func = '(CONDWAT_L0 / 100000) - 0.5'
+    cl1_pmap = {'CONDWAT_L0':'CONDWAT_L0'}
+    func = NumexprFunction('CONDWAT_L1', cl1_func, cl1_pmap)
+    condL1_ctxt = ParameterContext('CONDWAT_L1', param_type=ParameterFunctionType(function=func), variability=VariabilityEnum.TEMPORAL)
+    condL1_ctxt.uom = 'S m-1'
+    pdict.add_context(condL1_ctxt)
+
+    # Equation uses p_range, which is a calibration coefficient - Fixing to 679.34040721
+    #   PRESWAT_L1 = (PRESWAT_L0 * p_range / (0.85 * 65536)) - (0.05 * p_range)
+    pl1_func = '(PRESWAT_L0 * 679.34040721 / (0.85 * 65536)) - (0.05 * 679.34040721)'
+    pl1_pmap = {'PRESWAT_L0':'PRESWAT_L0'}
+    func = NumexprFunction('PRESWAT_L1', pl1_func, pl1_pmap)
+    presL1_ctxt = ParameterContext('PRESWAT_L1', param_type=ParameterFunctionType(function=func), variability=VariabilityEnum.TEMPORAL)
+    presL1_ctxt.uom = 'S m-1'
+    pdict.add_context(presL1_ctxt)
+
+    # Density & practical salinity calucluated using the Gibbs Seawater library - available via python-gsw project:
+    #       https://code.google.com/p/python-gsw/ & http://pypi.python.org/pypi/gsw/3.0.1
+
+    # PRACSAL = gsw.SP_from_C((CONDWAT_L1 * 10), TEMPWAT_L1, PRESWAT_L1)
+    owner = 'gsw'
+    sal_func = 'SP_from_C'
+    sal_arglist = [NumexprFunction('CONDWAT_L1*10', 'C*10', {'C':'CONDWAT_L1'}), 'TEMPWAT_L1', 'PRESWAT_L1']
+    sal_kwargmap = None
+    func = PythonFunction('PRACSAL', owner, sal_func, sal_arglist, sal_kwargmap)
+    sal_ctxt = ParameterContext('PRACSAL', param_type=ParameterFunctionType(func), variability=VariabilityEnum.TEMPORAL)
+    sal_ctxt.uom = 'g kg-1'
+    pdict.add_context(sal_ctxt)
+
+    # absolute_salinity = gsw.SA_from_SP(PRACSAL, PRESWAT_L1, longitude, latitude)
+    # conservative_temperature = gsw.CT_from_t(absolute_salinity, TEMPWAT_L1, PRESWAT_L1)
+    # DENSITY = gsw.rho(absolute_salinity, conservative_temperature, PRESWAT_L1)
+    owner = 'gsw'
+    abs_sal_func = PythonFunction('abs_sal', owner, 'SA_from_SP', ['PRACSAL', 'PRESWAT_L1', 'lon','lat'], None)
+    cons_temp_func = PythonFunction('cons_temp', owner, 'CT_from_t', [abs_sal_func, 'TEMPWAT_L1', 'PRESWAT_L1'], None)
+    dens_func = PythonFunction('DENSITY', owner, 'rho', [abs_sal_func, cons_temp_func, 'PRESWAT_L1'], None)
+    dens_ctxt = ParameterContext('DENSITY', param_type=ParameterFunctionType(dens_func), variability=VariabilityEnum.TEMPORAL)
+    dens_ctxt.uom = 'kg m-3'
+    pdict.add_context(dens_ctxt)
+
+
+    # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage for an SBE 37IM', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, value_caching=value_caching)
+
+    # Insert some timesteps (automatically expands other arrays)
+    nt = num_timesteps
+    scov.insert_timesteps(nt)
+
+    # Add data for each parameter
+    scov.set_parameter_values('time', value=np.arange(nt))
+    scov.set_parameter_values('lat', value=45)
+    scov.set_parameter_values('lon', value=-71)
+
+    # Make a bunch of data to assign to the dependent parameters.  This would be added to the coverage via ingestion
+    # From DPS info:
+    #   here: https://confluence.oceanobservatories.org/display/science/Data+Product+Specifications
+    #   and here: https://alfresco.oceanobservatories.org/alfresco/d/d/workspace/SpacesStore/466c4915-c777-429a-8946-c90a8f0945b0/1341-10004_Data_Product_SPEC_GLBLRNG_OOI.pdf
+    # and the seabird website here: http://www.seabird.com/products/spec_sheets/37imdata.htm
+
+    # SBE 37IM - temperature in 't_dec' example range between 280000 and 350000
+    scov.set_parameter_values('TEMPWAT_L0', value=np.random.random_sample(nt)*(350000-280000)+280000)
+    # SBE 37IM - conductivity, ranging between 100000 & 750000 (not 0 because never 0 in seawater)
+    scov.set_parameter_values('CONDWAT_L0', value=np.random.random_sample(nt)*(750000-100000)+100000)
+    # SBE 37IM - pressure, ranging between 2789 and 10000 (couldn't find a range in the DPS, this seems reasonable!)
+    scov.set_parameter_values('PRESWAT_L0', value=np.random.random_sample(nt)*(10000-2789)+2789)
+
+
+    return scov
+
+
 
 def nospatialcov(save_coverage=False, in_memory=False, inline_data_writes=True):
     # Construct temporal and spatial Coordinate Reference System objects

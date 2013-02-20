@@ -217,3 +217,17 @@ def slice_shape(slice_, shape):
         dim_lengths.append(dim_len)
 
     return tuple(dim_lengths)
+
+def express_slice(slice_, total_shape):
+    fsl=fix_slice(slice_, total_shape)
+    ret=[]
+    for i, x in enumerate(fsl):
+        if isinstance(x, slice):
+            start=x.start if not x.start is None else 0
+            stop=x.stop if not x.stop is None else total_shape[i]
+            step=x.step if not x.step is None else 1
+            ret.append(slice(start,stop,step))
+        else:
+            ret.append(x)
+
+    return tuple(ret)

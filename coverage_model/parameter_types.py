@@ -21,8 +21,10 @@
 from ooi.logging import log
 from coverage_model.basic_types import AbstractIdentifiable
 from coverage_model.parameter_values import ConstantValue
+from coverage_model.parameter_functions import AbstractFunction
 from coverage_model.numexpr_utils import digit_match, is_well_formed_where, single_where_match
 import numpy as np
+import networkx as nx
 import re
 
 UNSUPPORTED_DTYPES = {np.dtype('float16'), np.dtype('complex'), np.dtype('complex64'), np.dtype('complex128')}
@@ -50,6 +52,7 @@ class AbstractParameterType(AbstractIdentifiable):
         self._template_attrs = {}
         self._value_module = value_module or 'coverage_model.parameter_values'
         self._value_class = value_class or 'NumericValue'
+        self.name = None
 
     def is_valid_value(self, value):
         raise NotImplementedError('Function not implemented by abstract class')
@@ -101,6 +104,35 @@ class AbstractParameterType(AbstractIdentifiable):
     @property
     def storage_encoding(self):
         return self._value_encoding
+
+    def _add_graph_node(self, graph, name):
+        if name.startswith('<') and name.endswith('>'):
+            n = name[1:-1]
+            graph.add_node(n, color='forestgreen', fontcolor='forestgreen')
+        elif name.startswith('[') and name.endswith(']'):
+            n = name[1:-1]
+            graph.add_node(n, color='blue', fontcolor='blue')
+        elif name.startswith('MISSING') and name.endswith('!'):
+            n = name[9:-1]
+            graph.add_node(n, color='red', fontcolor='red')
+        else:
+            n = name
+            graph.add_node(n, color='black')
+
+        return n
+
+    def get_dependency_graph(self):
+        graph = nx.DiGraph()
+
+        self._add_graph_node(graph, '<{0}>'.format(self.name))
+
+        return graph
+
+    def write_dependency_graph(self, outpath, graph=None):
+        if graph is None:
+            graph = self.get_dependency_graph()
+
+        return nx.write_dot(graph, outpath)
 
     def _gen_template_attrs(self):
         for k, v in self._template_attrs.iteritems():
@@ -423,6 +455,126 @@ class TimeRangeType(AbstractSimplexParameterType):
         """
         kwc=kwargs.copy()
         AbstractSimplexParameterType.__init__(self, **kwc)
+
+class ParameterFunctionType(AbstractSimplexParameterType):
+
+    def __init__(self, function, value_encoding=None, **kwargs):
+        """
+
+        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractSimplexParameterType; see documentation for that class for details
+        """
+        kwc=kwargs.copy()
+        AbstractSimplexParameterType.__init__(self, value_class='ParameterFunctionValue', **kwc)
+        if not isinstance(function, AbstractFunction):
+            raise TypeError('\'function\' must be a subclass of AbstractFunction')
+
+        if value_encoding is None:
+            self._value_encoding = np.dtype('float32').str
+        else:
+            try:
+                dt = np.dtype(value_encoding)
+                if dt.isbuiltin not in (0,1):
+                    raise TypeError('\'value_encoding\' must be a valid numpy dtype: {0}'.format(value_encoding))
+                if dt in UNSUPPORTED_DTYPES:
+                    raise TypeError('\'value_encoding\' {0} is not supported by H5py: UNSUPPORTED types ==> {1}'.format(value_encoding, UNSUPPORTED_DTYPES))
+
+                self._value_encoding = dt.str
+
+            except TypeError:
+                raise
+
+        self._template_attrs['function'] = function
+
+        self._template_attrs['_pval_callback'] = None
+        self._template_attrs['_pctxt_callback'] = None
+        self._fmap = None
+        self._iparams = None
+        self._dparams = None
+
+        self._gen_template_attrs()
+
+        # TODO: Find a way to allow a parameter to NOT be stored at all....basically, storage == None
+        # For now, just use whatever the _value_encoding and _fill_value say it should be...
+
+    def _calc_param_sets(self):
+        fmap = self.get_function_map()
+        def walk(fmap, ipset, dpset):
+            for k,v in fmap.iteritems():
+                # if not an 'arg_#' or intermediate 'non-parameter' - add to dpset
+                if 'arg' not in k and not (k.startswith('[') and k.endswith(']')):
+                    dpset.add(k)
+                if isinstance(v, dict):
+                    walk(v, ipset, dpset)
+                else:
+                    if v.startswith('<') and v.endswith('>'):
+                        # independent parameter
+                        ipset.add(v[1:-1])
+                    elif k.startswith('[') and k.endswith(']'):
+                        # intermediate 'non-parameter' - continue
+                        continue
+                    else:
+                        # dependent parameter
+                        dpset.add(v)
+
+        ipset = set()
+        dpset = set()
+        walk(fmap, ipset, dpset)
+        self._iparams = tuple(ipset)
+        self._dparams = tuple(dpset)
+
+    def get_independent_parameters(self):
+        if self._iparams is None:
+            self._calc_param_sets()
+
+        return self._iparams
+
+    def get_dependent_parameters(self):
+        if self._dparams is None:
+            self._calc_param_sets()
+
+        return self._dparams
+
+    def get_function_map(self):
+        if self._fmap is None:
+            self._fmap = self.function.get_function_map(self._pctxt_callback)
+
+        return self._fmap
+
+    def get_dependency_graph(self, name=None):
+        graph = nx.DiGraph()
+
+        def fmap_to_graph(fmap, graph, pnode=None):
+            for k,v in fmap.iteritems():
+                if 'arg' not in k:
+                    n = self._add_graph_node(graph, k)
+
+                    if pnode is not None:
+                        graph.add_edge(pnode, n)
+                else:
+                    n = pnode
+
+                if isinstance(v, dict):
+                    fmap_to_graph(v, graph, n)
+                else:
+                    n = self._add_graph_node(graph, v)
+
+                    graph.add_edge(pnode, n)
+
+        fmap = self.get_function_map()
+        fmap_to_graph(fmap, graph)
+
+        return graph
+
+    def _todict(self, exclude=None):
+        # Must exclude _cov_range_value from persistence
+        return super(ParameterFunctionType, self)._todict(exclude=['_pval_callback', '_pctxt_callback', '_fmap', '_iparams', '_dparams'])
+
+    @classmethod
+    def _fromdict(cls, cmdict, arg_masks=None):
+        ret = super(ParameterFunctionType, cls)._fromdict(cmdict, arg_masks=arg_masks)
+        # Add the _pval_callback attribute, initialized to None
+        ret._pval_callback = None
+        return ret
 
 class FunctionType(AbstractComplexParameterType):
     """

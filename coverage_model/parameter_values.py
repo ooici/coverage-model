@@ -6,7 +6,6 @@
 @author Christopher Mueller
 @brief Abstract and concrete value objects for parameters
 """
-from ooi.logging import log
 from coverage_model.basic_types import AbstractBase, InMemoryStorage, VariabilityEnum
 from coverage_model.numexpr_utils import is_well_formed_where, nest_wheres
 from coverage_model import utils
@@ -176,6 +175,61 @@ class FunctionValue(AbstractComplexParameterValue):
                 self._storage[0][slice_[0]] = value
             else:
                 self._storage[0].append(value)
+
+class ParameterFunctionValue(AbstractSimplexParameterValue):
+
+    def __init__(self, parameter_type, domain_set, storage=None, **kwargs):
+        """
+
+        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterValue; see documentation for that class for details
+        """
+        kwc=kwargs.copy()
+        AbstractSimplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
+        # Do NOT expand storage - no need to store anything here!!
+
+        # Grab a local pointer to the coverage's _cov_range_value object
+        self._pval_callback = self.parameter_type._pval_callback
+        self._memoized_values = None
+
+    @property
+    def content(self):
+        return self.parameter_type.function
+
+    def expand_content(self, domain, origin, expansion):
+        # No op, storage is not used
+        pass
+
+    def __getitem__(self, slice_):
+        if self._memoized_values is not None:
+            return self._memoized_values
+        else:
+            slice_ = utils.fix_slice(slice_, self.shape)
+
+            try:
+                r = self.content.evaluate(self._pval_callback, self.parameter_type, slice_)
+            except Exception:
+                # Exception performing calculation - return array of fill_value
+                es = utils.slice_shape(slice_, self.shape)
+                ret = np.empty(es, dtype=self.parameter_type.value_encoding)
+                ret.fill(self.parameter_type.fill_value)
+                if False:
+                    it = np.nditer(ret, flags=['multi_index'], op_flags=['readwrite'])
+                    while not it.finished:
+                        try:
+                            it[0] = self.content.evaluate(self._pval_callback, self.parameter_type, it.multi_index)
+                        except Exception:
+                            pass
+                        it.iternext()
+
+                r = ret
+
+            # Replace any NaN values with fill_value
+            np.putmask(r, np.isnan(r), self.parameter_type.fill_value)
+            return r
+
+    def __setitem__(self, slice_, value):
+        self._memoized_values = value
+#        raise ValueError('Values cannot be set against ParameterFunctionValues!')
 
 class ConstantValue(AbstractComplexParameterValue):
 
