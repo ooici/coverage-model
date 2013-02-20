@@ -581,7 +581,6 @@ def sbe37im_samplecov(num_timesteps=100000, value_caching=True):
     contexts = _create_all_params()
     pdict.add_context(contexts.pop('TIME'), is_temporal=True)  # Add time
     map(pdict.add_context, contexts.values())  # Add others
-    print pdict.keys()
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
     scov = SimplexCoverage('test_data', create_guid(), 'sample coverage for an SBE 37IM', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, value_caching=value_caching)

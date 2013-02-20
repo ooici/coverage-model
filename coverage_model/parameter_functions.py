@@ -39,27 +39,30 @@ class PythonFunction(AbstractFunction):
         self.arg_list = arg_list
         self.kwarg_map = kwarg_map
         self.param_map = param_map
-        if param_map is not None:
-            keyset = set(param_map.keys())
-            argset = set(arg_list)
-            if not keyset.issubset(argset):
-                raise KeyError('\'param_map\' does not contain keys for all items in \'arg_list\'; missing keys = {0}'.format(keyset.difference(arg_list)))
-
-            self.mapped_arg_list = [self.param_map[a] for a in self.arg_list]
-        else:
-            self.mapped_arg_list = self.arg_list
-
 
     def _import_func(self):
         import importlib
         module = importlib.import_module(self.owner)
         self._callable = getattr(module, self.func_name)
 
+    def _apply_mapping(self):
+        if self.param_map is not None:
+            keyset = set(self.param_map.keys())
+            argset = set(self.arg_list)
+            if not keyset.issubset(argset):
+                raise KeyError('\'param_map\' does not contain keys for all items in \'arg_list\'; missing keys = {0}'.format(keyset.difference(arg_list)))
+
+            return [self.param_map[a] for a in self.arg_list]
+        else:
+            return self.arg_list
+
     def evaluate(self, pval_callback, slice_, fill_value=-9999):
         self._import_func()
 
+        mapped_arg_list = self._apply_mapping()
+
         args = []
-        for a in self.mapped_arg_list:
+        for a in mapped_arg_list:
             if isinstance(a, AbstractFunction):
                 args.append(a.evaluate(pval_callback, slice_, fill_value))
             else:
@@ -76,8 +79,9 @@ class PythonFunction(AbstractFunction):
 #            return self._callable(*args, **kwargs)
 
     def get_function_map(self, pctxt_callback):
+        mapped_arg_list = self._apply_mapping()
         ret={}
-        for i, a in enumerate(self.mapped_arg_list):
+        for i, a in enumerate(mapped_arg_list):
             if isinstance(a, AbstractFunction):
                 ret['arg_{0}'.format(i)] = a.get_function_map(pctxt_callback)
             else:
