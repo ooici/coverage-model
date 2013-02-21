@@ -39,6 +39,7 @@ setup(  name = 'coverage-model',
         'h5py==2.1.1a1', 
         'rtree==0.7.0',
         'pidantic',
+        'nose==1.1.2',  # must specify to avoid GSW from getting the latest version - which conflicts with pyon's
         'gsw==3.0.1a1',
         'pydot==1.0.28',
         'networkx==1.7',
