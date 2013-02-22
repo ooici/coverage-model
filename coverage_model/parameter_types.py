@@ -108,18 +108,27 @@ class AbstractParameterType(AbstractIdentifiable):
     def _add_graph_node(self, graph, name):
         if name.startswith('<') and name.endswith('>'):
             n = name[1:-1]
-            graph.add_node(n, color='forestgreen', fontcolor='forestgreen')
+            c = 'forestgreen'
         elif name.startswith('[') and name.endswith(']'):
             n = name[1:-1]
-            graph.add_node(n, color='blue', fontcolor='blue')
-        elif name.startswith('MISSING') and name.endswith('!'):
-            n = name[9:-1]
-            graph.add_node(n, color='red', fontcolor='red')
+            c = 'blue'
+        elif name.startswith('!') and name.endswith('!'):
+            n = name[1:-1]
+            c = 'red'
         else:
             n = name
-            graph.add_node(n, color='black')
+            c = 'black'
 
-        return n
+        if ':|:' in n:
+            a, n = n.split(':|:')
+            a = a.strip()
+            n = n.strip()
+        else:
+            a = ''
+
+        graph.add_node(n, color=c, fontcolor=c)
+
+        return a, n
 
     def get_dependency_graph(self):
         graph = nx.DiGraph()
@@ -534,9 +543,8 @@ class ParameterFunctionType(AbstractSimplexParameterType):
 
         return self._dparams
 
-    def get_function_map(self):
-        if self._fmap is None:
-            self._fmap = self.function.get_function_map(self._pctxt_callback)
+    def get_function_map(self, parent_arg_name=None):
+        self._fmap = self.function.get_function_map(self._pctxt_callback, parent_arg_name=parent_arg_name)
 
         return self._fmap
 
@@ -546,19 +554,19 @@ class ParameterFunctionType(AbstractSimplexParameterType):
         def fmap_to_graph(fmap, graph, pnode=None):
             for k,v in fmap.iteritems():
                 if 'arg' not in k:
-                    n = self._add_graph_node(graph, k)
+                    a, n = self._add_graph_node(graph, k)
 
                     if pnode is not None:
-                        graph.add_edge(pnode, n)
+                        graph.add_edge(pnode, n, {'label': a})
                 else:
                     n = pnode
 
                 if isinstance(v, dict):
                     fmap_to_graph(v, graph, n)
                 else:
-                    n = self._add_graph_node(graph, v)
+                    a, n = self._add_graph_node(graph, v)
 
-                    graph.add_edge(pnode, n)
+                    graph.add_edge(pnode, n, {'label': a})
 
         fmap = self.get_function_map()
         fmap_to_graph(fmap, graph)

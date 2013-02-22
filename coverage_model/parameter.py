@@ -523,7 +523,8 @@ class ParameterFunctionValidator(object):
 
             return g
         except Exception as ex:
-            raise ParameterFunctionException(ex.message, type(ex))
+            import sys
+            raise ParameterFunctionException(ex.message, type(ex)), None, sys.exc_traceback
 
 
 
