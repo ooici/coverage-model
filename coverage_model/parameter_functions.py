@@ -65,6 +65,8 @@ class PythonFunction(AbstractFunction):
         for a in mapped_arg_list:
             if isinstance(a, AbstractFunction):
                 args.append(a.evaluate(pval_callback, slice_, fill_value))
+            elif isinstance(a, Number) or hasattr(a, '__iter__') and np.array([isinstance(ai, Number) for ai in a]).all():
+                args.append(a)
             else:
                 v = pval_callback(a, slice_)
                 if v.dtype.kind == 'f':
@@ -85,16 +87,20 @@ class PythonFunction(AbstractFunction):
             if isinstance(a, AbstractFunction):
                 ret['arg_{0}'.format(i)] = a.get_function_map(pctxt_callback)
             else:
-                # Check to see if the argument is a ParameterFunctionType
-                try:
-                    spc = pctxt_callback(a)
-                    if hasattr(spc.param_type, 'get_function_map'):
-                        a = spc.param_type.get_function_map()
-                    else:
-                        # An independent parameter argument
-                        a = '<{0}>'.format(a)
-                except KeyError:
-                    a = 'MISSING:!{0}!'.format(a)
+                if isinstance(a, Number) or hasattr(a, '__iter__') and np.array([isinstance(ai, Number) for ai in a]).all():
+                    # Treat numerical arguments as independents
+                    a = '<{0}>'.format(a)
+                else:
+                    # Check to see if the argument is a ParameterFunctionType
+                    try:
+                        spc = pctxt_callback(a)
+                        if hasattr(spc.param_type, 'get_function_map'):
+                            a = spc.param_type.get_function_map()
+                        else:
+                            # An independent parameter argument
+                            a = '<{0}>'.format(a)
+                    except KeyError:
+                        a = 'MISSING:!{0}!'.format(a)
 
                 ret['arg_{0}'.format(i)] = a
 
@@ -124,20 +130,21 @@ class NumexprFunction(AbstractFunction):
 
     def evaluate(self, pval_callback, slice_, fill_value=-9999):
         ld = {}
-        for v, p in self.param_map.iteritems():
-            if isinstance(p, AbstractFunction):
-                ld[v] = p.evaluate(pval_callback, slice_, fill_value)
-            elif isinstance(p, Number):
-                ld[v] = p
+        for v, a in self.param_map.iteritems():
+            if isinstance(a, AbstractFunction):
+                ld[v] = a.evaluate(pval_callback, slice_, fill_value)
+            elif isinstance(a, Number) or hasattr(a, '__iter__') and np.array([isinstance(ai, Number) for ai in a]).all():
+                ld[v] = a
             else:
-                ld[v] = pval_callback(p, slice_)
+                ld[v] = pval_callback(a, slice_)
 
         return ne.evaluate(self.expression, local_dict=ld)
 
     def get_function_map(self, pctxt_callback):
         ret = {}
         for i, a in enumerate(self.param_map.values()):
-            if isinstance(a, Number): # Treat numerical arguments as independents
+            if isinstance(a, Number) or hasattr(a, '__iter__') and np.array([isinstance(ai, Number) for ai in a]).all():
+                # Treat numerical arguments as independents
                 a = '<{0}>'.format(a)
             else:
                 # Check to see if the argument is a ParameterFunctionType
