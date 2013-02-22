@@ -9,10 +9,10 @@
 
 from nose.plugins.attrib import attr
 import coverage_model.utils as utils
-from unittest import TestCase
+from coverage_model import CoverageModelUnitTestCase
 
 @attr('UNIT',group='cov')
-class TestUtilsUnit(TestCase):
+class TestUtilsUnit(CoverageModelUnitTestCase):
 
     def setUp(self):
         pass

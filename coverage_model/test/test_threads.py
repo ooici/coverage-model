@@ -17,13 +17,13 @@ import os
 import numpy as np
 import time
 import gevent
-import unittest
+import coverage_model
 
 
 
 
 @attr('UNIT',group='cov')
-class TestThreads(unittest.TestCase):
+class TestThreads(coverage_model.CoverageModelUnitTestCase):
     
     filepath = '/tmp/test_threads.hdf'
     def setUp(self):
