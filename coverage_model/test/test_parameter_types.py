@@ -10,15 +10,12 @@
 from nose.plugins.attrib import attr
 import coverage_model.parameter_types as ptypes
 import coverage_model.basic_types as btypes
-import coverage_model as cm
-import numpy as np
-import random
-from unittest import TestCase
+from coverage_model import CoverageModelUnitTestCase
 
 # TODO: Revisit this test class and expand/elaborate the tests
 
 @attr('UNIT',group='cov')
-class TestParameterTypesUnit(TestCase):
+class TestParameterTypesUnit(CoverageModelUnitTestCase):
 
     def setUp(self):
         pass

@@ -12,7 +12,6 @@ from nose.plugins.attrib import attr
 from coverage_model import *
 from coverage_model.parameter_functions import ParameterFunctionException
 import numpy as np
-from unittest import TestCase
 
 def errfunc(val1, val2):
     raise StandardError()
@@ -31,7 +30,7 @@ def _get_vals(name, slice_):
         return np.zeros(5)[slice_]
 
 @attr('UNIT',group='cov')
-class TestParameterFunctionsUnit(TestCase):
+class TestParameterFunctionsUnit(CoverageModelUnitTestCase):
 
     def test_numexpr_function(self):
         func = NumexprFunction('v*10', 'v*10', {'v': 'VALS'})
@@ -82,7 +81,7 @@ class TestParameterFunctionsUnit(TestCase):
 
 
 @attr('INT',group='cov')
-class TestParameterFunctionsInt(TestCase):
+class TestParameterFunctionsInt(CoverageModelIntTestCase):
 
     def setUp(self):
         self.contexts = None
@@ -201,7 +200,7 @@ class TestParameterFunctionsInt(TestCase):
 
 import networkx as nx
 @attr('INT',group='cov')
-class TestParameterValidatorInt(TestCase):
+class TestParameterValidatorInt(CoverageModelIntTestCase):
 
     def setUp(self):
         pass

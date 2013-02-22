@@ -16,12 +16,11 @@ from pyon.public import log
 import numpy as np
 from coverage_model import *
 from nose.plugins.attrib import attr
-from unittest import TestCase
 
 TEST_DIR = os.path.join(tempfile.gettempdir(), 'cov_mdl_tests')
 
 @attr('INT', group='cov')
-class TestCoverageModelBasicsInt(TestCase):
+class TestCoverageModelBasicsInt(CoverageModelIntTestCase):
 
     @classmethod
     def setUpClass(cls):

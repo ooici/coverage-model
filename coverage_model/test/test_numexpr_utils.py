@@ -10,10 +10,9 @@
 from coverage_model import *
 from coverage_model.numexpr_utils import nest_wheres, denest_wheres, is_nested_where, is_well_formed_nested, is_well_formed_where
 from nose.plugins.attrib import attr
-from unittest import TestCase
 
 @attr('UNIT',group='cov')
-class TestNumexprUtilsUnit(TestCase):
+class TestNumexprUtilsUnit(CoverageModelUnitTestCase):
 
     def test_make_range_expr(self):
 

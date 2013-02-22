@@ -12,12 +12,11 @@ import coverage_model.parameter_types as ptypes
 import coverage_model as cm
 import numpy as np
 import random
-from unittest import TestCase
 
 # TODO: Revisit this test class and expand/elaborate the tests
 
 @attr('UNIT',group='cov')
-class TestParameterValuesUnit(TestCase):
+class TestParameterValuesUnit(cm.CoverageModelUnitTestCase):
 
     def setUp(self):
         pass
