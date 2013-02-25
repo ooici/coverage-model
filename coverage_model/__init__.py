@@ -1,5 +1,5 @@
 from basic_types import AxisTypeEnum, MutabilityEnum, VariabilityEnum
-from coverage import SimplexCoverage, SimpleDomainSet, GridDomain, GridShape, CRS
+from coverage import SimplexCoverage, ViewCoverage, SimpleDomainSet, GridDomain, GridShape, CRS
 from coverage_model.parameter_functions import PythonFunction, NumexprFunction
 from parameter import ParameterContext, ParameterDictionary, ParameterFunctionValidator
 from parameter_types import ArrayType, BooleanType, CategoryRangeType, CategoryType, ConstantType, CountRangeType, CountType, FunctionType, QuantityRangeType, QuantityType, RecordType, ReferenceType, TextType, TimeRangeType, TimeType, VectorType, ConstantRangeType, ParameterFunctionType
@@ -9,7 +9,7 @@ from utils import create_guid, fix_slice
 from numexpr_utils import make_range_expr
 from coverage_model.base_test_cases import CoverageModelUnitTestCase, CoverageModelIntTestCase
 
-_core = ['ParameterContext', 'ParameterDictionary', 'ParameterFunctionValidator', 'SimplexCoverage', 'SimpleDomainSet',
+_core = ['ParameterContext', 'ParameterDictionary', 'ParameterFunctionValidator', 'SimplexCoverage', 'ViewCoverage', 'SimpleDomainSet',
          'GridDomain', 'GridShape', 'CRS', 'AxisTypeEnum', 'MutabilityEnum', 'VariabilityEnum']
 
 _types = ['ArrayType', 'BooleanType', 'CategoryRangeType', 'CategoryType', 'ConstantType',

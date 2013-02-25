@@ -7,7 +7,7 @@
 @brief Exemplar functions for creation, manipulation, and basic visualization of coverages
 """
 import random
-from coverage_model import PythonFunction, NumexprFunction
+from coverage_model import PythonFunction, NumexprFunction, ViewCoverage
 
 from ooi.logging import log
 from netCDF4 import Dataset
@@ -227,6 +227,31 @@ def samplecov(save_coverage=False, in_memory=False, inline_data_writes=True):
         SimplexCoverage.pickle_save(scov, 'test_data/sample.cov')
 
     return scov
+
+def sampleviewcov():
+    cov = samplecov()
+    ref_cov = cov.persistence_dir
+    cov.close()
+
+    # Instantiate a ParameterDictionary
+    pdict = ParameterDictionary()
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
+    t_ctxt.uom = 'seconds since 01-01-1970'
+    pdict.add_context(t_ctxt, is_temporal=True)
+
+    temp_ctxt = ParameterContext('temp', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    temp_ctxt.uom = 'degree_Celsius'
+    pdict.add_context(temp_ctxt)
+
+    cov = ViewCoverage('test_data',
+                       'test_view',
+                       reference_coverage_location=ref_cov,
+                       name='test ViewCoverage',
+                       parameter_dictionary=pdict)
+
+    return cov
 
 def samplecov2(save_coverage=False, in_memory=False, inline_data_writes=True):
     # Instantiate a ParameterDictionary

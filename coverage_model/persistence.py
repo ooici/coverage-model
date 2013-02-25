@@ -23,6 +23,56 @@ from copy import deepcopy
 class PersistenceError(Exception):
     pass
 
+class ViewPersistenceLayer(object):
+
+    def __init__(self, root, guid, rcov_loc=None, name=None, param_dict=None, sfilter=None, mode=None):
+        root = '.' if root is ('' or None) else root
+
+        self.master_manager = MasterManager(root_dir=root, guid=guid, name=name, rcov_loc=rcov_loc, param_dict=param_dict, sfilter=sfilter)
+
+        self.mode = mode
+
+        if self.mode != 'r':
+            self.master_manager.flush()
+
+        self._closed = False
+
+    def __getattr__(self, key):
+        if 'master_manager' in self.__dict__ and hasattr(self.master_manager, key):
+            return getattr(self.master_manager, key)
+        else:
+            return getattr(super(ViewPersistenceLayer, self), key)
+
+    def __setattr__(self, key, value):
+        if 'master_manager' in self.__dict__ and hasattr(self.master_manager, key):
+            setattr(self.master_manager, key, value)
+        else:
+            super(ViewPersistenceLayer, self).__setattr__(key, value)
+
+    def get_dirty_values_async_result(self):
+        from gevent.event import AsyncResult
+        ret = AsyncResult()
+        ret.set(True)
+        return ret
+
+    def flush_values(self):
+        return self.get_dirty_values_async_result()
+
+    def flush(self):
+        if self.mode == 'r':
+            log.warn('ViewPersistenceLayer not open for writing: mode=%s', self.mode)
+            return
+
+        log.debug('Flushing MasterManager...')
+        self.master_manager.flush()
+
+    def close(self, force=False, timeout=None):
+        if not self._closed:
+            if self.mode != 'r':
+                self.flush()
+
+        self._closed = True
+
 class PersistenceLayer(object):
     """
     The PersistenceLayer class manages the disk-level storage (and retrieval) of the Coverage Model using HDF5 files.
