@@ -29,24 +29,24 @@ def _get_vals(name, slice_):
     else:
         return np.zeros(5)[slice_]
 
-@attr('UNIT',group='cov')
+@attr('UNIT',group='now')
 class TestParameterFunctionsUnit(CoverageModelUnitTestCase):
 
     def test_numexpr_function(self):
-        func = NumexprFunction('v*10', 'v*10', {'v': 'VALS'})
+        func = NumexprFunction('v*10', 'v*10', ['v'], {'v': 'VALS'})
 
         ret = func.evaluate(_get_vals, slice(None))
         self.assertTrue(np.array_equal(ret, np.array([1, 3, 5, 6, 23]) * 10))
 
     def test_numexpr_function_slice(self):
-        func = NumexprFunction('v*10', 'v*10', {'v': 'VALS'})
+        func = NumexprFunction('v*10', 'v*10', ['v'], {'v': 'VALS'})
 
         ret = func.evaluate(_get_vals, slice(3, None))
         self.assertTrue(np.array_equal(ret, np.array([6, 23]) * 10))
 
     def test_nested_numexpr_function(self):
-        func1 = NumexprFunction('v*10', 'v*10', {'v': 'VALS'})
-        func2 = NumexprFunction('v*10', 'v*10', {'v': func1})
+        func1 = NumexprFunction('v*10', 'v*10', ['v'], {'v': 'VALS'})
+        func2 = NumexprFunction('v*10', 'v*10', ['v'], {'v': func1})
 
         ret = func2.evaluate(_get_vals, slice(None))
         self.assertTrue(np.array_equal(ret, np.array([100, 300, 500, 600, 2300])))
@@ -66,21 +66,21 @@ class TestParameterFunctionsUnit(CoverageModelUnitTestCase):
 
     def test_python_function_slice(self):
         owner = 'coverage_model.test.test_parameter_functions'
-        func = PythonFunction('multiplier', owner, 'pyfunc', ['first','second'])
+        func = PythonFunction('multiplier', owner, 'pyfunc', ['first', 'second'])
 
         ret = func.evaluate(_get_vals, slice(1, 4))
         self.assertTrue(np.array_equal(ret, np.array([2*4, 3*6, 4*8])))
 
     def test_nested_python_function(self):
         owner = 'coverage_model.test.test_parameter_functions'
-        func1 = PythonFunction('square', owner, 'pyfunc', ['first','first'])
+        func1 = PythonFunction('square', owner, 'pyfunc', ['first', 'first'])
         func2 = PythonFunction('quartic', owner, 'pyfunc', [func1, func1])
 
         ret = func2.evaluate(_get_vals, slice(None))
         self.assertTrue(np.array_equal(ret, np.array([1,  16,  81, 256, 625])))
 
 
-@attr('INT',group='cov')
+@attr('INT',group='now')
 class TestParameterFunctionsInt(CoverageModelIntTestCase):
 
     def setUp(self):
@@ -199,7 +199,7 @@ class TestParameterFunctionsInt(CoverageModelIntTestCase):
         self.assertTrue(np.allclose(rhoval[:], rho))
 
 import networkx as nx
-@attr('INT',group='cov')
+@attr('INT',group='now')
 class TestParameterValidatorInt(CoverageModelIntTestCase):
 
     def setUp(self):
@@ -361,26 +361,26 @@ def _create_all_params():
     # Dependent Parameters
 
     # TEMPWAT_L1 = (TEMPWAT_L0 / 10000) - 10
-    tl1_func = '(T_L0 / 10000) - 10'
-    tl1_pmap = {'T_L0': 'TEMPWAT_L0'}
-    expr = NumexprFunction('TEMPWAT_L1', tl1_func, tl1_pmap)
+    tl1_func = '(T / 10000) - 10'
+    tl1_pmap = {'T': 'TEMPWAT_L0'}
+    expr = NumexprFunction('TEMPWAT_L1', tl1_func, ['T'], param_map=tl1_pmap)
     tempL1_ctxt = ParameterContext('TEMPWAT_L1', param_type=ParameterFunctionType(function=expr), variability=VariabilityEnum.TEMPORAL)
     tempL1_ctxt.uom = 'deg_C'
     contexts['TEMPWAT_L1'] = tempL1_ctxt
 
     # CONDWAT_L1 = (CONDWAT_L0 / 100000) - 0.5
-    cl1_func = '(C_L0 / 100000) - 0.5'
-    cl1_pmap = {'C_L0': 'CONDWAT_L0'}
-    expr = NumexprFunction('CONDWAT_L1', cl1_func, cl1_pmap)
+    cl1_func = '(C / 100000) - 0.5'
+    cl1_pmap = {'C': 'CONDWAT_L0'}
+    expr = NumexprFunction('CONDWAT_L1', cl1_func, ['C'], param_map=cl1_pmap)
     condL1_ctxt = ParameterContext('CONDWAT_L1', param_type=ParameterFunctionType(function=expr), variability=VariabilityEnum.TEMPORAL)
     condL1_ctxt.uom = 'S m-1'
     contexts['CONDWAT_L1'] = condL1_ctxt
 
     # Equation uses p_range, which is a calibration coefficient - Fixing to 679.34040721
     #   PRESWAT_L1 = (PRESWAT_L0 * p_range / (0.85 * 65536)) - (0.05 * p_range)
-    pl1_func = '(P_L0 * p_range / (0.85 * 65536)) - (0.05 * p_range)'
-    pl1_pmap = {'P_L0': 'PRESWAT_L0', 'p_range': 679.34040721}
-    expr = NumexprFunction('PRESWAT_L1', pl1_func, pl1_pmap)
+    pl1_func = '(P * p_range / (0.85 * 65536)) - (0.05 * p_range)'
+    pl1_pmap = {'P': 'PRESWAT_L0', 'p_range': 679.34040721}
+    expr = NumexprFunction('PRESWAT_L1', pl1_func, ['P', 'p_range'], param_map=pl1_pmap)
     presL1_ctxt = ParameterContext('PRESWAT_L1', param_type=ParameterFunctionType(function=expr), variability=VariabilityEnum.TEMPORAL)
     presL1_ctxt.uom = 'S m-1'
     contexts['PRESWAT_L1'] = presL1_ctxt
@@ -391,8 +391,8 @@ def _create_all_params():
     # PRACSAL = gsw.SP_from_C((CONDWAT_L1 * 10), TEMPWAT_L1, PRESWAT_L1)
     owner = 'gsw'
     sal_func = 'SP_from_C'
-    sal_arglist = ['C10', 'T_L1', 'P_L1']
-    sal_pmap = {'C10': NumexprFunction('CONDWAT_L1*10', 'C*10', {'C': 'CONDWAT_L1'}), 'T_L1': 'TEMPWAT_L1', 'P_L1': 'PRESWAT_L1'}
+    sal_arglist = ['C', 't', 'p']
+    sal_pmap = {'C': NumexprFunction('CONDWAT_L1*10', 'C*10', ['C'], param_map={'C': 'CONDWAT_L1'}), 't': 'TEMPWAT_L1', 'p': 'PRESWAT_L1'}
     sal_kwargmap = None
     expr = PythonFunction('PRACSAL', owner, sal_func, sal_arglist, sal_kwargmap, sal_pmap)
     sal_ctxt = ParameterContext('PRACSAL', param_type=ParameterFunctionType(expr), variability=VariabilityEnum.TEMPORAL)

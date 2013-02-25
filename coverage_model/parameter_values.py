@@ -210,21 +210,8 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
             try:
                 r = self.content.evaluate(self._pval_callback, slice_, self.parameter_type.fill_value)
             except Exception as ex:
-                raise ParameterFunctionException(ex.message, type(ex))
-                # # Exception performing calculation - return array of fill_value
-                # es = utils.slice_shape(slice_, self.shape)
-                # ret = np.empty(es, dtype=self.parameter_type.value_encoding)
-                # ret.fill(self.parameter_type.fill_value)
-                # if False:
-                #     it = np.nditer(ret, flags=['multi_index'], op_flags=['readwrite'])
-                #     while not it.finished:
-                #         try:
-                #             it[0] = self.content.evaluate(self._pval_callback, it.multi_index, self.parameter_type.fill_value)
-                #         except Exception:
-                #             pass
-                #         it.iternext()
-                #
-                # r = ret
+                import sys
+                raise ParameterFunctionException(ex.message, type(ex)), None, sys.exc_traceback
 
             # Replace any NaN values with fill_value
             np.putmask(r, np.isnan(r), self.parameter_type.fill_value)
