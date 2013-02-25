@@ -509,7 +509,7 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True, mak
     cnst_rng_int_ctxt.long_name = 'example of a parameter of type ConstantRangeType, base_type int16'
     pdict.add_context(cnst_rng_int_ctxt)
 
-    func = NumexprFunction('func', expression='q*10', arg_list=['q'], param_map={'q':'quantity'})
+    func = NumexprFunction('numexpr_func', expression='q*10', arg_list=['q'], param_map={'q':'quantity'})
     pfunc_ctxt = ParameterContext('parameter_function', param_type=ParameterFunctionType(function=func), variability=VariabilityEnum.TEMPORAL)
     pfunc_ctxt.long_name = 'example of a parameter of type ParameterFunctionType'
     pdict.add_context(pfunc_ctxt)
