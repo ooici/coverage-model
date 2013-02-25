@@ -16,7 +16,6 @@ import os
 import shutil
 from coverage_model import create_guid
 
-from copy import deepcopy
 from rtree import index
 import numpy as np
 import h5py
@@ -121,24 +120,12 @@ class BrickingAssessor(object):
             log.debug('Determining slice for brick: %s', b)
             bexts = tuple([x+1 for x in zip(*bbnds)[1]]) # Shift from index to size
             log.debug('bid=%s, bbnds=%s, bexts=%s', bid, bbnds, bexts)
-            brick_slice = []
-            brick_mm = []
-            for x, sl in enumerate(slice_): # Dimensionality
-                log.debug('x=%s  sl=%s', x, sl)
-                log.debug('bbnds[%s]: %s', x, bbnds[x])
-                try:
-                    bsl, mm = bricking_utils.calc_brick_slice(sl, bbnds[x])
-                    brick_slice.append(bsl)
-                    brick_mm.append(mm)
-                except ValueError:
-                    continue
+
+            brick_slice, brick_mm = bricking_utils.get_brick_slice_nd(slice_, bbnds)
 
             if None in brick_slice: # Brick does not contain any of the requested indices
                 log.debug('Brick does not contain any of the requested indices: Move to next brick')
                 continue
-
-            brick_slice = tuple(brick_slice)
-            brick_mm = tuple(brick_mm)
 
             try:
                 brick_slice = utils.fix_slice(brick_slice, bexts)
@@ -147,13 +134,7 @@ class BrickingAssessor(object):
                 continue
 
             if not is_broadcast:
-                value_slice = []
-                for x, sl in enumerate(slice_): # Dimensionality
-                    vm=v_shp[x] if x < len(v_shp) else 1
-                    vs = bricking_utils.calc_value_slice(sl, bbnds[x], brick_slice=brick_slice[x], brick_sl=brick_mm[x], val_shp_max=vm)
-                    value_slice.append(vs)
-
-                value_slice = tuple(value_slice)
+                value_slice = bricking_utils.get_value_slice_nd(slice_, v_shp, bbnds, brick_slice, brick_mm)
 
                 try:
                     value_slice = utils.fix_slice(value_slice, v_shp)
@@ -181,26 +162,12 @@ class BrickingAssessor(object):
 
         for b in bricks:
             bid, bbnds = b
-            brick_slice = []
-            brick_mm = []
-            for x, sl in enumerate(slice_):
-                bsl, mm = bricking_utils.calc_brick_slice(sl, bbnds[x])
-                brick_slice.append(bsl)
-                brick_mm.append(mm)
+            brick_slice, brick_mm = bricking_utils.get_brick_slice_nd(slice_, bbnds)
 
             if None in brick_slice:
                 continue
 
-            brick_slice = tuple(brick_slice)
-            brick_mm = tuple(brick_mm)
-
-            ret_slice = []
-            for x, sl in enumerate(slice_):
-                rm = ret_shp[x] if x < len(ret_shp) else 1
-                rs = bricking_utils.calc_value_slice(sl, bbnds[x], brick_slice=brick_slice[x], brick_sl=brick_mm[x], val_shp_max=rm)
-                ret_slice.append(rs)
-
-            ret_slice = tuple(ret_slice)
+            ret_slice = bricking_utils.get_value_slice_nd(slice_, ret_shp, bbnds, brick_slice, brick_mm)
 
             if not self.use_hdf:
                 ret_vals = self.bricks[bid][brick_slice]

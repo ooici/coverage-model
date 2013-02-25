@@ -69,7 +69,27 @@ def get_bricks_from_slice(slice_, rtree, total_domain):
 
     return bricks
 
-def calc_brick_slice(slice_, bounds):
+
+def get_brick_slice_nd(slice_, bounds):
+    if len(slice_) != len(bounds):
+        raise ValueError('\'slice_\' and \'bounds\' must be of equal length')
+
+    brick_slice = []
+    brick_mm = []
+    for x, sl in enumerate(slice_):  # Dimensionality
+        log.debug('x=%s  sl=%s', x, sl)
+        log.debug('bbnds[%s]: %s', x, bounds[x])
+        try:
+            bsl, mm = calc_brick_slice_1d(sl, bounds[x])
+            brick_slice.append(bsl)
+            brick_mm.append(mm)
+        except ValueError:
+            continue
+
+    return tuple(brick_slice), tuple(brick_mm)
+
+
+def calc_brick_slice_1d(slice_, bounds):
     log.debug('slice_=%s\tbounds=%s', slice_, bounds)
     sl = deepcopy(slice_)
     bo = bounds[0]
@@ -137,7 +157,21 @@ def calc_brick_slice(slice_, bounds):
         log.debug('slice_ is slice: bo=%s\tbn=%s\tsl=%s\tbrick_slice=%s',bo, bn, sl, brick_slice)
         return brick_slice, (brick_slice.start, bs)
 
-def calc_value_slice(slice_, brick_ext, brick_slice, brick_sl, val_shp_max):
+
+def get_value_slice_nd(slice_, v_shp, bbnds, brick_slice, brick_mm):
+    if len(slice_) != len(v_shp) != len(bbnds) != len(brick_slice) != brick_mm:
+        raise ValueError('All arguments must be of equal length')
+
+    value_slice = []
+    for x, sl in enumerate(slice_): # Dimensionality
+        vm = v_shp[x] if x < len(v_shp) else 1
+        vs = calc_value_slice_1d(sl, bbnds[x], brick_slice=brick_slice[x], brick_sl=brick_mm[x], val_shp_max=vm)
+        value_slice.append(vs)
+
+    return tuple(value_slice)
+
+
+def calc_value_slice_1d(slice_, brick_ext, brick_slice, brick_sl, val_shp_max):
     log.debug('slice_==%s\tbrick_ext==%s\tbrick_slice==%s\tbrick_sl==%s\tval_shp_max==%s', slice_, brick_ext, brick_slice, brick_sl, val_shp_max)
 
     sl = deepcopy(slice_)
