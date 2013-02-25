@@ -12,22 +12,25 @@ from coverage_model import fix_slice, utils
 from copy import deepcopy
 import itertools
 
+
 def calc_brick_origins(total_domain, brick_sizes):
-    bo = list(set(itertools.product(*[range(d)[::brick_sizes[i]] for i,d in enumerate(total_domain)])))
+    bo = list(set(itertools.product(*[range(d)[::brick_sizes[i]] for i, d in enumerate(total_domain)])))
     bo.sort()
     return tuple(bo)
 
+
 def calc_brick_and_rtree_extents(brick_origins, brick_sizes):
-    be=[]
-    rte=[]
+    be = []
+    rte = []
     for ori in brick_origins:
-        be.append(tuple(zip(ori,map(lambda o,s: o+s-1, ori, brick_sizes))))
-        r = ori+tuple(map(lambda o,s: o+s-1, ori, brick_sizes))
+        be.append(tuple(zip(ori, map(lambda o, s: o + s - 1, ori, brick_sizes))))
+        r = ori + tuple(map(lambda o, s: o + s - 1, ori, brick_sizes))
         if len(ori) == 1:
-            r = tuple([e for ext in zip(r,[0 for x in r]) for e in ext])
+            r = tuple([e for ext in zip(r, [0 for x in r]) for e in ext])
         rte.append(r)
 
     return tuple(be), tuple(rte)
+
 
 def populate_rtree(rtree, rtree_extents, brick_extents):
     for i, e in enumerate(rtree_extents):
@@ -47,14 +50,14 @@ def get_bricks_from_slice(slice_, rtree, total_domain):
     log.debug('slice_ ==> %s', sl)
     log.debug('rtree bounds ==> %s', bnds)
 
-    start=[]
-    end=[]
+    start = []
+    end = []
     for x in xrange(rank):
-        sx=sl[x]
+        sx = sl[x]
         if isinstance(sx, slice):
-            si=sx.start if sx.start is not None else bnds[x::rank][0]
+            si = sx.start if sx.start is not None else bnds[x::rank][0]
             start.append(si)
-            ei=sx.stop-1 if sx.stop is not None else bnds[x::rank][1]
+            ei = sx.stop - 1 if sx.stop is not None else bnds[x::rank][1]
             end.append(ei)
         elif isinstance(sx, (list, tuple)):
             start.append(min(sx))
@@ -63,7 +66,7 @@ def get_bricks_from_slice(slice_, rtree, total_domain):
             start.append(sx)
             end.append(sx)
 
-    bricks = list(rtree.intersection(tuple(start+end), objects=True))
+    bricks = list(rtree.intersection(tuple(start + end), objects=True))
     bricks = [(b.id, b.object) for b in bricks]
     log.debug('bricks found ==> %s', bricks)
 
@@ -97,16 +100,16 @@ def calc_brick_slice_1d(slice_, bounds):
     bs = bn - bo
     if isinstance(sl, int):
         if bo <= sl < bn:
-            brick_slice = sl-bo
-            log.debug('slice_ is int: bo=%s\tbn=%s\tbrick_slice=%s',bo, bn, brick_slice)
+            brick_slice = sl - bo
+            log.debug('slice_ is int: bo=%s\tbn=%s\tbrick_slice=%s', bo, bn, brick_slice)
             return brick_slice, (sl, sl)
         else:# Brick does not contain any of the requested indices
             log.debug('Outside brick bounds: %s <= %s < %s', bo, sl, bn)
             return None, None
-    elif isinstance(sl, (list,tuple)):
+    elif isinstance(sl, (list, tuple)):
         filt_slice = [x - bo for x in sl if bo <= x < bn]
         if len(filt_slice) > 0:
-            log.debug('slice_ is list: bo=%s\tbn=%s\tfilt_slice=%s',bo, bn, filt_slice)
+            log.debug('slice_ is list: bo=%s\tbn=%s\tfilt_slice=%s', bo, bn, filt_slice)
             return filt_slice, (min(filt_slice), max(filt_slice))
         else:# Brick does not contain any of the requested indices
             log.debug('No values within brick bounds: %s <= %s < %s', bo, sl, bn)
@@ -139,14 +142,14 @@ def calc_brick_slice_1d(slice_, bounds):
             log.debug('pre-step-adjustment: start=%s\tstop=%s', start, stop)
             try:
                 ss = 0 if sl.start is None else sl.start
-                sli = xrange(*slice(ss,bn,sl.step).indices(bo+sl.step))
+                sli = xrange(*slice(ss, bn, sl.step).indices(bo + sl.step))
                 if len(sli) > 1:
                     brick_origin_offset = sli[-1] - bo
                 else:
                     brick_origin_offset = 0
             except:
                 brick_origin_offset = 0
-            log.debug('brick_origin_offset=%s',brick_origin_offset)
+            log.debug('brick_origin_offset=%s', brick_origin_offset)
             start += brick_origin_offset
             log.debug('post-step-adjustment: start=%s\tstop=%s', start, stop)
         brick_slice = slice(start, stop, sl.step)
@@ -154,7 +157,7 @@ def calc_brick_slice_1d(slice_, bounds):
             log.debug('Slice does not contain any of the requested indices: %s', brick_slice)
             return None, None
 
-        log.debug('slice_ is slice: bo=%s\tbn=%s\tsl=%s\tbrick_slice=%s',bo, bn, sl, brick_slice)
+        log.debug('slice_ is slice: bo=%s\tbn=%s\tsl=%s\tbrick_slice=%s', bo, bn, sl, brick_slice)
         return brick_slice, (brick_slice.start, bs)
 
 
@@ -172,7 +175,8 @@ def get_value_slice_nd(slice_, v_shp, bbnds, brick_slice, brick_mm):
 
 
 def calc_value_slice_1d(slice_, brick_ext, brick_slice, brick_sl, val_shp_max):
-    log.debug('slice_==%s\tbrick_ext==%s\tbrick_slice==%s\tbrick_sl==%s\tval_shp_max==%s', slice_, brick_ext, brick_slice, brick_sl, val_shp_max)
+    log.debug('slice_==%s\tbrick_ext==%s\tbrick_slice==%s\tbrick_sl==%s\tval_shp_max==%s', slice_, brick_ext,
+              brick_slice, brick_sl, val_shp_max)
 
     sl = deepcopy(slice_)
     brick_ext_min = brick_ext[0]
@@ -185,8 +189,9 @@ def calc_value_slice_1d(slice_, brick_ext, brick_slice, brick_sl, val_shp_max):
         val_sl_tn_min = max(ts, brick_ext_min)
         value_slice = val_sl_tn_min - ts
 
-        log.debug('ts=%s\tbrick_ext_min=%s\tval_sl_tn_min=%s\tvalue_slice=%s', ts, brick_ext_min, val_sl_tn_min, value_slice)
-    elif isinstance(sl, (list,tuple)):
+        log.debug('ts=%s\tbrick_ext_min=%s\tval_sl_tn_min=%s\tvalue_slice=%s', ts, brick_ext_min, val_sl_tn_min,
+                  value_slice)
+    elif isinstance(sl, (list, tuple)):
         si = utils.find_nearest_index(sl, brick_sl[0] + brick_ext_min)
         ei = utils.find_nearest_index(sl, brick_sl[1] + brick_ext_min) + 1 # Slices use exclusive upper!!
 
@@ -197,18 +202,20 @@ def calc_value_slice_1d(slice_, brick_ext, brick_slice, brick_sl, val_shp_max):
         if sl.step is not None and sl.step != 1:
             brick_ext_min = len(xrange(*sl.indices(brick_ext_min))) + ts
             brick_ext_max = len(xrange(*sl.indices(brick_ext_max))) + ts
-            log.debug('Correct for step: step=%s\tbrick_ext_min=%s\tbrick_ext_max=%s', sl.step, brick_ext_min, brick_ext_max)
+            log.debug('Correct for step: step=%s\tbrick_ext_min=%s\tbrick_ext_max=%s', sl.step, brick_ext_min,
+                      brick_ext_max)
 
         # Value Slice in Total Domain Notation
         val_sl_tn_min = max(ts, brick_ext_min)
         val_sl_tn_max = brick_sl[1] + brick_ext_max - brick_shp
 
-
         val_sl_min = val_sl_tn_min - ts
         val_sl_max = val_sl_tn_max - ts
 
         value_slice = slice(val_sl_min, val_sl_max, None)
-        log.debug('ts=%s\tbrick_ext_min=%s\tbrick_ext_max=%s\tval_sl_tn_min=%s\tval_sl_tn_max=%s\tval_sl_min=%s\tval_sl_max=%s\tvalue_slice=%s', ts, brick_ext_min, brick_ext_max, val_sl_tn_min, val_sl_tn_max, val_sl_min, val_sl_max, value_slice)
+        log.debug(
+            'ts=%s\tbrick_ext_min=%s\tbrick_ext_max=%s\tval_sl_tn_min=%s\tval_sl_tn_max=%s\tval_sl_min=%s\tval_sl_max=%s\tvalue_slice=%s',
+            ts, brick_ext_min, brick_ext_max, val_sl_tn_min, val_sl_tn_max, val_sl_min, val_sl_max, value_slice)
     else:
         value_slice = ()
         log.debug('value_slice=%s', value_slice)
