@@ -61,6 +61,7 @@ class TestParameterValuesUnit(cm.CoverageModelUnitTestCase):
             aval[x] = np.random.bytes(np.random.randint(1,20)) # One value (which is a byte string) for each member of the domain
 
         self.assertIsInstance(aval[0], np.ndarray)
+        self.assertIsInstance(aval[0][0], basestring)
         self.assertTrue(1 <= len(aval[0][0]) <= 20)
 
     # RecordType

@@ -71,7 +71,7 @@ class AbstractCoverage(AbstractIdentifiable):
 
         self._persistence_layer = InMemoryPersistenceLayer()
 
-        if mode is not None and isinstance(mode, str) and mode[0] in ['r','w','a','r+']:
+        if mode is not None and isinstance(mode, basestring) and mode[0] in ['r','w','a','r+']:
             self.mode = mode
         else:
             self.mode = 'r'
@@ -747,8 +747,8 @@ class ViewCoverage(AbstractCoverage):
 
         try:
             # Make sure root_dir and persistence_guid are both not None and are strings
-            if not isinstance(root_dir, str) or not isinstance(persistence_guid, str):
-                raise TypeError('\'root_dir\' and \'persistence_guid\' must be instances of str')
+            if not isinstance(root_dir, basestring) or not isinstance(persistence_guid, basestring):
+                raise TypeError('\'root_dir\' and \'persistence_guid\' must be instances of basestring')
 
             root_dir = root_dir if not root_dir.endswith(persistence_guid) else os.path.split(root_dir)[0]
 
@@ -780,8 +780,8 @@ class ViewCoverage(AbstractCoverage):
                     _doload(self)
                     return
 
-                if not isinstance(reference_coverage_location, str):
-                    raise TypeError('\'reference_coverage_location\' must be of type str')
+                if not isinstance(reference_coverage_location, basestring):
+                    raise TypeError('\'reference_coverage_location\' must be of type basestring')
 
                 if not os.path.exists(reference_coverage_location):
                     raise IOError('\'reference_coverage_location\' cannot be found: \'{0}\''.format(reference_coverage_location))
@@ -929,8 +929,8 @@ class SimplexCoverage(AbstractCoverage):
         AbstractCoverage.__init__(self, mode=mode)
         try:
             # Make sure root_dir and persistence_guid are both not None and are strings
-            if not isinstance(root_dir, str) or not isinstance(persistence_guid, str):
-                raise TypeError('\'root_dir\' and \'persistence_guid\' must be instances of str')
+            if not isinstance(root_dir, basestring) or not isinstance(persistence_guid, basestring):
+                raise TypeError('\'root_dir\' and \'persistence_guid\' must be instances of basestring')
 
             root_dir = root_dir if not root_dir.endswith(persistence_guid) else os.path.split(root_dir)[0]
 

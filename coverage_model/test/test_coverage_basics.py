@@ -626,7 +626,7 @@ class TestCoverageModelBasicsInt(CoverageModelIntTestCase):
     def test_persistence_variation5(self):
         scov = self._make_samplecov(in_memory=False, in_line=False, auto_flush=True, mode='a')
         cov_info_str = scov.info
-        self.assertIsInstance(cov_info_str, str)
+        self.assertIsInstance(cov_info_str, basestring)
 
     def test_run_test_dispatcher(self):
         from coverage_model.brick_dispatch import run_test_dispatcher
