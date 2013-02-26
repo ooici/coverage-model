@@ -63,13 +63,13 @@ class TestThreads(coverage_model.CoverageModelUnitTestCase):
         # Concurrently with the dispatcher thread
         t1 = time.time()
         with AsyncDispatcher(self.block_stuff) as dispatcher:
-            gevent.sleep(1)
+            gevent.sleep(5)
             v = dispatcher.wait(10)
         ndt = time.time() - t1
 
         # There is ususally some difference but should definitely be less than
         # one second
-        self.assertTrue( abs(dt - ndt) < 1)
+        self.assertTrue( abs(dt - ndt) < 5)
 
         try:
             # Make sure we're not losing file descriptors to maintain thread synchronization
