@@ -458,11 +458,11 @@ class PersistenceLayer(object):
             return
 
         self.flush_values()
+        log.debug('Flushing MasterManager...')
+        self.master_manager.flush()
         for pk, pm in self.parameter_metadata.iteritems():
             log.debug('Flushing ParameterManager for \'%s\'...', pk)
             pm.flush()
-        log.debug('Flushing MasterManager...')
-        self.master_manager.flush()
 
     def close(self, force=False, timeout=None):
         if not self._closed:
