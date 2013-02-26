@@ -7,7 +7,7 @@
 @brief Exemplar functions for creation, manipulation, and basic visualization of coverages
 """
 import random
-from coverage_model import PythonFunction, NumexprFunction, ViewCoverage
+from coverage_model import PythonFunction, NumexprFunction, ViewCoverage, ComplexCoverage
 
 from ooi.logging import log
 from netCDF4 import Dataset
@@ -252,6 +252,54 @@ def sampleviewcov():
                        parameter_dictionary=pdict)
 
     return cov
+
+def samplecomplexcov():
+    # Construct temporal and spatial Coordinate Reference System objects
+    tcrs = CRS([AxisTypeEnum.TIME])
+    scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+    # Construct temporal and spatial Domain objects
+    tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
+
+    def make_cov(pnames):
+        # Instantiate a ParameterDictionary
+        pdict = ParameterDictionary()
+
+        # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+        t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
+        t_ctxt.uom = 'seconds since 01-01-1970'
+        pdict.add_context(t_ctxt, is_temporal=True)
+
+        for p in pnames:
+            pdict.add_context(ParameterContext(p, param_type=QuantityType(value_encoding=np.dtype('float32'))))
+
+        scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom)
+
+        scov.insert_timesteps(10)
+        scov.set_parameter_values('time', range(10))
+        for p in pnames:
+            scov.set_parameter_values(p, range(10))
+
+        scov.close()
+
+        return scov.persistence_dir
+
+    cova_pth = make_cov(['first_param'])
+    covb_pth = make_cov(['second_param'])
+
+    # Instantiate a ParameterDictionary
+    pdict = ParameterDictionary()
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    func = NumexprFunction('a*b', 'a*b', ['a','b'], {'a': 'first_param', 'b': 'second_param'})
+    val_ctxt = ParameterContext('a*b', param_type=ParameterFunctionType(function=func, value_encoding=np.dtype('float32')))
+    pdict.add_context(val_ctxt)
+
+    # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+    ccov = ComplexCoverage('test_data', 'test_complex', 'sample complex coverage', reference_coverages=[cova_pth, covb_pth], parameter_dictionary=pdict)
+
+    return ccov
 
 def samplecov2(save_coverage=False, in_memory=False, inline_data_writes=True):
     # Instantiate a ParameterDictionary

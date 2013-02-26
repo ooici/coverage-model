@@ -838,35 +838,53 @@ class ViewCoverage(AbstractCoverage):
             mode=self.mode)
 
 
+from coverage_model.basic_types import BaseEnum
+class ComplexCoverageType(BaseEnum):
+
+    # Complex coverage that combines parameters from multiple coverages
+    # must have coincident temporal and spatial domains
+    PARAMETRIC = 'PARAMETRIC',
+
+    # Complex coverage that appends coverages along their temporal axis
+    TEMPORAL_APPEND = 'TEMPORAL_APPEND',
+
+    # Placeholder for spatial complex - not sure what this will look like yet...
+    SPATIAL_JOIN = 'SPATIAL_JOIN',
+
+
 class ComplexCoverage(AbstractCoverage):
     # TODO: Implement
     """
     References 1-n coverages
     """
-    def __init__(self, root_dir, persistence_guid, reference_coverages=None, additional_parameters=None, join_axis=0):
-        AbstractCoverage.__init__(self)
-        if join_axis == 0:
+    def __init__(self, root_dir, persistence_guid, name=None, reference_coverages=None, parameter_dictionary=None, complex_type=ComplexCoverageType.PARAMETRIC):
+        AbstractCoverage.__init__(self, mode='w')
+        self._bricking_scheme = {'brick_size':100000,'chunk_size':100000}
+
+        self._reference_covs={}
+
+        if complex_type == ComplexCoverageType.PARAMETRIC:
             # Complex parametric - combine parameters from multiple coverages
-            self._build_parametric(reference_coverages)
-        elif join_axis == 1:
+            self._build_parametric(reference_coverages, parameter_dictionary)
+        elif complex_type == ComplexCoverageType.TEMPORAL_APPEND:
             # Complex temporal - combine coverages temporally
             raise NotImplementedError('Not yet implemented')
-        elif join_axis == 2:
+        elif complex_type == ComplexCoverageType.SPATIAL_JOIN:
             # Complex spatial - combine coverages across a higher-order topology
             raise NotImplementedError('Not yet implemented')
 
-    def _build_parametric(self, rcovs, additional_params):
-        self._reference_covs = {}
-        self._params = {}
+    def _build_parametric(self, rcovs, parameter_dictionary):
         ntimes = None
 
-        for p in additional_params:
-            self._params[p.name] = p
+        for pc in parameter_dictionary.itervalues():
+            self.append_parameter(pc[1])
 
         for cpth in rcovs:
             cov = AbstractCoverage.load(cpth)
             if ntimes is None:
                 ntimes = cov.num_timesteps
+                self.temporal_domain = cov.temporal_domain
+                self.spatial_domain = cov.spatial_domain
             else:
                 if ntimes != cov.num_timesteps:
                     raise ValueError('Coverage does not have correct # of timestseps: {0}'.format(cpth))
@@ -875,8 +893,11 @@ class ComplexCoverage(AbstractCoverage):
                 self._reference_covs[cpth] = cov
 
             for p in cov.list_parameters():
-                if not p in self._params:
-                    self._params[p] = self._reference_covs[cpth]
+                if not p in self._range_dictionary:
+                    # Add the context from the reference coverage
+                    self._range_dictionary.add_context(self._reference_covs[cpth]._range_dictionary.get_context(p))
+                    # Add the value class from the reference coverage
+                    self._range_value[p] = self._reference_covs[cpth]._range_value[p]
 
 
 class SimplexCoverage(AbstractCoverage):
