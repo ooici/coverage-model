@@ -342,7 +342,7 @@ class AbstractCoverage(AbstractIdentifiable):
         if self.value_caching:
             # Make slice_ fully expressed such that there are no "None" entries - this lets us ignore domain growth
             slk = utils.express_slice(slice_, total_shape)
-            key=(param_name, utils.hash_any(slk))
+            key = (param_name, utils.hash_any(slk))
             try:
                 return_value = self._value_cache.pop(key)
             #                print 'Vals from cache for \'%s\'' % param_name
