@@ -23,12 +23,12 @@ from copy import deepcopy
 class PersistenceError(Exception):
     pass
 
-class ViewPersistenceLayer(object):
+class SimplePersistenceLayer(object):
 
-    def __init__(self, root, guid, rcov_loc=None, name=None, param_dict=None, sfilter=None, mode=None):
+    def __init__(self, root, guid, name=None, param_dict=None, mode=None, **kwargs):
         root = '.' if root is ('' or None) else root
 
-        self.master_manager = MasterManager(root_dir=root, guid=guid, name=name, rcov_loc=rcov_loc, param_dict=param_dict, sfilter=sfilter)
+        self.master_manager = MasterManager(root_dir=root, guid=guid, name=name, param_dict=param_dict, **kwargs)
 
         self.mode = mode
 
@@ -41,13 +41,17 @@ class ViewPersistenceLayer(object):
         if 'master_manager' in self.__dict__ and hasattr(self.master_manager, key):
             return getattr(self.master_manager, key)
         else:
-            return getattr(super(ViewPersistenceLayer, self), key)
+            return getattr(super(SimplePersistenceLayer, self), key)
 
     def __setattr__(self, key, value):
         if 'master_manager' in self.__dict__ and hasattr(self.master_manager, key):
             setattr(self.master_manager, key, value)
         else:
-            super(ViewPersistenceLayer, self).__setattr__(key, value)
+            super(SimplePersistenceLayer, self).__setattr__(key, value)
+
+    def has_dirty_values(self):
+        # Never has dirty values
+        return False
 
     def get_dirty_values_async_result(self):
         from gevent.event import AsyncResult
@@ -60,7 +64,7 @@ class ViewPersistenceLayer(object):
 
     def flush(self):
         if self.mode == 'r':
-            log.warn('ViewPersistenceLayer not open for writing: mode=%s', self.mode)
+            log.warn('SimplePersistenceLayer not open for writing: mode=%s', self.mode)
             return
 
         log.debug('Flushing MasterManager...')
@@ -72,6 +76,18 @@ class ViewPersistenceLayer(object):
                 self.flush()
 
         self._closed = True
+
+    def expand_domain(self, *args, **kwargs):
+        # No Op - storage expanded by *Value classes
+        pass
+
+    def init_parameter(self, parameter_context, *args, **kwargs):
+        return InMemoryStorage(dtype=parameter_context.param_type.value_encoding, fill_value=parameter_context.param_type.fill_value)
+
+    def update_domain(self, tdom=None, sdom=None, do_flush=True):
+        # No Op
+        pass
+
 
 class PersistenceLayer(object):
     """
