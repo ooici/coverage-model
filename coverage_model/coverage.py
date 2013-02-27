@@ -1022,12 +1022,13 @@ class SimplexCoverage(AbstractCoverage):
                 from coverage_model.persistence import PersistedStorage
                 for parameter_name in self._persistence_layer.parameter_metadata.keys():
                     md = self._persistence_layer.parameter_metadata[parameter_name]
+                    mm = self._persistence_layer.master_manager
                     pc = md.parameter_context
                     if hasattr(pc, '_pval_callback'):
                         pc._pval_callback = self.get_parameter_values
                         pc._pctxt_callback = self.get_parameter_context
                     self._range_dictionary.add_context(pc)
-                    s = PersistedStorage(md, self._persistence_layer.brick_dispatcher, dtype=pc.param_type.storage_encoding, fill_value=pc.param_type.fill_value, mode=self.mode, inline_data_writes=inline_data_writes, auto_flush=auto_flush_values)
+                    s = PersistedStorage(md, mm, self._persistence_layer.brick_dispatcher, dtype=pc.param_type.storage_encoding, fill_value=pc.param_type.fill_value, mode=self.mode, inline_data_writes=inline_data_writes, auto_flush=auto_flush_values)
                     self._range_value[parameter_name] = get_value_class(param_type=pc.param_type, domain_set=pc.dom, storage=s)
                     if parameter_name in self._persistence_layer.parameter_bounds:
                         bmin, bmax = self._persistence_layer.parameter_bounds[parameter_name]
