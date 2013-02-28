@@ -218,7 +218,7 @@ class PersistenceLayer(object):
 
         self.global_bricking_scheme = bricking_scheme
 
-        pm = ParameterManager(os.path.join(self.root_dir, self.guid, parameter_name), parameter_name)
+        pm = ParameterManager(os.path.join(self.root_dir, self.guid, parameter_name), parameter_name, read_only=False)
         self.parameter_metadata[parameter_name] = pm
 
         pm.parameter_context = parameter_context
@@ -259,6 +259,10 @@ class PersistenceLayer(object):
         # CBM TODO: Consider making this optional and bulk-flushing from the coverage after all parameters have been initialized
         # No need to check if they're dirty, we know they are!
         pm.flush()
+
+        # Put the pm into read_only mode
+        pm.read_only = True
+
         self.master_manager.flush()
 
         return v

@@ -175,15 +175,20 @@ class MasterManager(BaseManager):
 
 class ParameterManager(BaseManager):
 
-    def __init__(self, root_dir, parameter_name, **kwargs):
+    def __init__(self, root_dir, parameter_name, read_only=True, **kwargs):
         BaseManager.__init__(self, root_dir=root_dir, file_name='{0}.hdf5'.format(parameter_name), **kwargs)
         self.parameter_name = parameter_name
+        self.read_only = read_only
 
         # Add attributes that should NEVER be flushed
         self._ignore.update(['brick_tree', 'file_path', 'root_dir'])
 
     def thin_origins(self, origins):
         pass
+
+    def flush(self):
+        if not self.read_only:
+            super(ParameterManager, self).flush()
 
     # def update_rtree(self, count, extents, obj):
     #     log.warn('PM [{1}] count: {0}'.format(count, self.parameter_name))
