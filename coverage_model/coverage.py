@@ -167,8 +167,8 @@ class AbstractCoverage(AbstractIdentifiable):
         for n in self._range_dictionary:
             pc = self._range_dictionary.get_context(n)
             # Update the dom of the parameter_context
-            if pc.dom.tdom is not None:
-                pc.dom.tdom = self.temporal_domain.shape.extents
+            # if pc.dom.tdom is not None:
+            #     pc.dom.tdom = self.temporal_domain.shape.extents
 
             self._persistence_layer.expand_domain(pc)
             self._range_value[n].expand_content(VariabilityEnum.TEMPORAL, origin, count)
@@ -180,6 +180,50 @@ class AbstractCoverage(AbstractIdentifiable):
             spawn(self._persistence_layer.flush)
         else:
             self._persistence_layer.flush()
+
+    def _assign_domain(self, pcontext):
+        no_sdom = self.spatial_domain is None
+
+        ## Determine the correct array shape
+
+        # Get the parameter variability; assign to VariabilityEnum.NONE if None
+        pv = pcontext.variability or VariabilityEnum.NONE
+        if no_sdom and pv in (VariabilityEnum.SPATIAL, VariabilityEnum.BOTH):
+            log.warn('ParameterContext \'{0}\' indicates Spatial variability, but coverage has no Spatial Domain'.format(pcontext.name))
+
+        if pv == VariabilityEnum.TEMPORAL: # Only varies in the Temporal Domain
+            pcontext.dom = DomainSet(self.temporal_domain, None)
+        elif pv == VariabilityEnum.SPATIAL: # Only varies in the Spatial Domain
+            pcontext.dom = DomainSet(None, self.spatial_domain)
+        elif pv == VariabilityEnum.BOTH: # Varies in both domains
+            # If the Spatial Domain is only a single point on a 0d Topology, the parameter's shape is that of the Temporal Domain only
+            if no_sdom or (len(self.spatial_domain.shape.extents) == 1 and self.spatial_domain.shape.extents[0] == 0):
+                pcontext.dom = DomainSet(self.temporal_domain, None)
+            else:
+                pcontext.dom = DomainSet(self.temporal_domain, self.spatial_domain)
+        elif pv == VariabilityEnum.NONE: # No variance; constant
+        # CBM TODO: Not sure we can have this constraint - precludes situations like a TextType with Variablity==None...
+        #            # This is a constant - if the ParameterContext is not a ConstantType, make it one with the default 'x' expr
+        #            if not isinstance(pcontext.param_type, ConstantType):
+        #                pcontext.param_type = ConstantType(pcontext.param_type)
+
+            # The domain is the total domain - same value everywhere!!
+            # If the Spatial Domain is only a single point on a 0d Topology, the parameter's shape is that of the Temporal Domain only
+            if no_sdom or (len(self.spatial_domain.shape.extents) == 1 and self.spatial_domain.shape.extents[0] == 0):
+                pcontext.dom = DomainSet(self.temporal_domain, None)
+            else:
+                pcontext.dom = DomainSet(self.temporal_domain, self.spatial_domain)
+        else:
+            # Should never get here...but...
+            raise SystemError('Must define the variability of the ParameterContext: a member of VariabilityEnum')
+
+        # Assign the pname to the CRS (if applicable) and select the appropriate domain (default is the spatial_domain)
+        dom = self.spatial_domain
+        if not pcontext.axis is None and AxisTypeEnum.is_member(pcontext.axis, AxisTypeEnum.TIME):
+            dom = self.temporal_domain
+            dom.crs.axes[pcontext.axis] = pcontext.name
+        elif not no_sdom and (pcontext.axis in self.spatial_domain.crs.axes):
+            dom.crs.axes[pcontext.axis] = pcontext.name
 
     def append_parameter(self, parameter_context):
         """
@@ -202,56 +246,13 @@ class AbstractCoverage(AbstractIdentifiable):
         if not isinstance(parameter_context, ParameterContext):
             raise TypeError('\'parameter_context\' must be an instance of ParameterContext')
 
-        if parameter_context.name in self._range_dictionary:
-            log.warn('Coverage already contains a parameter with the name \'{0}\'; ignoring'.format(parameter_context.name))
-
         # Create a deep copy of the ParameterContext
         pcontext = deepcopy(parameter_context)
 
         pname = pcontext.name
 
-        no_sdom = self.spatial_domain is None
-
-        ## Determine the correct array shape
-
-        # Get the parameter variability; assign to VariabilityEnum.NONE if None
-        pv = pcontext.variability or VariabilityEnum.NONE
-        if no_sdom and pv in (VariabilityEnum.SPATIAL, VariabilityEnum.BOTH):
-            log.warn('ParameterContext \'{0}\' indicates Spatial variability, but coverage has no Spatial Domain'.format(pcontext.name))
-
-        if pv == VariabilityEnum.TEMPORAL: # Only varies in the Temporal Domain
-            pcontext.dom = DomainSet(self.temporal_domain.shape.extents, None)
-        elif pv == VariabilityEnum.SPATIAL: # Only varies in the Spatial Domain
-            pcontext.dom = DomainSet(None, self.spatial_domain.shape.extents)
-        elif pv == VariabilityEnum.BOTH: # Varies in both domains
-            # If the Spatial Domain is only a single point on a 0d Topology, the parameter's shape is that of the Temporal Domain only
-            if no_sdom or (len(self.spatial_domain.shape.extents) == 1 and self.spatial_domain.shape.extents[0] == 0):
-                pcontext.dom = DomainSet(self.temporal_domain.shape.extents, None)
-            else:
-                pcontext.dom = DomainSet(self.temporal_domain.shape.extents, self.spatial_domain.shape.extents)
-        elif pv == VariabilityEnum.NONE: # No variance; constant
-        # CBM TODO: Not sure we can have this constraint - precludes situations like a TextType with Variablity==None...
-        #            # This is a constant - if the ParameterContext is not a ConstantType, make it one with the default 'x' expr
-        #            if not isinstance(pcontext.param_type, ConstantType):
-        #                pcontext.param_type = ConstantType(pcontext.param_type)
-
-            # The domain is the total domain - same value everywhere!!
-            # If the Spatial Domain is only a single point on a 0d Topology, the parameter's shape is that of the Temporal Domain only
-            if no_sdom or (len(self.spatial_domain.shape.extents) == 1 and self.spatial_domain.shape.extents[0] == 0):
-                pcontext.dom = DomainSet(self.temporal_domain.shape.extents, None)
-            else:
-                pcontext.dom = DomainSet(self.temporal_domain.shape.extents, self.spatial_domain.shape.extents)
-        else:
-            # Should never get here...but...
-            raise SystemError('Must define the variability of the ParameterContext: a member of VariabilityEnum')
-
-        # Assign the pname to the CRS (if applicable) and select the appropriate domain (default is the spatial_domain)
-        dom = self.spatial_domain
-        if not pcontext.axis is None and AxisTypeEnum.is_member(pcontext.axis, AxisTypeEnum.TIME):
-            dom = self.temporal_domain
-            dom.crs.axes[pcontext.axis] = pcontext.name
-        elif not no_sdom and (pcontext.axis in self.spatial_domain.crs.axes):
-            dom.crs.axes[pcontext.axis] = pcontext.name
+        # Assign the coverage's domain object(s)
+        self._assign_domain(pcontext)
 
         # If this is a ParameterFunctionType parameter, provide a callback to the coverage's _range_value
         if hasattr(pcontext, '_pval_callback'):
@@ -1020,10 +1021,15 @@ class SimplexCoverage(AbstractCoverage):
                 self.value_caching = self._persistence_layer.value_caching
 
                 from coverage_model.persistence import PersistedStorage
-                for parameter_name in self._persistence_layer.parameter_metadata.keys():
+                for parameter_name in self._persistence_layer.parameter_metadata:
                     md = self._persistence_layer.parameter_metadata[parameter_name]
                     mm = self._persistence_layer.master_manager
                     pc = md.parameter_context
+
+                    # Assign the coverage's domain object(s)
+                    self._assign_domain(pc)
+
+                    # Get the callbacks for ParameterFunctionType parameters
                     if hasattr(pc, '_pval_callback'):
                         pc._pval_callback = self.get_parameter_values
                         pc._pctxt_callback = self.get_parameter_context
@@ -1287,18 +1293,18 @@ class TopologicalDomain(AbstractDomain):
 class DomainSet(AbstractIdentifiable):
 
     def __init__(self, tdom=None, sdom=None, **kwargs):
-        kwc=kwargs.copy()
+        kwc = kwargs.copy()
         AbstractIdentifiable.__init__(self, **kwc)
         self.tdom = tdom
         self.sdom = sdom
 
     @property
     def total_extents(self):
-        ret=[]
-        if self.tdom:
-            ret += self.tdom
-        if self.sdom:
-            ret += self.sdom
+        ret = []
+        if self.tdom is not None:
+            ret += self.tdom.shape.extents
+        if self.sdom is not None:
+            ret += self.sdom.shape.extents
 
         return tuple(ret)
 
