@@ -134,7 +134,7 @@ class MasterManager(BaseManager):
 
         log.warn('self.file_path: {0}'.format(self.file_path))
         with h5py.File(self.file_path, 'a') as f:
-            rtree_ds = f.require_dataset('rtree', shape=(1,), dtype=h5py.special_dtype(vlen=str), maxshape=(None,))
+            rtree_ds = f.require_dataset('rtree', shape=(count,), dtype=h5py.special_dtype(vlen=str), maxshape=(None,))
             rtree_ds.resize((count+1,))
             rtree_ds[count] = pack((extents, obj))
 
@@ -185,35 +185,35 @@ class ParameterManager(BaseManager):
     def thin_origins(self, origins):
         pass
 
-    def update_rtree(self, count, extents, obj):
-        log.warn('PM [{1}] count: {0}'.format(count, self.parameter_name))
-        if not hasattr(self, 'brick_tree'):
-            raise AttributeError('Cannot update rtree; object does not have a \'brick_tree\' attribute!!')
-
-        with h5py.File(self.file_path, 'a') as f:
-            rtree_ds = f.require_dataset('rtree', shape=(count,), dtype=h5py.special_dtype(vlen=str), maxshape=(None,))
-            rtree_ds.resize((count+1,))
-            rtree_ds[count] = pack((extents, obj))
-
-            self.brick_tree.insert(count, extents, obj=obj)
+    # def update_rtree(self, count, extents, obj):
+    #     log.warn('PM [{1}] count: {0}'.format(count, self.parameter_name))
+    #     if not hasattr(self, 'brick_tree'):
+    #         raise AttributeError('Cannot update rtree; object does not have a \'brick_tree\' attribute!!')
+    #
+    #     with h5py.File(self.file_path, 'a') as f:
+    #         rtree_ds = f.require_dataset('rtree', shape=(count,), dtype=h5py.special_dtype(vlen=str), maxshape=(None,))
+    #         rtree_ds.resize((count+1,))
+    #         rtree_ds[count] = pack((extents, obj))
+    #
+    #         self.brick_tree.insert(count, extents, obj=obj)
 
     def _load(self):
         with h5py.File(self.file_path, 'r') as f:
             self._base_load(f)
 
-            # Don't forget brick_tree!
-            p = rtree.index.Property()
-            p.dimension = self.tree_rank
-
-            if 'rtree' in f.keys():
-                # Populate brick tree from the 'rtree' dataset
-                ds = f['/rtree']
-
-                def tree_loader(darr):
-                    for i, x in enumerate(darr):
-                        ext, obj = unpack(x)
-                        yield (i, ext, obj)
-
-                setattr(self, 'brick_tree', rtree.index.Index(tree_loader(ds[:]), properties=p))
-            else:
-                setattr(self, 'brick_tree', rtree.index.Index(properties=p))
+            # # Don't forget brick_tree!
+            # p = rtree.index.Property()
+            # p.dimension = self.tree_rank
+            #
+            # if 'rtree' in f.keys():
+            #     # Populate brick tree from the 'rtree' dataset
+            #     ds = f['/rtree']
+            #
+            #     def tree_loader(darr):
+            #         for i, x in enumerate(darr):
+            #             ext, obj = unpack(x)
+            #             yield (i, ext, obj)
+            #
+            #     setattr(self, 'brick_tree', rtree.index.Index(tree_loader(ds[:]), properties=p))
+            # else:
+            #     setattr(self, 'brick_tree', rtree.index.Index(properties=p))

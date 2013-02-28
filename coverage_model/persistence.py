@@ -241,15 +241,15 @@ class PersistenceLayer(object):
 
         brick_tree = rtree.index.Index(properties=p)
 
-        pm.brick_list = {}
+        self.master_manager.brick_list = {}
         if isinstance(parameter_context.param_type, (FunctionType, ConstantType)):
             # These have constant storage, never expand!!
-                pm.brick_domains = [(1,),(1,),(1,),bricking_scheme]
+                self.master_manager.brick_domains = [(1,),(1,),(1,),bricking_scheme]
         else:
-            pm.brick_domains = [tD, bD, cD, bricking_scheme]
+            self.master_manager.brick_domains = [tD, bD, cD, bricking_scheme]
 
-        pm.tree_rank = tree_rank
-        pm.brick_tree = brick_tree
+        self.master_manager.tree_rank = tree_rank
+        self.master_manager.brick_tree = brick_tree
 
         v = PersistedStorage(pm, self.master_manager, self.brick_dispatcher, dtype=parameter_context.param_type.storage_encoding, fill_value=parameter_context.param_type.fill_value, mode=self.mode, inline_data_writes=self.inline_data_writes, auto_flush=self.auto_flush_values)
         self.value_list[parameter_name] = v
@@ -326,12 +326,12 @@ class PersistenceLayer(object):
     #
     #     return do_write, brick_guid
 
-    def _brick_exists_master(self, brick_extents):
+    def _brick_exists_master(self, brick_extents, parameter_name):
         do_write = True
         brick_guid = ''
         for x,v in self.master_manager.brick_list.iteritems():
-            if brick_extents == v[0]:
-                log.debug('Brick found with matching extents: guid=%s', x)
+            if (brick_extents == v[0]) and (parameter_name == v[4]):
+                log.debug('Brick found for \"parameter\" %s with matching extents: guid=%s', v[4], x)
                 do_write = False
                 brick_guid = x
                 break
@@ -352,7 +352,7 @@ class PersistenceLayer(object):
         @param parameter_name   Parameter name as string
         @return N/A
         """
-        log.warn('rtree_extents={0}, brick_extents={1}, brick_active_size={2}, origin={3}, bD={4}, parameter_name={5}'.format(rtree_extents, brick_extents, brick_active_size, origin, bD, parameter_name))
+        log.error('rtree_extents={0}, brick_extents={1}, brick_active_size={2}, origin={3}, bD={4}, parameter_name={5}'.format(rtree_extents, brick_extents, brick_active_size, origin, bD, parameter_name))
         pm = self.parameter_metadata[parameter_name]
 
         log.debug('Writing virtual brick for parameter %s', parameter_name)
@@ -372,11 +372,10 @@ class PersistenceLayer(object):
         self.master_manager.add_external_link(link_path, brick_rel_path, brick_guid)
 
         # Update the brick listing
-        log.debug('Updating brick list[%s] with (%s, %s)', parameter_name, brick_guid, brick_extents)
+        log.error('Updating brick list[%s] with (%s, %s)', parameter_name, brick_guid, brick_extents)
         brick_count = self.parameter_brick_count(parameter_name)
-        # pm.brick_list[brick_guid] = [brick_extents, origin, tuple(bD), brick_active_size]
-        self.master_manager.brick_list[brick_guid] = [brick_extents, origin, tuple(bD), brick_active_size]
-        log.debug('Brick count for %s is %s', parameter_name, brick_count)
+        self.master_manager.brick_list[brick_guid] = [brick_extents, origin, tuple(bD), brick_active_size, parameter_name]
+        log.error('Brick count for %s is %s', parameter_name, brick_count)
 
         # Insert into Rtree
         log.debug('Inserting into Rtree %s:%s:%s', brick_count, rtree_extents, brick_guid)
@@ -402,19 +401,17 @@ class PersistenceLayer(object):
         log.debug('Expand %s', parameter_name)
         pm = self.parameter_metadata[parameter_name]
 
-        log.warn('INPUT pm.brick_domains: {0}'.format(pm.brick_domains))
-
-        if pm.brick_domains[0] is not None:
+        if self.master_manager.brick_domains[0] is not None:
             log.debug('Expanding domain (n-dimension)')
 
             # Check if the number of dimensions of the total domain has changed
             # TODO: Will this ever happen???  If so, how to handle?
-            if len(parameter_context.dom.total_extents) != len(pm.brick_domains[0]):
+            if len(parameter_context.dom.total_extents) != len(self.master_manager.brick_domains[0]):
                 raise SystemError('Number of dimensions for parameter cannot change, only expand in size! No action performed.')
             else:
-                tD = pm.brick_domains[0]
-                bD = pm.brick_domains[1]
-                cD = pm.brick_domains[2]
+                tD = self.master_manager.brick_domains[0]
+                bD = self.master_manager.brick_domains[1]
+                cD = self.master_manager.brick_domains[2]
                 if not isinstance(pm.parameter_context.param_type, (FunctionType, ConstantType)): # These have constant storage, never expand!!
                     new_domain = parameter_context.dom.total_extents
 
@@ -422,14 +419,12 @@ class PersistenceLayer(object):
                     log.debug('delta domain: %s', delta_domain)
 
                     tD = [(x + y) for x, y in zip(tD, delta_domain)]
-                    pm.brick_domains[0] = tD
+                    self.master_manager.brick_domains[0] = tD
         else:
             tD = parameter_context.dom.total_extents
-            bricking_scheme = pm.brick_domains[3]
+            bricking_scheme = self.master_manager.brick_domains[3]
             bD,cD = self.calculate_brick_size(tD, bricking_scheme)
-            pm.brick_domains = [tD, bD, cD, bricking_scheme]
-
-        log.warn('OUTPUT pm.brick_domains: {0}'.format(pm.brick_domains))
+            self.master_manager.brick_domains = [tD, bD, cD, bricking_scheme]
 
         try:
             # Gather block list
@@ -439,7 +434,7 @@ class PersistenceLayer(object):
             # Gather brick origins
             need_origins = set(itertools.product(*lst))
             log.trace('need_origins: %s', need_origins)
-            have_origins = set([v[1] for k,v in pm.brick_list.iteritems() if v[2] == v[3]])
+            have_origins = set([v[1] for k,v in self.master_manager.brick_list.iteritems() if (v[2] == v[3]) & (v[4] == parameter_name)])
             log.trace('have_origins: %s', have_origins)
             need_origins.difference_update(have_origins)
             log.trace('need_origins: %s', need_origins)
@@ -457,10 +452,10 @@ class PersistenceLayer(object):
                 for origin in need_origins:
                     rtree_extents, brick_extents, brick_active_size = self.calculate_extents(origin, bD, parameter_name)
 
-                    do_write, bguid = self._brick_exists_master(brick_extents)
+                    do_write, bguid = self._brick_exists_master(brick_extents, parameter_name)
                     if not do_write:
                         log.debug('Brick already exists!  Updating brick metadata...')
-                        pm.brick_list[bguid] = [brick_extents, origin, tuple(bD), brick_active_size]
+                        self.master_manager.brick_list[bguid] = [brick_extents, origin, tuple(bD), brick_active_size, parameter_name]
                     else:
                         self._write_brick(rtree_extents, brick_extents, brick_active_size, origin, bD, parameter_name)
 
@@ -470,11 +465,11 @@ class PersistenceLayer(object):
             raise
 
         ## .flush() is called by insert_timesteps - no need to call these here
-
+        self.master_manager.flush()
         if do_flush:
         # Flush the parameter_metadata
             pm.flush()
-            # If necessary (i.e. write_brick has been called), flush the master_manager
+            # If necessary (i.e. write_brick has been called), flush the master_manager461
             if self.master_manager.is_dirty():
                 self.master_manager.flush()
 
@@ -487,11 +482,13 @@ class PersistenceLayer(object):
         @return The number of virtual bricks
         """
         ret = 0
-        if parameter_name in self.parameter_metadata:
-            ret = len(self.parameter_metadata[parameter_name].brick_list)
-        else:
-            log.debug('No bricks found for parameter: %s', parameter_name)
-
+        # if parameter_name in self.parameter_metadata:
+        #     ret = len(self.parameter_metadata[parameter_name].brick_list)
+        # else:
+        #     log.debug('No bricks found for parameter: %s', parameter_name)
+        # TODO: To do this we need to track which parameters have had bricks created in the master file
+        # ret = len(self.master_manager.brick_list)
+        ret = len([x for x,v in self.master_manager.brick_list.iteritems() if v[4] == parameter_name])
         return ret
 
     def has_dirty_values(self):
@@ -600,7 +597,7 @@ class PersistedStorage(AbstractStorage):
         # Rtree of bricks for parameter
         # self.brick_tree = parameter_manager.brick_tree
         self.brick_tree = mm.brick_tree
-
+        log.error('[init] brick_tree.bounds: {0}'.format(self.brick_tree.bounds))
         # Filesystem path to HDF brick file(s)
         self.brick_path = parameter_manager.root_dir
 
@@ -608,7 +605,7 @@ class PersistedStorage(AbstractStorage):
         # self.brick_list = parameter_manager.brick_list
         self.brick_list = mm.brick_list
 
-        self.brick_domains = parameter_manager.brick_domains
+        self.brick_domains = mm.brick_domains
 
         self._pending_values = {}
         self.brick_dispatcher = brick_dispatcher
@@ -656,12 +653,12 @@ class PersistedStorage(AbstractStorage):
         if rank == 1:
             rank += 1
             sl += (0,)
-
+        log.warn('rank: {0}'.format(rank))
         if self.brick_tree.properties.dimension != rank:
             raise ValueError('slice_ is of incorrect rank: is {0}, must be {1}'.format(rank, self.brick_tree.properties.dimension))
 
         bnds = self.brick_tree.bounds
-
+        log.warn('bounds: {0}'.format(bnds))
         # Perform the calculations for the slice_ start and stop bounds in Rtree format
         # CBM TODO: INACCURATE BRICK SELECTION --> THIS IS NOT LIKELY TO WORK FOR ANY RANK > 1!!!
         start = []
@@ -679,7 +676,7 @@ class PersistedStorage(AbstractStorage):
             elif isinstance(sx, int):
                 start.append(sx)
                 end.append(sx)
-
+        log.warn('rank, bnds, start, end: {0}, {1}, {2}, {3}'.format(rank, bnds, start, end))
         hits = list(self.brick_tree.intersection(tuple(start+end), objects=True))
         ret = [(h.id,h.object) for h in hits]
         ret.sort()
@@ -828,7 +825,7 @@ class PersistedStorage(AbstractStorage):
                     f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=None, fillvalue=fv)
                     if isinstance(brick_slice, tuple):
                         brick_slice = list(brick_slice)
-
+                    log.warn('brick_slice: {0}'.format(brick_slice))
                     f[brick_guid].__setitem__(*brick_slice, val=v)
             else:
                 # If the brick file doesn't exist, 'touch' it to make sure it's immediately available
@@ -860,7 +857,7 @@ class PersistedStorage(AbstractStorage):
         @return brick_slice, value_slice, brick_origin_offset
         """
 
-        brick_origin, _, brick_size = self.brick_list[brick_guid][1:]
+        brick_origin, _, brick_size = self.brick_list[brick_guid][1:4]
         log.debug('Brick %s:  origin=%s, size=%s', brick_guid, brick_origin, brick_size)
         log.debug('Slice set: %s', slice_)
 
