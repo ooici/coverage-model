@@ -44,6 +44,7 @@ setup(  name = 'coverage-model',
         'pydot==1.0.28',
         'networkx==1.7',
         'pyparsing==1.5.6',
+        'msgpack-python==0.1.13',
 #        'scipy==0.10.1',
     ],
 )
