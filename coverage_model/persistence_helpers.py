@@ -146,6 +146,9 @@ class MasterManager(BaseManager):
 
             self.param_groups = set()
             f.visit(self.param_groups.add)
+            log.warn('self.param_groups: %s', self.param_groups)
+            # TODO: Use valid parameter list to compare against inspected param_groups and discard all that are invalid
+            self.param_groups.discard('rtree')
 
             # Don't forget brick_tree!
             p = rtree.index.Property()

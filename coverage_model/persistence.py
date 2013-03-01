@@ -251,10 +251,12 @@ class PersistenceLayer(object):
         self.master_manager.tree_rank = tree_rank
         self.master_manager.brick_tree = brick_tree
 
-        v = PersistedStorage(pm, self.master_manager, self.brick_dispatcher, dtype=parameter_context.param_type.storage_encoding, fill_value=parameter_context.param_type.fill_value, mode=self.mode, inline_data_writes=self.inline_data_writes, auto_flush=self.auto_flush_values)
+        mm = self.master_manager
+
+        v = PersistedStorage(pm, mm, self.brick_dispatcher, dtype=parameter_context.param_type.storage_encoding, fill_value=parameter_context.param_type.fill_value, mode=self.mode, inline_data_writes=self.inline_data_writes, auto_flush=self.auto_flush_values)
         self.value_list[parameter_name] = v
 
-        self.expand_domain(parameter_context)
+        # self.expand_domain(parameter_context)
 
         # CBM TODO: Consider making this optional and bulk-flushing from the coverage after all parameters have been initialized
         # No need to check if they're dirty, we know they are!
@@ -359,7 +361,7 @@ class PersistenceLayer(object):
         log.error('rtree_extents={0}, brick_extents={1}, brick_active_size={2}, origin={3}, bD={4}, parameter_name={5}'.format(rtree_extents, brick_extents, brick_active_size, origin, bD, parameter_name))
         pm = self.parameter_metadata[parameter_name]
 
-        log.debug('Writing virtual brick for parameter %s', parameter_name)
+        log.error('Writing virtual brick for parameter %s', parameter_name)
 
         # Set HDF5 file and group
         # Create a GUID for the brick
@@ -377,12 +379,12 @@ class PersistenceLayer(object):
 
         # Update the brick listing
         log.error('Updating brick list[%s] with (%s, %s)', parameter_name, brick_guid, brick_extents)
-        brick_count = self.parameter_brick_count(parameter_name)
+        brick_count = self.parameter_brick_count()
         self.master_manager.brick_list[brick_guid] = [brick_extents, origin, tuple(bD), brick_active_size, parameter_name]
-        log.error('Brick count for %s is %s', parameter_name, brick_count)
+        log.warn('Brick count for %s is %s', parameter_name, brick_count)
 
         # Insert into Rtree
-        log.debug('Inserting into Rtree %s:%s:%s', brick_count, rtree_extents, brick_guid)
+        log.warn('Inserting into Rtree %s:%s:%s', brick_count, rtree_extents, brick_guid)
         # pm.update_rtree(brick_count, rtree_extents, obj=brick_guid)
         self.master_manager.update_rtree(brick_count, rtree_extents, obj=brick_guid)
 
@@ -472,13 +474,13 @@ class PersistenceLayer(object):
         self.master_manager.flush()
         if do_flush:
         # Flush the parameter_metadata
-            pm.flush()
+            #pm.flush()
             # If necessary (i.e. write_brick has been called), flush the master_manager461
             if self.master_manager.is_dirty():
                 self.master_manager.flush()
 
     # Returns a count of bricks for a parameter
-    def parameter_brick_count(self, parameter_name):
+    def parameter_brick_count(self):
         """
         Counts and returns the number of bricks in a given parameter's brick list
 
@@ -491,8 +493,8 @@ class PersistenceLayer(object):
         # else:
         #     log.debug('No bricks found for parameter: %s', parameter_name)
         # TODO: To do this we need to track which parameters have had bricks created in the master file
-        # ret = len(self.master_manager.brick_list)
-        ret = len([x for x,v in self.master_manager.brick_list.iteritems() if v[4] == parameter_name])
+        ret = len(self.master_manager.brick_list)
+        # ret = len([x for x,v in self.master_manager.brick_list.iteritems()])
         return ret
 
     def has_dirty_values(self):
@@ -601,7 +603,7 @@ class PersistedStorage(AbstractStorage):
         # Rtree of bricks for parameter
         # self.brick_tree = parameter_manager.brick_tree
         self.brick_tree = mm.brick_tree
-        log.error('[init] brick_tree.bounds: {0}'.format(self.brick_tree.bounds))
+        log.warn('[init] brick_tree.bounds: {0}'.format(self.brick_tree.bounds))
         # Filesystem path to HDF brick file(s)
         self.brick_path = parameter_manager.root_dir
 
@@ -681,6 +683,7 @@ class PersistedStorage(AbstractStorage):
                 start.append(sx)
                 end.append(sx)
         log.warn('rank, bnds, start, end: {0}, {1}, {2}, {3}'.format(rank, bnds, start, end))
+        log.warn('brick_tree.bounds: %s', self.brick_tree.bounds)
         hits = list(self.brick_tree.intersection(tuple(start+end), objects=True))
         ret = [(h.id,h.object) for h in hits]
         ret.sort()

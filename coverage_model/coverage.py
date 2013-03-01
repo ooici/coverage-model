@@ -169,8 +169,8 @@ class AbstractCoverage(AbstractIdentifiable):
             # Update the dom of the parameter_context
             # if pc.dom.tdom is not None:
             #     pc.dom.tdom = self.temporal_domain.shape.extents
-
-            self._persistence_layer.expand_domain(pc)
+            if pc.name == 'time':
+                self._persistence_layer.expand_domain(pc)
             self._range_value[n].expand_content(VariabilityEnum.TEMPORAL, origin, count)
 
         # Update the temporal_domain in the master_manager, do NOT flush!!
