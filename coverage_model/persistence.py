@@ -922,6 +922,8 @@ class PersistedStorage(AbstractStorage):
 
 class InMemoryPersistenceLayer(object):
 
+    parameter_bounds = {}
+
     def expand_domain(self, *args, **kwargs):
         # No Op - storage expanded by *Value classes
         pass
@@ -932,6 +934,14 @@ class InMemoryPersistenceLayer(object):
     def has_dirty_values(self):
         # Never has dirty values
         return False
+
+    def update_parameter_bounds(self, parameter_name, bounds):
+        dmin, dmax = bounds
+        if parameter_name in self.parameter_bounds:
+            pmin, pmax = self.parameter_bounds[parameter_name]
+            dmin = min(dmin, pmin)
+            dmax = max(dmax, pmax)
+        self.parameter_bounds[parameter_name] = (dmin, dmax)
 
     def get_dirty_values_async_result(self):
         from gevent.event import AsyncResult
