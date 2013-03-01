@@ -596,6 +596,7 @@ class SimplexCoverage(AbstractCoverage):
         log.debug('Setting slice: %s', slice_)
 
         self._range_value[param_name][slice_] = value
+        self._update_parameter_bounds(param_name, value)
 
     def get_parameter_values(self, param_name, tdoa=None, sdoa=None, return_value=None):
         """
@@ -719,6 +720,10 @@ class SimplexCoverage(AbstractCoverage):
 
         return params
 
+    def _update_parameter_bounds(self, parameter_name, values):
+        bnds = self._calc_data_bounds(parameter_name, {parameter_name: np.atleast_1d(values)})
+        self._persistence_layer.update_parameter_bounds(parameter_name, bnds)
+
     def get_data_bounds(self, parameter_name=None):
         """
         Returns the bounds (min, max) for the parameter(s) indicated by <i>parameter_name</i>
@@ -730,27 +735,45 @@ class SimplexCoverage(AbstractCoverage):
 
         @param parameter_name   A string parameter name; may be an iterable of such members
         """
+
         if self.num_timesteps == 0:
             raise ValueError('The coverage has no data!')
 
-        from coverage_model import QuantityType, ConstantType
         ret = {}
         for pn in self.__parameter_name_arg_to_params(parameter_name):
-            if pn == self.temporal_parameter_name: # Make assumption that temporal is monotonically increasing!!
-                ret[pn] = (self._range_value[pn][0], self._range_value[pn][-1])
+            if pn in self._persistence_layer.parameter_bounds:
+                ret[pn] = self._persistence_layer.parameter_bounds[pn]
             else:
-                ctxt = self._range_dictionary.get_context(pn)
-                fv = ctxt.fill_value
-                if isinstance(ctxt.param_type, QuantityType) or isinstance(ctxt.param_type, ConstantType):
-                    varr = np.ma.masked_equal(self._range_value[pn][:], fv, copy=False)
-                    r = (varr.min(), varr.max())
-                    ret[pn] = tuple([fv if isinstance(x, np.ma.core.MaskedConstant) else x for x in r])
-                else:
-                    # CBM TODO: Sort out if this is an appropriate way to deal with non-numeric types
-                    ret[pn] = (fv, fv)
+                ret[pn] = self._calc_data_bounds(pn, {pn: self._range_value})
 
         if len(ret) == 1:
             ret = ret.values()[0]
+
+        return ret
+
+    def _calc_data_bounds(self, parameter_name=None, values_dict=None):
+        """
+        Returns the bounds (min, max) for the parameter indicated by <i>parameter_name</i>
+
+        @param parameter_name   A string parameter name; may be an iterable of such members
+        @param values_dict  A dict of the form values_dict[param_name] = values; values should be >= 1d
+        """
+        if values_dict is None:
+            raise ValueError('\'values_dict\' cannot be None!')
+
+        from coverage_model import QuantityType, ConstantType
+        if parameter_name == self.temporal_parameter_name: # Make assumption that temporal is monotonically increasing!!
+            ret = (values_dict[parameter_name][0], values_dict[parameter_name][-1])
+        else:
+            ctxt = self._range_dictionary.get_context(parameter_name)
+            fv = ctxt.fill_value
+            if isinstance(ctxt.param_type, QuantityType) or isinstance(ctxt.param_type, ConstantType):
+                varr = np.ma.masked_equal(values_dict[parameter_name][:], fv, copy=False)
+                r = (varr.min(), varr.max())
+                ret = tuple([fv if isinstance(x, np.ma.core.MaskedConstant) else x for x in r])
+            else:
+                # CBM TODO: Sort out if this is an appropriate way to deal with non-numeric types
+                ret = (fv, fv)
 
         return ret
 
