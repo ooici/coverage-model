@@ -120,6 +120,8 @@ class MasterManager(BaseManager):
     def __init__(self, root_dir, guid, **kwargs):
         BaseManager.__init__(self, root_dir=os.path.join(root_dir,guid), file_name='{0}_master.hdf5'.format(guid), **kwargs)
         self.guid = guid
+        if self.parameter_bounds is None:
+            self.parameter_bounds = {}
 
         # Add attributes that should NEVER be flushed
         self._ignore.update(['param_groups', 'guid', 'file_path', 'root_dir'])
