@@ -275,6 +275,10 @@ class SimplexCoverage(AbstractCoverage):
                     self._range_dictionary.add_context(pc)
                     s = PersistedStorage(md, self._persistence_layer.brick_dispatcher, dtype=pc.param_type.storage_encoding, fill_value=pc.param_type.fill_value, mode=self.mode, inline_data_writes=inline_data_writes, auto_flush=auto_flush_values)
                     self._range_value[parameter_name] = get_value_class(param_type=pc.param_type, domain_set=pc.dom, storage=s)
+                    if parameter_name in self._persistence_layer.parameter_bounds:
+                        bmin, bmax = self._persistence_layer.parameter_bounds[parameter_name]
+                        self._range_value[parameter_name]._min = bmin
+                        self._range_value[parameter_name]._max = bmax
 
             if name is None or parameter_dictionary is None:
                 # This appears to be a load
@@ -596,6 +600,8 @@ class SimplexCoverage(AbstractCoverage):
         log.debug('Setting slice: %s', slice_)
 
         self._range_value[param_name][slice_] = value
+        # Update parameter bounds in the persistence layer
+        self._persistence_layer.update_parameter_bounds(param_name, self._range_value[param_name].bounds)
 
     def get_parameter_values(self, param_name, tdoa=None, sdoa=None, return_value=None):
         """
@@ -730,24 +736,13 @@ class SimplexCoverage(AbstractCoverage):
 
         @param parameter_name   A string parameter name; may be an iterable of such members
         """
+
         if self.num_timesteps == 0:
             raise ValueError('The coverage has no data!')
 
-        from coverage_model import QuantityType, ConstantType
         ret = {}
         for pn in self.__parameter_name_arg_to_params(parameter_name):
-            if pn == self.temporal_parameter_name: # Make assumption that temporal is monotonically increasing!!
-                ret[pn] = (self._range_value[pn][0], self._range_value[pn][-1])
-            else:
-                ctxt = self._range_dictionary.get_context(pn)
-                fv = ctxt.fill_value
-                if isinstance(ctxt.param_type, QuantityType) or isinstance(ctxt.param_type, ConstantType):
-                    varr = np.ma.masked_equal(self._range_value[pn][:], fv, copy=False)
-                    r = (varr.min(), varr.max())
-                    ret[pn] = tuple([fv if isinstance(x, np.ma.core.MaskedConstant) else x for x in r])
-                else:
-                    # CBM TODO: Sort out if this is an appropriate way to deal with non-numeric types
-                    ret[pn] = (fv, fv)
+            ret[pn] = self._range_value[pn].bounds
 
         if len(ret) == 1:
             ret = ret.values()[0]

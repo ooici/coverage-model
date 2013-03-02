@@ -47,7 +47,7 @@ class PersistenceLayer(object):
         log.debug('Persistence GUID: %s', guid)
         root = '.' if root is ('' or None) else root
 
-        self.master_manager = MasterManager(root, guid, name=name, tdom=tdom, sdom=sdom, global_bricking_scheme=bricking_scheme)
+        self.master_manager = MasterManager(root, guid, name=name, tdom=tdom, sdom=sdom, global_bricking_scheme=bricking_scheme, parameter_bounds=None)
 
         self.mode = mode
         if not hasattr(self.master_manager, 'auto_flush_values'):
@@ -90,6 +90,15 @@ class PersistenceLayer(object):
             setattr(self.master_manager, key, value)
         else:
             super(PersistenceLayer, self).__setattr__(key, value)
+
+    def update_parameter_bounds(self, parameter_name, bounds):
+        dmin, dmax = bounds
+        if parameter_name in self.parameter_bounds:
+            pmin, pmax = self.parameter_bounds[parameter_name]
+            dmin = min(dmin, pmin)
+            dmax = max(dmax, pmax)
+        self.parameter_bounds[parameter_name] = (dmin, dmax)
+        self.master_manager.flush()
 
     # CBM TODO: This needs to be improved greatly - should callback all the way to the Application layer as a "failure handler"
     def write_failure_callback(self, message, work):
@@ -913,6 +922,8 @@ class PersistedStorage(AbstractStorage):
 
 class InMemoryPersistenceLayer(object):
 
+    parameter_bounds = {}
+
     def expand_domain(self, *args, **kwargs):
         # No Op - storage expanded by *Value classes
         pass
@@ -923,6 +934,14 @@ class InMemoryPersistenceLayer(object):
     def has_dirty_values(self):
         # Never has dirty values
         return False
+
+    def update_parameter_bounds(self, parameter_name, bounds):
+        dmin, dmax = bounds
+        if parameter_name in self.parameter_bounds:
+            pmin, pmax = self.parameter_bounds[parameter_name]
+            dmin = min(dmin, pmin)
+            dmax = max(dmax, pmax)
+        self.parameter_bounds[parameter_name] = (dmin, dmax)
 
     def get_dirty_values_async_result(self):
         from gevent.event import AsyncResult
