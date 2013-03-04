@@ -123,8 +123,11 @@ class PersistenceLayer(object):
         if not hasattr(self.master_manager, 'value_caching'):
             self.master_manager.value_caching = value_caching
 
-        self._init_master_rtree()
-        self.master_manager.brick_list = {}
+        # TODO: This is not done correctly
+        if tdom != None:
+            self._init_master(tdom.shape.extents, bricking_scheme)
+            self.master_manager.brick_list = {}
+
 
         self.value_list = {}
 
@@ -169,14 +172,25 @@ class PersistenceLayer(object):
         self.parameter_bounds[parameter_name] = (dmin, dmax)
         self.master_manager.flush()
 
-    def _init_master_rtree(self):
+    def _init_master(self, tD, bricking_scheme):
         log.debug('Performing Rtree dict setup')
+        # tD = parameter_context.dom.total_extents
+        bD,cD = self.calculate_brick_size(tD, bricking_scheme) #remains same for each parameter
+        # Verify domain is Rtree friendly
+        tree_rank = len(bD)
+        log.debug('tree_rank: %s', tree_rank)
+        if tree_rank == 1:
+            tree_rank += 1
+        log.debug('tree_rank: %s', tree_rank)
         p = rtree.index.Property()
-        p.dimension = 2
+        p.dimension = tree_rank
 
         brick_tree = rtree.index.Index(properties=p)
 
-        self.master_manager.tree_rank = 2
+        self.master_manager.brick_list = {}
+        self.master_manager.brick_domains = [tD, bD, cD, bricking_scheme]
+
+        self.master_manager.tree_rank = tree_rank
         self.master_manager.brick_tree = brick_tree
 
     # CBM TODO: This needs to be improved greatly - should callback all the way to the Application layer as a "failure handler"
@@ -227,33 +241,33 @@ class PersistenceLayer(object):
 
         self.master_manager.create_group(parameter_name)
 
-        log.debug('Performing Rtree dict setup')
-        tD = parameter_context.dom.total_extents
-        bD,cD = self.calculate_brick_size(tD, bricking_scheme) #remains same for each parameter
-        # Verify domain is Rtree friendly
-        tree_rank = len(bD)
-        log.debug('tree_rank: %s', tree_rank)
-        if tree_rank == 1:
-            tree_rank += 1
-        log.debug('tree_rank: %s', tree_rank)
-        p = rtree.index.Property()
-        p.dimension = tree_rank
+        # log.debug('Performing Rtree dict setup')
+        # tD = parameter_context.dom.total_extents
+        # bD,cD = self.calculate_brick_size(tD, bricking_scheme) #remains same for each parameter
+        # # Verify domain is Rtree friendly
+        # tree_rank = len(bD)
+        # log.debug('tree_rank: %s', tree_rank)
+        # if tree_rank == 1:
+        #     tree_rank += 1
+        # log.debug('tree_rank: %s', tree_rank)
+        # p = rtree.index.Property()
+        # p.dimension = tree_rank
+        #
+        # brick_tree = rtree.index.Index(properties=p)
+        #
+        # self.master_manager.brick_list = {}
+        # if isinstance(parameter_context.param_type, (FunctionType, ConstantType)):
+        #     # These have constant storage, never expand!!
+        #         self.master_manager.brick_domains = [(1,),(1,),(1,),bricking_scheme]
+        # else:
+        #     self.master_manager.brick_domains = [tD, bD, cD, bricking_scheme]
+        #
+        # self.master_manager.tree_rank = tree_rank
+        # self.master_manager.brick_tree = brick_tree
 
-        brick_tree = rtree.index.Index(properties=p)
+        # mm = self.master_manager
 
-        self.master_manager.brick_list = {}
-        if isinstance(parameter_context.param_type, (FunctionType, ConstantType)):
-            # These have constant storage, never expand!!
-                self.master_manager.brick_domains = [(1,),(1,),(1,),bricking_scheme]
-        else:
-            self.master_manager.brick_domains = [tD, bD, cD, bricking_scheme]
-
-        self.master_manager.tree_rank = tree_rank
-        self.master_manager.brick_tree = brick_tree
-
-        mm = self.master_manager
-
-        v = PersistedStorage(pm, mm, self.brick_dispatcher, dtype=parameter_context.param_type.storage_encoding, fill_value=parameter_context.param_type.fill_value, mode=self.mode, inline_data_writes=self.inline_data_writes, auto_flush=self.auto_flush_values)
+        v = PersistedStorage(pm, self.master_manager, self.brick_dispatcher, dtype=parameter_context.param_type.storage_encoding, fill_value=parameter_context.param_type.fill_value, mode=self.mode, inline_data_writes=self.inline_data_writes, auto_flush=self.auto_flush_values)
         self.value_list[parameter_name] = v
 
         # self.expand_domain(parameter_context)
@@ -585,7 +599,7 @@ class PersistedStorage(AbstractStorage):
     A concrete implementation of AbstractStorage utilizing the ParameterManager and brick dispatcher
     """
 
-    def __init__(self, parameter_manager, mm, brick_dispatcher, dtype=None, fill_value=None, mode=None, inline_data_writes=True, auto_flush=True, **kwargs):
+    def __init__(self, parameter_manager, master_manager, brick_dispatcher, dtype=None, fill_value=None, mode=None, inline_data_writes=True, auto_flush=True, **kwargs):
         """
         Constructor for PersistedStorage
 
@@ -600,18 +614,14 @@ class PersistedStorage(AbstractStorage):
         kwc=kwargs.copy()
         AbstractStorage.__init__(self, dtype=dtype, fill_value=fill_value, **kwc)
 
-        # Rtree of bricks for parameter
-        # self.brick_tree = parameter_manager.brick_tree
-        self.brick_tree = mm.brick_tree
-        log.warn('[init] brick_tree.bounds: {0}'.format(self.brick_tree.bounds))
+        log.warn('[init] brick_tree.bounds: {0}'.format(master_manager.brick_tree.bounds))
         # Filesystem path to HDF brick file(s)
         self.brick_path = parameter_manager.root_dir
 
-        # Listing of bricks and their metadata for parameter
-        # self.brick_list = parameter_manager.brick_list
-        self.brick_list = mm.brick_list
+        self.brick_tree = master_manager.brick_tree
+        self.brick_list = master_manager.brick_list
 
-        self.brick_domains = mm.brick_domains
+        self.brick_domains = master_manager.brick_domains
 
         self._pending_values = {}
         self.brick_dispatcher = brick_dispatcher
