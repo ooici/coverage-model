@@ -461,3 +461,36 @@ class ArrayValue(AbstractComplexParameterValue):
         kwc=kwargs.copy()
         AbstractComplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
         self._storage.expand(self.shape, 0, self.shape[0])
+
+    def __getitem__(self, slice_):
+        slice_ = utils.fix_slice(slice_, self.shape)
+
+        ns = []
+        for s in slice_:
+            if isinstance(s, int):
+                ns.append(slice(s, s + 1))
+            else:
+                ns.append(s)
+
+        slice_ = ns
+
+        ret = self._storage[slice_]
+
+        if isinstance(ret, np.ndarray) and ret.shape[0] == 1:
+            ret = ret[0]
+
+        return ret
+
+    def __setitem__(self, slice_, value):
+        slice_ = utils.fix_slice(slice_, self.shape)
+
+        if isinstance(value, np.ndarray) and len(value.shape) > 1:
+            v = np.empty(value.shape[0], dtype=object)
+            for i in xrange(value.shape[0]):
+                v[i] = value[i, :]
+
+            value = v
+
+        self._storage[slice_] = value[:]
+
+        self._update_min_max(value)
