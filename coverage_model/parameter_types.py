@@ -595,9 +595,7 @@ class ParameterFunctionType(AbstractSimplexParameterType):
     def __eq__(self, other):
         ret = False
         if super(ParameterFunctionType, self).__eq__(other):  # Performs instance check
-            sfm = self.get_function_map()
-            ofm = other.get_function_map()
-            ret = sfm == ofm
+            ret = self.value_encoding == other.value_encoding and self.function == other.function
 
         return ret
 
