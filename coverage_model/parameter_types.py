@@ -544,7 +544,15 @@ class ParameterFunctionType(AbstractSimplexParameterType):
         return self._dparams
 
     def get_function_map(self, parent_arg_name=None):
-        self._fmap = self.function.get_function_map(self._pctxt_callback, parent_arg_name=parent_arg_name)
+        if self._pctxt_callback is None:
+            log.warn('\'_pctxt_callback\' is None; using placeholder callback')
+            def raise_keyerror(*args):
+                raise KeyError()
+            cb = raise_keyerror
+        else:
+            cb = self._pctxt_callback
+
+        self._fmap = self.function.get_function_map(cb, parent_arg_name=parent_arg_name)
 
         return self._fmap
 
@@ -582,6 +590,15 @@ class ParameterFunctionType(AbstractSimplexParameterType):
         ret = super(ParameterFunctionType, cls)._fromdict(cmdict, arg_masks=arg_masks)
         # Add the _pval_callback attribute, initialized to None
         ret._pval_callback = None
+        return ret
+
+    def __eq__(self, other):
+        ret = False
+        if super(ParameterFunctionType, self).__eq__(other):  # Performs instance check
+            sfm = self.get_function_map()
+            ofm = other.get_function_map()
+            ret = sfm == ofm
+
         return ret
 
 class FunctionType(AbstractComplexParameterType):

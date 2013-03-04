@@ -94,6 +94,19 @@ class AbstractFunction(AbstractBase):
 
         return {n: ret}
 
+    def __eq__(self, other):
+        ret = False
+        if isinstance(other, AbstractFunction):
+            def raise_keyerror(*args):
+                raise KeyError()
+            sfm = self.get_function_map(raise_keyerror)
+            ofm = other.get_function_map(raise_keyerror)
+            ret = sfm == ofm
+
+        return ret
+
+    def __ne__(self, other):
+        return not self == other
 
 class PythonFunction(AbstractFunction):
     def __init__(self, name, owner, func_name, arg_list, kwarg_map=None, param_map=None):
