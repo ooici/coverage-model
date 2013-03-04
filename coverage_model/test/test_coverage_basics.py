@@ -180,7 +180,7 @@ class TestCoverageModelBasicsInt(CoverageModelIntTestCase):
         scov = self._create_multi_bricks_cov(brick_size, time_steps)
         self.assertIsInstance(scov, SimplexCoverage)
         pl = scov._persistence_layer
-        self.assertTrue(pl.parameter_brick_count('temp') == 5)
+        self.assertTrue(pl.parameter_brick_count() == 5)
 
     def test_create_succeeds(self):
         # Tests creation of SimplexCoverage succeeds

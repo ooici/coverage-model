@@ -128,11 +128,11 @@ class MasterManager(BaseManager):
             self.param_groups = set()
 
     def update_rtree(self, count, extents, obj):
-        log.warn('MM count: {0}'.format(count))
+        log.debug('MM count: {0}'.format(count))
         if not hasattr(self, 'brick_tree'):
             raise AttributeError('Cannot update rtree; object does not have a \'brick_tree\' attribute!!')
 
-        log.warn('self.file_path: {0}'.format(self.file_path))
+        log.debug('self.file_path: {0}'.format(self.file_path))
         with h5py.File(self.file_path, 'a') as f:
             rtree_ds = f.require_dataset('rtree', shape=(count,), dtype=h5py.special_dtype(vlen=str), maxshape=(None,))
             rtree_ds.resize((count+1,))

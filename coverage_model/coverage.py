@@ -163,14 +163,10 @@ class AbstractCoverage(AbstractIdentifiable):
         # Expand the shape of the temporal_domain - following works if extents is a list or tuple
         shp.extents = (shp.extents[0]+count,)+tuple(shp.extents[1:])
 
+        self._persistence_layer.expand_domain(shp.extents)
+
         # Expand the temporal dimension of each of the parameters - the parameter determines how to apply the change
         for n in self._range_dictionary:
-            pc = self._range_dictionary.get_context(n)
-            # Update the dom of the parameter_context
-            # if pc.dom.tdom is not None:
-            #     pc.dom.tdom = self.temporal_domain.shape.extents
-            if pc.name == 'time':
-                self._persistence_layer.expand_domain(pc)
             self._range_value[n].expand_content(VariabilityEnum.TEMPORAL, origin, count)
 
         # Update the temporal_domain in the master_manager, do NOT flush!!
