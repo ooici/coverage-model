@@ -153,6 +153,12 @@ class PythonFunction(AbstractFunction):
         ret = super(PythonFunction, cls)._fromdict(cmdict, arg_masks=arg_masks)
         return ret
 
+    def __eq__(self, other):
+        ret = False
+        if super(PythonFunction, self).__eq__(other):
+            ret = self.owner == other.owner and self.func_name == other.func_name
+
+        return ret
 
 class NumexprFunction(AbstractFunction):
     def __init__(self, name, expression, arg_list, param_map=None):
@@ -174,3 +180,10 @@ class NumexprFunction(AbstractFunction):
                 ld[k] = pval_callback(a, slice_)
 
         return ne.evaluate(self.expression, local_dict=ld)
+
+    def __eq__(self, other):
+        ret = False
+        if super(NumexprFunction, self).__eq__(other):
+            ret = self.expression == other.expression
+
+        return ret
