@@ -479,9 +479,6 @@ class ArrayValue(AbstractComplexParameterValue):
 
         ret = self._storage[slice_]
 
-        if isinstance(ret, np.ndarray) and ret.shape[0] == 1:
-            ret = ret[0]
-
         return ret
 
     def __setitem__(self, slice_, value):
