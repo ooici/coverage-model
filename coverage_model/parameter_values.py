@@ -261,6 +261,9 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
         if self._memoized_values is not None:
             return self._memoized_values
         else:
+            if self._pval_callback is None:
+                raise ParameterFunctionException('\'_pval_callback\' is None; cannot evaluate!!')
+
             slice_ = utils.fix_slice(slice_, self.shape)
 
             try:
