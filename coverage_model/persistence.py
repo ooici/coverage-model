@@ -332,12 +332,12 @@ class PersistenceLayer(object):
     #
     #     return do_write, brick_guid
 
-    def _brick_exists_master(self, brick_extents, parameter_name):
+    def _brick_exists_master(self, brick_extents):
         do_write = True
         brick_guid = ''
         for x,v in self.master_manager.brick_list.iteritems():
-            if (brick_extents == v[0]) and (parameter_name == v[4]):
-                log.debug('Brick found for \"parameter\" %s with matching extents: guid=%s', v[4], x)
+            if brick_extents == v[0]:
+                log.debug('Brick found with matching extents: guid=%s', x)
                 do_write = False
                 brick_guid = x
                 break
@@ -380,7 +380,7 @@ class PersistenceLayer(object):
         # Update the brick listing
         log.error('Updating brick list[%s] with (%s, %s)', parameter_name, brick_guid, brick_extents)
         brick_count = self.parameter_brick_count()
-        self.master_manager.brick_list[brick_guid] = [brick_extents, origin, tuple(bD), brick_active_size, parameter_name]
+        self.master_manager.brick_list[brick_guid] = [brick_extents, origin, tuple(bD), brick_active_size]
         log.warn('Brick count for %s is %s', parameter_name, brick_count)
 
         # Insert into Rtree
@@ -440,7 +440,7 @@ class PersistenceLayer(object):
             # Gather brick origins
             need_origins = set(itertools.product(*lst))
             log.trace('need_origins: %s', need_origins)
-            have_origins = set([v[1] for k,v in self.master_manager.brick_list.iteritems() if (v[2] == v[3]) & (v[4] == parameter_name)])
+            have_origins = set([v[1] for k,v in self.master_manager.brick_list.iteritems() if (v[2] == v[3])])
             log.trace('have_origins: %s', have_origins)
             need_origins.difference_update(have_origins)
             log.trace('need_origins: %s', need_origins)
@@ -458,10 +458,10 @@ class PersistenceLayer(object):
                 for origin in need_origins:
                     rtree_extents, brick_extents, brick_active_size = self.calculate_extents(origin, bD, parameter_name)
 
-                    do_write, bguid = self._brick_exists_master(brick_extents, parameter_name)
+                    do_write, bguid = self._brick_exists_master(brick_extents)
                     if not do_write:
                         log.debug('Brick already exists!  Updating brick metadata...')
-                        self.master_manager.brick_list[bguid] = [brick_extents, origin, tuple(bD), brick_active_size, parameter_name]
+                        self.master_manager.brick_list[bguid] = [brick_extents, origin, tuple(bD), brick_active_size]
                     else:
                         self._write_brick(rtree_extents, brick_extents, brick_active_size, origin, bD, parameter_name)
 
@@ -662,7 +662,6 @@ class PersistedStorage(AbstractStorage):
         log.warn('rank: {0}'.format(rank))
         if self.brick_tree.properties.dimension != rank:
             raise ValueError('slice_ is of incorrect rank: is {0}, must be {1}'.format(rank, self.brick_tree.properties.dimension))
-
         bnds = self.brick_tree.bounds
         log.warn('bounds: {0}'.format(bnds))
         # Perform the calculations for the slice_ start and stop bounds in Rtree format
@@ -864,7 +863,7 @@ class PersistedStorage(AbstractStorage):
         @return brick_slice, value_slice, brick_origin_offset
         """
 
-        brick_origin, _, brick_size = self.brick_list[brick_guid][1:4]
+        brick_origin, _, brick_size = self.brick_list[brick_guid][1:]
         log.debug('Brick %s:  origin=%s, size=%s', brick_guid, brick_origin, brick_size)
         log.debug('Slice set: %s', slice_)
 
