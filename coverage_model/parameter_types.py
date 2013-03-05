@@ -667,7 +667,7 @@ class ConstantType(AbstractComplexParameterType):
             elif isinstance(value, np.ndarray):
                 if value.dtype.kind != 'S':
                     raise ValueError('\'value\' is a numpy array, with an invalid dtype; must be kind=\'S\', is kind={0}'.format(value.dtype.kind))
-            elif not isinstance(value, str):
+            elif not isinstance(value, basestring):
                 raise ValueError('\'value\' must be a string with a max length of {0}; longer strings will be truncated'.format(dt.str[dt.str.index('S')+1:]))
         else:
             # TODO: Check numeric??
@@ -753,5 +753,4 @@ class ArrayType(AbstractComplexParameterType):
         """
         kwc=kwargs.copy()
         AbstractComplexParameterType.__init__(self, value_class='ArrayValue', **kwc)
-
         self._gen_template_attrs()

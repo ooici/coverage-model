@@ -7,7 +7,7 @@
 @brief Exemplar functions for creation, manipulation, and basic visualization of coverages
 """
 import random
-from coverage_model import PythonFunction, NumexprFunction
+from coverage_model import PythonFunction, NumexprFunction, ViewCoverage, ComplexCoverage
 
 from ooi.logging import log
 from netCDF4 import Dataset
@@ -227,6 +227,60 @@ def samplecov(save_coverage=False, in_memory=False, inline_data_writes=True):
         SimplexCoverage.pickle_save(scov, 'test_data/sample.cov')
 
     return scov
+
+def sampleviewcov():
+    cov = samplecov()
+    ref_cov = cov.persistence_dir
+    cov.close()
+
+    # Instantiate a ParameterDictionary
+    pdict = ParameterDictionary()
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
+    t_ctxt.uom = 'seconds since 01-01-1970'
+    pdict.add_context(t_ctxt, is_temporal=True)
+
+    temp_ctxt = ParameterContext('temp', param_type=QuantityType(value_encoding=np.dtype('float32')))
+    temp_ctxt.uom = 'degree_Celsius'
+    pdict.add_context(temp_ctxt)
+
+    cov = ViewCoverage('test_data',
+                       'test_view',
+                       reference_coverage_location=ref_cov,
+                       name='test ViewCoverage',
+                       parameter_dictionary=pdict)
+
+    return cov
+
+def samplecomplexcov():
+    # Construct temporal and spatial Coordinate Reference System objects
+    tcrs = CRS([AxisTypeEnum.TIME])
+    scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+    # Construct temporal and spatial Domain objects
+    tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
+
+    from coverage_model.test.test_complex_coverage import _make_cov
+    rcov_locs = [_make_cov('test_data', ['first_param']),
+                 _make_cov('test_data', ['second_param']),
+                 _make_cov('test_data', ['third_param', 'fourth_param']),
+                 ]
+
+    # Instantiate a ParameterDictionary
+    pdict = ParameterDictionary()
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    func = NumexprFunction('a*b', 'a*b', ['a', 'b'], {'a': 'first_param', 'b': 'second_param'})
+    val_ctxt = ParameterContext('a*b', param_type=ParameterFunctionType(function=func, value_encoding=np.dtype('float32')))
+    pdict.add_context(val_ctxt)
+
+    # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+    ccov = ComplexCoverage('test_data', 'test_complex', 'sample complex coverage', parameter_dictionary=pdict,
+                           mode='a', reference_coverage_locs=rcov_locs)
+
+    return ccov
 
 def samplecov2(save_coverage=False, in_memory=False, inline_data_writes=True):
     # Instantiate a ParameterDictionary
@@ -484,7 +538,7 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True, mak
     cnst_rng_int_ctxt.long_name = 'example of a parameter of type ConstantRangeType, base_type int16'
     pdict.add_context(cnst_rng_int_ctxt)
 
-    func = NumexprFunction('func', expression='q*10', arg_list=['q'], param_map={'q':'quantity'})
+    func = NumexprFunction('numexpr_func', expression='q*10', arg_list=['q'], param_map={'q':'quantity'})
     pfunc_ctxt = ParameterContext('parameter_function', param_type=ParameterFunctionType(function=func), variability=VariabilityEnum.TEMPORAL)
     pfunc_ctxt.long_name = 'example of a parameter of type ParameterFunctionType'
     pdict.add_context(pfunc_ctxt)
@@ -610,6 +664,88 @@ def sbe37im_samplecov(num_timesteps=100000, value_caching=True):
 
     return scov
 
+
+def sbe37im_complexcov(num_timesteps=10, value_caching=True):
+    # Construct temporal and spatial Coordinate Reference System objects
+    tcrs = CRS([AxisTypeEnum.TIME])
+    scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+    # Construct temporal and spatial Domain objects
+    tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE)
+
+    # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+    from coverage_model.test.test_parameter_functions import _create_all_params
+    contexts = _create_all_params()
+
+    tctxt = contexts.pop('TIME')
+
+    # Make the llcov
+
+    # Instantiate a ParameterDictionary
+    pdict = ParameterDictionary()
+
+    pdict.add_context(tctxt, is_temporal=True)  # Add time
+    # Add lat, lon, time parameters
+    pdict.add_context(contexts.pop('LAT'))
+    pdict.add_context(contexts.pop('LON'))
+
+    # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+    llcov = SimplexCoverage('test_data', create_guid(), 'lat lon coverage for an SBE 37IM', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, value_caching=value_caching)
+
+    # Insert some timesteps (automatically expands other arrays)
+    nt = num_timesteps
+    llcov.insert_timesteps(nt)
+
+    # Add data for the llcov
+    llcov.set_parameter_values('TIME', value=np.arange(nt))
+    llcov.set_parameter_values('LAT', value=45)
+    llcov.set_parameter_values('LON', value=-71)
+
+    llcov.close()
+
+    # Make the science data cov
+    pdict = ParameterDictionary()
+    pdict.add_context(tctxt, is_temporal=True)
+
+    # Add L0 params
+    pdict.add_context(contexts.pop('TEMPWAT_L0'))
+    pdict.add_context(contexts.pop('CONDWAT_L0'))
+    pdict.add_context(contexts.pop('PRESWAT_L0'))
+
+    scov = SimplexCoverage('test_data', create_guid(), 'lat lon coverage for an SBE 37IM', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, value_caching=value_caching)
+
+    scov.insert_timesteps(nt)
+
+    # Add data for the L0 cov
+    scov.set_parameter_values('TIME', value=np.arange(nt))
+
+    # SBE 37IM - temperature in 't_dec' example range between 280000 and 350000
+    scov.set_parameter_values('TEMPWAT_L0', value=np.random.random_sample(nt)*(350000-280000)+280000)
+    # SBE 37IM - conductivity, ranging between 100000 & 750000 (not 0 because never 0 in seawater)
+    scov.set_parameter_values('CONDWAT_L0', value=np.random.random_sample(nt)*(750000-100000)+100000)
+    # SBE 37IM - pressure, ranging between 2789 and 10000 (couldn't find a range in the DPS, this seems reasonable!)
+    scov.set_parameter_values('PRESWAT_L0', value=np.random.random_sample(nt)*(10000-2789)+2789)
+
+    scov.close()
+
+    # Make the L1/2 coverage (a complex)
+    pdict = ParameterDictionary()
+
+    pdict.add_context(tctxt, is_temporal=True)
+
+    # Add L1/L2 params
+    pdict.add_context(contexts.pop('TEMPWAT_L1'))
+    pdict.add_context(contexts.pop('CONDWAT_L1'))
+    pdict.add_context(contexts.pop('PRESWAT_L1'))
+    pdict.add_context(contexts.pop('DENSITY'))
+    pdict.add_context(contexts.pop('PRACSAL'))
+
+    ccov = ComplexCoverage('test_data', create_guid(), 'l1 l2 coverage for SBE 37IM', parameter_dictionary=pdict, reference_coverage_locs=[llcov.persistence_dir, scov.persistence_dir], complex_type=ComplexCoverageType.PARAMETRIC)
+    # ccov.insert_timesteps(nt)
+    # ccov.set_parameter_values('TIME', value=np.arange(nt))
+
+    return ccov
 
 
 def nospatialcov(save_coverage=False, in_memory=False, inline_data_writes=True):

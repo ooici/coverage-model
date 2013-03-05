@@ -23,6 +23,72 @@ from copy import deepcopy
 class PersistenceError(Exception):
     pass
 
+class SimplePersistenceLayer(object):
+
+    def __init__(self, root, guid, name=None, param_dict=None, mode=None, **kwargs):
+        root = '.' if root is ('' or None) else root
+
+        self.master_manager = MasterManager(root_dir=root, guid=guid, name=name, param_dict=param_dict, parameter_bounds=None, **kwargs)
+
+        self.mode = mode
+
+        if self.mode != 'r':
+            self.master_manager.flush()
+
+        self._closed = False
+
+    def __getattr__(self, key):
+        if 'master_manager' in self.__dict__ and hasattr(self.master_manager, key):
+            return getattr(self.master_manager, key)
+        else:
+            return getattr(super(SimplePersistenceLayer, self), key)
+
+    def __setattr__(self, key, value):
+        if 'master_manager' in self.__dict__ and hasattr(self.master_manager, key):
+            setattr(self.master_manager, key, value)
+        else:
+            super(SimplePersistenceLayer, self).__setattr__(key, value)
+
+    def has_dirty_values(self):
+        # Never has dirty values
+        return False
+
+    def get_dirty_values_async_result(self):
+        from gevent.event import AsyncResult
+        ret = AsyncResult()
+        ret.set(True)
+        return ret
+
+    def flush_values(self):
+        return self.get_dirty_values_async_result()
+
+    def flush(self):
+        if self.mode == 'r':
+            log.warn('SimplePersistenceLayer not open for writing: mode=%s', self.mode)
+            return
+
+        log.debug('Flushing MasterManager...')
+        self.master_manager.flush()
+
+    def close(self, force=False, timeout=None):
+        if not self._closed:
+            if self.mode != 'r':
+                self.flush()
+
+        self._closed = True
+
+    def expand_domain(self, *args, **kwargs):
+        # No Op - storage expanded by *Value classes
+        pass
+
+    def init_parameter(self, parameter_context, *args, **kwargs):
+        return InMemoryStorage(dtype=parameter_context.param_type.value_encoding, fill_value=parameter_context.param_type.fill_value)
+
+    def update_domain(self, tdom=None, sdom=None, do_flush=True):
+        # No Op
+        pass
+
+
 class PersistenceLayer(object):
     """
     The PersistenceLayer class manages the disk-level storage (and retrieval) of the Coverage Model using HDF5 files.
