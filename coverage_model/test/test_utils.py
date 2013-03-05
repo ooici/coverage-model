@@ -32,7 +32,7 @@ class TestUtilsUnit(CoverageModelUnitTestCase):
         guid = utils.create_guid()
 
         # Ensure the guid is a str
-        self.assertIsInstance(guid, str)
+        self.assertIsInstance(guid, basestring)
 
         # Make sure it's properly formatted - this also tests is_guid
         self.assertTrue(utils.is_guid(guid))

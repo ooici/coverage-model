@@ -17,24 +17,11 @@ import numpy as np
 from coverage_model import *
 from nose.plugins.attrib import attr
 
-TEST_DIR = os.path.join(tempfile.gettempdir(), 'cov_mdl_tests')
-
 @attr('INT', group='cov')
 class TestCoverageModelBasicsInt(CoverageModelIntTestCase):
 
-    @classmethod
-    def setUpClass(cls):
-        os.mkdir(TEST_DIR)
-
-    @classmethod
-    def tearDownClass(cls):
-        # Removes temporary files
-        # Comment this out if you need to inspect the HDF5 files.
-        shutil.rmtree(TEST_DIR)
-
     def setUp(self):
-        # Create temporary working directory for the persisted coverage tests
-        self.working_dir = TEST_DIR
+        pass
 
     # Loading Coverage Tests
     def test_load_succeeds(self):
@@ -639,7 +626,7 @@ class TestCoverageModelBasicsInt(CoverageModelIntTestCase):
     def test_persistence_variation5(self):
         scov = self._make_samplecov(in_memory=False, in_line=False, auto_flush=True, mode='a')
         cov_info_str = scov.info
-        self.assertIsInstance(cov_info_str, str)
+        self.assertIsInstance(cov_info_str, basestring)
 
     def test_run_test_dispatcher(self):
         from coverage_model.brick_dispatch import run_test_dispatcher
