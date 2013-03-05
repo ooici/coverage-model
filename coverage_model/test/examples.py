@@ -326,8 +326,8 @@ def samplecov2(save_coverage=False, in_memory=False, inline_data_writes=True):
 
     # Add data for each parameter
     scov.set_parameter_values('time', value=np.arange(nt))
-    scov.set_parameter_values('lat', value=make_range_expr(45.32))
-    scov.set_parameter_values('lon', value=make_range_expr(-71.11))
+    scov.set_parameter_values('lat', value=45.32)
+    scov.set_parameter_values('lon', value=-71.11)
     # make a random sample of 10 values between 23 and 26
     # Ref: http://docs.scipy.org/doc/numpy/reference/generated/numpy.random.random_sample.html#numpy.random.random_sample
     # --> To sample  multiply the output of random_sample by (b-a) and add a
