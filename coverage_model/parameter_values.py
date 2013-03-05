@@ -105,7 +105,7 @@ class AbstractParameterValue(AbstractBase):
             if np.atleast_1d(v == self.fill_value).all():
                 return
             # Mask fill_value so it's not included in the calculation
-            v = np.ma.masked_equal(np.atleast_1d(value), self.fill_value, copy=False)
+            v = np.atleast_1d(np.ma.masked_equal(v, self.fill_value, copy=False))
             # Update min
             self._min = min(v.min(), self._min) if self._min != self.fill_value else v.min()
             # Update max
