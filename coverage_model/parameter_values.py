@@ -102,7 +102,7 @@ class AbstractParameterValue(AbstractBase):
         if np.dtype(self.value_encoding).kind != 'S':  # No min/max for strings
             v = np.atleast_1d(value)
             # All values are fill_values, leave what we have!
-            if (v == self.fill_value).all():
+            if np.atleast_1d(v == self.fill_value).all():
                 return
             # Mask fill_value so it's not included in the calculation
             v = np.ma.masked_equal(np.atleast_1d(value), self.fill_value, copy=False)
