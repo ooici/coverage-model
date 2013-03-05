@@ -80,9 +80,9 @@ def nest_wheres(*args):
 
     @param *args    One or more str or unicode expressions that pass the is_well_formed_where function
     """
-    where_list = [w for w in args if isinstance(w, (str, unicode)) and is_well_formed_where(w)]
+    where_list = [w for w in args if isinstance(w, basestring) and is_well_formed_where(w)]
     if not where_list:
-        raise IndexError('There are no appropriate arguments; each argument must be a str/unicode matching \'where(.*,.*,.*)\'')
+        raise IndexError('There are no appropriate arguments; each argument must be a basestring matching \'where(.*,.*,.*)\'')
 
     ret = where_list[0]
     for w in where_list[1:]:

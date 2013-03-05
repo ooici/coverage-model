@@ -29,7 +29,7 @@ def _get_vals(name, slice_):
     else:
         return np.zeros(5)[slice_]
 
-@attr('UNIT',group='now')
+@attr('UNIT',group='cm')
 class TestParameterFunctionsUnit(CoverageModelUnitTestCase):
 
     def test_numexpr_function(self):
@@ -80,7 +80,7 @@ class TestParameterFunctionsUnit(CoverageModelUnitTestCase):
         self.assertTrue(np.array_equal(ret, np.array([1,  16,  81, 256, 625])))
 
 
-@attr('INT',group='now')
+@attr('INT',group='cm')
 class TestParameterFunctionsInt(CoverageModelIntTestCase):
 
     def setUp(self):
@@ -199,7 +199,7 @@ class TestParameterFunctionsInt(CoverageModelIntTestCase):
         self.assertTrue(np.allclose(rhoval[:], rho))
 
 import networkx as nx
-@attr('INT',group='now')
+@attr('INT',group='cm')
 class TestParameterValidatorInt(CoverageModelIntTestCase):
 
     def setUp(self):
