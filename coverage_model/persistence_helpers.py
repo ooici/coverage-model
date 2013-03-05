@@ -124,42 +124,16 @@ class MasterManager(BaseManager):
             self.parameter_bounds = {}
 
         # Add attributes that should NEVER be flushed
-        self._ignore.update(['param_groups', 'guid', 'file_path', 'root_dir'])
+        self._ignore.update(['param_groups', 'guid', 'file_path', 'root_dir', 'brick_tree'])
         if not hasattr(self, 'param_groups'):
             self.param_groups = set()
 
-    def _load(self):
-        with h5py.File(self.file_path, 'r') as f:
-            self._base_load(f)
-
-            self.param_groups = set()
-            f.visit(self.param_groups.add)
-
-    def add_external_link(self, link_path, rel_ext_path, link_name):
-        with h5py.File(self.file_path, 'r+') as f:
-            f[link_path] = h5py.ExternalLink(rel_ext_path, link_name)
-
-    def create_group(self, group_path):
-        with h5py.File(self.file_path, 'r+') as f:
-            f.create_group(group_path)
-
-
-class ParameterManager(BaseManager):
-
-    def __init__(self, root_dir, parameter_name, **kwargs):
-        BaseManager.__init__(self, root_dir=root_dir, file_name='{0}.hdf5'.format(parameter_name), **kwargs)
-        self.parameter_name = parameter_name
-
-        # Add attributes that should NEVER be flushed
-        self._ignore.update(['brick_tree', 'file_path', 'root_dir'])
-
-    def thin_origins(self, origins):
-        pass
-
     def update_rtree(self, count, extents, obj):
+        log.debug('MM count: {0}'.format(count))
         if not hasattr(self, 'brick_tree'):
             raise AttributeError('Cannot update rtree; object does not have a \'brick_tree\' attribute!!')
 
+        log.debug('self.file_path: {0}'.format(self.file_path))
         with h5py.File(self.file_path, 'a') as f:
             rtree_ds = f.require_dataset('rtree', shape=(count,), dtype=h5py.special_dtype(vlen=str), maxshape=(None,))
             rtree_ds.resize((count+1,))
@@ -170,6 +144,11 @@ class ParameterManager(BaseManager):
     def _load(self):
         with h5py.File(self.file_path, 'r') as f:
             self._base_load(f)
+
+            self.param_groups = set()
+            f.visit(self.param_groups.add)
+            # TODO: Use valid parameter list to compare against inspected param_groups and discard all that are invalid
+            self.param_groups.discard('rtree')
 
             # Don't forget brick_tree!
             p = rtree.index.Property()
@@ -187,3 +166,34 @@ class ParameterManager(BaseManager):
                 setattr(self, 'brick_tree', rtree.index.Index(tree_loader(ds[:]), properties=p))
             else:
                 setattr(self, 'brick_tree', rtree.index.Index(properties=p))
+
+    def add_external_link(self, link_path, rel_ext_path, link_name):
+        with h5py.File(self.file_path, 'r+') as f:
+            f[link_path] = h5py.ExternalLink(rel_ext_path, link_name)
+
+    def create_group(self, group_path):
+        with h5py.File(self.file_path, 'r+') as f:
+            f.create_group(group_path)
+
+
+class ParameterManager(BaseManager):
+
+    def __init__(self, root_dir, parameter_name, read_only=True, **kwargs):
+        BaseManager.__init__(self, root_dir=root_dir, file_name='{0}.hdf5'.format(parameter_name), **kwargs)
+        self.parameter_name = parameter_name
+        self.read_only = read_only
+
+        # Add attributes that should NEVER be flushed
+        self._ignore.update(['brick_tree', 'file_path', 'root_dir'])
+
+    def thin_origins(self, origins):
+        pass
+
+    def flush(self):
+        if not self.read_only:
+            super(ParameterManager, self).flush()
+
+    def _load(self):
+        with h5py.File(self.file_path, 'r') as f:
+            self._base_load(f)
+
