@@ -271,6 +271,7 @@ class ParameterDictionary(AbstractIdentifiable):
         self.__count += 1
         self._map[param_ctxt.name] = (self.__count, param_ctxt)
 
+
     def get_context(self, param_name):
         """
         Retrieve a ParameterContext by name
@@ -370,6 +371,9 @@ class ParameterDictionary(AbstractIdentifiable):
 
     def __iter__(self):
         return self._map.__iter__()
+    
+    def __contains__(self, parameter):
+        return parameter in self._map
 
     def iteritems(self):
         return self._map.iteritems()
