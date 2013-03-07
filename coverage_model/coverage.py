@@ -263,11 +263,8 @@ class AbstractCoverage(AbstractIdentifiable):
             pcontext._pctxt_callback = self.get_parameter_context
 
         self._range_dictionary.add_context(pcontext)
-        s = self._initialize_storage(pcontext)
+        s = self._persistence_layer.init_parameter(pcontext, self._bricking_scheme)
         self._range_value[pname] = get_value_class(param_type=pcontext.param_type, domain_set=pcontext.dom, storage=s)
-
-    def _initialize_storage(self, pcontext):
-        raise NotImplementedError('Not implemented by AbstractCoverage')
 
     def get_parameter(self, param_name):
         """
@@ -647,9 +644,6 @@ class AbstractCoverage(AbstractIdentifiable):
             return None
         else:
             return self._persistence_layer.master_manager.root_dir
-
-    def _initialize_storage(self, pcontext):
-        return self._persistence_layer.init_parameter(pcontext, self._bricking_scheme)
 
     def has_dirty_values(self):
         return self._persistence_layer.has_dirty_values()
