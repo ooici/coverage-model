@@ -384,8 +384,10 @@ class ConstantRangeValue(AbstractComplexParameterValue):
     def __setitem__(self, slice_, value):
         if self.parameter_type.is_valid_value(value):
             # We already know it's either a list or tuple, that it's length is >= 2, and that both of
-            # the first two values are of the correct type...so...
-            self._storage[0] = str(tuple(value[:2]))
+            # the first two values are of the correct type...so...just deal with funky nesting...
+            va = np.atleast_1d(value)
+            va = va.flatten()  # Flatten the whole thing - deals with nD arrays
+            self._storage[0] = str(tuple(va[:2]))
 
             self._update_min_max(self.content)
 
