@@ -176,6 +176,9 @@ class ParameterContext(AbstractIdentifiable):
         """
         return not self.axis is None
 
+    def get_module_dependencies(self):
+        return self.param_type.get_module_dependencies()
+
     def __str__(self, indent=None):
         indent = indent or ' '
         lst = []

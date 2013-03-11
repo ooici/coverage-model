@@ -64,5 +64,17 @@ class TestParameterUnit(CoverageModelUnitTestCase):
         lat_ctxt = ParameterContext('lat', param_type=QuantityType(value_encoding=np.dtype('float32')))
         pc_list = [time_ctxt, lat_ctxt]
         pd = ParameterDictionary(pc_list)
-        len(pd)
-        pd.size()
+
+        self.assertEqual(len(pd), pd.size())
+
+    def test_pc_mod_deps(self):
+        owner = 'gsw'
+        sal_func = 'SP_from_C'
+        sal_arglist = ['C', 't', 'p']
+        sal_pmap = {'C': NumexprFunction('CONDWAT_L1*10', 'C*10', ['C'], param_map={'C': 'CONDWAT_L1'}), 't': 'TEMPWAT_L1', 'p': 'PRESWAT_L1'}
+        sal_kwargmap = None
+        expr = PythonFunction('PRACSAL', owner, sal_func, sal_arglist, sal_kwargmap, sal_pmap)
+        sal_ctxt = ParameterContext('PRACSAL', param_type=ParameterFunctionType(expr), variability=VariabilityEnum.TEMPORAL)
+
+        self.assertEqual(('numexpr', 'gsw'), sal_ctxt.get_module_dependencies())
+
