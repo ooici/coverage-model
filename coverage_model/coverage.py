@@ -136,6 +136,13 @@ class AbstractCoverage(AbstractIdentifiable):
     def parameter_dictionary(self):
         return deepcopy(self._range_dictionary)
 
+    @property
+    def module_dependencies(self):
+        s = set()
+        map(s.update, [self._range_dictionary.get_context(p).get_module_dependencies() for p in self.list_parameters()])
+
+        return tuple(s)
+
     def insert_timesteps(self, count, origin=None, oob=True):
         """
         Insert count # of timesteps beginning at the origin

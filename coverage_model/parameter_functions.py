@@ -46,16 +46,51 @@ class AbstractFunction(AbstractBase):
 
         return OrderedDict(zip(args, vals))
 
-    def _get_map_name(self, a, n):
+    @classmethod
+    def _get_map_name(cls, a, n):
         if a is None or a == '':
             return n
         else:
             return '{0} :|: {1}'.format(a, n)
 
+    @classmethod
+    def _parse_map_name(cls, name):
+        try:
+            a, n = name.split(':|:')
+            a = a.strip()
+            n = n.strip()
+        except ValueError:
+            return '', name
+
+        return a, n
+
     def evaluate(self, *args):
         raise NotImplementedError('Not implemented in abstract class')
 
-    def get_function_map(self, pctxt_callback, parent_arg_name=None):
+    def get_module_dependencies(self):
+        deps = set()
+
+        if hasattr(self, 'expression'):  # NumexprFunction
+            deps.add('numexpr')
+        elif hasattr(self, 'owner'):  # PythonFunction
+            deps.add(self.owner)
+
+        arg_map = self._apply_mapping()
+        for k in self.arg_list:
+            a = arg_map[k]
+            if isinstance(a, AbstractFunction):
+                deps.update(a.get_module_dependencies())
+
+        return tuple(deps)
+
+    def get_function_map(self, pctxt_callback=None, parent_arg_name=None):
+        if pctxt_callback is None:
+            log.warn('\'_pctxt_callback\' is None; using placeholder callback')
+
+            def raise_keyerror(*args):
+                raise KeyError()
+            pctxt_callback = raise_keyerror
+
         arg_map = self._apply_mapping()
 
         ret = {}
@@ -97,16 +132,15 @@ class AbstractFunction(AbstractBase):
     def __eq__(self, other):
         ret = False
         if isinstance(other, AbstractFunction):
-            def raise_keyerror(*args):
-                raise KeyError()
-            sfm = self.get_function_map(raise_keyerror)
-            ofm = other.get_function_map(raise_keyerror)
+            sfm = self.get_function_map()
+            ofm = other.get_function_map()
             ret = sfm == ofm
 
         return ret
 
     def __ne__(self, other):
         return not self == other
+
 
 class PythonFunction(AbstractFunction):
     def __init__(self, name, owner, func_name, arg_list, kwarg_map=None, param_map=None):
@@ -159,6 +193,7 @@ class PythonFunction(AbstractFunction):
             ret = self.owner == other.owner and self.func_name == other.func_name
 
         return ret
+
 
 class NumexprFunction(AbstractFunction):
     def __init__(self, name, expression, arg_list, param_map=None):

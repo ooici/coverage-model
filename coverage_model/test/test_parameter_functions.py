@@ -79,6 +79,28 @@ class TestParameterFunctionsUnit(CoverageModelUnitTestCase):
         ret = func2.evaluate(_get_vals, slice(None))
         self.assertTrue(np.array_equal(ret, np.array([1,  16,  81, 256, 625])))
 
+    def get_module_dependencies(self):
+        owner = 'coverage_model.test.test_parameter_functions'
+        func1 = PythonFunction('square', owner, 'pyfunc', ['first', 'first'])
+        func2 = PythonFunction('quartic', owner, 'pyfunc', [func1, func1])
+
+        deps = func2.get_module_dependencies()
+        self.assertEqual(({'coverage_model.test.test_parameter_functions'}), deps)
+
+        func = NumexprFunction('v*10', 'v*10', ['v'], {'v': func1})
+        deps = func.get_module_dependencies()
+        self.assertEqual(({'numexpr', 'coverage_model.test.test_parameter_functions'}), deps)
+
+    def test_get_function_map(self):
+        owner = 'coverage_model.test.test_parameter_functions'
+        func1 = PythonFunction('square', owner, 'pyfunc', ['first', 'first'])
+        func = NumexprFunction('v*10', 'v*10', ['v'], {'v': func1})
+
+        efm = {'[v*10]': {'arg_0': {'[v :|: square]': {'arg_0': '!first :|: first!', 'arg_1': '!first :|: first!'}}}}
+        self.assertEqual(func.get_function_map(), efm)
+
+        efm = {'[square]': {'arg_0': '!first :|: first!', 'arg_1': '!first :|: first!'}}
+        self.assertEqual(func1.get_function_map(), efm)
 
 @attr('INT',group='cm')
 class TestParameterFunctionsInt(CoverageModelIntTestCase):
@@ -115,6 +137,81 @@ class TestParameterFunctionsInt(CoverageModelIntTestCase):
 
     def _ctxt_callback(self, context_name):
         return self.contexts[context_name]
+
+    def test_get_function_map(self):
+        self.contexts = _get_pc_dict('TEMPWAT_L0', 'CONDWAT_L0', 'PRESWAT_L0',
+                                     'TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1',
+                                     'PRACSAL')
+
+        # Add the callback for retrieving contexts
+        for n, p in self.contexts.iteritems():
+            if hasattr(p, '_pctxt_callback'):
+                p._pctxt_callback = self._ctxt_callback
+
+        fmap = {'<TEMPWAT_L0>': None}
+        self.assertEqual(fmap, self.contexts['TEMPWAT_L0'].param_type.get_function_map())
+
+        fmap = {'TEMPWAT_L1': {'arg_0': {'<TEMPWAT_L0>': None}}}
+        self.assertEqual(fmap, self.contexts['TEMPWAT_L1'].param_type.get_function_map())
+
+        fmap = {'PRACSAL': {'arg_0': {'[C :|: CONDWAT_L1*10]': {'arg_0': {'C :|: CONDWAT_L1': {'arg_0': {'<CONDWAT_L0>': None}}}}},
+                            'arg_1': {'t :|: TEMPWAT_L1': {'arg_0': {'<TEMPWAT_L0>': None}}},
+                            'arg_2': {'p :|: PRESWAT_L1': {'arg_0': {'<PRESWAT_L0>': None}, 'arg_1': '<p_range :|: 679.34040721>'}}}}
+        self.assertEqual(fmap, self.contexts['PRACSAL'].param_type.get_function_map())
+
+    def test_get_independent_parameters(self):
+        self.contexts = _get_pc_dict('TEMPWAT_L0', 'CONDWAT_L0', 'PRESWAT_L0',
+                                     'TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1',
+                                     'PRACSAL')
+
+        # Add the callback for retrieving contexts
+        for n, p in self.contexts.iteritems():
+            if hasattr(p, '_pctxt_callback'):
+                p._pctxt_callback = self._ctxt_callback
+
+        ips = ('TEMPWAT_L0',)
+        self.assertEqual(ips, self.contexts['TEMPWAT_L0'].param_type.get_independent_parameters())
+
+        ips = ('TEMPWAT_L0',)
+        self.assertEqual(ips, self.contexts['TEMPWAT_L1'].param_type.get_independent_parameters())
+
+        ips = ('CONDWAT_L0', '679.34040721', 'PRESWAT_L0', 'TEMPWAT_L0')
+        self.assertEqual(ips, self.contexts['PRACSAL'].param_type.get_independent_parameters())
+
+    def test_get_dependent_parameters(self):
+        self.contexts = _get_pc_dict('TEMPWAT_L0', 'CONDWAT_L0', 'PRESWAT_L0',
+                                     'TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1',
+                                     'PRACSAL')
+
+        # Add the callback for retrieving contexts
+        for n, p in self.contexts.iteritems():
+            if hasattr(p, '_pctxt_callback'):
+                p._pctxt_callback = self._ctxt_callback
+
+        dps = ()
+        self.assertEqual(dps, self.contexts['TEMPWAT_L0'].param_type.get_dependent_parameters())
+
+        dps = ('TEMPWAT_L1',)
+        self.assertEqual(dps, self.contexts['TEMPWAT_L1'].param_type.get_dependent_parameters())
+
+        dps = ('CONDWAT_L1', 'PRACSAL', 'TEMPWAT_L1', 'PRESWAT_L1')
+        self.assertEqual(dps, self.contexts['PRACSAL'].param_type.get_dependent_parameters())
+
+    def test_get_module_dependencies(self):
+        self.contexts = _get_pc_dict('TEMPWAT_L0', 'CONDWAT_L0', 'PRESWAT_L0',
+                                     'TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1',
+                                     'PRACSAL')
+
+        # Add the callback for retrieving contexts
+        for n, p in self.contexts.iteritems():
+            if hasattr(p, '_pctxt_callback'):
+                p._pctxt_callback = self._ctxt_callback
+
+        self.assertEqual((), self.contexts['TEMPWAT_L0'].get_module_dependencies())
+
+        self.assertEqual(('numexpr',), self.contexts['TEMPWAT_L1'].get_module_dependencies())
+
+        self.assertEqual(('numexpr', 'gsw'), self.contexts['PRACSAL'].get_module_dependencies())
 
     def test_L1_params(self):
         self.contexts = _get_pc_dict('TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1')
