@@ -7,7 +7,7 @@
 @brief Abstract and concrete value objects for parameters
 """
 
-from coverage_model.basic_types import AbstractBase, InMemoryStorage, VariabilityEnum
+from coverage_model.basic_types import AbstractBase, InMemoryStorage, VariabilityEnum, Span
 from coverage_model.numexpr_utils import is_well_formed_where, nest_wheres
 from coverage_model.parameter_functions import ParameterFunctionException
 from coverage_model import utils
@@ -279,6 +279,115 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
 #        raise ValueError('Values cannot be set against ParameterFunctionValues!')
 
 
+class SparseConstantValue(AbstractComplexParameterValue):
+
+    def __init__(self, parameter_type, domain_set, storage=None, **kwargs):
+        """
+
+        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterValue; see documentation for that class for details
+        """
+        kwc=kwargs.copy()
+        AbstractComplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
+        self._storage.expand((1,), 0, 1)
+        self._storage[0] = Span(value=self.fill_value)
+
+    @property
+    def content(self):
+        return self._storage[:]
+
+    def expand_content(self, domain, origin, expansion):
+        # No op - storage expanded in __setitem__
+        pass
+
+    def __indexify_slice(self, slice_, total_shape):
+        ## ONLY WORKS FOR 1D ARRAYS!!!
+        fsl = utils.fix_slice(slice_, total_shape)
+        ss = utils.slice_shape(slice_, total_shape)
+        ret = np.empty(ss, dtype=int)
+        rf = ret.flatten()
+
+        ci = 0
+        for s, shape in zip(fsl, total_shape):
+            if isinstance(s,slice):
+                ind = range(*s.indices(shape))
+                ll = len(ind)
+                rf[ci:ll] = ind
+                ci += ll
+            elif isinstance(s, (list,tuple)):
+                ll = len(s)
+                rf[ci:ll] = s
+                ci += ll
+            elif isinstance(s, int):
+                rf[ci] = s
+                ci += 1
+            else:
+                raise TypeError('Unsupported slice method') # TODO: Better error message
+
+        return rf.reshape(ss)
+
+    def __getitem__(self, slice_):
+        ind_arr = self.__indexify_slice(slice_, self.shape)
+
+        # No data!
+        if len(ind_arr) is 0:
+            return np.empty(0, dtype=self.value_encoding)
+
+        # Get first and last index
+        fi, li = ind_arr.min(), ind_arr.max()
+
+        # Find the first storage needed
+        strt_i = 0
+        end_i = 1
+        for i, s in enumerate(self._storage):
+            if fi in s:
+                strt_i = i
+            elif li in s:
+                end_i = i+1
+
+        stor_sub = self._storage[strt_i:end_i]
+        # Build the array of stored values
+        v_arr = np.empty(0, dtype=self.value_encoding)
+        for s in stor_sub:
+            st = s.lower_bound or 0
+            en = s.upper_bound or li + 1
+            sz = en - st
+            e = np.empty(sz, dtype=self.value_encoding)
+            e.fill(s.value)
+
+            v_arr = np.append(v_arr, e)
+
+        if stor_sub[0].lower_bound is None:
+            offset = 0
+        else:
+            offset = stor_sub[0].lower_bound
+        io = ind_arr - offset
+
+        return v_arr[io]
+
+    def __setitem__(self, slice_, value):
+        # Get the last span
+        lspn = self._storage[-1]
+
+        # The current index becomes the upper_bound of the previous span and the start of the next span
+        curr_ind = self.shape[0]
+
+        nspn = Span(curr_ind, None, value)
+
+        # New span == last span, replace and continue
+        if lspn == nspn:
+            self._storage[-1] = nspn
+            return
+
+        # Reset the last span
+        self._storage[-1] = Span(lspn.lower_bound, curr_ind, lspn.value)
+
+        # Expand storage
+        self._storage.expand((1,), len(self._storage), 1)
+
+        # Create the new span
+        self._storage[-1] = Span(curr_ind, None, value)
+
+
 class ConstantValue(AbstractComplexParameterValue):
 
     def __init__(self, parameter_type, domain_set, storage=None, **kwargs):
@@ -305,7 +414,7 @@ class ConstantValue(AbstractComplexParameterValue):
     def __getitem__(self, slice_):
         slice_ = utils.fix_slice(slice_, self.shape)
 
-        ret_shape = utils.get_shape_from_slice(slice_, self.shape)
+        ret_shape = utils.slice_shape(slice_, self.shape)
         ret = np.empty(ret_shape, dtype=np.dtype(self.value_encoding))
         ret.fill(self.content)
 
@@ -364,8 +473,8 @@ class ConstantRangeValue(AbstractComplexParameterValue):
     def __getitem__(self, slice_):
         slice_ = utils.fix_slice(slice_, self.shape)
 
-        ret_shape = utils.get_shape_from_slice(slice_, self.shape)
-        ret = np.empty(ret_shape, dtype=np.dtype(object))  # Always object type because it's 2 values / element!!
+        ret_shape = utils.slice_shape(slice_, self.shape)
+        ret = np.empty(ret_shape, dtype=np.dtype(object)) # Always object type because it's 2 values / element!!
         ret.fill(self.content)
 
         # If the array is size 1 AND a slice object was NOT part of the query

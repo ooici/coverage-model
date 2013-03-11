@@ -156,6 +156,41 @@ class TestParameterValuesUnit(CoverageModelUnitTestCase):
         self.assertEqual(fval[5], 200)
         self.assertEqual(fval[9], 300)
 
+    def test_parameter_function_values(self):
+        pass
+
+    def test_sparse_constant_value(self):
+        num_rec = 0
+        dom = SimpleDomainSet((num_rec,))
+        sctype = SparseConstantType(fill_value=-999)
+        scval = get_value_class(sctype, dom)
+
+        scval[:] = 10
+        self.assertTrue(np.array_equal(scval[:], np.empty(0, dtype=sctype.value_encoding)))
+
+        dom.shape = (10,)
+        self.assertTrue(np.array_equal(scval[:], np.array([10] * 10, dtype=sctype.value_encoding)))
+
+        scval[:] = 20
+        dom.shape = (20,)
+        out = np.empty(20, dtype=sctype.value_encoding)
+        out[:10] = 10
+        out[10:] = 20
+        self.assertTrue(np.array_equal(scval[:], out))
+        self.assertTrue(np.array_equal(scval[2:19], out[2:19]))
+        self.assertTrue(np.array_equal(scval[8::3], out[8::3]))
+
+        scval[:] = 30
+        dom.shape = (30,)
+        out = np.empty(30, dtype=sctype.value_encoding)
+        out[:10] = 10
+        out[10:20] = 20
+        out[20:] = 30
+        self.assertTrue(np.array_equal(scval[:], out))
+        self.assertTrue(np.array_equal(scval[2:29], out[2:29]))
+        self.assertTrue(np.array_equal(scval[12:25], out[12:25]))
+        self.assertTrue(np.array_equal(scval[18::3], out[18::3]))
+
 
 @attr('INT',group='cov')
 class TestParameterValuesInt(CoverageModelIntTestCase):
