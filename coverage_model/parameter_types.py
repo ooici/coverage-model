@@ -120,9 +120,7 @@ class AbstractParameterType(AbstractIdentifiable):
             c = 'black'
 
         if ':|:' in n:
-            a, n = n.split(':|:')
-            a = a.strip()
-            n = n.strip()
+            a, n = AbstractFunction._parse_map_name(n)
         else:
             a = ''
 
@@ -130,10 +128,63 @@ class AbstractParameterType(AbstractIdentifiable):
 
         return a, n
 
-    def get_dependency_graph(self):
+    def _calc_param_sets(self):
+
+        def walk(fmap, ipset, dpset):
+            for k, v in fmap.iteritems():
+                # if not an 'arg_#' or intermediate 'non-parameter' - add to dpset
+                if 'arg' not in k:
+                    if k.startswith('<') and k.endswith('>'):
+                        ipset.add(k[1:-1])
+                    elif k.startswith('[') and k.endswith(']'):  # Intermediate 'non parameter' - continue
+                        pass
+                    else:
+                        # dependent parameter
+                        dpset.add(AbstractFunction._parse_map_name(k)[1])
+
+                if v is None:
+                    continue
+                elif isinstance(v, dict):
+                    walk(v, ipset, dpset)
+                elif v.startswith('<') and v.endswith('>'):
+                    # independent parameter
+                    ipset.add(AbstractFunction._parse_map_name(v[1:-1])[1])
+                elif k.startswith('[') and k.endswith(']'):  # Intermediate 'non parameter' - continue
+                    continue
+                else:
+                    # dependent parameter
+                    dpset.add(AbstractFunction._parse_map_name(v)[1])
+
+        ipset = set()
+        dpset = set()
+        fmap = self.get_function_map()
+        walk(fmap, ipset, dpset)
+        return tuple(ipset), tuple(dpset)
+
+    def get_dependency_graph(self, name=None):
         graph = nx.DiGraph()
 
-        self._add_graph_node(graph, '<{0}>'.format(self.name))
+        def fmap_to_graph(fmap, graph, pnode=None):
+            for k, v in fmap.iteritems():
+                if 'arg' not in k:
+                    a, n = self._add_graph_node(graph, k)
+
+                    if pnode is not None:
+                        graph.add_edge(pnode, n, {'label': a})
+                else:
+                    n = pnode
+
+                if v is None:  # Singleton
+                    pass
+                elif isinstance(v, dict):
+                    fmap_to_graph(v, graph, n)
+                else:
+                    a, n = self._add_graph_node(graph, v)
+
+                    graph.add_edge(pnode, n, {'label': a})
+
+        fmap = self.get_function_map()
+        fmap_to_graph(fmap, graph)
 
         return graph
 
@@ -142,6 +193,23 @@ class AbstractParameterType(AbstractIdentifiable):
             graph = self.get_dependency_graph()
 
         return nx.write_dot(graph, outpath)
+
+    def get_function_map(self, parent_arg_name=None):
+        return {'<{0}>'.format(self.name): None}
+
+    def get_module_dependencies(self):
+        # Return empty tuple
+        return ()
+
+    def get_independent_parameters(self):
+        iparams, dparams = self._calc_param_sets()
+
+        return iparams
+
+    def get_dependent_parameters(self):
+        iparams, dparams = self._calc_param_sets()
+
+        return dparams
 
     def _gen_template_attrs(self):
         for k, v in self._template_attrs.iteritems():
@@ -496,90 +564,19 @@ class ParameterFunctionType(AbstractSimplexParameterType):
 
         self._template_attrs['_pval_callback'] = None
         self._template_attrs['_pctxt_callback'] = None
-        self._fmap = None
-        self._iparams = None
-        self._dparams = None
 
         self._gen_template_attrs()
 
         # TODO: Find a way to allow a parameter to NOT be stored at all....basically, storage == None
         # For now, just use whatever the _value_encoding and _fill_value say it should be...
 
-    def _calc_param_sets(self):
-        fmap = self.get_function_map()
-        def walk(fmap, ipset, dpset):
-            for k,v in fmap.iteritems():
-                # if not an 'arg_#' or intermediate 'non-parameter' - add to dpset
-                if 'arg' not in k and not (k.startswith('[') and k.endswith(']')):
-                    dpset.add(k)
-                if isinstance(v, dict):
-                    walk(v, ipset, dpset)
-                else:
-                    if v.startswith('<') and v.endswith('>'):
-                        # independent parameter
-                        ipset.add(v[1:-1])
-                    elif k.startswith('[') and k.endswith(']'):
-                        # intermediate 'non-parameter' - continue
-                        continue
-                    else:
-                        # dependent parameter
-                        dpset.add(v)
-
-        ipset = set()
-        dpset = set()
-        walk(fmap, ipset, dpset)
-        self._iparams = tuple(ipset)
-        self._dparams = tuple(dpset)
-
-    def get_independent_parameters(self):
-        if self._iparams is None:
-            self._calc_param_sets()
-
-        return self._iparams
-
-    def get_dependent_parameters(self):
-        if self._dparams is None:
-            self._calc_param_sets()
-
-        return self._dparams
+    def get_module_dependencies(self):
+        return self.function.get_module_dependencies()
 
     def get_function_map(self, parent_arg_name=None):
-        if self._pctxt_callback is None:
-            log.warn('\'_pctxt_callback\' is None; using placeholder callback')
-            def raise_keyerror(*args):
-                raise KeyError()
-            cb = raise_keyerror
-        else:
-            cb = self._pctxt_callback
-
-        self._fmap = self.function.get_function_map(cb, parent_arg_name=parent_arg_name)
+        self._fmap = self.function.get_function_map(self._pctxt_callback, parent_arg_name=parent_arg_name)
 
         return self._fmap
-
-    def get_dependency_graph(self, name=None):
-        graph = nx.DiGraph()
-
-        def fmap_to_graph(fmap, graph, pnode=None):
-            for k,v in fmap.iteritems():
-                if 'arg' not in k:
-                    a, n = self._add_graph_node(graph, k)
-
-                    if pnode is not None:
-                        graph.add_edge(pnode, n, {'label': a})
-                else:
-                    n = pnode
-
-                if isinstance(v, dict):
-                    fmap_to_graph(v, graph, n)
-                else:
-                    a, n = self._add_graph_node(graph, v)
-
-                    graph.add_edge(pnode, n, {'label': a})
-
-        fmap = self.get_function_map()
-        fmap_to_graph(fmap, graph)
-
-        return graph
 
     def _todict(self, exclude=None):
         # Must exclude _cov_range_value from persistence
