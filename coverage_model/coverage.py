@@ -389,6 +389,11 @@ class AbstractCoverage(AbstractIdentifiable):
         """
         return self.temporal_domain.shape.extents[0]
 
+    def _clear_value_cache_for_parameter(self, param_name):
+        for k in self._value_cache.keys():
+            if k[0] == param_name:
+                self._value_cache.pop(k)
+
     def set_parameter_values(self, param_name, value, tdoa=None, sdoa=None):
         """
         Assign value to the specified parameter
@@ -427,6 +432,9 @@ class AbstractCoverage(AbstractIdentifiable):
         self._range_value[param_name][slice_] = value
         # Update parameter bounds in the persistence layer
         self._persistence_layer.update_parameter_bounds(param_name, self._range_value[param_name].bounds)
+
+        # Clear any cached values for this parameter
+        self._clear_value_cache_for_parameter(param_name)
 
 
     def clear_value_cache(self):
