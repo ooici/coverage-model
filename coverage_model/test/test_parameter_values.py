@@ -189,6 +189,34 @@ class TestParameterValuesInt(CoverageModelIntTestCase):
             cov.get_time_values(x)
         self.assertEqual(len(cov._value_cache), 30)
 
+    def test_value_caching_with_domain_expansion(self):
+        cov = self._make_empty_oneparamcov()
+
+        # Insert some timesteps (automatically expands other arrays)
+        nt = 100
+        cov.insert_timesteps(nt)
+
+        vals = np.arange(nt, dtype=cov._range_dictionary.get_context('time').param_type.value_encoding)
+        cov.set_time_values(vals)
+
+        # Prime the value_cache
+        got = cov.get_time_values()
+
+        # Expand the domain
+        cov.insert_timesteps(nt)
+
+        # Value cache should still hold 1 and the value should be equal to values retrieved prior to expansion ('got')
+        self.assertEqual(len(cov._value_cache), 1)
+        self.assertTrue(np.array_equal(cov._value_cache[cov._value_cache.keys()[0]], got))
+
+        # Perform another get, just to make sure the following removes all entries for the parameter
+        got = cov.get_time_values(slice(0, 10))
+
+        # Set time values
+        cov.set_time_values(range(cov.num_timesteps))
+
+        # Value cache should now be empty because all values cached for 'time' should be removed
+        self.assertEqual(len(cov._value_cache), 0)
 
     def _make_empty_oneparamcov(self):
         # Instantiate a ParameterDictionary
