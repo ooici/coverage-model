@@ -288,7 +288,7 @@ class ParameterDictionary(AbstractIdentifiable):
         return self._map[param_name][1]
 
     def get_temporal_context(self):
-        if self.temporal_parameter_name is None:
+        if self.temporal_parameter_name is not None:
             return self._map[self.temporal_parameter_name][1]
         else:
             raise KeyError('This dictionary does not have a parameter designated as \'temporal\'')
