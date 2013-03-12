@@ -505,7 +505,6 @@ class AbstractCoverage(AbstractIdentifiable):
 
         # Verify
         invalid_params = set(params).difference(set(pdict.keys()))
-        log.warn(invalid_params)
 
         if None in invalid_params:
             invalid_params = ''
