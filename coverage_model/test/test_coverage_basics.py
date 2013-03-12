@@ -599,7 +599,7 @@ class TestCoverageModelBasicsInt(CoverageModelIntTestCase):
 
     def test_append_parameter(self):
         results = []
-        scov = self._make_samplecov()
+        scov = self._make_samplecov(in_line=True)
         self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='time')
 
         parameter_name = 'turbidity'
@@ -609,7 +609,8 @@ class TestCoverageModelBasicsInt(CoverageModelIntTestCase):
         scov.append_parameter(pc_in)
 
         nt = 50
-        scov.set_parameter_values('turbidity', value=np.random.random_sample(nt)*20)
+        sample_values = np.arange(nt, dtype='f')
+        scov.set_parameter_values('turbidity', value=sample_values)
 
         ret_data = scov.get_parameter_values('turbidity')
         self.assertTrue(np.array_equal(sample_values, ret_data))

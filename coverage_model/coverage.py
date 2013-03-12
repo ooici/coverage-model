@@ -249,6 +249,9 @@ class AbstractCoverage(AbstractIdentifiable):
         if not isinstance(parameter_context, ParameterContext):
             raise TypeError('\'parameter_context\' must be an instance of ParameterContext')
 
+        if parameter_context.name in self._range_dictionary:
+            raise ValueError('\'paramaeter_context\' with name \'{0}\' already exists'.format(parameter_context.name))
+
         # Create a deep copy of the ParameterContext
         pcontext = deepcopy(parameter_context)
 
