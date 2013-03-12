@@ -33,9 +33,8 @@ class TestParameterUnit(CoverageModelUnitTestCase):
         time_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
         self.assertFalse(time_ctxt.is_coordinate)
         lat_ctxt = ParameterContext('lat', param_type=QuantityType(value_encoding=np.dtype('float32')))
-        lat_ctxt.reference_frame = AxisTypeEnum.LAT
+        lat_ctxt.axis = AxisTypeEnum.LAT
         lat_ctxt.uom = 'degree_north'
-        lat_ctxt.axis = AxisTypeEnum.GEO_Y
         self.assertTrue(lat_ctxt.is_coordinate)
 
     def test_parameter_context_ne(self):
