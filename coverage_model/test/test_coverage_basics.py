@@ -597,6 +597,39 @@ class TestCoverageModelBasicsInt(CoverageModelIntTestCase):
         self.assertNotEquals(pdict_1,  pdict_4)
         self.assertEquals(pdict_1.compare(pdict_4), {'lat': ['lat'], 'lon': ['lon'], None: [], 'temp': ['temp', 'temp2'], 'time': ['time']})
 
+    def test_append_parameter(self):
+        results = []
+        scov = self._make_samplecov(in_line=True)
+        self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='time')
+
+        parameter_name = 'turbidity'
+        pc_in = ParameterContext(parameter_name, param_type=QuantityType(value_encoding=np.dtype('float32')))
+        pc_in.uom = 'FTU'
+
+        scov.append_parameter(pc_in)
+
+        nt = 50
+        sample_values = np.arange(nt, dtype='f')
+        scov.set_parameter_values('turbidity', value=sample_values)
+
+        ret_data = scov.get_parameter_values('turbidity')
+        self.assertTrue(np.array_equal(sample_values, ret_data))
+
+        scov.insert_timesteps(100)
+        self.assertTrue(len(scov.get_parameter_values('turbidity')) == 150)
+
+        scov.set_parameter_values('turbidity', value=np.arange(150, dtype='f'))
+        self.assertTrue(np.array_equal(np.arange(150, dtype='f'), scov.get_parameter_values('turbidity')))
+
+        with self.assertRaises(ValueError):
+            scov.append_parameter(pc_in)
+
+    def test_append_parameter_invalid_pc(self):
+        scov = self._make_samplecov()
+        self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='time')
+        with self.assertRaises(TypeError):
+            scov.append_parameter('junk')
+
     def test_get_all_data_metadata(self):
         scov = self._make_samplecov(in_memory=True, in_line=True, auto_flush=True)
         res = self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='time')

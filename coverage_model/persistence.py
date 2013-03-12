@@ -125,7 +125,6 @@ class PersistenceLayer(object):
         # TODO: This is not done correctly
         if tdom != None:
             self._init_master(tdom.shape.extents, bricking_scheme)
-            self.master_manager.brick_list = {}
 
         self.value_list = {}
 
@@ -249,6 +248,11 @@ class PersistenceLayer(object):
         # Put the pm into read_only mode
         pm.read_only = True
 
+        # If there are already bricks, ensure there are appropriate links for this new parameter
+        for brick_guid in self.master_manager.brick_list:
+            brick_file_name = '{0}.hdf5'.format(brick_guid)
+            self._add_brick_link(parameter_name, brick_guid, brick_file_name)
+
         self.master_manager.flush()
 
         return v
@@ -295,6 +299,13 @@ class PersistenceLayer(object):
 
         return do_write, brick_guid
 
+    def _add_brick_link(self, parameter_name, brick_guid, brick_file_name):
+        brick_rel_path = os.path.join(self.parameter_metadata[parameter_name].root_dir.replace(self.root_dir,'.'), brick_file_name)
+        link_path = '/{0}/{1}'.format(parameter_name, brick_guid)
+
+        # Add brick to Master HDF file
+        self.master_manager.add_external_link(link_path, brick_rel_path, brick_guid)
+
     # Write empty HDF5 brick to the filesystem
     def _write_brick(self, rtree_extents, brick_extents, brick_active_size, origin, bD):
         """
@@ -317,11 +328,7 @@ class PersistenceLayer(object):
 
         #TODO: Inclusion of external links only used for external viewing of master file, remove if non-performant
         for parameter_name in self.parameter_metadata.keys():
-            brick_rel_path = os.path.join(self.parameter_metadata[parameter_name].root_dir.replace(self.root_dir,'.'), brick_file_name)
-            link_path = '/{0}/{1}'.format(parameter_name, brick_guid)
-
-            # Add brick to Master HDF file
-            self.master_manager.add_external_link(link_path, brick_rel_path, brick_guid)
+            self._add_brick_link(parameter_name, brick_guid, brick_file_name)
 
         # Update the brick listing
         log.debug('Updating brick list[%s] with (%s, %s, %s, %s)', brick_guid, brick_extents, origin, tuple(bD), brick_active_size)
@@ -973,3 +980,4 @@ class InMemoryPersistenceLayer(object):
     def close(self, force=False, timeout=None):
         # No Op
         pass
+
