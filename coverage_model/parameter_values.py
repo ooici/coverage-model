@@ -272,8 +272,6 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
                 import sys
                 raise ParameterFunctionException(ex.message, type(ex)), None, sys.exc_traceback
 
-            # Replace any NaN values with fill_value
-            np.putmask(r, np.isnan(r), self.parameter_type.fill_value)
             return r
 
     def __setitem__(self, slice_, value):
