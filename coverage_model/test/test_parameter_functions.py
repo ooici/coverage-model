@@ -423,9 +423,10 @@ def _create_all_params():
 
     contexts = {}
 
-    t_ctxt = ParameterContext('TIME', param_type=QuantityType(value_encoding=np.dtype('int64')))
+    t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
+    t_ctxt.axis = AxisTypeEnum.TIME
     t_ctxt.uom = 'seconds since 01-01-1900'
-    contexts['TIME'] = t_ctxt
+    contexts['time'] = t_ctxt
 
     lat_ctxt = ParameterContext('LAT', param_type=ConstantType(QuantityType(value_encoding=np.dtype('float32'))), fill_value=-9999)
     lat_ctxt.axis = AxisTypeEnum.LAT
