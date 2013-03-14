@@ -9,7 +9,7 @@
 
 from ooi.logging import log
 import numpy as np
-from coverage_model.utils import create_guid, is_valid_constraint
+from coverage_model.utils import create_guid, is_valid_constraint, prod
 
 class Dictable(object):
     """
@@ -329,6 +329,118 @@ def get_valid_DomainOfApplication(v, valid_shape):
         v = DomainOfApplication(v)
 
     return v
+
+
+class NdSpan(AbstractBase):
+
+    def __init__(self, spans, value=None):
+        AbstractBase.__init__(self)
+        if not hasattr(spans, '__iter__'):
+            spans = tuple(spans)
+        self.spans = [s for s in spans if isinstance(s, Span)]
+        self.value = value
+
+    def __contains__(self, indices):
+        if not hasattr(indices, '__iter__'):
+            raise ValueError('\'indices\' must be iterable')
+
+        if len(indices) != len(self.spans):
+            raise ValueError('\'indices\' must be the same length as self.spans:  %s != %s', len(indices), len(self.spans))
+
+        for i, s in enumerate(self.spans):
+            if indices[i] not in s:
+                return False
+
+        return True
+
+    def tuplize(self):
+        return tuple([s.tuplize() for s in self.spans])
+
+    @property
+    def shape(self):
+        return tuple([len(s) for s in self.spans])
+
+    def __eq__(self, other):
+        if isinstance(other, NdSpan):
+            if len(self.spans) == len(other.spans):
+                if np.atleast_1d([self.spans[i] == other.spans[i] for i in len(self.spans)]).all():
+                    return True
+
+        return False
+
+    def __ne__(self, other):
+        return not self == other
+
+    def __len__(self):
+        return prod(self.shape)
+
+
+class Span(AbstractBase):
+
+    def __init__(self, lower_bound=None, upper_bound=None, value=None):
+        AbstractBase.__init__(self)
+        if lower_bound is not None and upper_bound is not None and lower_bound >= upper_bound:
+            raise ValueError('\'lower_bound\' cannot be >= \'upper_bound\'')
+
+        self.lower_bound = lower_bound
+        self.upper_bound = upper_bound
+        self.value = value
+
+    def __contains__(self, index):
+
+        if self.lower_bound is None and self.upper_bound is None:
+            return True
+        elif self.lower_bound is None and index < self.upper_bound:
+            return True
+        elif self.upper_bound is None and index >= self.lower_bound:
+            return True
+        elif self.lower_bound <= index < self.upper_bound:
+            return True
+
+        return False
+
+    def get_index_array(self, lower=None, upper=None):
+        if lower is None:
+            if self.lower_bound is None:
+                raise ValueError('Both \'lower\' and \'self.lower_bound\' are None; cannot continue')
+            lower = self.lower_bound
+        if upper is None:
+            if self.upper_bound is None:
+                raise ValueError('Both \'upper\' and \'self.upper_bound\' are None; cannot continue')
+            upper = self.upper_bound
+
+        return np.arange(lower, upper, dtype='int32')
+
+    def tuplize(self):
+        return self.lower_bound, self.upper_bound
+
+    @property
+    def shape(self):
+        return (len(self),)
+
+    @classmethod
+    def from_tuple(cls, tup):
+        if isinstance(tup, tuple) and len(tup) >= 2:
+            return Span.__init__(*tup)
+
+        raise ValueError('\'tup\' must be an iterable with a length of at least 2')
+
+    def __eq__(self, other):
+        if isinstance(other, Span):
+            if self.upper_bound == other.upper_bound and self.lower_bound == other.upper_bound:
+                return True
+
+        return False
+
+    def __ne__(self, other):
+        return not self == other
+
+    def __len__(self):
+        if self.lower_bound is not None and self.upper_bound is not None:
+            return self.upper_bound - self.lower_bound
+        else:
+            return 0
+
 
 class BaseEnum(object):
 
