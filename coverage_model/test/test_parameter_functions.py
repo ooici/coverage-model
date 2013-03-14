@@ -116,17 +116,17 @@ class TestParameterFunctionsInt(CoverageModelIntTestCase):
                 return np.empty(shp).fill(vmin)
             return np.arange(vmin, vmax, (vmax - vmin) / int(utils.prod(shp)), dtype='float32').reshape(shp)
 
-        if name == 'LAT':
+        if name == 'lat':
             ret = np.empty(shp)
             ret.fill(45)
-        elif name == 'LON':
+        elif name == 'lon':
             ret = np.empty(shp)
             ret.fill(-71)
-        elif name == 'TEMPWAT_L0':
+        elif name == 'tempwat_l0':
             ret = _getarr(280000, shp, 350000)
-        elif name == 'CONDWAT_L0':
+        elif name == 'condwat_l0':
             ret = _getarr(100000, shp, 750000)
-        elif name == 'PRESWAT_L0':
+        elif name == 'preswat_l0':
             ret = _getarr(3000, shp, 10000)
         elif name in self.value_classes: # Non-L0 parameters
             ret = self.value_classes[name][:]
@@ -139,49 +139,49 @@ class TestParameterFunctionsInt(CoverageModelIntTestCase):
         return self.contexts[context_name]
 
     def test_get_function_map(self):
-        self.contexts = _get_pc_dict('TEMPWAT_L0', 'CONDWAT_L0', 'PRESWAT_L0',
-                                     'TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1',
-                                     'PRACSAL')
+        self.contexts = _get_pc_dict('tempwat_l0', 'condwat_l0', 'preswat_l0',
+                                     'tempwat_l1', 'condwat_l1', 'preswat_l1',
+                                     'pracsal')
 
         # Add the callback for retrieving contexts
         for n, p in self.contexts.iteritems():
             if hasattr(p, '_pctxt_callback'):
                 p._pctxt_callback = self._ctxt_callback
 
-        fmap = {'<TEMPWAT_L0>': None}
-        self.assertEqual(fmap, self.contexts['TEMPWAT_L0'].param_type.get_function_map())
+        fmap = {'<tempwat_l0>': None}
+        self.assertEqual(fmap, self.contexts['tempwat_l0'].param_type.get_function_map())
 
-        fmap = {'TEMPWAT_L1': {'arg_0': {'<TEMPWAT_L0>': None}}}
-        self.assertEqual(fmap, self.contexts['TEMPWAT_L1'].param_type.get_function_map())
+        fmap = {'tempwat_l1': {'arg_0': {'<tempwat_l0>': None}}}
+        self.assertEqual(fmap, self.contexts['tempwat_l1'].param_type.get_function_map())
 
-        fmap = {'PRACSAL': {'arg_0': {'[C :|: CONDWAT_L1*10]': {'arg_0': {'C :|: CONDWAT_L1': {'arg_0': {'<CONDWAT_L0>': None}}}}},
-                            'arg_1': {'t :|: TEMPWAT_L1': {'arg_0': {'<TEMPWAT_L0>': None}}},
-                            'arg_2': {'p :|: PRESWAT_L1': {'arg_0': {'<PRESWAT_L0>': None}, 'arg_1': '<p_range :|: 679.34040721>'}}}}
-        self.assertEqual(fmap, self.contexts['PRACSAL'].param_type.get_function_map())
+        fmap = {'pracsal': {'arg_0': {'[C :|: condwat_l1*10]': {'arg_0': {'C :|: condwat_l1': {'arg_0': {'<condwat_l0>': None}}}}},
+                            'arg_1': {'t :|: tempwat_l1': {'arg_0': {'<tempwat_l0>': None}}},
+                            'arg_2': {'p :|: preswat_l1': {'arg_0': {'<preswat_l0>': None}, 'arg_1': '<p_range :|: 679.34040721>'}}}}
+        self.assertEqual(fmap, self.contexts['pracsal'].param_type.get_function_map())
 
     def test_get_independent_parameters(self):
-        self.contexts = _get_pc_dict('TEMPWAT_L0', 'CONDWAT_L0', 'PRESWAT_L0',
-                                     'TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1',
-                                     'PRACSAL')
+        self.contexts = _get_pc_dict('tempwat_l0', 'condwat_l0', 'preswat_l0',
+                                     'tempwat_l1', 'condwat_l1', 'preswat_l1',
+                                     'pracsal')
 
         # Add the callback for retrieving contexts
         for n, p in self.contexts.iteritems():
             if hasattr(p, '_pctxt_callback'):
                 p._pctxt_callback = self._ctxt_callback
 
-        ips = ('TEMPWAT_L0',)
-        self.assertEqual(ips, self.contexts['TEMPWAT_L0'].param_type.get_independent_parameters())
+        ips = ('tempwat_l0',)
+        self.assertEqual(ips, self.contexts['tempwat_l0'].param_type.get_independent_parameters())
 
-        ips = ('TEMPWAT_L0',)
-        self.assertEqual(ips, self.contexts['TEMPWAT_L1'].param_type.get_independent_parameters())
+        ips = ('tempwat_l0',)
+        self.assertEqual(ips, self.contexts['tempwat_l1'].param_type.get_independent_parameters())
 
-        ips = ('CONDWAT_L0', '679.34040721', 'PRESWAT_L0', 'TEMPWAT_L0')
-        self.assertEqual(ips, self.contexts['PRACSAL'].param_type.get_independent_parameters())
+        ips = ('condwat_l0', '679.34040721', 'preswat_l0', 'tempwat_l0')
+        self.assertEqual(ips, self.contexts['pracsal'].param_type.get_independent_parameters())
 
     def test_get_dependent_parameters(self):
-        self.contexts = _get_pc_dict('TEMPWAT_L0', 'CONDWAT_L0', 'PRESWAT_L0',
-                                     'TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1',
-                                     'PRACSAL')
+        self.contexts = _get_pc_dict('tempwat_l0', 'condwat_l0', 'preswat_l0',
+                                     'tempwat_l1', 'condwat_l1', 'preswat_l1',
+                                     'pracsal')
 
         # Add the callback for retrieving contexts
         for n, p in self.contexts.iteritems():
@@ -189,32 +189,32 @@ class TestParameterFunctionsInt(CoverageModelIntTestCase):
                 p._pctxt_callback = self._ctxt_callback
 
         dps = ()
-        self.assertEqual(dps, self.contexts['TEMPWAT_L0'].param_type.get_dependent_parameters())
+        self.assertEqual(dps, self.contexts['tempwat_l0'].param_type.get_dependent_parameters())
 
-        dps = ('TEMPWAT_L1',)
-        self.assertEqual(dps, self.contexts['TEMPWAT_L1'].param_type.get_dependent_parameters())
+        dps = ('tempwat_l1',)
+        self.assertEqual(dps, self.contexts['tempwat_l1'].param_type.get_dependent_parameters())
 
-        dps = ('CONDWAT_L1', 'PRACSAL', 'TEMPWAT_L1', 'PRESWAT_L1')
-        self.assertEqual(dps, self.contexts['PRACSAL'].param_type.get_dependent_parameters())
+        dps = ('condwat_l1', 'preswat_l1', 'pracsal', 'tempwat_l1')
+        self.assertEqual(dps, self.contexts['pracsal'].param_type.get_dependent_parameters())
 
     def test_get_module_dependencies(self):
-        self.contexts = _get_pc_dict('TEMPWAT_L0', 'CONDWAT_L0', 'PRESWAT_L0',
-                                     'TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1',
-                                     'PRACSAL')
+        self.contexts = _get_pc_dict('tempwat_l0', 'condwat_l0', 'preswat_l0',
+                                     'tempwat_l1', 'condwat_l1', 'preswat_l1',
+                                     'pracsal')
 
         # Add the callback for retrieving contexts
         for n, p in self.contexts.iteritems():
             if hasattr(p, '_pctxt_callback'):
                 p._pctxt_callback = self._ctxt_callback
 
-        self.assertEqual((), self.contexts['TEMPWAT_L0'].get_module_dependencies())
+        self.assertEqual((), self.contexts['tempwat_l0'].get_module_dependencies())
 
-        self.assertEqual(('numexpr',), self.contexts['TEMPWAT_L1'].get_module_dependencies())
+        self.assertEqual(('numexpr',), self.contexts['tempwat_l1'].get_module_dependencies())
 
-        self.assertEqual(('numexpr', 'gsw'), self.contexts['PRACSAL'].get_module_dependencies())
+        self.assertEqual(('numexpr', 'gsw'), self.contexts['pracsal'].get_module_dependencies())
 
     def test_L1_params(self):
-        self.contexts = _get_pc_dict('TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1')
+        self.contexts = _get_pc_dict('tempwat_l1', 'condwat_l1', 'preswat_l1')
         self.value_classes = {}
 
         dom_set = SimpleDomainSet((10,))
@@ -227,32 +227,32 @@ class TestParameterFunctionsInt(CoverageModelIntTestCase):
                 self.value_classes[n] = get_value_class(p.param_type, dom_set)
 
         # Get the L1 data
-        t1val = get_value_class(self.contexts['TEMPWAT_L1'].param_type, dom_set)
-        c1val = get_value_class(self.contexts['CONDWAT_L1'].param_type, dom_set)
-        p1val = get_value_class(self.contexts['PRESWAT_L1'].param_type, dom_set)
+        t1val = get_value_class(self.contexts['tempwat_l1'].param_type, dom_set)
+        c1val = get_value_class(self.contexts['condwat_l1'].param_type, dom_set)
+        p1val = get_value_class(self.contexts['preswat_l1'].param_type, dom_set)
 
         # Perform assertions - involves "manual" calculation of values
         # Get the L0 data needed for validating output
-        t0vals = self._get_param_vals('TEMPWAT_L0', slice(None))
-        c0vals = self._get_param_vals('CONDWAT_L0', slice(None))
-        p0vals = self._get_param_vals('PRESWAT_L0', slice(None))
+        t0vals = self._get_param_vals('tempwat_l0', slice(None))
+        c0vals = self._get_param_vals('condwat_l0', slice(None))
+        p0vals = self._get_param_vals('preswat_l0', slice(None))
 
-        # TEMPWAT_L1 = (TEMPWAT_L0 / 10000) - 10
+        # tempwat_l1 = (tempwat_l0 / 10000) - 10
         t1 = (t0vals / 10000) - 10
         self.assertTrue(np.allclose(t1val[:], t1))
 
-        # CONDWAT_L1 = (CONDWAT_L0 / 100000) - 0.5
+        # condwat_l1 = (condwat_l0 / 100000) - 0.5
         c1 = (c0vals / 100000) - 0.5
         self.assertTrue(np.allclose(c1val[:], c1))
 
         # Equation uses p_range, which is a calibration coefficient - Fixing to 679.34040721
-        #   PRESWAT_L1 = (PRESWAT_L0 * p_range / (0.85 * 65536)) - (0.05 * p_range)
+        #   preswat_l1 = (preswat_l0 * p_range / (0.85 * 65536)) - (0.05 * p_range)
         p1 = (p0vals * 679.34040721 / (0.85 * 65536)) - (0.05 * 679.34040721)
         self.assertTrue(np.allclose(p1val[:], p1))
 
     def test_L2_params(self):
-        self.contexts = _get_pc_dict('TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1',
-                                     'PRACSAL', 'DENSITY')
+        self.contexts = _get_pc_dict('tempwat_l1', 'condwat_l1', 'preswat_l1',
+                                     'pracsal', 'density')
 
         self.value_classes = {}
 
@@ -266,30 +266,30 @@ class TestParameterFunctionsInt(CoverageModelIntTestCase):
                 self.value_classes[n] = get_value_class(p.param_type, dom_set)
 
         # Get the L2 data
-        psval = get_value_class(self.contexts['PRACSAL'].param_type, dom_set)
-        rhoval = get_value_class(self.contexts['DENSITY'].param_type, dom_set)
+        psval = get_value_class(self.contexts['pracsal'].param_type, dom_set)
+        rhoval = get_value_class(self.contexts['density'].param_type, dom_set)
 
         # Perform assertions - involves "manual" calculation of values
         # Get the L0 data needed for validating output
-        latvals = self._get_param_vals('LAT', slice(None))
-        lonvals = self._get_param_vals('LON', slice(None))
+        latvals = self._get_param_vals('lat', slice(None))
+        lonvals = self._get_param_vals('lon', slice(None))
 
         # Get the L1 data needed for validating output
-        t1val = get_value_class(self.contexts['TEMPWAT_L1'].param_type, dom_set)
-        c1val = get_value_class(self.contexts['CONDWAT_L1'].param_type, dom_set)
-        p1val = get_value_class(self.contexts['PRESWAT_L1'].param_type, dom_set)
+        t1val = get_value_class(self.contexts['tempwat_l1'].param_type, dom_set)
+        c1val = get_value_class(self.contexts['condwat_l1'].param_type, dom_set)
+        p1val = get_value_class(self.contexts['preswat_l1'].param_type, dom_set)
 
         # Density & practical salinity calucluated using the Gibbs Seawater library - available via python-gsw project:
         #       https://code.google.com/p/python-gsw/ & http://pypi.python.org/pypi/gsw/3.0.1
 
-        # PRACSAL = gsw.SP_from_C((CONDWAT_L1 * 10), TEMPWAT_L1, PRESWAT_L1)
+        # pracsal = gsw.SP_from_C((condwat_l1 * 10), tempwat_l1, preswat_l1)
         import gsw
         ps = gsw.SP_from_C((c1val[:] * 10.), t1val[:], p1val[:])
         self.assertTrue(np.allclose(psval[:], ps))
 
-        # absolute_salinity = gsw.SA_from_SP(PRACSAL, PRESWAT_L1, longitude, latitude)
-        # conservative_temperature = gsw.CT_from_t(absolute_salinity, TEMPWAT_L1, PRESWAT_L1)
-        # DENSITY = gsw.rho(absolute_salinity, conservative_temperature, PRESWAT_L1)
+        # absolute_salinity = gsw.SA_from_SP(pracsal, preswat_l1, longitude, latitude)
+        # conservative_temperature = gsw.CT_from_t(absolute_salinity, tempwat_l1, preswat_l1)
+        # density = gsw.rho(absolute_salinity, conservative_temperature, preswat_l1)
         abs_sal = gsw.SA_from_SP(psval[:], p1val[:], lonvals, latvals)
         cons_temp = gsw.CT_from_t(abs_sal, t1val[:], p1val[:])
         rho = gsw.rho(abs_sal, cons_temp, p1val[:])
@@ -303,9 +303,9 @@ class TestParameterValidatorInt(CoverageModelIntTestCase):
         pass
 
     def test_simple_passthrough(self):
-        in_values = _get_pc_list('TIME', 'LAT', 'LON', 'TEMPWAT_L0', 'CONDWAT_L0', 'PRESWAT_L0')
+        in_values = _get_pc_list('time', 'lat', 'lon', 'tempwat_l0', 'condwat_l0', 'preswat_l0')
         in_contexts = in_values
-        out_contexts = _get_pc_list('TIME', 'LAT', 'LON', 'TEMPWAT_L0', 'CONDWAT_L0', 'PRESWAT_L0')
+        out_contexts = _get_pc_list('time', 'lat', 'lon', 'tempwat_l0', 'condwat_l0', 'preswat_l0')
         out_values = [p.name for p in out_contexts]
 
         pfv = ParameterFunctionValidator(in_values, in_contexts, out_contexts)
@@ -315,9 +315,9 @@ class TestParameterValidatorInt(CoverageModelIntTestCase):
             self.assertIsInstance(g, nx.DiGraph)
 
     def test_L1_from_L0(self):
-        in_values = _get_pc_list('TIME', 'LAT', 'LON', 'TEMPWAT_L0', 'CONDWAT_L0', 'PRESWAT_L0')
+        in_values = _get_pc_list('time', 'lat', 'lon', 'tempwat_l0', 'condwat_l0', 'preswat_l0')
         in_contexts = in_values
-        out_contexts = _get_pc_list('TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1')
+        out_contexts = _get_pc_list('tempwat_l1', 'condwat_l1', 'preswat_l1')
         out_values = [p.name for p in out_contexts]
 
         pfv = ParameterFunctionValidator(in_values, in_contexts, out_contexts)
@@ -327,10 +327,10 @@ class TestParameterValidatorInt(CoverageModelIntTestCase):
             self.assertIsInstance(g, nx.DiGraph)
 
     def test_L2_from_L0(self):
-        in_values = _get_pc_list('TIME', 'LAT', 'LON', 'TEMPWAT_L0', 'CONDWAT_L0', 'PRESWAT_L0')
+        in_values = _get_pc_list('time', 'lat', 'lon', 'tempwat_l0', 'condwat_l0', 'preswat_l0')
         in_contexts = in_values
-        out_contexts = _get_pc_list('DENSITY', 'PRACSAL', 'TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1')
-        out_values = ['DENSITY', 'PRACSAL']
+        out_contexts = _get_pc_list('density', 'pracsal', 'tempwat_l1', 'condwat_l1', 'preswat_l1')
+        out_values = ['density', 'pracsal']
 
         pfv = ParameterFunctionValidator(in_values, in_contexts, out_contexts)
 
@@ -339,9 +339,9 @@ class TestParameterValidatorInt(CoverageModelIntTestCase):
             self.assertIsInstance(g, nx.DiGraph)
 
     def test_Ln_from_L0(self):
-        in_values = _get_pc_list('TIME', 'LAT', 'LON', 'TEMPWAT_L0', 'CONDWAT_L0', 'PRESWAT_L0')
+        in_values = _get_pc_list('time', 'lat', 'lon', 'tempwat_l0', 'condwat_l0', 'preswat_l0')
         in_contexts = in_values
-        out_contexts = _get_pc_list('DENSITY', 'PRACSAL', 'TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1')
+        out_contexts = _get_pc_list('density', 'pracsal', 'tempwat_l1', 'condwat_l1', 'preswat_l1')
         out_values = [p.name for p in out_contexts]
 
         pfv = ParameterFunctionValidator(in_values, in_contexts, out_contexts)
@@ -351,9 +351,9 @@ class TestParameterValidatorInt(CoverageModelIntTestCase):
             self.assertIsInstance(g, nx.DiGraph)
 
     def test_L2_from_L1(self):
-        in_values = _get_pc_list('TIME', 'LAT', 'LON', 'TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1')
+        in_values = _get_pc_list('time', 'lat', 'lon', 'tempwat_l1', 'condwat_l1', 'preswat_l1')
         in_contexts = in_values
-        out_contexts = _get_pc_list('DENSITY', 'PRACSAL')
+        out_contexts = _get_pc_list('density', 'pracsal')
         out_values = [p.name for p in out_contexts]
 
         pfv = ParameterFunctionValidator(in_values, in_contexts, out_contexts)
@@ -363,9 +363,9 @@ class TestParameterValidatorInt(CoverageModelIntTestCase):
             self.assertIsInstance(g, nx.DiGraph)
 
     def test_L1_from_L0_fail_missing_L0(self):
-        in_values = _get_pc_list('TIME', 'LAT', 'LON')
+        in_values = _get_pc_list('time', 'lat', 'lon')
         in_contexts = in_values
-        out_contexts = _get_pc_list('TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1')
+        out_contexts = _get_pc_list('tempwat_l1', 'condwat_l1', 'preswat_l1')
         out_values = [p.name for p in out_contexts]
 
         pfv = ParameterFunctionValidator(in_values, in_contexts, out_contexts)
@@ -374,10 +374,10 @@ class TestParameterValidatorInt(CoverageModelIntTestCase):
             self.assertRaises(ParameterFunctionException, pfv.validate, o)
 
     def test_L2_from_L0_fail_missing_L0(self):
-        in_values = _get_pc_list('TIME', 'LAT', 'LON')
+        in_values = _get_pc_list('time', 'lat', 'lon')
         in_contexts = in_values
-        out_contexts = _get_pc_list('DENSITY', 'PRACSAL', 'TEMPWAT_L1', 'CONDWAT_L1', 'PRESWAT_L1')
-        out_values = ['DENSITY', 'PRACSAL']
+        out_contexts = _get_pc_list('density', 'pracsal', 'tempwat_l1', 'condwat_l1', 'preswat_l1')
+        out_values = ['density', 'pracsal']
 
         pfv = ParameterFunctionValidator(in_values, in_contexts, out_contexts)
 
@@ -385,9 +385,9 @@ class TestParameterValidatorInt(CoverageModelIntTestCase):
             self.assertRaises(ParameterFunctionException, pfv.validate, o)
 
     def test_L2_from_L0_fail_missing_L1(self):
-        in_values = _get_pc_list('TIME', 'LAT', 'LON', 'TEMPWAT_L0', 'CONDWAT_L0', 'PRESWAT_L0')
+        in_values = _get_pc_list('time', 'lat', 'lon', 'tempwat_l0', 'condwat_l0', 'preswat_l0')
         in_contexts = in_values
-        out_contexts = _get_pc_list('DENSITY', 'PRACSAL')
+        out_contexts = _get_pc_list('density', 'pracsal')
         out_values = [p.name for p in out_contexts]
 
         pfv = ParameterFunctionValidator(in_values, in_contexts, out_contexts)
@@ -406,17 +406,17 @@ def _get_pc_list(*pnames):
 def _create_all_params():
     '''
      [
-     'DENSITY',
-     'TIME',
-     'LON',
-     'TEMPWAT_L1',
-     'TEMPWAT_L0',
-     'CONDWAT_L1',
-     'CONDWAT_L0',
-     'PRESWAT_L1',
-     'PRESWAT_L0',
-     'LAT',
-     'PRACSAL'
+     'density',
+     'time',
+     'lon',
+     'tempwat_l1',
+     'tempwat_l0',
+     'condwat_l1',
+     'condwat_l0',
+     'preswat_l1',
+     'preswat_l0',
+     'lat',
+     'pracsal'
      ]
     @return:
     '''
@@ -428,85 +428,85 @@ def _create_all_params():
     t_ctxt.uom = 'seconds since 01-01-1900'
     contexts['time'] = t_ctxt
 
-    lat_ctxt = ParameterContext('LAT', param_type=ConstantType(QuantityType(value_encoding=np.dtype('float32'))), fill_value=-9999)
+    lat_ctxt = ParameterContext('lat', param_type=ConstantType(QuantityType(value_encoding=np.dtype('float32'))), fill_value=-9999)
     lat_ctxt.axis = AxisTypeEnum.LAT
     lat_ctxt.uom = 'degree_north'
-    contexts['LAT'] = lat_ctxt
+    contexts['lat'] = lat_ctxt
 
-    lon_ctxt = ParameterContext('LON', param_type=ConstantType(QuantityType(value_encoding=np.dtype('float32'))), fill_value=-9999)
+    lon_ctxt = ParameterContext('lon', param_type=ConstantType(QuantityType(value_encoding=np.dtype('float32'))), fill_value=-9999)
     lon_ctxt.axis = AxisTypeEnum.LON
     lon_ctxt.uom = 'degree_east'
-    contexts['LON'] = lon_ctxt
+    contexts['lon'] = lon_ctxt
 
     # Independent Parameters
 
     # Temperature - values expected to be the decimal results of conversion from hex
-    temp_ctxt = ParameterContext('TEMPWAT_L0', param_type=QuantityType(value_encoding=np.dtype('float32')), fill_value=-9999)
+    temp_ctxt = ParameterContext('tempwat_l0', param_type=QuantityType(value_encoding=np.dtype('float32')), fill_value=-9999)
     temp_ctxt.uom = 'deg_C'
-    contexts['TEMPWAT_L0'] = temp_ctxt
+    contexts['tempwat_l0'] = temp_ctxt
 
     # Conductivity - values expected to be the decimal results of conversion from hex
-    cond_ctxt = ParameterContext('CONDWAT_L0', param_type=QuantityType(value_encoding=np.dtype('float32')), fill_value=-9999)
+    cond_ctxt = ParameterContext('condwat_l0', param_type=QuantityType(value_encoding=np.dtype('float32')), fill_value=-9999)
     cond_ctxt.uom = 'S m-1'
-    contexts['CONDWAT_L0'] = cond_ctxt
+    contexts['condwat_l0'] = cond_ctxt
 
     # Pressure - values expected to be the decimal results of conversion from hex
-    press_ctxt = ParameterContext('PRESWAT_L0', param_type=QuantityType(value_encoding=np.dtype('float32')), fill_value=-9999)
+    press_ctxt = ParameterContext('preswat_l0', param_type=QuantityType(value_encoding=np.dtype('float32')), fill_value=-9999)
     press_ctxt.uom = 'dbar'
-    contexts['PRESWAT_L0'] = press_ctxt
+    contexts['preswat_l0'] = press_ctxt
 
 
     # Dependent Parameters
 
-    # TEMPWAT_L1 = (TEMPWAT_L0 / 10000) - 10
+    # tempwat_l1 = (tempwat_l0 / 10000) - 10
     tl1_func = '(T / 10000) - 10'
-    tl1_pmap = {'T': 'TEMPWAT_L0'}
-    expr = NumexprFunction('TEMPWAT_L1', tl1_func, ['T'], param_map=tl1_pmap)
-    tempL1_ctxt = ParameterContext('TEMPWAT_L1', param_type=ParameterFunctionType(function=expr), variability=VariabilityEnum.TEMPORAL)
+    tl1_pmap = {'T': 'tempwat_l0'}
+    expr = NumexprFunction('tempwat_l1', tl1_func, ['T'], param_map=tl1_pmap)
+    tempL1_ctxt = ParameterContext('tempwat_l1', param_type=ParameterFunctionType(function=expr), variability=VariabilityEnum.TEMPORAL)
     tempL1_ctxt.uom = 'deg_C'
-    contexts['TEMPWAT_L1'] = tempL1_ctxt
+    contexts['tempwat_l1'] = tempL1_ctxt
 
-    # CONDWAT_L1 = (CONDWAT_L0 / 100000) - 0.5
+    # condwat_l1 = (condwat_l0 / 100000) - 0.5
     cl1_func = '(C / 100000) - 0.5'
-    cl1_pmap = {'C': 'CONDWAT_L0'}
-    expr = NumexprFunction('CONDWAT_L1', cl1_func, ['C'], param_map=cl1_pmap)
-    condL1_ctxt = ParameterContext('CONDWAT_L1', param_type=ParameterFunctionType(function=expr), variability=VariabilityEnum.TEMPORAL)
+    cl1_pmap = {'C': 'condwat_l0'}
+    expr = NumexprFunction('condwat_l1', cl1_func, ['C'], param_map=cl1_pmap)
+    condL1_ctxt = ParameterContext('condwat_l1', param_type=ParameterFunctionType(function=expr), variability=VariabilityEnum.TEMPORAL)
     condL1_ctxt.uom = 'S m-1'
-    contexts['CONDWAT_L1'] = condL1_ctxt
+    contexts['condwat_l1'] = condL1_ctxt
 
     # Equation uses p_range, which is a calibration coefficient - Fixing to 679.34040721
-    #   PRESWAT_L1 = (PRESWAT_L0 * p_range / (0.85 * 65536)) - (0.05 * p_range)
+    #   preswat_l1 = (preswat_l0 * p_range / (0.85 * 65536)) - (0.05 * p_range)
     pl1_func = '(P * p_range / (0.85 * 65536)) - (0.05 * p_range)'
-    pl1_pmap = {'P': 'PRESWAT_L0', 'p_range': 679.34040721}
-    expr = NumexprFunction('PRESWAT_L1', pl1_func, ['P', 'p_range'], param_map=pl1_pmap)
-    presL1_ctxt = ParameterContext('PRESWAT_L1', param_type=ParameterFunctionType(function=expr), variability=VariabilityEnum.TEMPORAL)
+    pl1_pmap = {'P': 'preswat_l0', 'p_range': 679.34040721}
+    expr = NumexprFunction('preswat_l1', pl1_func, ['P', 'p_range'], param_map=pl1_pmap)
+    presL1_ctxt = ParameterContext('preswat_l1', param_type=ParameterFunctionType(function=expr), variability=VariabilityEnum.TEMPORAL)
     presL1_ctxt.uom = 'S m-1'
-    contexts['PRESWAT_L1'] = presL1_ctxt
+    contexts['preswat_l1'] = presL1_ctxt
 
     # Density & practical salinity calucluated using the Gibbs Seawater library - available via python-gsw project:
     #       https://code.google.com/p/python-gsw/ & http://pypi.python.org/pypi/gsw/3.0.1
 
-    # PRACSAL = gsw.SP_from_C((CONDWAT_L1 * 10), TEMPWAT_L1, PRESWAT_L1)
+    # pracsal = gsw.SP_from_C((condwat_l1 * 10), tempwat_l1, preswat_l1)
     owner = 'gsw'
     sal_func = 'SP_from_C'
     sal_arglist = ['C', 't', 'p']
-    sal_pmap = {'C': NumexprFunction('CONDWAT_L1*10', 'C*10', ['C'], param_map={'C': 'CONDWAT_L1'}), 't': 'TEMPWAT_L1', 'p': 'PRESWAT_L1'}
+    sal_pmap = {'C': NumexprFunction('condwat_l1*10', 'C*10', ['C'], param_map={'C': 'condwat_l1'}), 't': 'tempwat_l1', 'p': 'preswat_l1'}
     sal_kwargmap = None
-    expr = PythonFunction('PRACSAL', owner, sal_func, sal_arglist, sal_kwargmap, sal_pmap)
-    sal_ctxt = ParameterContext('PRACSAL', param_type=ParameterFunctionType(expr), variability=VariabilityEnum.TEMPORAL)
+    expr = PythonFunction('pracsal', owner, sal_func, sal_arglist, sal_kwargmap, sal_pmap)
+    sal_ctxt = ParameterContext('pracsal', param_type=ParameterFunctionType(expr), variability=VariabilityEnum.TEMPORAL)
     sal_ctxt.uom = 'g kg-1'
-    contexts['PRACSAL'] = sal_ctxt
+    contexts['pracsal'] = sal_ctxt
 
-    # absolute_salinity = gsw.SA_from_SP(PRACSAL, PRESWAT_L1, longitude, latitude)
-    # conservative_temperature = gsw.CT_from_t(absolute_salinity, TEMPWAT_L1, PRESWAT_L1)
-    # DENSITY = gsw.rho(absolute_salinity, conservative_temperature, PRESWAT_L1)
+    # absolute_salinity = gsw.SA_from_SP(pracsal, preswat_l1, longitude, latitude)
+    # conservative_temperature = gsw.CT_from_t(absolute_salinity, tempwat_l1, preswat_l1)
+    # density = gsw.rho(absolute_salinity, conservative_temperature, preswat_l1)
     owner = 'gsw'
-    abs_sal_expr = PythonFunction('abs_sal', owner, 'SA_from_SP', ['PRACSAL', 'PRESWAT_L1', 'LON','LAT'])
-    cons_temp_expr = PythonFunction('cons_temp', owner, 'CT_from_t', [abs_sal_expr, 'TEMPWAT_L1', 'PRESWAT_L1'])
-    dens_expr = PythonFunction('DENSITY', owner, 'rho', [abs_sal_expr, cons_temp_expr, 'PRESWAT_L1'])
-    dens_ctxt = ParameterContext('DENSITY', param_type=ParameterFunctionType(dens_expr), variability=VariabilityEnum.TEMPORAL)
+    abs_sal_expr = PythonFunction('abs_sal', owner, 'SA_from_SP', ['pracsal', 'preswat_l1', 'lon','lat'])
+    cons_temp_expr = PythonFunction('cons_temp', owner, 'CT_from_t', [abs_sal_expr, 'tempwat_l1', 'preswat_l1'])
+    dens_expr = PythonFunction('density', owner, 'rho', [abs_sal_expr, cons_temp_expr, 'preswat_l1'])
+    dens_ctxt = ParameterContext('density', param_type=ParameterFunctionType(dens_expr), variability=VariabilityEnum.TEMPORAL)
     dens_ctxt.uom = 'kg m-3'
-    contexts['DENSITY'] = dens_ctxt
+    contexts['density'] = dens_ctxt
 
     return contexts
 
