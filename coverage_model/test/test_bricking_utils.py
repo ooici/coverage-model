@@ -321,21 +321,21 @@ class TestBrickingUtilsUnit(CoverageModelUnitTestCase):
             self.assertTrue(np.array_equal(vals, vo) or np.array_equal(vals.squeeze(), vo))
 
     def test_set_get_slice_1d(self):
-        from coverage_model.test.bricking_assessment import test_1d
+        from coverage_model.test.bricking_assessment_utility import test_1d
         test_1d(self._run_test_slices, None, persist=False, verbose=False, dtype='int16')
         test_1d(self._run_test_slices, None, persist=False, verbose=False, dtype='int32')
         test_1d(self._run_test_slices, None, persist=False, verbose=False, dtype='float32')
         test_1d(self._run_test_slices, None, persist=False, verbose=False, dtype='float64')
 
     def test_set_get_slice_2d(self):
-        from coverage_model.test.bricking_assessment import test_2d
+        from coverage_model.test.bricking_assessment_utility import test_2d
         test_2d(self._run_test_slices, None, persist=False, verbose=False, dtype='int16')
         test_2d(self._run_test_slices, None, persist=False, verbose=False, dtype='int32')
         test_2d(self._run_test_slices, None, persist=False, verbose=False, dtype='float32')
         test_2d(self._run_test_slices, None, persist=False, verbose=False, dtype='float64')
 
     def test_set_get_slice_3d(self):
-        from coverage_model.test.bricking_assessment import test_3d
+        from coverage_model.test.bricking_assessment_utility import test_3d
         test_3d(self._run_test_slices, None, persist=False, verbose=False, dtype='int16')
         test_3d(self._run_test_slices, None, persist=False, verbose=False, dtype='int32')
         test_3d(self._run_test_slices, None, persist=False, verbose=False, dtype='float32')
@@ -356,21 +356,21 @@ class TestBrickingUtilsInt(CoverageModelIntTestCase):
             self.assertTrue(np.array_equal(vals, vo) or np.array_equal(vals.squeeze(), vo))
 
     def test_set_get_slice_1d(self):
-        from coverage_model.test.bricking_assessment import test_1d
+        from coverage_model.test.bricking_assessment_utility import test_1d
         test_1d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='int16')
         test_1d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='int32')
         test_1d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='float32')
         test_1d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='float64')
 
     def test_set_get_slice_2d(self):
-        from coverage_model.test.bricking_assessment import test_2d
+        from coverage_model.test.bricking_assessment_utility import test_2d
         test_2d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='int16')
         test_2d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='int32')
         test_2d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='float32')
         test_2d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='float64')
 
     def test_set_get_slice_3d(self):
-        from coverage_model.test.bricking_assessment import test_3d
+        from coverage_model.test.bricking_assessment_utility import test_3d
         test_3d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='int16')
         test_3d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='int32')
         test_3d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='float32')
