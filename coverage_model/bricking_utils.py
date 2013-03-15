@@ -11,30 +11,44 @@ from ooi.logging import log
 from coverage_model import fix_slice, utils
 from copy import deepcopy
 import itertools
+import numpy as np
 
 
 def calc_brick_origins(total_domain, brick_sizes):
+    if not hasattr(total_domain, '__iter__') or not hasattr(brick_sizes, '__iter__'):
+        raise ValueError('\'total_domain\' and \'brick_sizes\' must both be iterable')
+
+    if len(total_domain) != len(brick_sizes):
+        raise ValueError('\'total_domain\' and \'brick_sizes\' must have the same length')
+
     bo = list(set(itertools.product(*[range(d)[::brick_sizes[i]] for i, d in enumerate(total_domain)])))
     bo.sort()
     return tuple(bo)
 
 
 def calc_brick_and_rtree_extents(brick_origins, brick_sizes):
+    if not hasattr(brick_origins, '__iter__') or not hasattr(brick_sizes, '__iter__'):
+        raise ValueError('\'brick_origins\' and \'brick_sizes\' must both be iterable')
+
+    lbs = len(brick_sizes)
+    if not np.atleast_1d([lbs == len(x) for x in brick_origins]).all():
+        raise ValueError('Each member of \'brick_origins\' must have the same length as \'brick_sizes\'')
+
     be = []
     rte = []
     for ori in brick_origins:
         be.append(tuple(zip(ori, map(lambda o, s: o + s - 1, ori, brick_sizes))))
         r = ori + tuple(map(lambda o, s: o + s - 1, ori, brick_sizes))
         if len(ori) == 1:
-            r = tuple([e for ext in zip(r, [0 for x in r]) for e in ext])
+            r = tuple([e for ext in zip(r, [0] * len(r)) for e in ext])
         rte.append(r)
 
     return tuple(be), tuple(rte)
 
 
-def populate_rtree(rtree, rtree_extents, brick_extents):
+def rtree_populator(rtree_extents, brick_extents):
     for i, e in enumerate(rtree_extents):
-        rtree.insert(i, e, obj=brick_extents[i])
+        yield i, e, brick_extents[i]
 
 
 def get_bricks_from_slice(slice_, rtree, total_domain):

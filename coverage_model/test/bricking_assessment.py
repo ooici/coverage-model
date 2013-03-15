@@ -50,16 +50,15 @@ class BrickingAssessor(object):
             self.param_manager.flush()
 
         self.bricks = {}
-        p = index.Property()
-        tdl = len(self.total_domain)
-        p.dimension = tdl if tdl > 1 else tdl + 1
-        self.rtree = index.Index(properties=p)
 
         self.brick_origins = bricking_utils.calc_brick_origins(self.total_domain, self.brick_sizes)
         self.brick_extents, self.rtree_extents = bricking_utils.calc_brick_and_rtree_extents(self.brick_origins,
                                                                                              self.brick_sizes)
         self.build_bricks()
-        bricking_utils.populate_rtree(self.rtree, self.rtree_extents, self.brick_extents)
+        p = index.Property()
+        tdl = len(self.total_domain)
+        p.dimension = tdl if tdl > 1 else tdl + 1
+        self.rtree = index.Index(bricking_utils.rtree_populator(self.rtree_extents, self.brick_extents), properties=p)
 
     def _get_numpy_array(self, shape):
         if not isinstance(shape, tuple):
@@ -237,9 +236,12 @@ def _run_test_slices(ba, sl_list, val_arr, verbose):
     print
 
 
-def test_1d(persist=False, verbose=False, dtype='int16'):
+def test_1d(slice_runner, root_dir, persist=False, verbose=False, dtype='int16'):
+    if root_dir is None:
+        persist = False
+
     shp = (100,)
-    ba = BrickingAssessor(total_domain=shp, brick_size=10, use_hdf=persist, guid='1d_trial', dtype=dtype)
+    ba = BrickingAssessor(total_domain=shp, brick_size=10, use_hdf=persist, guid='1d_trial', dtype=dtype, root_dir=root_dir)
     val_arr = ba._get_numpy_array(shp)
 
     sl_list = []
@@ -268,14 +270,17 @@ def test_1d(persist=False, verbose=False, dtype='int16'):
     sl_list.append(slice(3, None))
     sl_list.append(slice(None, 80, 15))
 
-    _run_test_slices(ba, sl_list, val_arr, verbose)
+    slice_runner(ba, sl_list, val_arr, verbose)
 
     return ba, val_arr
 
 
-def test_2d(persist=False, verbose=False, dtype='int16'):
+def test_2d(slice_runner, root_dir, persist=False, verbose=False, dtype='int16'):
+    if root_dir is None:
+        persist = False
+
     shp = (10, 10)
-    ba = BrickingAssessor(total_domain=shp, brick_size=2, use_hdf=persist, guid='2d_trial', dtype=dtype)
+    ba = BrickingAssessor(total_domain=shp, brick_size=2, use_hdf=persist, guid='2d_trial', dtype=dtype, root_dir=root_dir)
     val_arr = ba._get_numpy_array(shp)
 
     sl_list = []
@@ -305,14 +310,17 @@ def test_2d(persist=False, verbose=False, dtype='int16'):
     sl_list.append((slice(2, 6, 3), slice(3, None, 6)))
     sl_list.append((slice(3, None), slice(3, 9, 2)))
 
-    _run_test_slices(ba, sl_list, val_arr, verbose)
+    slice_runner(ba, sl_list, val_arr, verbose)
 
     return ba, val_arr
 
 
-def test_3d(persist=False, verbose=False, dtype='int16'):
+def test_3d(slice_runner, root_dir, persist=False, verbose=False, dtype='int16'):
+    if root_dir is None:
+        persist = False
+
     shp = (10, 10, 10)
-    ba = BrickingAssessor(total_domain=shp, brick_size=5, use_hdf=persist, guid='3d_trial', dtype=dtype)
+    ba = BrickingAssessor(total_domain=shp, brick_size=2, use_hdf=persist, guid='3d_trial', dtype=dtype, root_dir=root_dir)
     val_arr = ba._get_numpy_array(shp)
 
     sl_list = []
@@ -344,7 +352,7 @@ def test_3d(persist=False, verbose=False, dtype='int16'):
     sl_list.append((slice(None, None, 6), slice(None, None, None), slice(4, 9, 5)))
     sl_list.append((slice(3, None), slice(3, 9, 2), slice(None, None, 2)))
 
-    _run_test_slices(ba, sl_list, val_arr, verbose)
+    slice_runner(ba, sl_list, val_arr, verbose)
 
     return ba, val_arr
 
@@ -364,6 +372,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    root_dir = 'test_data/multi_dim_trials'
+
     if args.all:
         args.onedim = True
         args.twodim = True
@@ -372,14 +382,14 @@ if __name__ == '__main__':
     one_picked = np.any([args.onedim, args.twodim, args.threedim])
     if args.onedim or not one_picked:
         print ">>> Start 1D Test >>>"
-        test_1d(args.persist, args.verbose, args.dtype[0])
+        test_1d(_run_test_slices, root_dir, args.persist, args.verbose, args.dtype[0])
         print "<<<< End 1D Test <<<<\n"
     if args.twodim:
         print ">>> Start 2D Test >>>"
-        test_2d(args.persist, args.verbose, args.dtype[0])
+        test_2d(_run_test_slices, root_dir, args.persist, args.verbose, args.dtype[0])
         print "<<<< End 2D Test <<<<\n"
     if args.threedim:
         print ">>> Start 3D Test >>>"
         #        print "Not built yet..."
-        test_3d(args.persist, args.verbose, args.dtype[0])
+        test_3d(_run_test_slices, root_dir, args.persist, args.verbose, args.dtype[0])
         print "<<<< End 3D Test <<<<\n"
