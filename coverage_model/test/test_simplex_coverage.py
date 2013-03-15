@@ -16,7 +16,7 @@ import random
 from coverage_test_base import *
 
 
-@attr('INT', group='jdc')
+@attr('INT', group='cov')
 class TestSampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
     def setUp(self):
@@ -53,7 +53,7 @@ class TestSampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
         # Insert some timesteps (automatically expands other arrays)
         if (nt is None) or (nt == 0) or (make_empty is True):
-            return scov
+            return scov, 'TestSampleCovInt'
         else:
             scov.insert_timesteps(nt)
 
@@ -72,7 +72,7 @@ class TestSampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         if in_memory and save_coverage:
             SimplexCoverage.pickle_save(scov, os.path.join(self.working_dir, 'sample.cov'))
 
-        return scov
+        return scov, 'TestSampleCovInt'
 
     def _insert_set_get(self, scov=None, timesteps=None, data=None, _slice=None, param='all'):
         # Function to test variable occurances of getting and setting values across parameter(s)
@@ -93,7 +93,7 @@ class TestSampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
             ret = scov.get_parameter_values(param, _slice)
         return (ret == data).all()
 
-@attr('INT', group='jdc')
+@attr('INT', group='cov')
 class TestOneParamCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
     def setUp(self):
@@ -124,7 +124,7 @@ class TestOneParamCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
         # Insert some timesteps (automatically expands other arrays)
         if (nt is None) or (nt == 0) or (make_empty is True):
-            return scov
+            return scov, 'TestOneParamCovInt'
         else:
             scov.insert_timesteps(nt)
 
@@ -134,7 +134,7 @@ class TestOneParamCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         if in_memory and save_coverage:
             SimplexCoverage.pickle_save(scov, os.path.join(self.working_dir, 'sample.cov'))
 
-        return scov
+        return scov, 'TestOneParamCovInt'
 
     def _insert_set_get(self, scov=None, timesteps=None, data=None, _slice=None, param='all'):
         # Function to test variable occurances of getting and setting values across parameter(s)
@@ -155,7 +155,7 @@ class TestOneParamCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
             ret = scov.get_parameter_values(param, _slice)
         return (ret == data).all()
 
-@attr('INT', group='jdc')
+@attr('INT', group='cov')
 class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
     def setUp(self):
@@ -191,7 +191,7 @@ class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         if in_memory and save_coverage:
             SimplexCoverage.pickle_save(scov, os.path.join(self.working_dir, 'sample.cov'))
 
-        return scov
+        return scov, 'TestEmptySampleCovInt'
 
     def _insert_set_get(self, scov=None, timesteps=None, data=None, _slice=None, param='all'):
         return True
@@ -205,7 +205,8 @@ class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
     def test_append_parameter(self):
         pass
 
-@attr('INT', group='jdc')
+
+@attr('INT', group='cov')
 class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
     def setUp(self):
@@ -252,7 +253,7 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
         # Insert some timesteps (automatically expands other arrays)
         if (nt is None) or (nt == 0) or (make_empty is True):
-            return scov
+            return scov, 'TestPtypesCovInt'
         else:
             scov.insert_timesteps(nt)
 
@@ -290,7 +291,7 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         if in_memory and save_coverage:
             SimplexCoverage.pickle_save(scov, os.path.join(self.working_dir, 'sample.cov'))
 
-        return scov
+        return scov, 'TestPtypesCovInt'
 
     def _insert_set_get(self, scov=None, timesteps=None, data=None, _slice=None, param='all'):
         return True
@@ -339,7 +340,7 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         # Tests retrieval of values from QuantityType, ConstantType,
         # TODO: Implement getting values from FunctionType, ArrayType and RecordType
         results = []
-        ptypes_cov = self.get_cov(nt=2000)
+        ptypes_cov, cov_name = self.get_cov(nt=2000)
         self.assertIsInstance(ptypes_cov, SimplexCoverage)
 
         # QuantityType
@@ -351,59 +352,5 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         ptypes_cov.close()
         self.assertTrue(False not in results)
 
-    def test_slice_and_dice(self):
-        pass
-
-    def test_domain_expansion(self):
-        #TODO: Override to handle category parameter type.
-        pass
-        # Tests temporal_domain expansion and getting and setting values for all parameters
-        # res = False
-        # scov = self.get_cov(nt=0)
-        # tsteps = scov.num_timesteps
-        # res = _run_standard_tests(scov, tsteps)
-        # self.assertTrue(res)
-        # tsteps = tsteps + 10
-        # res = _insert_set_get(scov=scov, timesteps=tsteps, data=np.arange(tsteps), _slice=slice(scov.num_timesteps, tsteps), param='all')
-        # self.assertTrue(res)
-        # res = _run_standard_tests(scov, tsteps)
-        # self.assertTrue(res)
-        # prev_tsteps = tsteps
-        # tsteps = 35
-        # res = _insert_set_get(scov=scov, timesteps=tsteps, data=np.arange(tsteps)+prev_tsteps, _slice=slice(prev_tsteps, tsteps), param='all')
-        # self.assertTrue(res)
-        # res = _run_standard_tests(scov, tsteps+prev_tsteps)
-        # scov.close()
-        # self.assertTrue(res)
-        #
-        # scov.insert_timesteps(nt)
-        #
-        # # Add data for each parameter
-        # scov.set_parameter_values('quantity_time', value=np.arange(nt))
-        # scov.set_parameter_values('boolean', value=[True, True, True], tdoa=[[2,4,14]])
-        # scov.set_parameter_values('const_float', value=-71.11) # Set a constant with correct data type
-        # scov.set_parameter_values('const_int', value=45.32) # Set a constant with incorrect data type (fixed under the hood)
-        # scov.set_parameter_values('const_str', value='constant string value') # Set with a string
-        # scov.set_parameter_values('const_rng_flt', value=(12.8, 55.2)) # Set with a tuple
-        # scov.set_parameter_values('const_rng_int', value=[-10, 10]) # Set with a list
-        #
-        # scov.set_parameter_values('quantity', value=np.random.random_sample(nt)*(26-23)+23)
-        #
-        # arrval = []
-        # recval = []
-        # catval = []
-        # fstrval = []
-        # catkeys = cat.keys()
-        # letts='abcdefghijklmnopqrstuvwxyz'
-        # while len(letts) < nt:
-        #     letts += 'abcdefghijklmnopqrstuvwxyz'
-        # for x in xrange(nt):
-        #     arrval.append(np.random.bytes(np.random.randint(1,20))) # One value (which is a byte string) for each member of the domain
-        #     d = {letts[x]: letts[x:]}
-        #     recval.append(d) # One value (which is a dict) for each member of the domain
-        #     catval.append(random.choice(catkeys))
-        #     fstrval.append(''.join([random.choice(letts) for x in xrange(8)])) # A random string of length 8
-        # scov.set_parameter_values('array', value=arrval)
-        # scov.set_parameter_values('record', value=recval)
-        # scov.set_parameter_values('category', value=catval)
-        # scov.set_parameter_values('fixed_str', value=fstrval)
+    # def test_slice_and_dice(self):
+    #     pass

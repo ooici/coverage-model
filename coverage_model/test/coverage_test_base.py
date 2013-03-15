@@ -15,7 +15,6 @@ from pyon.public import log
 
 
 class CoverageIntTestBase(object):
-# class CoverageIntTestBase(CoverageModelIntTestCase):
 
     def setUp(self):
         pass
@@ -29,7 +28,7 @@ class CoverageIntTestBase(object):
     # ############################
     # METADATA
     def test_get_all_data_metadata(self):
-        scov = self.get_cov(only_time=True, in_memory=True, inline_data_writes=True, auto_flush_values=True, nt=5000)
+        scov, cov_name = self.get_cov(only_time=True, in_memory=True, inline_data_writes=True, auto_flush_values=True, nt=5000)
         # self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='time')
         res = scov.get_data_bounds(parameter_name='time')
         self.assertEqual(res, (0, 4999))
@@ -45,10 +44,21 @@ class CoverageIntTestBase(object):
     # ############################
     # CONSTRUCTION
     def test_create_cov(self):
-        cov = self.get_cov()
+        time_steps = 30
+        cov, cov_name = self.get_cov(nt=time_steps)
         self.assertIsInstance(cov, SimplexCoverage)
         cov_info_str = cov.info
         self.assertIsInstance(cov_info_str, basestring)
+        self.assertEqual(cov.name, 'sample coverage_model')
+
+        if cov_name not in OMIT_TEST_NO_DATA:
+            self.assertEqual(cov.num_timesteps, time_steps)
+            self.assertEqual(list(cov.temporal_domain.shape.extents), [time_steps])
+
+        params = cov.list_parameters()
+        for param in params:
+            pc = cov.get_parameter_context(param)
+            self.assertEqual(len(pc.dom.identifier), 36)
 
     def test_create_guid_valid(self):
         # Tests that the create_guid() function outputs a properly formed GUID
@@ -77,7 +87,7 @@ class CoverageIntTestBase(object):
         # Tests creation of multiple (5) bricks
         brick_size = 1000
         time_steps = 5000
-        scov = self.get_cov(brick_size=brick_size, nt=time_steps)
+        scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
         self.assertIsInstance(scov, SimplexCoverage)
 
         if scov.num_timesteps != time_steps:
@@ -166,7 +176,7 @@ class CoverageIntTestBase(object):
         # Tests closing a coverage and then attempting to retrieve values.
         brick_size = 1000
         time_steps = 5000
-        scov = self.get_cov(brick_size=brick_size, nt=time_steps)
+        scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
         scov.close()
         with self.assertRaises(ValueError):
             scov.get_time_values()
@@ -174,10 +184,9 @@ class CoverageIntTestBase(object):
 
     # ############################
     # LOADING
-
     def test_load_succeeds(self):
         # Creates a valid coverage, inserts data and loads coverage back up from the HDF5 files.
-        scov = self.get_cov()
+        scov, cov_name = self.get_cov()
         self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='time')
         pl = scov._persistence_layer
         guid = scov.persistence_guid
@@ -193,7 +202,7 @@ class CoverageIntTestBase(object):
 
     def test_dot_load_succeeds(self):
         # Creates a valid coverage, inserts data and .load coverage back up from the HDF5 files.
-        scov = self.get_cov()
+        scov, cov_name = self.get_cov()
         self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='time')
         pl = scov._persistence_layer
         guid = scov.persistence_guid
@@ -207,7 +216,7 @@ class CoverageIntTestBase(object):
     def test_get_data_after_load(self):
         # Creates a valid coverage, inserts data and .load coverage back up from the HDF5 files.
         results =[]
-        scov = self.get_cov(nt=50)
+        scov, cov_name = self.get_cov(nt=50)
         # self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='time')
         pl = scov._persistence_layer
         guid = scov.persistence_guid
@@ -223,7 +232,7 @@ class CoverageIntTestBase(object):
 
     def test_load_fails_bad_guid(self):
         # Tests load fails if coverage exists and path is correct but GUID is incorrect
-        scov = self.get_cov()
+        scov, cov_name = self.get_cov()
         self.assertIsInstance(scov, SimplexCoverage)
         self.assertTrue(os.path.exists(scov.persistence_dir))
         guid = 'some_incorrect_guid'
@@ -235,7 +244,7 @@ class CoverageIntTestBase(object):
 
     def test_dot_load_fails_bad_guid(self):
         # Tests load fails if coverage exists and path is correct but GUID is incorrect
-        scov = self.get_cov()
+        scov, cov_name = self.get_cov()
         self.assertIsInstance(scov, SimplexCoverage)
         self.assertTrue(os.path.exists(scov.persistence_dir))
         guid = 'some_incorrect_guid'
@@ -246,27 +255,27 @@ class CoverageIntTestBase(object):
             self.assertEquals(se.message, 'Cannot find specified coverage: {0}'.format(os.path.join(base_path, guid)))
 
     def test_load_only_pd_raises_error(self):
-        scov = self.get_cov()
+        scov, cov_name = self.get_cov()
         scov.close()
         with self.assertRaises(TypeError):
             SimplexCoverage(scov.persistence_dir)
 
     def test_load_options_pd_pg(self):
-        scov = self.get_cov()
+        scov, cov_name = self.get_cov()
         scov.close()
         cov = SimplexCoverage(scov.persistence_dir, scov.persistence_guid)
         self.assertIsInstance(cov, SimplexCoverage)
         cov.close()
 
     def test_dot_load_options_pd(self):
-        scov = self.get_cov()
+        scov, cov_name = self.get_cov()
         scov.close()
         cov = SimplexCoverage.load(scov.persistence_dir)
         self.assertIsInstance(cov, SimplexCoverage)
         cov.close()
 
     def test_dot_load_options_pd_pg(self):
-        scov = self.get_cov()
+        scov, cov_name = self.get_cov()
         scov.close()
         cov = SimplexCoverage.load(scov.persistence_dir, scov.persistence_guid)
         self.assertIsInstance(cov, SimplexCoverage)
@@ -274,7 +283,7 @@ class CoverageIntTestBase(object):
 
     def test_load_succeeds_with_options(self):
         # Tests loading a SimplexCoverage using init parameters
-        scov = self.get_cov()
+        scov, cov_name = self.get_cov()
         pl = scov._persistence_layer
         guid = scov.persistence_guid
         root_path = pl.master_manager.root_dir
@@ -296,9 +305,8 @@ class CoverageIntTestBase(object):
 
     # ############################
     # MODES
-
     def test_coverage_mode_expand_domain(self):
-        scov = self.get_cov()
+        scov, cov_name = self.get_cov()
         self.assertEqual(scov.mode, 'a')
         scov.close()
         rcov = SimplexCoverage.load(scov.persistence_dir, mode='r')
@@ -307,7 +315,7 @@ class CoverageIntTestBase(object):
             rcov.insert_timesteps(10)
 
     def test_coverage_mode_set_value(self):
-        scov = self.get_cov()
+        scov, cov_name = self.get_cov()
         self.assertEqual(scov.mode, 'a')
         scov.insert_timesteps(10)
         scov.close()
@@ -317,19 +325,19 @@ class CoverageIntTestBase(object):
             rcov._range_value.time[0] = 1
 
     def test_persistence_variation1(self):
-        scov = self.get_cov(only_time=True, in_memory=False, inline_data_writes=False, auto_flush_values=True)
+        scov, cov_name = self.get_cov(only_time=True, in_memory=False, inline_data_writes=False, auto_flush_values=True)
         res = self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='time')
 
     def test_persistence_variation2(self):
-        scov = self.get_cov(only_time=True, in_memory=True, inline_data_writes=False, auto_flush_values=True)
+        scov, cov_name = self.get_cov(only_time=True, in_memory=True, inline_data_writes=False, auto_flush_values=True)
         res = self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='time')
 
     def test_persistence_variation3(self):
-        scov = self.get_cov(only_time=True, in_memory=True, inline_data_writes=True, auto_flush_values=True)
+        scov, cov_name = self.get_cov(only_time=True, in_memory=True, inline_data_writes=True, auto_flush_values=True)
         res = self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='time')
 
     def test_persistence_variation4(self):
-        scov = self.get_cov(only_time=True, in_memory=False, inline_data_writes=True, auto_flush_values=True)
+        scov, cov_name = self.get_cov(only_time=True, in_memory=False, inline_data_writes=True, auto_flush_values=True)
         res = self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='time')
 
     # ############################
@@ -337,33 +345,11 @@ class CoverageIntTestBase(object):
     def test_ptypescov_get_values(self):
         pass
 
-    # def test_domain_expansion(self):
-    #     # Tests temporal_domain expansion and getting and setting values for all parameters
-    #     res = False
-    #     scov = self.get_cov(nt=0)
-    #     tsteps = scov.num_timesteps
-    #     res = _run_standard_tests(scov, tsteps)
-    #     self.assertTrue(res)
-    #     tsteps = tsteps + 10
-    #     res = self._insert_set_get(scov=scov, timesteps=tsteps, data=np.arange(tsteps), _slice=slice(scov.num_timesteps, tsteps), param='all')
-    #     self.assertTrue(res)
-    #     res = _run_standard_tests(scov, tsteps)
-    #     self.assertTrue(res)
-    #     prev_tsteps = tsteps
-    #     tsteps = 35
-    #     res = self._insert_set_get(scov=scov, timesteps=tsteps, data=np.arange(tsteps)+prev_tsteps, _slice=slice(prev_tsteps, tsteps), param='all')
-    #     self.assertTrue(res)
-    #     res = _run_standard_tests(scov, tsteps+prev_tsteps)
-    #     scov.close()
-    #     self.assertTrue(res)
-
     # def test_slice_and_dice(self):
     #     # Tests for slice and index errors across multiple bricks
     #     time_steps = 5000
-    #     scov = self.get_cov(brick_size=1000, nt=5000)
-    #     if scov.num_timesteps != time_steps:
-    #         log.warn('Must be an empty coverage!')
-    #     else:
+    #     scov, cov_name = self.get_cov(brick_size=1000, nt=time_steps)
+    #     if cov_name not in OMIT_TEST_NO_DATA:
     #         params, _slices, results, index_errors = _slice_and_dice(scov)
     #         log.debug('slices per parameter: %s', len(_slices))
     #         log.debug('total slices ran: %s', len(_slices) * len(params))
@@ -371,110 +357,110 @@ class CoverageIntTestBase(object):
     #         log.debug('IndexError slices: %s\n%s', len(index_errors), index_errors)
     #         scov.close()
     #         self.assertTrue(len(results) + len(index_errors) == 0)
-    #
+
     def test_slice_stop_greater_than_size(self):
         # Tests that a slice defined outside the coverage data bounds raises an error when attempting retrieval
         brick_size = 1000
         time_steps = 5000
-        scov = self.get_cov(brick_size=brick_size, nt=time_steps)
-        # scov = self._create_multi_bricks_cov(brick_size, time_steps)
+        scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
         if scov.num_timesteps > 0:
             _slice = slice(4998, 5020, None)
             ret = scov.get_parameter_values('time', _slice)
             self.assertTrue(np.array_equal(ret, np.arange(4998, 5000, dtype=scov.get_parameter_context('time').param_type.value_encoding)))
 
-    # def test_slice_stop_greater_than_size_with_step(self):
-    #     # Tests that a slice (with step) defined outside the coverage data bounds raises an error when attempting retrieval
-    #     brick_size = 1000
-    #     time_steps = 5000
-    #     scov = self._create_multi_bricks_cov(brick_size, time_steps)
-    #     _slice = slice(4000, 5020, 5)
-    #     ret = scov.get_parameter_values('temp', _slice)
-    #     self.assertTrue(np.array_equal(ret, np.arange(4000, 5000, 5, dtype=scov.get_parameter_context('temp').param_type.value_encoding)))
-    #
-    # def test_slice_raises_index_error_out_out(self):
-    #     # Tests that an array defined totally outside the coverage data bounds raises an error when attempting retrieval
-    #     brick_size = 1000
-    #     time_steps = 5000
-    #     scov = self._create_multi_bricks_cov(brick_size, time_steps)
-    #     _slice = slice(5010, 5020, None)
-    #     with self.assertRaises(IndexError):
-    #         scov.get_parameter_values('temp', _slice)
-    #
-    # def test_int_raises_index_error(self):
-    #     # Tests that an integer defined outside the coverage data bounds raises an error when attempting retrieval
-    #     brick_size = 1000
-    #     time_steps = 5000
-    #     scov = self._create_multi_bricks_cov(brick_size, time_steps)
-    #     with self.assertRaises(IndexError):
-    #         scov.get_parameter_values('temp', 9000)
-    #
-    # def test_array_raises_index_error(self):
-    #     # Tests that an array defined outside the coverage data bounds raises an error when attempting retrieval
-    #     brick_size = 1000
-    #     time_steps = 5000
-    #     scov = self._create_multi_bricks_cov(brick_size, time_steps)
-    #     with self.assertRaises(IndexError):
-    #         scov.get_parameter_values('temp', [[5,9000]])
-    #
-    # def test_get_by_slice(self):
-    #     # Tests retrieving data across multiple bricks for a variety of slices
-    #     results = []
-    #     brick_size = 10
-    #     time_steps = 30
-    #     cov = self._create_multi_bricks_cov(brick_size, time_steps)
-    #     dat = cov.get_parameter_values('time')
-    #     for s in range(len(dat)):
-    #         for e in range(len(dat)):
-    #             e+=1
-    #             if s < e:
-    #                 for st in range(e-s):
-    #                     sl = slice(s, e, st+1)
-    #                     mock_data = np.array(range(*sl.indices(sl.stop)))
-    #                     data = cov.get_parameter_values('time', sl)
-    #                     results.append(np.array_equiv(mock_data, data))
-    #     self.assertTrue(False not in results)
+    def test_slice_stop_greater_than_size_with_step(self):
+        # Tests that a slice (with step) defined outside the coverage data bounds raises an error when attempting retrieval
+        brick_size = 1000
+        time_steps = 5000
+        scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
+        if cov_name not in OMIT_TEST_NO_DATA:
+            _slice = slice(4000, 5020, 5)
+            ret = scov.get_parameter_values('time', _slice)
+            self.assertTrue(np.array_equal(ret, np.arange(4000, 5000, 5, dtype=scov.get_parameter_context('time').param_type.value_encoding)))
+
+    def test_slice_raises_index_error_out_out(self):
+        # Tests that an array defined totally outside the coverage data bounds raises an error when attempting retrieval
+        brick_size = 1000
+        time_steps = 5000
+        scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
+        _slice = slice(5010, 5020, None)
+        with self.assertRaises(IndexError):
+            scov.get_parameter_values('time', _slice)
+
+    def test_int_raises_index_error(self):
+        # Tests that an integer defined outside the coverage data bounds raises an error when attempting retrieval
+        brick_size = 1000
+        time_steps = 5000
+        scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
+        with self.assertRaises(IndexError):
+            scov.get_parameter_values('time', 9000)
+
+    def test_array_raises_index_error(self):
+        # Tests that an array defined outside the coverage data bounds raises an error when attempting retrieval
+        brick_size = 1000
+        time_steps = 5000
+        scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
+        with self.assertRaises(IndexError):
+            scov.get_parameter_values('time', [[5,9000]])
+
+    def test_get_by_slice(self):
+        # Tests retrieving data across multiple bricks for a variety of slices
+        results = []
+        brick_size = 10
+        time_steps = 30
+        cov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
+        dat = cov.get_parameter_values('time')
+        for s in range(len(dat)):
+            for e in range(len(dat)):
+                e+=1
+                if s < e:
+                    for st in range(e-s):
+                        sl = slice(s, e, st+1)
+                        mock_data = np.array(range(*sl.indices(sl.stop)))
+                        data = cov.get_parameter_values('time', sl)
+                        results.append(np.array_equiv(mock_data, data))
+        self.assertTrue(False not in results)
 
     # ############################
     # SET
     def test_samplecov_time_one_brick(self):
         # Tests setting and getting one brick's worth of data for the 'time' parameter
-        scov = self.get_cov(only_time=True)
+        scov, cov_name = self.get_cov(only_time=True)
         res = self._insert_set_get(scov=scov, timesteps=10, data=np.arange(10), _slice=slice(0,10), param='time')
         scov.close()
         self.assertTrue(res)
 
     def test_samplecov_allparams_one_brick(self):
         # Tests setting and getting one brick's worth of data for all parameters in the coverage
-        scov = self.get_cov()
+        scov, cov_name = self.get_cov()
         res = self._insert_set_get(scov=scov, timesteps=10, data=np.arange(10), _slice=slice(0,10), param='all')
         scov.close()
         self.assertTrue(res)
 
     def test_samplecov_time_five_bricks(self):
         # Tests setting and getting five brick's worth of data for the 'time' parameter
-        scov = self.get_cov(only_time=True)
+        scov, cov_name = self.get_cov(only_time=True)
         res = self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='time')
         scov.close()
         self.assertTrue(res)
 
     def test_samplecov_allparams_five_bricks(self):
         # Tests setting and getting five brick's worth of data for all parameters
-        scov = self.get_cov()
+        scov, cov_name = self.get_cov()
         res = self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='all')
         scov.close()
         self.assertTrue(res)
 
     def test_samplecov_time_one_brick_strided(self):
         # Tests setting and getting one brick's worth of data with a stride of two for the 'time' parameter
-        scov = self.get_cov(only_time=True)
+        scov, cov_name = self.get_cov(only_time=True)
         res = self._insert_set_get(scov=scov, timesteps=10, data=np.arange(10), _slice=slice(0,10,2), param='time')
         scov.close()
         self.assertTrue(res)
 
     def test_samplecov_time_five_bricks_strided(self):
         # Tests setting and getting five brick's worth of data with a stride of five for the 'time' parameter
-        scov = self.get_cov(only_time=True)
+        scov, cov_name = self.get_cov(only_time=True)
         res = self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50,5), param='time')
         scov.close()
         self.assertTrue(res)
@@ -502,28 +488,28 @@ class CoverageIntTestBase(object):
     # SAVE
     def test_coverage_flush(self):
         # Tests that the .flush() function flushes the coverage
-        scov = self.get_cov()
+        scov, cov_name = self.get_cov()
         scov.flush()
         self.assertTrue(not scov.has_dirty_values())
         scov.close()
 
     def test_coverage_save(self):
         # Tests that the .save() function flushes coverage
-        scov = self.get_cov()
+        scov, cov_name = self.get_cov()
         scov.save(scov)
         self.assertTrue(not scov.has_dirty_values())
         scov.close()
 
     def test_coverage_pickle_and_in_memory(self):
         # Tests creating a SimplexCoverage in memory and saving it to a pickle object
-        cov = self.get_cov(only_time=True, in_memory=True, save_coverage=True, nt=2000)
+        cov, cov_name = self.get_cov(only_time=True, in_memory=True, save_coverage=True, nt=2000)
         cov.close()
         self.assertTrue(os.path.exists(os.path.join(self.working_dir, 'sample.cov')))
 
     def test_pickle_problems_in_memory(self):
         # Tests saving and loading with both successful and unsuccessful test scenarios
         nt = 2000
-        scov = self.get_cov(only_time=True, brick_size=1000, in_memory=True, nt=nt)
+        scov, cov_name = self.get_cov(only_time=True, brick_size=1000, in_memory=True, nt=nt)
 
         # Add data for the parameter
         #TODO: This gets repeated, create separate function
@@ -574,6 +560,15 @@ class CoverageIntTestBase(object):
         pc = ParameterContext('pcname')
         self.assertEquals(pc.name, 'pcname')
         self.assertFalse(pc.is_coordinate)
+
+    def test_get_parameter(self):
+        cov, cov_name = self.get_cov()
+        param = cov.get_parameter('time')
+        self.assertEqual(param.name, 'time')
+
+        cov.close()
+        with self.assertRaises(ValueError):
+            cov.get_parameter('time')
 
     def test_params(self):
         # Tests ParameterDictionary and ParameterContext creation
@@ -647,8 +642,7 @@ class CoverageIntTestBase(object):
 
     def test_append_parameter(self):
         results = []
-        scov = self.get_cov(inline_data_writes=True, nt=50)
-        # self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='time')
+        scov, cov_name = self.get_cov(inline_data_writes=True, nt=50)
 
         parameter_name = 'turbidity'
         pc_in = ParameterContext(parameter_name, param_type=QuantityType(value_encoding=np.dtype('float32')))
@@ -673,8 +667,7 @@ class CoverageIntTestBase(object):
             scov.append_parameter(pc_in)
 
     def test_append_parameter_invalid_pc(self):
-        scov = self.get_cov(only_time=True, nt=50)
-        # self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='time')
+        scov, cov_name = self.get_cov(only_time=True, nt=50)
         with self.assertRaises(TypeError):
             scov.append_parameter('junk')
 
@@ -705,10 +698,12 @@ def get_parameter_dict(parameter_list=None):
 
     return pdict_ret
 
+OMIT_TEST_NO_DATA = ['TestEmptySampleCovInt']
 EXEMPLAR_CATEGORIES = {0:'turkey',1:'duck',2:'chicken',99:'None'}
 
 def _make_master_parameter_dict():
     # Construct ParameterDictionary of all supported types
+    # TODO: Ensure all description attributes are filled in properly
     pdict = ParameterDictionary()
 
     temp_ctxt = ParameterContext('temp', param_type=QuantityType(value_encoding=np.dtype('float32')))
@@ -872,20 +867,6 @@ def _make_master_parameter_dict():
 
 MASTER_PDICT = _make_master_parameter_dict()
 
-def _run_standard_tests(scov, timesteps):
-    # A suite of standard tests to run against a SimplexCoverage
-    results = []
-    # Check basic metadata
-    results.append(scov.name == 'sample coverage_model')
-    results.append(scov.num_timesteps == timesteps)
-    results.append(list(scov.temporal_domain.shape.extents) == [timesteps])
-    params = scov.list_parameters()
-    for param in params:
-        pc = scov.get_parameter_context(param)
-        results.append(len(pc.dom.identifier) == 36)
-
-    return False not in results
-
 def _make_tcrs():
     # Construct temporal Coordinate Reference System object
     tcrs = CRS([AxisTypeEnum.TIME])
@@ -906,36 +887,36 @@ def _make_sdom(scrs):
     sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
     return sdom
 
-def _slice_and_dice(scov):
-    # Tests retrieving data for a variety of slice conditions
-    results = []
-    index_errors = []
-    params = scov.list_parameters()
-    _slices = []
-    # TODO: Automatically calculate the start, stops and strides based on the brick size and time_steps
-    starts = [0, 1, 10, 500, 1000, 1001, 3000, 4999]
-    stops = [1, 2, 11, 501, 1001, 1002, 3001, 5000]
-    strides = [None, 1, 2, 3, 4, 5, 50, 100, 500, 750, 999, 1000, 1001, 1249, 1250, 1500, 2000, 3000, 4000, 5000]
-    for stride in strides:
-        for start in starts:
-            for stop in stops:
-                if stop > start and (stop-start) > stride:
-                    _slices.append(slice(start, stop, stride))
-    for param in params:
-        for _slice in _slices:
-            log.trace('working on _slice: %s', _slice)
-            sliced_data = np.arange(5000)[_slice]
-            try:
-                ret = scov.get_parameter_values(param, _slice)
-                if not (ret == sliced_data).all():
-                    results.append(_slice)
-                    log.trace('failed _slice: %s', _slice)
-            except IndexError as ie:
-                log.trace('%s; moving to next slice', ie.message)
-                index_errors.append(_slice)
-                continue
-    # scov.close()
-    return params, _slices, results, index_errors
+# def _slice_and_dice(scov):
+#     # Tests retrieving data for a variety of slice conditions
+#     results = []
+#     index_errors = []
+#     params = scov.list_parameters()
+#     _slices = []
+#     # TODO: Automatically calculate the start, stops and strides based on the brick size and time_steps
+#     starts = [0, 1, 10, 500, 1000, 1001, 3000, 4999]
+#     stops = [1, 2, 11, 501, 1001, 1002, 3001, 5000]
+#     strides = [None, 1, 2, 3, 4, 5, 50, 100, 500, 750, 999, 1000, 1001, 1249, 1250, 1500, 2000, 3000, 4000, 5000]
+#     for stride in strides:
+#         for start in starts:
+#             for stop in stops:
+#                 if stop > start and (stop-start) > stride:
+#                     _slices.append(slice(start, stop, stride))
+#     for param in params:
+#         for _slice in _slices:
+#             log.trace('working on _slice: %s', _slice)
+#             sliced_data = np.arange(5000)[_slice]
+#             try:
+#                 ret = scov.get_parameter_values(param, _slice)
+#                 if not (ret == sliced_data).all():
+#                     results.append(_slice)
+#                     log.trace('failed _slice: %s', _slice)
+#             except IndexError as ie:
+#                 log.trace('%s; moving to next slice', ie.message)
+#                 index_errors.append(_slice)
+#                 continue
+#     scov.close()
+#     return params, _slices, results, index_errors
 
 
 @attr('INT', group='cov')
