@@ -12,12 +12,23 @@ from nose.plugins.attrib import attr
 import numpy as np
 from pyon.public import log
 import random
+from copy import deepcopy
 
 from coverage_test_base import *
 
-
 @attr('INT', group='cov')
 class TestSampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
+
+    # Make a deep copy of the base TESTING_PROPERTIES dict and then modify for this class
+    TESTING_PROPERTIES = deepcopy(CoverageIntTestBase.TESTING_PROPERTIES)
+    TESTING_PROPERTIES['test_props_decorator'] = {'test_props': 10}
+
+    @get_props()
+    def test_props_decorator(self):
+        props = self.test_props_decorator.props
+        self.assertIsInstance(props, dict)
+        expected = {'time_steps': 30, 'test_props': 10, 'brick_size': 1000}
+        self.assertEqual(props, expected)
 
     def setUp(self):
         pass
@@ -157,6 +168,17 @@ class TestOneParamCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
 @attr('INT', group='cov')
 class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
+
+    # Make a deep copy of the base TESTING_PROPERTIES dict and then modify for this class
+    TESTING_PROPERTIES = deepcopy(CoverageIntTestBase.TESTING_PROPERTIES)
+    TESTING_PROPERTIES['defaults'] = {'time_steps': 0}
+
+    @get_props()
+    def test_props_decorator(self):
+        props = self.test_props_decorator.props
+        self.assertIsInstance(props, dict)
+        expected = {'time_steps': 0, 'test_props': 'base_test_props', 'brick_size': 1000}
+        self.assertEqual(props, expected)
 
     def setUp(self):
         pass

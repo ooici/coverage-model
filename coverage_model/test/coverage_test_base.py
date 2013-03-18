@@ -13,8 +13,88 @@ import numpy as np
 import os
 from pyon.public import log
 
+from copy import deepcopy
+import functools
+
+
+def get_props():
+
+    def decorating_function(function):
+
+        @functools.wraps(function)
+        def wrapper(*args, **kwargs):
+
+            func_name = function.__name__
+            props = dict(deepcopy(CoverageIntTestBase.TESTING_PROPERTIES)['defaults'].items())
+
+            if isinstance(args[0], CoverageIntTestBase):
+                sub_props = args[0].TESTING_PROPERTIES
+                props.update(sub_props['defaults'].items())
+                if func_name in sub_props:
+                    props.update(sub_props[func_name].items())
+
+            wrapper.props = props
+            result = function(*args, **kwargs)
+
+            return result
+        return wrapper
+    return decorating_function
+
 
 class CoverageIntTestBase(object):
+    """
+    Base class for integration tests for the coverage model.  Provides a set of core tests that are run by multiple
+    sub-classes which provide specific coverages.
+
+    <b>get_props decorator</b>
+    Evaluates the contents of <i>TESTING_PROPERTIES</i> on a test-by-test basis and
+    Provides a self.method_name.props attribute to the method that contains a dictionary of properties
+
+    The <i>TESTING_PROPERTIES</i> dictionary can be extended/amended by subclasses to provide specific properties
+    on a class-wide and/or test-by-test basis
+
+    The <i>TESTING_PROPERTIES</i> dict should be <b>deepcopied</b> in each subclass and the keys overridden as necessary
+
+    All 'top level' values <b>MUST</b> be instances of dict
+
+    Keys overridden by subclasses are done so in a 'non-destructive' manner.  In the example below, any keys present in
+    the CoverageIntTestBase.TESTING_PROPERTIES['defaults'] dictionary OTHER than 'time_steps' will be preserved.
+
+    The properties available to a specific test are a non-destructive combination of 'defaults' and those for the
+    specific test.
+
+    Subclass Example:
+    \code{.py}
+    from copy import deepcopy
+    TESTING_PROPERTIES = deepcopy(CoverageIntTestBase.TESTING_PROPERTIES
+    TESTING_PROPERTIES['defaults'] = {'time_steps': 20}
+    TESTING_PROPERTIES['test_method_one'] = {'my_prop': 'myval'}
+
+    @get_props()
+    def test_method_one(self):
+        props = self.test_method_one.props
+        time_steps = props['time_steps']
+        assert time_steps == 20
+        myprop = props['my_prop']
+        assert myprop == 'myval'
+
+    \endcode
+    """
+
+    TESTING_PROPERTIES = {
+        'test_props_decorator': {'test_props': 'base_test_props'},
+        'defaults': {'time_steps': 30,
+                     'brick_size': 1000,
+                     },
+    }
+
+
+    @get_props()
+    def test_props_decorator(self):
+        props = self.test_props_decorator.props
+        self.assertIsInstance(props, dict)
+        expected = {'time_steps': 30, 'test_props': 'base_test_props', 'brick_size': 1000}
+        self.assertEqual(props, expected)
 
     def setUp(self):
         pass
@@ -43,17 +123,19 @@ class CoverageIntTestBase(object):
 
     # ############################
     # CONSTRUCTION
+    @get_props()
     def test_create_cov(self):
-        time_steps = 30
+        props = self.test_create_cov.props
+        time_steps = props['time_steps']
+
         cov, cov_name = self.get_cov(nt=time_steps)
         self.assertIsInstance(cov, SimplexCoverage)
         cov_info_str = cov.info
         self.assertIsInstance(cov_info_str, basestring)
         self.assertEqual(cov.name, 'sample coverage_model')
 
-        if cov_name not in OMIT_TEST_NO_DATA:
-            self.assertEqual(cov.num_timesteps, time_steps)
-            self.assertEqual(list(cov.temporal_domain.shape.extents), [time_steps])
+        self.assertEqual(cov.num_timesteps, time_steps)
+        self.assertEqual(list(cov.temporal_domain.shape.extents), [time_steps])
 
         params = cov.list_parameters()
         for param in params:
