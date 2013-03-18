@@ -70,22 +70,30 @@ class ParameterContext(AbstractIdentifiable):
     """
 
     # Dynamically added attributes - from ObjectType CI Attributes (2480139)
-    ATTRS = ['attributes',
-             'index_key',
-             'ion_name',
+    ATTRS = [
+#             'attributes',
+#             'index_key',
+#             'ion_name',
 #             'name', # accounted for as 'name'
 #             'units', # accounted for as 'uom'
-             'standard_name',
-             'long_name',
-             'ooi_short_name',
-             'display_name',
+#             'standard_name',
+#             'long_name',
+#             'ooi_short_name',
+#             'display_name',
 #             'missing_value', # accounted for as 'fill_value'
-             'cdm_data_type',
-             'variable_reports',
+#             'cdm_data_type',
+#             'variable_reports',
 #             'axis', # accounted for as 'axis'
-             'references',
+#             'references',
 #             'comment', # accounted for as description
-             'code_reports',]
+#             'code_reports',]
+            'reference_urls',
+            'internal_name',
+            'display_name', 
+            'standard_name',
+            'ooi_short_name',
+            #'description', # Warning - Overrides AbstractIdentifiable.description
+    ]
 
     def __init__(self, name, param_type=None, axis=None, fill_value=None, variability=None, uom=None, **kwargs):
         """
