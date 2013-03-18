@@ -92,7 +92,7 @@ class ParameterContext(AbstractIdentifiable):
             'display_name', 
             'standard_name',
             'ooi_short_name',
-            'description',
+            #'description', # Warning - Overrides AbstractIdentifiable.description
     ]
 
     def __init__(self, name, param_type=None, axis=None, fill_value=None, variability=None, uom=None, **kwargs):
