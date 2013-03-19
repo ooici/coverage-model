@@ -102,7 +102,7 @@ class BaseManager(object):
             self._dirty.difference_update(self._ignore) # Ensure any ignored attrs are gone...
             for k, v in [(k,v) for k, v in self.__dict__.iteritems() if not k in self._ignore and not k.startswith('_')]:
                 chv = utils.hash_any(v)
-                log.trace('key=%s:  cached hash value=%s  current hash value=%s', k, self._hmap[k], chv)
+                # log.trace('key=%s:  cached hash value=%s  current hash value=%s', k, self._hmap[k], chv)
                 if self._hmap[k] != chv:
                     self._dirty.add(k)
 
@@ -120,7 +120,7 @@ class MasterManager(BaseManager):
     def __init__(self, root_dir, guid, **kwargs):
         BaseManager.__init__(self, root_dir=os.path.join(root_dir,guid), file_name='{0}_master.hdf5'.format(guid), **kwargs)
         self.guid = guid
-        if self.parameter_bounds is None:
+        if hasattr(self, 'parameter_bounds') and self.parameter_bounds is None:
             self.parameter_bounds = {}
 
         # Add attributes that should NEVER be flushed

@@ -1106,7 +1106,7 @@ class SimplexCoverage(AbstractCoverage):
                 if self._in_memory_storage:
                     self._persistence_layer = InMemoryPersistenceLayer()
                 else:
-                    self._persistence_layer = PersistenceLayer(root_dir, persistence_guid, name=name, tdom=temporal_domain, sdom=spatial_domain, mode=self.mode, bricking_scheme=self._bricking_scheme, inline_data_writes=inline_data_writes, auto_flush_values=auto_flush_values, value_caching=value_caching)
+                    self._persistence_layer = PersistenceLayer(root_dir, persistence_guid, name=name, tdom=self.temporal_domain, sdom=self.spatial_domain, mode=self.mode, bricking_scheme=self._bricking_scheme, inline_data_writes=inline_data_writes, auto_flush_values=auto_flush_values, value_caching=value_caching)
 
                 for o, pc in parameter_dictionary.itervalues():
                     self.append_parameter(pc)
