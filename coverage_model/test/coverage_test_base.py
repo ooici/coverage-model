@@ -8,6 +8,7 @@
 """
 
 from coverage_model import *
+from coverage_model.coverage import *
 from nose.plugins.attrib import attr
 import numpy as np
 import os
@@ -107,7 +108,7 @@ class CoverageIntTestBase(object):
 
     # ############################
     # METADATA
-    def test_get_all_data_metadata(self):
+    def test_get_time_metadata(self):
         scov, cov_name = self.get_cov(only_time=True, in_memory=True, inline_data_writes=True, auto_flush_values=True, nt=5000)
         # self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='time')
         res = scov.get_data_bounds(parameter_name='time')
@@ -121,15 +122,20 @@ class CoverageIntTestBase(object):
         res = scov.get_data_size(parameter_name='time', slice_=None, in_bytes=False)
         self.assertEqual(res, 0.03814696)
 
+    def test_get_all_metadata(self):
+        #TODO: Make sure we can get all the data for all the parameters
+        pass
+
     # ############################
     # CONSTRUCTION
     @get_props()
+
     def test_create_cov(self):
         props = self.test_create_cov.props
         time_steps = props['time_steps']
 
         cov, cov_name = self.get_cov(nt=time_steps)
-        self.assertIsInstance(cov, SimplexCoverage)
+        self.assertIsInstance(cov, AbstractCoverage)
         cov_info_str = cov.info
         self.assertIsInstance(cov_info_str, basestring)
         self.assertEqual(cov.name, 'sample coverage_model')
@@ -170,7 +176,7 @@ class CoverageIntTestBase(object):
         brick_size = 1000
         time_steps = 5000
         scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
-        self.assertIsInstance(scov, SimplexCoverage)
+        self.assertIsInstance(scov, AbstractCoverage)
 
         if scov.num_timesteps != time_steps:
             log.warn('Must be an empty coverage!')
@@ -276,10 +282,10 @@ class CoverageIntTestBase(object):
         base_path = root_path.replace(guid,'')
         scov.close()
         lcov = SimplexCoverage(base_path, guid)
-        self.assertIsInstance(lcov, SimplexCoverage)
+        self.assertIsInstance(lcov, AbstractCoverage)
 
         lcov = SimplexCoverage.load(scov.persistence_dir)
-        self.assertIsInstance(lcov, SimplexCoverage)
+        self.assertIsInstance(lcov, AbstractCoverage)
         lcov.close()
 
     def test_dot_load_succeeds(self):
@@ -293,7 +299,7 @@ class CoverageIntTestBase(object):
         scov.close()
         lcov = SimplexCoverage.load(base_path, guid)
         lcov.close()
-        self.assertIsInstance(lcov, SimplexCoverage)
+        self.assertIsInstance(lcov, AbstractCoverage)
 
     def test_get_data_after_load(self):
         # Creates a valid coverage, inserts data and .load coverage back up from the HDF5 files.
@@ -310,12 +316,12 @@ class CoverageIntTestBase(object):
         results.append(np.arange(50).any() == ret_data.any())
         self.assertTrue(False not in results)
         lcov.close()
-        self.assertIsInstance(lcov, SimplexCoverage)
+        self.assertIsInstance(lcov, AbstractCoverage)
 
     def test_load_fails_bad_guid(self):
         # Tests load fails if coverage exists and path is correct but GUID is incorrect
         scov, cov_name = self.get_cov()
-        self.assertIsInstance(scov, SimplexCoverage)
+        self.assertIsInstance(scov, AbstractCoverage)
         self.assertTrue(os.path.exists(scov.persistence_dir))
         guid = 'some_incorrect_guid'
         base_path = scov.persistence_dir
@@ -327,7 +333,7 @@ class CoverageIntTestBase(object):
     def test_dot_load_fails_bad_guid(self):
         # Tests load fails if coverage exists and path is correct but GUID is incorrect
         scov, cov_name = self.get_cov()
-        self.assertIsInstance(scov, SimplexCoverage)
+        self.assertIsInstance(scov, AbstractCoverage)
         self.assertTrue(os.path.exists(scov.persistence_dir))
         guid = 'some_incorrect_guid'
         base_path = scov.persistence_dir
@@ -346,21 +352,21 @@ class CoverageIntTestBase(object):
         scov, cov_name = self.get_cov()
         scov.close()
         cov = SimplexCoverage(scov.persistence_dir, scov.persistence_guid)
-        self.assertIsInstance(cov, SimplexCoverage)
+        self.assertIsInstance(cov, AbstractCoverage)
         cov.close()
 
     def test_dot_load_options_pd(self):
         scov, cov_name = self.get_cov()
         scov.close()
         cov = SimplexCoverage.load(scov.persistence_dir)
-        self.assertIsInstance(cov, SimplexCoverage)
+        self.assertIsInstance(cov, AbstractCoverage)
         cov.close()
 
     def test_dot_load_options_pd_pg(self):
         scov, cov_name = self.get_cov()
         scov.close()
         cov = SimplexCoverage.load(scov.persistence_dir, scov.persistence_guid)
-        self.assertIsInstance(cov, SimplexCoverage)
+        self.assertIsInstance(cov, AbstractCoverage)
         cov.close()
 
     def test_load_succeeds_with_options(self):
@@ -383,7 +389,7 @@ class CoverageIntTestBase(object):
 
         lcov = SimplexCoverage(base_path, guid, name, pdict, tdom, sdom)
         lcov.close()
-        self.assertIsInstance(lcov, SimplexCoverage)
+        self.assertIsInstance(lcov, AbstractCoverage)
 
     # ############################
     # MODES
@@ -409,18 +415,22 @@ class CoverageIntTestBase(object):
     def test_persistence_variation1(self):
         scov, cov_name = self.get_cov(only_time=True, in_memory=False, inline_data_writes=False, auto_flush_values=True)
         res = self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='time')
+        self.assertTrue(res)
 
     def test_persistence_variation2(self):
         scov, cov_name = self.get_cov(only_time=True, in_memory=True, inline_data_writes=False, auto_flush_values=True)
         res = self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='time')
+        self.assertTrue(res)
 
     def test_persistence_variation3(self):
         scov, cov_name = self.get_cov(only_time=True, in_memory=True, inline_data_writes=True, auto_flush_values=True)
         res = self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='time')
+        self.assertTrue(res)
 
     def test_persistence_variation4(self):
         scov, cov_name = self.get_cov(only_time=True, in_memory=False, inline_data_writes=True, auto_flush_values=True)
         res = self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='time')
+        self.assertTrue(res)
 
     # ############################
     # GET
@@ -503,6 +513,13 @@ class CoverageIntTestBase(object):
                         results.append(np.array_equiv(mock_data, data))
         self.assertTrue(False not in results)
 
+    def test_get_by_int(self):
+        pass
+
+    def test_get_by_list(self):
+        pass
+
+    
     # ############################
     # SET
     def test_samplecov_time_one_brick(self):
@@ -565,6 +582,27 @@ class CoverageIntTestBase(object):
 
     # ############################
     # ERRORS
+    def test_error_get_invalid_parameter(self):
+        cov, cov_name = self.get_cov()
+        with self.assertRaises(KeyError):
+            cov.get_parameter_values('invalid_parameter')
+
+        with self.assertRaises(KeyError):
+            cov.get_parameter_context('invalid_context')
+
+    def test_error_set_invalid_parameter(self):
+        cov, cov_name = self.get_cov()
+
+        with self.assertRaises(KeyError):
+            cov.set_parameter_values('invalid_parameter', np.arange(cov.num_timesteps))
+
+        cov.mode = 'r'
+        with self.assertRaises(IOError):
+            cov.set_parameter_values('time', np.arange(cov.num_timesteps))
+
+        cov.close()
+        with self.assertRaises(IOError):
+            cov.set_parameter_values('time', np.arange(cov.num_timesteps))
 
     # ############################
     # SAVE
@@ -605,7 +643,7 @@ class CoverageIntTestBase(object):
         self.assertTrue(os.path.join(self.working_dir, 'sample.cov'))
 
         ncov = SimplexCoverage.pickle_load(pickled_coverage_file)
-        self.assertIsInstance(ncov, SimplexCoverage)
+        self.assertIsInstance(ncov, AbstractCoverage)
 
         with self.assertRaises(StandardError):
             SimplexCoverage.pickle_load('some_bad_file_location.cov')
@@ -752,6 +790,9 @@ class CoverageIntTestBase(object):
         scov, cov_name = self.get_cov(only_time=True, nt=50)
         with self.assertRaises(TypeError):
             scov.append_parameter('junk')
+
+    def test_list_parameters_coords_only(self):
+        pass
 
 
 def get_parameter_dict_info():

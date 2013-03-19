@@ -104,6 +104,13 @@ class TestSampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
             ret = scov.get_parameter_values(param, _slice)
         return (ret == data).all()
 
+    def test_list_parameters_coords_only(self):
+        cov, cov_name = self.get_cov()
+        coords_params = cov.list_parameters(coords_only=True)
+        self.assertEqual(coords_params, ['lat', 'lon', 'time'])
+        data_params = cov.list_parameters(data_only=True)
+        self.assertEqual(data_params, ['conductivity', 'temp'])
+
 @attr('INT', group='cov')
 class TestOneParamCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
@@ -225,6 +232,9 @@ class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         pass
 
     def test_append_parameter(self):
+        pass
+
+    def test_get_time_metadata(self):
         pass
 
 
@@ -363,7 +373,7 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         # TODO: Implement getting values from FunctionType, ArrayType and RecordType
         results = []
         ptypes_cov, cov_name = self.get_cov(nt=2000)
-        self.assertIsInstance(ptypes_cov, SimplexCoverage)
+        self.assertIsInstance(ptypes_cov, AbstractCoverage)
 
         # QuantityType
         results.append((ptypes_cov._range_value.time[:] == np.arange(2000)).any())
