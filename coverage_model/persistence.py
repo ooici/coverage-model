@@ -669,9 +669,8 @@ class PersistedStorage(AbstractStorage):
 
         ret_arr = ret_arr.squeeze()
 
-        # # If the array is size 1 AND a slice object was NOT part of the query
-        if ret_arr.size == 1 and np.atleast_1d([isinstance(s, slice) for s in slice_]):
-        # if ret_arr.size == 1:
+        # If the array is size 1 AND a slice object was NOT part of the query
+        if ret_arr.size == 1 and not np.atleast_1d([isinstance(s, slice) for s in slice_]).all():
             if ret_arr.ndim == 0:
                 ret_arr = ret_arr[()]
             else:

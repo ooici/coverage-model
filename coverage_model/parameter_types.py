@@ -703,7 +703,7 @@ class ConstantRangeType(AbstractComplexParameterType):
         self._gen_template_attrs()
 
     def is_valid_value(self, value):
-        if isinstance(value, (list, tuple)) and len(value) >= 2:
+        if isinstance(value, (list, tuple, np.ndarray)) and len(value) >= 2:
             my_kind=np.dtype(self.value_encoding).kind
             for v in value[:2]:
                 if np.asanyarray(v).dtype.kind != my_kind:
