@@ -117,47 +117,47 @@ class TestBrickingUtilsUnit(CoverageModelUnitTestCase):
         # Incompatible brick_origins & brick_sizes
         self.assertRaises(ValueError, calc_brick_and_rtree_extents, brick_origins, brick_sizes)
 
-    def test_rtree_populator_1d(self):
-
-        brick_extents = (((0, 4),), ((5, 9),), ((10, 14),))
-        rtree_extents = ((0, 0, 4, 0), (5, 0, 9, 0), (10, 0, 14, 0))
-
-        p = index.Property()
-        p.dimension = 2  # Minimum is 2 for proper functioning
-        rtree = index.Index(rtree_populator(rtree_extents, brick_extents), properties=p)
-
-        self.assertIsInstance(rtree, index.Index)
-        self.assertEqual(rtree.get_bounds(), [0.0, 0.0, 14.0, 0.0])
-        self.assertEqual(rtree.leaves(), [(0, [0, 1, 2], [0.0, 0.0, 14.0, 0.0])])
-        self.assertEqual(rtree.properties.dimension, 2)
-
-    def test_rtree_populator_2d(self):
-
-        brick_extents = (((0, 4), (0, 4)), ((0, 4), (5, 9)), ((5, 9), (0, 4)), ((5, 9), (5, 9)), ((10, 14), (0, 4)), ((10, 14), (5, 9)))
-        rtree_extents = ((0, 0, 4, 4), (0, 5, 4, 9), (5, 0, 9, 4), (5, 5, 9, 9), (10, 0, 14, 4), (10, 5, 14, 9))
-
-        p = index.Property()
-        p.dimension = 2
-        rtree = index.Index(rtree_populator(rtree_extents, brick_extents), properties=p)
-
-        self.assertIsInstance(rtree, index.Index)
-        self.assertEqual(rtree.get_bounds(), [0.0, 0.0, 14.0, 9.0])
-        self.assertEqual(rtree.leaves(), [(0, [0, 1, 2, 3, 4, 5], [0.0, 0.0, 14.0, 9.0])])
-        self.assertEqual(rtree.properties.dimension, 2)
-
-    def test_rtree_populator_3d(self):
-
-        brick_extents = (((0, 4), (0, 4), (0, 4)), ((0, 4), (5, 9), (0, 4)), ((0, 4), (10, 14), (0, 4)), ((5, 9), (0, 4), (0, 4)), ((5, 9), (5, 9), (0, 4)), ((5, 9), (10, 14), (0, 4)))
-        rtree_extents = ((0, 0, 0, 4, 4, 4), (0, 5, 0, 4, 9, 4), (0, 10, 0, 4, 14, 4), (5, 0, 0, 9, 4, 4), (5, 5, 0, 9, 9, 4), (5, 10, 0, 9, 14, 4))
-
-        p = index.Property()
-        p.dimension = 3
-        rtree = index.Index(rtree_populator(rtree_extents, brick_extents), properties=p)
-
-        self.assertIsInstance(rtree, index.Index)
-        self.assertEqual(rtree.get_bounds(), [0.0, 0.0, 0.0, 9.0, 14.0, 4.0])
-        self.assertEqual(rtree.leaves(), [(0, [0, 1, 2, 3, 4, 5], [0.0, 0.0, 0.0, 9.0, 14.0, 4.0])])
-        self.assertEqual(rtree.properties.dimension, 3)
+    # def test_rtree_populator_1d(self):
+    #
+    #     brick_extents = (((0, 4),), ((5, 9),), ((10, 14),))
+    #     rtree_extents = ((0, 0, 4, 0), (5, 0, 9, 0), (10, 0, 14, 0))
+    #
+    #     p = index.Property()
+    #     p.dimension = 2  # Minimum is 2 for proper functioning
+    #     rtree = index.Index(rtree_populator(rtree_extents, brick_extents), properties=p)
+    #
+    #     self.assertIsInstance(rtree, index.Index)
+    #     self.assertEqual(rtree.get_bounds(), [0.0, 0.0, 14.0, 0.0])
+    #     self.assertEqual(rtree.leaves(), [(0, [0, 1, 2], [0.0, 0.0, 14.0, 0.0])])
+    #     self.assertEqual(rtree.properties.dimension, 2)
+    #
+    # def test_rtree_populator_2d(self):
+    #
+    #     brick_extents = (((0, 4), (0, 4)), ((0, 4), (5, 9)), ((5, 9), (0, 4)), ((5, 9), (5, 9)), ((10, 14), (0, 4)), ((10, 14), (5, 9)))
+    #     rtree_extents = ((0, 0, 4, 4), (0, 5, 4, 9), (5, 0, 9, 4), (5, 5, 9, 9), (10, 0, 14, 4), (10, 5, 14, 9))
+    #
+    #     p = index.Property()
+    #     p.dimension = 2
+    #     rtree = index.Index(rtree_populator(rtree_extents, brick_extents), properties=p)
+    #
+    #     self.assertIsInstance(rtree, index.Index)
+    #     self.assertEqual(rtree.get_bounds(), [0.0, 0.0, 14.0, 9.0])
+    #     self.assertEqual(rtree.leaves(), [(0, [0, 1, 2, 3, 4, 5], [0.0, 0.0, 14.0, 9.0])])
+    #     self.assertEqual(rtree.properties.dimension, 2)
+    #
+    # def test_rtree_populator_3d(self):
+    #
+    #     brick_extents = (((0, 4), (0, 4), (0, 4)), ((0, 4), (5, 9), (0, 4)), ((0, 4), (10, 14), (0, 4)), ((5, 9), (0, 4), (0, 4)), ((5, 9), (5, 9), (0, 4)), ((5, 9), (10, 14), (0, 4)))
+    #     rtree_extents = ((0, 0, 0, 4, 4, 4), (0, 5, 0, 4, 9, 4), (0, 10, 0, 4, 14, 4), (5, 0, 0, 9, 4, 4), (5, 5, 0, 9, 9, 4), (5, 10, 0, 9, 14, 4))
+    #
+    #     p = index.Property()
+    #     p.dimension = 3
+    #     rtree = index.Index(rtree_populator(rtree_extents, brick_extents), properties=p)
+    #
+    #     self.assertIsInstance(rtree, index.Index)
+    #     self.assertEqual(rtree.get_bounds(), [0.0, 0.0, 0.0, 9.0, 14.0, 4.0])
+    #     self.assertEqual(rtree.leaves(), [(0, [0, 1, 2, 3, 4, 5], [0.0, 0.0, 0.0, 9.0, 14.0, 4.0])])
+    #     self.assertEqual(rtree.properties.dimension, 3)
 
     def _get_bricks_assert(self, slice_, rtree, total_domain, size, brick_list):
         bricks = get_bricks_from_slice(slice_, rtree, total_domain)
@@ -179,9 +179,10 @@ class TestBrickingUtilsUnit(CoverageModelUnitTestCase):
         brick_1 = (1, ((5, 9),))
         brick_2 = (2, ((10, 14),))
 
+        from coverage_model.test.bricking_assessment_utility import BrickingAssessor
         p = index.Property()
         p.dimension = 2  # Minimum is 2 for proper functioning
-        rtree = index.Index(rtree_populator(rtree_extents, brick_extents), properties=p)
+        rtree = index.Index(BrickingAssessor.rtree_populator(rtree_extents, brick_extents), properties=p)
 
         # Try a variety of slices
         self._get_bricks_assert(slice(None), rtree, total_domain, 3, [brick_0, brick_1, brick_2])
@@ -220,9 +221,10 @@ class TestBrickingUtilsUnit(CoverageModelUnitTestCase):
         brick_4 = (4, ((10, 14), (0, 4)))
         brick_5 = (5, ((10, 14), (5, 9)))
 
+        from coverage_model.test.bricking_assessment_utility import BrickingAssessor
         p = index.Property()
         p.dimension = 2
-        rtree = index.Index(rtree_populator(rtree_extents, brick_extents), properties=p)
+        rtree = index.Index(BrickingAssessor.rtree_populator(rtree_extents, brick_extents), properties=p)
 
         # Get all bricks
         self._get_bricks_assert((slice(None),) * 2, rtree, total_domain, 6, [brick_0, brick_1, brick_2, brick_3, brick_4, brick_5])
@@ -269,9 +271,10 @@ class TestBrickingUtilsUnit(CoverageModelUnitTestCase):
         brick_4 = (4, ((5, 9), (5, 9), (0, 4)))
         brick_5 = (5, ((5, 9), (10, 14), (0, 4)))
 
+        from coverage_model.test.bricking_assessment_utility import BrickingAssessor
         p = index.Property()
         p.dimension = 3
-        rtree = index.Index(rtree_populator(rtree_extents, brick_extents), properties=p)
+        rtree = index.Index(BrickingAssessor.rtree_populator(rtree_extents, brick_extents), properties=p)
 
         # Get all bricks
         self._get_bricks_assert((slice(None),) * 3, rtree, total_domain, 6, [brick_0, brick_1, brick_2, brick_3, brick_4, brick_5])
@@ -322,24 +325,15 @@ class TestBrickingUtilsUnit(CoverageModelUnitTestCase):
 
     def test_set_get_slice_1d(self):
         from coverage_model.test.bricking_assessment_utility import test_1d
-        test_1d(self._run_test_slices, None, persist=False, verbose=False, dtype='int16')
-        test_1d(self._run_test_slices, None, persist=False, verbose=False, dtype='int32')
         test_1d(self._run_test_slices, None, persist=False, verbose=False, dtype='float32')
-        test_1d(self._run_test_slices, None, persist=False, verbose=False, dtype='float64')
 
     def test_set_get_slice_2d(self):
         from coverage_model.test.bricking_assessment_utility import test_2d
-        test_2d(self._run_test_slices, None, persist=False, verbose=False, dtype='int16')
-        test_2d(self._run_test_slices, None, persist=False, verbose=False, dtype='int32')
         test_2d(self._run_test_slices, None, persist=False, verbose=False, dtype='float32')
-        test_2d(self._run_test_slices, None, persist=False, verbose=False, dtype='float64')
 
     def test_set_get_slice_3d(self):
         from coverage_model.test.bricking_assessment_utility import test_3d
-        test_3d(self._run_test_slices, None, persist=False, verbose=False, dtype='int16')
-        test_3d(self._run_test_slices, None, persist=False, verbose=False, dtype='int32')
         test_3d(self._run_test_slices, None, persist=False, verbose=False, dtype='float32')
-        test_3d(self._run_test_slices, None, persist=False, verbose=False, dtype='float64')
 
 
 @attr('INT', group='cov')
@@ -357,21 +351,12 @@ class TestBrickingUtilsInt(CoverageModelIntTestCase):
 
     def test_set_get_slice_1d(self):
         from coverage_model.test.bricking_assessment_utility import test_1d
-        test_1d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='int16')
-        test_1d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='int32')
         test_1d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='float32')
-        test_1d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='float64')
 
     def test_set_get_slice_2d(self):
         from coverage_model.test.bricking_assessment_utility import test_2d
-        test_2d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='int16')
-        test_2d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='int32')
         test_2d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='float32')
-        test_2d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='float64')
 
     def test_set_get_slice_3d(self):
         from coverage_model.test.bricking_assessment_utility import test_3d
-        test_3d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='int16')
-        test_3d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='int32')
         test_3d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='float32')
-        test_3d(self._run_test_slices, self.working_dir, persist=True, verbose=False, dtype='float64')

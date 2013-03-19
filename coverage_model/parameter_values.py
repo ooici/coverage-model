@@ -339,23 +339,12 @@ class ConstantRangeValue(AbstractComplexParameterValue):
         @return:
         """
         kwc=kwargs.copy()
-        # Special handling for this type due to the stringification TODO: reconsider after slicing is reworked
-        if storage is None:
-            storage = InMemoryStorage(dtype=parameter_type.storage_encoding, fill_value=str(parameter_type.fill_value))
-
         AbstractComplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
-        self._storage.expand((1,), 0, 1)
+        self._storage.expand((1,), 0, 2)
 
     @property
     def content(self):
-        import ast
-        # CBM TODO: Remove this check once slicing is fixed
-        if self._storage[0] is None:
-            return None
-        if isinstance(self._storage[0], np.ndarray) and self._storage[0].size == 0:
-            return self.parameter_type.fill_value
-
-        return ast.literal_eval(self._storage[0])
+        return tuple(self._storage[:2])
 
     def expand_content(self, domain, origin, expansion):
         # No op storage is always 1 - appropriate domain applied during retrieval of data
@@ -369,14 +358,14 @@ class ConstantRangeValue(AbstractComplexParameterValue):
         slice_ = utils.fix_slice(slice_, self.shape)
 
         ret_shape = utils.get_shape_from_slice(slice_, self.shape)
-        ret = np.empty(ret_shape, dtype=np.dtype(object)) # Always object type because it's 2 values / element!!
+        ret = np.empty(ret_shape, dtype=np.dtype(object))  # Always object type because it's 2 values / element!!
         ret.fill(self.content)
 
-        if ret.size==1:
-            if ret.ndim==0:
-                ret=ret[()]
+        if ret.size == 1:
+            if ret.ndim == 0:
+                ret = ret[()]
             else:
-                ret=ret[0]
+                ret = ret[0]
         return ret
 
     def __setitem__(self, slice_, value):
@@ -385,7 +374,7 @@ class ConstantRangeValue(AbstractComplexParameterValue):
             # the first two values are of the correct type...so...just deal with funky nesting...
             va = np.atleast_1d(value)
             va = va.flatten()  # Flatten the whole thing - deals with nD arrays
-            self._storage[0] = str(tuple(va[:2]))
+            self._storage[:2] = np.array(va[:2], dtype=self.value_encoding)
 
             self._update_min_max(self.content)
 

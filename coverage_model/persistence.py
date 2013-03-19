@@ -525,6 +525,9 @@ class PersistedStorage(AbstractStorage):
         # Filesystem path to HDF brick file(s)
         self.brick_path = parameter_manager.root_dir
 
+        from coverage_model.coverage import DomainSet
+        self.total_domain = DomainSet(master_manager.tdom, master_manager.sdom)
+
         self.brick_tree = master_manager.brick_tree
         self.brick_list = master_manager.brick_list
         self.brick_domains = master_manager.brick_domains
@@ -614,63 +617,66 @@ class PersistedStorage(AbstractStorage):
         @return The value contained by the storage at location slice
         @raise  ValueError when brick contains no values for specified slice
         """
+        from coverage_model import bricking_utils, utils
 
-        if not isinstance(slice_, (list,tuple)):
-            slice_ = [slice_]
-        log.debug('getitem slice_: %s', slice_)
+        extents = tuple([s for s in self.total_domain.total_extents if s != 0])
+        # bricks is a list of tuples [(b_ord, b_guid), ...]
+        slice_ = utils.fix_slice(deepcopy(slice_), extents)
+        log.trace('slice_=%s', slice_)
+        bricks = bricking_utils.get_bricks_from_slice(slice_, self.brick_tree, extents)
+        log.trace('Found bricks: %s', bricks)
 
-        arr_shp = self._get_array_shape_from_slice(slice_)
-
-        ret_arr = np.empty(arr_shp, dtype=self.dtype)
+        ret_shp = utils.slice_shape(slice_, extents)
+        log.trace('Return array shape: %s', ret_shp)
+        ret_arr = np.empty(ret_shp, dtype=self.dtype)
         ret_arr.fill(self.fill_value)
-        ret_origin = [0 for x in range(ret_arr.ndim)]
-        log.trace('Shape of returned array: %s', ret_arr.shape)
 
-        if arr_shp == 0:
-            return ret_arr
+        for b in bricks:
+            # b is (brick_ordinal, brick_guid)
+            _, bid = b
+            # brick_list[brick_guid] contains: [brick_extents, origin, tuple(bD), brick_active_size]
+            _, bori, _, bact = self.brick_list[bid]
+            bbnds = []
+            for i, bnd in enumerate(bori):
+                bbnds.append((bori[i], bori[i] + bact[i] - 1))
+            bbnds = tuple(bbnds)
 
-        brick_origin_offset = 0
+            brick_slice, brick_mm = bricking_utils.get_brick_slice_nd(slice_, bbnds)
+            log.trace('brick_slice=%s\tbrick_mm=%s', brick_slice, brick_mm)
 
-        bricks = self._bricks_from_slice(slice_)
-        log.trace('Slice %s indicates bricks: %s', slice_, bricks)
-
-        for idx, brick_guid in bricks:
-            brick_file_path = '{0}/{1}.hdf5'.format(self.brick_path, brick_guid)
-
-            # Figuring out which part of brick to set values - also appropriately increments the ret_origin
-            log.trace('Return array origin: %s', ret_origin)
-            try:
-                brick_slice, value_slice, brick_origin_offset = self._calc_slices(slice_, brick_guid, ret_arr, ret_origin, brick_origin_offset)
-                if brick_slice is None:
-                    raise ValueError('Brick contains no values for specified slice')
-            except ValueError as ve:
-                log.warn(ve.message + '; moving to next brick')
+            if None in brick_slice:
+                log.info('Brick does not contain any of the requested indices: Move to next brick')
                 continue
 
-            log.trace('Brick slice to extract: %s', brick_slice)
-            log.trace('Value slice to fill: %s', value_slice)
+            ret_slice = bricking_utils.get_value_slice_nd(slice_, ret_shp, bbnds, brick_slice, brick_mm)
 
+            brick_file_path = '{0}/{1}.hdf5'.format(self.brick_path, bid)
             if not os.path.exists(brick_file_path):
                 log.trace('Found virtual brick file: %s', brick_file_path)
             else:
                 log.trace('Found real brick file: %s', brick_file_path)
 
                 with h5py.File(brick_file_path) as brick_file:
-                    v = brick_file[brick_guid].__getitem__(*brick_slice)
+                    ret_vals = brick_file[bid][brick_slice]
 
                 # Check if object type
                 if self.dtype == '|O8':
-                    if not hasattr(v, '__iter__'):
-                        v = [v]
-                    v = [unpack(x) for x in v]
+                    if not hasattr(ret_vals, '__iter__'):
+                        ret_vals = [ret_vals]
+                    ret_vals = [unpack(x) for x in ret_vals]
 
-                ret_arr[value_slice] = v
+                ret_arr[ret_slice] = ret_vals
 
-        if ret_arr.size == 1:
-            if ret_arr.ndim==0:
-                ret_arr=ret_arr[()]
+        ret_arr = ret_arr.squeeze()
+
+        # # If the array is size 1 AND a slice object was NOT part of the query
+        if ret_arr.size == 1 and np.atleast_1d([isinstance(s, slice) for s in slice_]):
+        # if ret_arr.size == 1:
+            if ret_arr.ndim == 0:
+                ret_arr = ret_arr[()]
             else:
-                ret_arr=ret_arr[0]
+                ret_arr = ret_arr[0]
+
         return ret_arr
 
     def __setitem__(self, slice_, value):
@@ -686,58 +692,129 @@ class PersistedStorage(AbstractStorage):
         if self.mode == 'r':
             raise IOError('PersistenceLayer not open for writing: mode == \'{0}\''.format(self.mode))
 
-        if not isinstance(slice_, (list,tuple)):
-            slice_ = [slice_]
-        log.debug('setitem slice_: %s', slice_)
-        val = np.asanyarray(value)
-        val_origin = [0 for x in range(val.ndim)]
+        from coverage_model import bricking_utils, utils
 
-        brick_origin_offset = 0
+        extents = tuple([s for s in self.total_domain.total_extents if s != 0])
+        # bricks is a list of tuples [(b_ord, b_guid), ...]
+        slice_ = utils.fix_slice(deepcopy(slice_), extents)
+        log.trace('slice_=%s', slice_)
+        bricks = bricking_utils.get_bricks_from_slice(slice_, self.brick_tree, extents)
+        log.trace('Found bricks: %s', bricks)
 
-        bricks = self._bricks_from_slice(slice_)
-        log.trace('Slice %s indicates bricks: %s', slice_, bricks)
+        values = np.asanyarray(value)
+        v_shp = values.shape
+        log.trace('value_shape: %s', v_shp)
+        s_shp = utils.slice_shape(slice_, extents)
+        log.trace('slice_shape: %s', s_shp)
+        is_broadcast = False
+        if v_shp == ():
+            log.trace('Broadcast!!')
+            is_broadcast = True
+            value_slice = ()
+        elif v_shp != s_shp:
+            if v_shp == tuple([i for i in s_shp if i != 1]): # Missing dimensions are singleton, just reshape to fit
+                values = values.reshape(s_shp)
+                v_shp = values.shape
+            else:
+                raise IndexError(
+                    'Shape of \'value\' is not compatible with \'slice_\': slice_ shp == {0}\tvalue shp == {1}'.format(
+                        s_shp, v_shp))
+        else:
+            value_slice = None
 
-        for idx, brick_guid in bricks:
-            # Figuring out which part of brick to set values
-            try:
-                brick_slice, value_slice, brick_origin_offset = self._calc_slices(slice_, brick_guid, val, val_origin, brick_origin_offset)
-                log.trace('brick_slice: %s, value_slice: %s, brick_origin_offset: %s', brick_slice, value_slice, brick_origin_offset)
-                if brick_slice is None:
-                    raise ValueError('Brick contains no values for specified slice')
-            except ValueError as ve:
-                log.warn(ve.message + '; moving to next brick')
+        log.trace('value_shape: %s', v_shp)
+
+        for b in bricks:
+            # b is (brick_ordinal, brick_guid)
+            _, bid = b
+            # brick_list[brick_guid] contains: [brick_extents, origin, tuple(bD), brick_active_size]
+            _, bori, _, bact = self.brick_list[bid]
+            bbnds = []
+            bexts = []
+            for i, bnd in enumerate(bori):
+                bbnds.append((bori[i], bori[i] + bact[i] - 1))
+                bexts.append(bori[i] + bact[i])
+            bbnds = tuple(bbnds)
+            bexts = tuple(bexts)
+            log.trace('bid=%s, bbnds=%s, bexts=%s', bid, bbnds, bexts)
+
+            log.trace('Determining slice for brick: %s', b)
+
+            brick_slice, brick_mm = bricking_utils.get_brick_slice_nd(slice_, bbnds)
+            log.trace('brick_slice=%s\tbrick_mm=%s', brick_slice, brick_mm)
+
+            if None in brick_slice: # Brick does not contain any of the requested indices
+                log.debug('Brick does not contain any of the requested indices: Move to next brick')
                 continue
 
-            brick_file_path = os.path.join(self.brick_path, '{0}.hdf5'.format(brick_guid))
-            log.trace('Brick slice to fill: %s', brick_slice)
-            log.trace('Value slice to extract: %s', value_slice)
+            try:
+                brick_slice = utils.fix_slice(brick_slice, bexts)
+            except IndexError:
+                log.debug('Malformed brick_slice: move to next brick')
+                continue
 
-            # Create the HDF5 dataset that represents one brick
-            bD = tuple(self.brick_domains[1])
-            cD = self.brick_domains[2]
-            v = val[value_slice]
-            if val.ndim == 0 and len(val.shape) == 0 and np.iterable(v): # Prevent single value strings from being iterated
-                v = [v]
+            if not is_broadcast:
+                value_slice = bricking_utils.get_value_slice_nd(slice_, v_shp, bbnds, brick_slice, brick_mm)
 
-            # Check for object type
-            data_type = self.dtype
-            fv = self.fill_value
+                try:
+                    value_slice = utils.fix_slice(value_slice, v_shp)
+                except IndexError:
+                    log.debug('Malformed value_slice: move to next brick')
+                    continue
 
-            # Check for object type
+            log.trace('\nbrick %s:\n\tbrick_slice %s=%s\n\tmin/max=%s\n\tvalue_slice %s=%s', b,
+                      utils.slice_shape(brick_slice, bexts), brick_slice, brick_mm,
+                      utils.slice_shape(value_slice, v_shp), value_slice)
+            v = values[value_slice]
+
+            self._set_values_to_brick(bid, brick_slice, v)
+
+    def _set_values_to_brick(self, brick_guid, brick_slice, values, value_slice=None):
+        brick_file_path = os.path.join(self.brick_path, '{0}.hdf5'.format(brick_guid))
+        log.trace('Brick slice to fill: %s', brick_slice)
+        log.trace('Value slice to extract: %s', value_slice)
+
+        # Create the HDF5 dataset that represents one brick
+        bD = tuple(self.brick_domains[1])
+        cD = self.brick_domains[2]
+        if value_slice is not None:
+            vals = values[value_slice]
+        else:
+            vals = values
+
+        if values.ndim == 0 and len(values.shape) == 0 and np.iterable(vals): # Prevent single value strings from being iterated
+            vals = [vals]
+
+        # Check for object type
+        data_type = self.dtype
+        fv = self.fill_value
+
+        # Check for object type
+        if data_type == '|O8':
+            if np.iterable(vals):
+                vals = [pack(x) for x in vals]
+            else:
+                vals = pack(vals)
+
+        if self.inline_data_writes:
             if data_type == '|O8':
-                if np.iterable(v):
-                    v = [pack(x) for x in v]
-                else:
-                    v = pack(v)
-
+                data_type = h5py.special_dtype(vlen=str)
+            if 0 in cD or 1 in cD:
+                cD = True
+            with h5py.File(brick_file_path, 'a') as f:
+                # TODO: Due to usage concerns, currently locking chunking to "auto"
+                f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=None, fillvalue=fv)
+                f[brick_guid][brick_slice] = vals
+        else:
             work_key = brick_guid
-            work = (brick_slice, v)
+            work = (brick_slice, vals)
             work_metrics = (brick_file_path, bD, cD, data_type, fv)
             log.trace('Work key: %s', work_key)
             log.trace('Work metrics: %s', work_metrics)
             log.trace('Work[0]: %s', work[0])
 
-            if self.inline_data_writes:
+            # If the brick file doesn't exist, 'touch' it to make sure it's immediately available
+            if not os.path.exists(brick_file_path):
                 if data_type == '|O8':
                     data_type = h5py.special_dtype(vlen=str)
                 if 0 in cD or 1 in cD:
@@ -745,182 +822,13 @@ class PersistedStorage(AbstractStorage):
                 with h5py.File(brick_file_path, 'a') as f:
                     # TODO: Due to usage concerns, currently locking chunking to "auto"
                     f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=None, fillvalue=fv)
-                    if isinstance(brick_slice, tuple):
-                        brick_slice = list(brick_slice)
 
-                    f[brick_guid].__setitem__(*brick_slice, val=v)
+            if self.auto_flush:
+                # Immediately submit work to the dispatcher
+                self.brick_dispatcher.put_work(work_key, work_metrics, work)
             else:
-                # If the brick file doesn't exist, 'touch' it to make sure it's immediately available
-                if not os.path.exists(brick_file_path):
-                    if data_type == '|O8':
-                        data_type = h5py.special_dtype(vlen=str)
-                    if 0 in cD or 1 in cD:
-                        cD = True
-                    with h5py.File(brick_file_path, 'a') as f:
-                        # TODO: Due to usage concerns, currently locking chunking to "auto"
-                        f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=None, fillvalue=fv)
-
-                if self.auto_flush:
-                    # Immediately submit work to the dispatcher
-                    self.brick_dispatcher.put_work(work_key, work_metrics, work)
-                else:
-                    # Queue the work for later flushing
-                    self._queue_work(work_key, work_metrics, work)
-
-    def _calc_slices(self, slice_, brick_guid, value, val_origin, brick_origin_offset=0):
-        """
-        Calculates and returns the brick_slice, value_slice and brick_origin_offset for a given value and slice for a specific brick
-
-        @param slice_   Requested slice
-        @param brick_guid   GUID of brick
-        @param value    Value to apply to brick
-        @param val_origin   An origin offset within the value's domain
-        @param brick_origin_offset  A resultant offset based on the slice, ie. mid-brick slice start
-        @return brick_slice, value_slice, brick_origin_offset
-        """
-
-        brick_origin, _, brick_size = self.brick_list[brick_guid][1:]
-        log.debug('Brick %s:  origin=%s, size=%s', brick_guid, brick_origin, brick_size)
-        log.debug('Slice set: %s', slice_)
-
-        brick_slice = []
-        value_slice = []
-
-        # Get the value into a numpy array - should do all the heavy lifting of sorting out what's what!!!
-        val_arr = np.asanyarray(value)
-        val_shp = val_arr.shape
-        val_rank = val_arr.ndim
-        log.trace('Value asanyarray: rank=%s, shape=%s', val_rank, val_shp)
-
-        if val_origin is None or len(val_origin) == 0:
-            val_ori = [0 for x in range(len(slice_))]
-        else:
-            val_ori = val_origin
-
-        for i, sl in enumerate(slice_):
-            bo=brick_origin[i]
-            bs=brick_size[i]
-            bn=bo+bs
-            vo=val_ori[i]
-            vs=val_shp[i] if len(val_shp) > 0 else None
-            log.trace('i=%s, sl=%s, bo=%s, bs=%s, bn=%s, vo=%s, vs=%s',i,sl,bo,bs,bn,vo,vs)
-            if isinstance(sl, int):
-                if bo <= sl < bn: # The slice is within the bounds of the brick
-                    brick_slice.append(sl-bo) # brick_slice is the given index minus the brick origin
-                    value_slice.append(0 + vo)
-                    val_ori[i] = vo + 1
-                else:
-                    raise ValueError('Specified index is not within the brick: {0}'.format(sl))
-            elif isinstance(sl, (list,tuple)):
-                lb = [x - bo for x in sl if bo <= x < bn]
-                if len(lb) == 0:
-                    raise ValueError('None of the specified indices are within the brick: {0}'.format(sl))
-                brick_slice.append(lb)
-                value_slice.append(slice(vo, vo+len(lb), None)) # Everything from the appropriate index to the size needed
-                val_ori[i] = len(lb) + vo
-            elif isinstance(sl, slice):
-                if sl.start is None:
-                    start = 0
-                else:
-                    if bo <= sl.start < bn:
-                        start = sl.start - bo
-                    elif bo > sl.start:
-                        start = 0
-                    else: #  sl.start > bn
-                        raise ValueError('The slice is not contained in this brick (sl.start > bn)')
-
-                if sl.stop is None:
-                    stop = bs
-                else:
-                    if bo < sl.stop <= bn:
-                        stop = sl.stop - bo
-                    elif sl.stop > bn:
-                        stop = bs
-                    else: #  bo > sl.stop
-                        raise ValueError('The slice is not contained in this brick (bo > sl.stop)')
-
-                log.trace('start=%s, stop=%s', start, stop)
-                log.trace('brick_origin_offset=%s', brick_origin_offset)
-                start += brick_origin_offset
-                log.trace('start=%s, stop=%s', start, stop)
-                nbs = slice(start, stop, sl.step)
-                nbsi = range(*nbs.indices(stop))
-                nbsl = len(nbsi)
-                if nbsl == 0: # No values in this brick!!
-                    if sl.step is not None:
-                        brick_origin_offset = brick_origin_offset - bs
-                    return None, None, brick_origin_offset
-                last_index = nbsi[-1]
-                log.trace('last_index=%s',last_index)
-                log.trace('nbsl=%s',nbsl)
-                # brick_origin_offset should make this check unnecessary!!
-#                if vs is not None and vs != vo:
-#                    while nbsl > (vs-vo):
-#                        stop -= 1
-#                        nbs = slice(start, stop, sl.step)
-#                        nbsl = len(range(*nbs.indices(stop)))
-#                log.trace('nbsl=%s',nbsl)
-
-                brick_slice.append(nbs)
-                vstp = vo+nbsl
-                log.trace('vstp=%s',vstp)
-                if vs is not None and vstp > vs: # Don't think this will ever happen, should be dealt with by active_brick_size logic...
-                    log.warn('Value set not the proper size for setter slice (vstp > vs)!')
-#                    vstp = vs
-
-                value_slice.append(slice(vo, vstp, None))
-                val_ori[i] = vo + nbsl
-
-                if sl.step is not None:
-                    brick_origin_offset = last_index - bs + sl.step
-                    log.trace('brick_origin_offset = %s', brick_origin_offset)
-
-        if val_origin is not None and len(val_origin) != 0:
-            val_origin = val_ori
-        else:
-            if val_arr.ndim == 0 and len(val_arr.shape) == 0:
-                value_slice = ()
-            else:
-                value_slice = brick_slice
-
-        return brick_slice, value_slice, brick_origin_offset
-
-    # TODO: Does not support n-dimensional
-    def _get_array_shape_from_slice(self, slice_):
-        """
-        Calculates and returns the shape of the slice in each dimension of the total domain
-
-        @param slice_   Requested slice
-        @return A tuple object denoting the shape of the slice in each dimension of the total domain
-        """
-
-        log.debug('Getting array shape for slice_: %s', slice_)
-
-        vals = self.brick_list.values()
-        log.trace('vals: %s', vals)
-        if len(vals) == 0:
-            return 0
-        # Calculate the min and max brick value indices for each dimension
-        if len(vals[0][1]) > 1:
-            min_len = min([min(*x[0][i])+1 for i,x in enumerate(vals)])
-            max_len = max([min(*x[0][i])+min(x[3]) for i,x in enumerate(vals)])
-        else:
-            min_len = min([min(*x[0])+1 for i,x in enumerate(vals)])
-            max_len = max([min(*x[0])+min(x[3]) for i,x in enumerate(vals)])
-
-        maxes = [max_len, min_len]
-
-        # Calculate the shape base on the type of slice_
-        shp = []
-        for i, s in enumerate(slice_):
-            if isinstance(s, int):
-                shp.append(1)
-            elif isinstance(s, (list,tuple)):
-                shp.append(len(s))
-            elif isinstance(s, slice):
-                shp.append(len(range(*s.indices(maxes[i])))) # TODO: Does not support n-dimensional
-
-        return tuple(shp)
+                # Queue the work for later flushing
+                self._queue_work(work_key, work_metrics, work)
 
     def expand(self, arrshp, origin, expansion, fill_value=None):
         pass # No op

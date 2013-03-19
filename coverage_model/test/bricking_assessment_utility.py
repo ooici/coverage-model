@@ -58,7 +58,13 @@ class BrickingAssessor(object):
         p = index.Property()
         tdl = len(self.total_domain)
         p.dimension = tdl if tdl > 1 else tdl + 1
-        self.rtree = index.Index(bricking_utils.rtree_populator(self.rtree_extents, self.brick_extents), properties=p)
+
+        self.rtree = index.Index(BrickingAssessor.rtree_populator(self.rtree_extents, self.brick_extents), properties=p)
+
+    @classmethod
+    def rtree_populator(cls, rtree_extents, brick_extents):
+        for i, e in enumerate(rtree_extents):
+            yield i, e, brick_extents[i]
 
     def _get_numpy_array(self, shape):
         if not isinstance(shape, tuple):
@@ -235,7 +241,6 @@ def _run_test_slices(ba, sl_list, val_arr, verbose):
 
     print
 
-
 def test_1d(slice_runner, root_dir, persist=False, verbose=False, dtype='int16'):
     if root_dir is None:
         persist = False
@@ -269,6 +274,7 @@ def test_1d(slice_runner, root_dir, persist=False, verbose=False, dtype='int16')
     sl_list.append(slice(1, 8, 3))
     sl_list.append(slice(3, None))
     sl_list.append(slice(None, 80, 15))
+    sl_list.append(slice(0, 21, 15))
 
     slice_runner(ba, sl_list, val_arr, verbose)
 
