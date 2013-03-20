@@ -661,9 +661,10 @@ class PersistedStorage(AbstractStorage):
 
                 # Check if object type
                 if self.dtype == '|O8':
-                    if not hasattr(ret_vals, '__iter__'):
-                        ret_vals = [ret_vals]
-                    ret_vals = [unpack(x) for x in ret_vals]
+                    if hasattr(ret_vals, '__iter__'):
+                        ret_vals = [self._object_unpack_hook(x) for x in ret_vals]
+                    else:
+                        ret_vals = self._object_unpack_hook(ret_vals)
 
                 ret_arr[ret_slice] = ret_vals
 
@@ -677,6 +678,15 @@ class PersistedStorage(AbstractStorage):
                 ret_arr = ret_arr[0]
 
         return ret_arr
+
+    def _object_unpack_hook(self, value):
+        value = unpack(value)
+        if isinstance(value, np.ndarray):
+            return value.tolist()
+        elif isinstance(value, tuple):
+            return list(value)
+        else:
+            return value
 
     def __setitem__(self, slice_, value):
         """

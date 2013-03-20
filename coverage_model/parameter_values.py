@@ -472,15 +472,6 @@ class ArrayValue(AbstractComplexParameterValue):
     def __getitem__(self, slice_):
         slice_ = utils.fix_slice(slice_, self.shape)
 
-        ns = []
-        for s in slice_:
-            if isinstance(s, int):
-                ns.append(slice(s, s + 1))
-            else:
-                ns.append(s)
-
-        slice_ = ns
-
         ret = self._storage[slice_]
 
         return ret
@@ -488,10 +479,15 @@ class ArrayValue(AbstractComplexParameterValue):
     def __setitem__(self, slice_, value):
         slice_ = utils.fix_slice(slice_, self.shape)
 
-        if isinstance(value, np.ndarray) and len(value.shape) > 1:
+        value = np.atleast_1d(value)
+        if len(value.shape) > 1:
             v = np.empty(value.shape[0], dtype=object)
             for i in xrange(value.shape[0]):
-                v[i] = value[i, :]
+                iv = value[i,:]
+                if isinstance(iv, np.ndarray):
+                    v[i] = iv.tolist()
+                else:
+                    v[i] = iv
 
             value = v
 

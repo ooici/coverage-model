@@ -64,6 +64,21 @@ class TestParameterValuesUnit(CoverageModelUnitTestCase):
         self.assertIsInstance(aval[0][0], basestring)
         self.assertTrue(1 <= len(aval[0][0]) <= 20)
 
+        vals = [[1, 2, 3]] * num_rec
+        val_arr = np.empty(num_rec, dtype=object)
+        val_arr[:] = vals
+
+        aval[:] = vals
+        self.assertIsInstance(aval[0], list)
+        self.assertTrue(np.array_equal(aval[:], val_arr))
+        self.assertEqual(aval[0], [1, 2, 3])
+
+        aval[:] = val_arr
+        self.assertIsInstance(aval[0], list)
+        self.assertTrue(np.array_equal(aval[:], val_arr))
+        self.assertEqual(aval[0], [1, 2, 3])
+
+
     # RecordType
     def test_record_values(self):
         num_rec = 10
@@ -240,3 +255,39 @@ class TestParameterValuesInt(CoverageModelIntTestCase):
         scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom)
 
         return scov
+
+    def test_array_value_interop(self):
+        # Setup the basics
+        ntimes = 20
+        vals = [[1, 2, 3]] * ntimes
+        vals_arr = np.empty(ntimes, dtype=object)
+        vals_arr[:] = vals
+
+        # Setup the in-memory value
+        dom=SimpleDomainSet((ntimes,))
+        av=get_value_class(ArrayType(), dom)
+
+        # Setup the coverage
+        pdict = ParameterDictionary()
+        # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+        pdict.add_context(ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64'))), is_temporal=True)
+        pdict.add_context(ParameterContext('array', param_type=ArrayType()))
+        tdom = GridDomain(GridShape('temporal', [0]), CRS([AxisTypeEnum.TIME]), MutabilityEnum.EXTENSIBLE)
+
+        # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+        cov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom)
+        cov.insert_timesteps(ntimes)
+
+        # Nested List Assignment
+        av[:] = vals
+        cov.set_parameter_values('array', vals)
+
+        self.assertTrue(np.array_equal(cov.get_parameter_values('array'), av[:]))
+        self.assertEqual(cov.get_parameter_values('array', 0), av[0])
+
+        # Array Assignment
+        av[:] = vals_arr
+        cov.set_parameter_values('array', vals_arr)
+
+        self.assertTrue(np.array_equal(cov.get_parameter_values('array'), av[:]))
+        self.assertEqual(cov.get_parameter_values('array', 0), av[0])

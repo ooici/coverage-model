@@ -82,11 +82,13 @@ def values_outside_coverage():
     if not (aval.shape == rval.shape == cval_n.shape):# == fval.shape):
         raise SystemError('Shapes are not equal!!')
 
-    types = (qtype, atype, rtype, btype, ctype_n, ctype_s, cattype, ftype, pftype)
+    keys = ('qval', 'aval', 'rval', 'bval', 'cval_n', 'cval_s', 'crval', 'catval', 'fval', 'pfval')
+    types = (qtype, atype, rtype, btype, ctype_n, ctype_s, crtype, cattype, ftype, pftype)
     vals = (qval, aval, rval, bval, cval_n, cval_s, crval, catval, fval, pfval)
 
-    log.info('Returning: qval, aval, rval, bval, cval_n, cval_s, crval, catval, fval, pfval')
-    return vals
+    log.info('Returning a dict of (type, value) with keys: %s', keys)
+    ret = {k: (types[i], vals[i]) for i, k in enumerate(keys)}
+    return ret
 
 def param_dict_dump_load():
     pd = ParameterDictionary()
