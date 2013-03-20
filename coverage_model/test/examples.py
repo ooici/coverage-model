@@ -56,8 +56,9 @@ def values_outside_coverage():
     pftype._pval_callback = _get_pvals
     pfval=get_value_class(pftype, SimpleDomainSet((5,)))
 
-    cat = {0:'turkey',1:'duck',2:'chicken',99:'None'}
+    cat = {0:'turkey',1:'duck',2:'chicken',99:'empty'}
     cattype = CategoryType(categories=cat)
+    cattype.fill_value = 99
     catval = get_value_class(cattype, dom)
 
     # Add data to the values
@@ -82,7 +83,7 @@ def values_outside_coverage():
     if not (aval.shape == rval.shape == cval_n.shape):# == fval.shape):
         raise SystemError('Shapes are not equal!!')
 
-    keys = ('qval', 'aval', 'rval', 'bval', 'cval_n', 'cval_s', 'crval', 'catval', 'fval', 'pfval')
+    keys = ('quantity', 'array', 'record', 'boolean', 'const_num', 'const_str', 'const_rng', 'category', 'function', 'parameter_function')
     types = (qtype, atype, rtype, btype, ctype_n, ctype_s, crtype, cattype, ftype, pftype)
     vals = (qval, aval, rval, bval, cval_n, cval_s, crval, catval, fval, pfval)
 

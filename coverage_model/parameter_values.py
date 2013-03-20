@@ -409,11 +409,9 @@ class CategoryValue(AbstractComplexParameterValue):
         slice_ = utils.fix_slice(slice_, self.shape)
 
         ret = self._storage[slice_]
-        cats=self.parameter_type.categories
+        cats = self.parameter_type.categories
         if np.iterable(ret):
-            ret = np.array([cats[x] if x is not None else self.parameter_type.fill_value for x in ret], dtype=object)
-        elif isinstance(ret, np.ndarray):
-            ret = cats[ret.item()]
+            ret = np.array([cats[x] for x in ret], dtype=object)
         else:
             ret = cats[ret]
 
@@ -422,13 +420,19 @@ class CategoryValue(AbstractComplexParameterValue):
     def __setitem__(self, slice_, value):
         slice_ = utils.fix_slice(slice_, self.shape)
         self.parameter_type.is_valid_value(value)
-        if np.asanyarray(value).dtype.kind == np.dtype(self.parameter_type.value_encoding).kind:
+        value = np.atleast_1d(value)
+
+        # Replace any None with fill_value
+        np.place(value, value == np.array([None]), self.fill_value)
+
+        if value.dtype.kind == np.dtype(self.parameter_type.value_encoding).kind:
             # Set as ordinals
             self._storage[slice_] = value
         else:
+            # Set as categories
             rcats={v:k for k,v in self.parameter_type.categories.iteritems()}
             try:
-                vals=[rcats[v] for v in value]
+                vals=[rcats[v] if v != self.fill_value else v for v in value]
                 self._storage[slice_] = vals
             except KeyError, ke:
                 raise ValueError('Invalid category specified: \'{0}\''.format(ke.message))
