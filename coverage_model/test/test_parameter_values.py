@@ -256,22 +256,32 @@ class TestParameterValuesInt(CoverageModelIntTestCase):
 
         return scov
 
+    def _interop_assertions(self, cov, pname, val_cls):
+        self.assertTrue(np.array_equal(cov.get_parameter_values(pname), val_cls[:]))
+        self.assertTrue(np.array_equal(cov.get_parameter_values(pname, slice(-1, None)), val_cls[-1:]))
+        self.assertTrue(np.array_equal(cov.get_parameter_values(pname, slice(None, None, 3)), val_cls[::3]))
+        self.assertEqual(cov.get_parameter_values(pname, 0), val_cls[0])
+        self.assertEqual(cov.get_parameter_values(pname, -1), val_cls[-1])
+
     def test_array_value_interop(self):
-        # Setup the basics
+        # Setup the type
+        arr_type = ArrayType()
+
+        # Setup the values
         ntimes = 20
         vals = [[1, 2, 3]] * ntimes
         vals_arr = np.empty(ntimes, dtype=object)
         vals_arr[:] = vals
 
         # Setup the in-memory value
-        dom=SimpleDomainSet((ntimes,))
-        av=get_value_class(ArrayType(), dom)
+        dom = SimpleDomainSet((ntimes,))
+        arr_val = get_value_class(arr_type, dom)
 
         # Setup the coverage
         pdict = ParameterDictionary()
         # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
         pdict.add_context(ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64'))), is_temporal=True)
-        pdict.add_context(ParameterContext('array', param_type=ArrayType()))
+        pdict.add_context(ParameterContext('array', param_type=arr_type))
         tdom = GridDomain(GridShape('temporal', [0]), CRS([AxisTypeEnum.TIME]), MutabilityEnum.EXTENSIBLE)
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
@@ -279,15 +289,62 @@ class TestParameterValuesInt(CoverageModelIntTestCase):
         cov.insert_timesteps(ntimes)
 
         # Nested List Assignment
-        av[:] = vals
+        arr_val[:] = vals
         cov.set_parameter_values('array', vals)
-
-        self.assertTrue(np.array_equal(cov.get_parameter_values('array'), av[:]))
-        self.assertEqual(cov.get_parameter_values('array', 0), av[0])
+        self._interop_assertions(cov, 'array', arr_val)
 
         # Array Assignment
-        av[:] = vals_arr
+        arr_val[:] = vals_arr
         cov.set_parameter_values('array', vals_arr)
+        self._interop_assertions(cov, 'array', arr_val)
 
-        self.assertTrue(np.array_equal(cov.get_parameter_values('array'), av[:]))
-        self.assertEqual(cov.get_parameter_values('array', 0), av[0])
+    def test_category_value_interop(self):
+        # Setup the type
+        cats = {0: 'turkey', 1: 'duck', 2: 'chicken', 3: 'empty'}
+        cat_type = CategoryType(categories=cats)
+        cat_type.fill_value = 3
+
+        # Setup the values
+        ntimes = 10
+        key_vals = [1, 2, 0, 3, 2, 0, 1, 2, 1, 1]
+        cat_vals = [cats[k] for k in key_vals]
+        key_vals_arr = np.array(key_vals)
+        cat_vals_arr = np.empty(ntimes, dtype=object)
+        cat_vals_arr[:] = cat_vals
+
+        # Setup the in-memory value
+        dom = SimpleDomainSet((ntimes,))
+        cat_val = get_value_class(cat_type, dom)
+
+        # Setup the coverage
+        pdict = ParameterDictionary()
+        # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+        pdict.add_context(ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64'))), is_temporal=True)
+        pdict.add_context(ParameterContext('category', param_type=cat_type))
+        tdom = GridDomain(GridShape('temporal', [0]), CRS([AxisTypeEnum.TIME]), MutabilityEnum.EXTENSIBLE)
+
+        # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+        cov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom)
+        cov.insert_timesteps(ntimes)
+
+        # Assign with a list of keys
+        cat_val[:] = key_vals
+        cov.set_parameter_values('category', key_vals)
+        self._interop_assertions(cov, 'category', cat_val)
+
+        # Assign with a list of categories
+        cat_val[:] = cat_vals
+        cov.set_parameter_values('category', cat_vals)
+        self._interop_assertions(cov, 'category', cat_val)
+
+        # Assign with an array of keys
+        cat_val[:] = key_vals_arr
+        cov.set_parameter_values('category', key_vals_arr)
+        self._interop_assertions(cov, 'category', cat_val)
+
+        # Assign with an array of categories
+        cat_val[:] = cat_vals_arr
+        cov.set_parameter_values('category', cat_vals_arr)
+        self._interop_assertions(cov, 'category', cat_val)
+
+
