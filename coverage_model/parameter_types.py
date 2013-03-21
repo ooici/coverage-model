@@ -330,7 +330,7 @@ class CategoryType(AbstractComplexParameterType):
 
     """
 
-    SUPPORTED_CATETEGORY_KEY_KINDS = set([np.dtype(int).kind, np.dtype(float).kind, np.dtype(str).kind])
+    SUPPORTED_CATETEGORY_KEY_KINDS = ({np.dtype(int).kind, np.dtype(float).kind, np.dtype(str).kind})
 
     def __init__(self, categories, key_value_encoding=None, key_fill_value=None, **kwargs):
         """
