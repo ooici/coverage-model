@@ -237,6 +237,9 @@ class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
     def test_get_time_metadata(self):
         pass
 
+    def test_get_by_slice(self):
+        pass
+
 
 @attr('INT', group='cov')
 class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
