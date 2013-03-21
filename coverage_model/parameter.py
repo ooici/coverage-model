@@ -92,6 +92,7 @@ class ParameterContext(AbstractIdentifiable):
             'display_name', 
             'standard_name',
             'ooi_short_name',
+            'precision',
             #'description', # Warning - Overrides AbstractIdentifiable.description
     ]
 
