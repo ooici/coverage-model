@@ -714,27 +714,27 @@ class TestCoverageModelBasicsInt(CoverageModelIntTestCase):
     #     with self.assertRaises(StandardError):
     #         SimplexCoverage.pickle_save('nat_a_SimplexCoverage', pickled_coverage_file)
 
-    def test_crs_temporal(self):
-        temporal_code = 'ISO 8601'
-        tcrs = CRS([AxisTypeEnum.TIME], temporal_code=temporal_code)
-        self.assertEqual(tcrs.temporal_code, temporal_code)
-
-        tcrs = CRS.standard_temporal(temporal_code=temporal_code)
-        self.assertEqual(tcrs.temporal_code, temporal_code)
-
-    def test_crs_spatial(self):
-        epsg_code = 4326
-        scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT], epsg_code=epsg_code)
-        self.assertEqual(scrs.epsg_code, epsg_code)
-
-        scrs = CRS.lat_lon(epsg_code=4326)
-        self.assertEqual(scrs.epsg_code, epsg_code)
-
-        scrs = CRS.lat_lon_height(epsg_code=4326)
-        self.assertEqual(scrs.epsg_code, epsg_code)
-
-        scrs = CRS.x_y_z(epsg_code=4326)
-        self.assertEqual(scrs.epsg_code, epsg_code)
+    # def test_crs_temporal(self):
+    #     temporal_code = 'ISO 8601'
+    #     tcrs = CRS([AxisTypeEnum.TIME], temporal_code=temporal_code)
+    #     self.assertEqual(tcrs.temporal_code, temporal_code)
+    #
+    #     tcrs = CRS.standard_temporal(temporal_code=temporal_code)
+    #     self.assertEqual(tcrs.temporal_code, temporal_code)
+    #
+    # def test_crs_spatial(self):
+    #     epsg_code = 4326
+    #     scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT], epsg_code=epsg_code)
+    #     self.assertEqual(scrs.epsg_code, epsg_code)
+    #
+    #     scrs = CRS.lat_lon(epsg_code=4326)
+    #     self.assertEqual(scrs.epsg_code, epsg_code)
+    #
+    #     scrs = CRS.lat_lon_height(epsg_code=4326)
+    #     self.assertEqual(scrs.epsg_code, epsg_code)
+    #
+    #     scrs = CRS.x_y_z(epsg_code=4326)
+    #     self.assertEqual(scrs.epsg_code, epsg_code)
 
     def _slice_and_dice(self, brick_size, time_steps):
         # Tests retrieving data for a variety of slice conditions

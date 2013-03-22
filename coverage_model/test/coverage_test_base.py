@@ -144,6 +144,28 @@ class CoverageIntTestBase(object):
         with self.assertRaises(ValueError):
             scov._axis_arg_to_params(axis='AXIS')
 
+    def test_crs_temporal(self):
+        temporal_code = 'ISO 8601'
+        tcrs = CRS([AxisTypeEnum.TIME], temporal_code=temporal_code)
+        self.assertEqual(tcrs.temporal_code, temporal_code)
+
+        tcrs = CRS.standard_temporal(temporal_code=temporal_code)
+        self.assertEqual(tcrs.temporal_code, temporal_code)
+
+    def test_crs_spatial(self):
+        epsg_code = 4326
+        scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT], epsg_code=epsg_code)
+        self.assertEqual(scrs.epsg_code, epsg_code)
+
+        scrs = CRS.lat_lon(epsg_code=4326)
+        self.assertEqual(scrs.epsg_code, epsg_code)
+
+        scrs = CRS.lat_lon_height(epsg_code=4326)
+        self.assertEqual(scrs.epsg_code, epsg_code)
+
+        scrs = CRS.x_y_z(epsg_code=4326)
+        self.assertEqual(scrs.epsg_code, epsg_code)
+
     # ############################
     # CONSTRUCTION
     @get_props()
