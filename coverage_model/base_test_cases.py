@@ -32,6 +32,9 @@ class CoverageModelIntTestCase(TestCase):
 
     @classmethod
     def setUpClass(cls):
+        if os.path.exists(cls.working_dir):
+            shutil.rmtree(cls.working_dir)
+
         os.mkdir(cls.working_dir)
 
     @classmethod
