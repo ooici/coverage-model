@@ -126,6 +126,24 @@ class CoverageIntTestBase(object):
         #TODO: Make sure we can get all the data for all the parameters
         pass
 
+    def test_get_param_by_axis(self):
+        scov, cov_name = self.get_cov()
+        single_axis = 'TIME'
+        axis_list = ['TIME']
+        axis_expected_result = scov._axis_arg_to_params()
+
+        ret_val = scov._axis_arg_to_params(axis=axis_list)
+        self.assertEqual(ret_val, ['time'])
+
+        ret_val = scov._axis_arg_to_params(axis=single_axis)
+        self.assertEqual(ret_val, ['time'])
+
+        ret_val = scov._axis_arg_to_params()
+        self.assertEqual(ret_val, axis_expected_result)
+
+        with self.assertRaises(ValueError):
+            scov._axis_arg_to_params(axis='AXIS')
+
     # ############################
     # CONSTRUCTION
     @get_props()
