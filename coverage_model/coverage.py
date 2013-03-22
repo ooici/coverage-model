@@ -1179,12 +1179,27 @@ class CRS(AbstractIdentifiable):
     """
 
     """
-    def __init__(self, axis_types=None):
+    def __init__(self, axis_types=None, epsg_code=None, temporal_code=None):
         AbstractIdentifiable.__init__(self)
-        self.axes={}
+        self.axes = {}
+
         if axis_types is not None:
             for l in axis_types:
                 self.add_axis(l)
+
+        if epsg_code is not None:
+            self.epsg_code = epsg_code
+
+        if temporal_code is not None:
+            self.temporal_code = temporal_code
+
+    @property
+    def has_epsg_code(self):
+        return hasattr(self, 'epsg_code')
+
+    @property
+    def has_temporal_code(self):
+        return hasattr(self, 'temporal_code')
 
     def add_axis(self, axis_type, axis_name=None):
         if not AxisTypeEnum.has_member(axis_type):
@@ -1193,20 +1208,20 @@ class CRS(AbstractIdentifiable):
         self.axes[axis_type] = axis_name
 
     @classmethod
-    def standard_temporal(cls):
-        return CRS([AxisTypeEnum.TIME])
+    def standard_temporal(cls, temporal_code=None):
+        return CRS([AxisTypeEnum.TIME], temporal_code=temporal_code)
 
     @classmethod
-    def lat_lon_height(cls):
-        return CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT, AxisTypeEnum.HEIGHT])
+    def lat_lon_height(cls, epsg_code=None):
+        return CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT, AxisTypeEnum.HEIGHT], epsg_code=epsg_code)
 
     @classmethod
-    def lat_lon(cls):
-        return CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+    def lat_lon(cls, epsg_code=None):
+        return CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT], epsg_code=epsg_code)
 
     @classmethod
-    def x_y_z(cls):
-        return CRS([AxisTypeEnum.GEO_X, AxisTypeEnum.GEO_Y, AxisTypeEnum.GEO_Z])
+    def x_y_z(cls, epsg_code=None):
+        return CRS([AxisTypeEnum.GEO_X, AxisTypeEnum.GEO_Y, AxisTypeEnum.GEO_Z], epsg_code=epsg_code)
 
     def __str__(self, indent=None):
         indent = indent or ' '
