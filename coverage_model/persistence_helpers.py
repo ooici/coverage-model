@@ -21,8 +21,20 @@ import msgpack
 def pack(payload):
     return msgpack.packb(payload, default=encode_ion).replace('\x01','\x01\x02').replace('\x00','\x01\x01')
 
+
 def unpack(msg):
     return msgpack.unpackb(msg.replace('\x01\x01','\x00').replace('\x01\x02','\x01'), object_hook=decode_ion)
+
+
+def get_coverage_type(path):
+    ctype = 'simplex'
+    if os.path.exists(path):
+        with h5py.File(path) as f:
+            if 'coverage_type' in f.attrs:
+                ctype = unpack(f.attrs['coverage_type'])
+
+    return ctype
+
 
 class BaseManager(object):
 
@@ -72,7 +84,7 @@ class BaseManager(object):
 
     def _base_load(self, f):
         for key, val in f.attrs.iteritems():
-            if val.startswith('DICTABLE'):
+            if isinstance(val, basestring) and val.startswith('DICTABLE'):
                 i = val.index('|', 9)
                 smod, sclass = val[9:i].split(':')
                 value = unpack(val[i+1:])
