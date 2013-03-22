@@ -197,10 +197,7 @@ class CoverageIntTestBase(object):
         scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
         self.assertIsInstance(scov, AbstractCoverage)
 
-        if scov.num_timesteps != time_steps:
-            log.warn('Must be an empty coverage!')
-        else:
-            self.assertTrue(len(scov._persistence_layer.master_manager.brick_list) == 5)
+        self.assertTrue(len(scov._persistence_layer.master_manager.brick_list) == 5)
 
     def test_create_dir_not_exists(self):
         # Tests creation of SimplexCoverage fails using an incorrect path
@@ -291,7 +288,7 @@ class CoverageIntTestBase(object):
 
     # ############################
     # LOADING
-    def test_load_succeeds(self):
+    def test_load_init_succeeds(self):
         # Creates a valid coverage, inserts data and loads coverage back up from the HDF5 files.
         scov, cov_name = self.get_cov()
         self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='time')
@@ -453,28 +450,23 @@ class CoverageIntTestBase(object):
 
     # ############################
     # GET
-    def test_ptypescov_get_values(self):
-        pass
-
     def test_slice_stop_greater_than_size(self):
         # Tests that a slice defined outside the coverage data bounds raises an error when attempting retrieval
         brick_size = 1000
         time_steps = 5000
         scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
-        if scov.num_timesteps > 0:
-            _slice = slice(4998, 5020, None)
-            ret = scov.get_parameter_values('time', _slice)
-            self.assertTrue(np.array_equal(ret, np.arange(4998, 5000, dtype=scov.get_parameter_context('time').param_type.value_encoding)))
+        _slice = slice(4998, 5020, None)
+        ret = scov.get_parameter_values('time', _slice)
+        self.assertTrue(np.array_equal(ret, np.arange(4998, 5000, dtype=scov.get_parameter_context('time').param_type.value_encoding)))
 
     def test_slice_stop_greater_than_size_with_step(self):
         # Tests that a slice (with step) defined outside the coverage data bounds raises an error when attempting retrieval
         brick_size = 1000
         time_steps = 5000
         scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
-        if cov_name not in OMIT_TEST_NO_DATA:
-            _slice = slice(4000, 5020, 5)
-            ret = scov.get_parameter_values('time', _slice)
-            self.assertTrue(np.array_equal(ret, np.arange(4000, 5000, 5, dtype=scov.get_parameter_context('time').param_type.value_encoding)))
+        _slice = slice(4000, 5020, 5)
+        ret = scov.get_parameter_values('time', _slice)
+        self.assertTrue(np.array_equal(ret, np.arange(4000, 5000, 5, dtype=scov.get_parameter_context('time').param_type.value_encoding)))
 
     def test_slice_raises_index_error_out_out(self):
         # Tests that an array defined totally outside the coverage data bounds raises an error when attempting retrieval
@@ -528,42 +520,42 @@ class CoverageIntTestBase(object):
     
     # ############################
     # SET
-    def test_samplecov_time_one_brick(self):
+    def test_set_time_one_brick(self):
         # Tests setting and getting one brick's worth of data for the 'time' parameter
         scov, cov_name = self.get_cov(only_time=True)
         res = self._insert_set_get(scov=scov, timesteps=10, data=np.arange(10), _slice=slice(0,10), param='time')
         scov.close()
         self.assertTrue(res)
 
-    def test_samplecov_allparams_one_brick(self):
+    def test_set_allparams_one_brick(self):
         # Tests setting and getting one brick's worth of data for all parameters in the coverage
         scov, cov_name = self.get_cov()
         res = self._insert_set_get(scov=scov, timesteps=10, data=np.arange(10), _slice=slice(0,10), param='all')
         scov.close()
         self.assertTrue(res)
 
-    def test_samplecov_time_five_bricks(self):
+    def test_set_time_five_bricks(self):
         # Tests setting and getting five brick's worth of data for the 'time' parameter
         scov, cov_name = self.get_cov(only_time=True)
         res = self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='time')
         scov.close()
         self.assertTrue(res)
 
-    def test_samplecov_allparams_five_bricks(self):
+    def test_set_allparams_five_bricks(self):
         # Tests setting and getting five brick's worth of data for all parameters
         scov, cov_name = self.get_cov()
         res = self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='all')
         scov.close()
         self.assertTrue(res)
 
-    def test_samplecov_time_one_brick_strided(self):
+    def test_set_time_one_brick_strided(self):
         # Tests setting and getting one brick's worth of data with a stride of two for the 'time' parameter
         scov, cov_name = self.get_cov(only_time=True)
         res = self._insert_set_get(scov=scov, timesteps=10, data=np.arange(10), _slice=slice(0,10,2), param='time')
         scov.close()
         self.assertTrue(res)
 
-    def test_samplecov_time_five_bricks_strided(self):
+    def test_set_time_five_bricks_strided(self):
         # Tests setting and getting five brick's worth of data with a stride of five for the 'time' parameter
         scov, cov_name = self.get_cov(only_time=True)
         res = self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50,5), param='time')
@@ -639,10 +631,7 @@ class CoverageIntTestBase(object):
 
         # Add data for the parameter
         #TODO: This gets repeated, create separate function
-        if scov.num_timesteps != nt:
-            log.warn('Must be an empty coverage!')
-        else:
-            scov.set_parameter_values('time', value=np.arange(nt))
+        scov.set_parameter_values('time', value=np.arange(nt))
 
         pickled_coverage_file = os.path.join(self.working_dir, 'sample.cov')
         SimplexCoverage.pickle_save(scov, pickled_coverage_file)
@@ -726,7 +715,6 @@ def get_parameter_dict(parameter_list=None):
 
     return pdict_ret
 
-OMIT_TEST_NO_DATA = ['TestEmptySampleCovInt']
 EXEMPLAR_CATEGORIES = {0:'turkey',1:'duck',2:'chicken',99:'None'}
 
 def _make_master_parameter_dict():

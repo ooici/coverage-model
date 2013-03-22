@@ -240,6 +240,18 @@ class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
     def test_get_by_slice(self):
         pass
 
+    def test_create_multi_bricks(self):
+        pass
+
+    def test_pickle_problems_in_memory(self):
+        pass
+
+    def test_slice_stop_greater_than_size(self):
+        pass
+
+    def test_slice_stop_greater_than_size_with_step(self):
+        pass
+
 
 @attr('INT', group='cov')
 class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
@@ -386,6 +398,3 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         results.append(ptypes_cov._range_value.const_rng_int[0] == (-10, 10))
         ptypes_cov.close()
         self.assertTrue(False not in results)
-
-    # def test_slice_and_dice(self):
-    #     pass

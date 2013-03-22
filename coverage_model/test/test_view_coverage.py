@@ -9,9 +9,7 @@
 
 from coverage_model import *
 from nose.plugins.attrib import attr
-import numpy as np
 from pyon.public import log
-import random
 
 from test_simplex_coverage import TestSampleCovInt as sc
 
@@ -47,7 +45,7 @@ class TestSampleCovViewInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
         return cov, 'TestSampleCovViewInt'
 
-    def test_load_succeeds(self):
+    def test_load_init_succeeds(self):
         pass
 
     def test_load_succeeds_with_options(self):
@@ -56,22 +54,22 @@ class TestSampleCovViewInt(CoverageModelIntTestCase, CoverageIntTestBase):
     def test_dot_load_succeeds(self):
         pass
 
-    def test_samplecov_time_one_brick(self):
+    def test_set_time_one_brick(self):
         pass
 
-    def test_samplecov_allparams_five_bricks(self):
+    def test_set_allparams_five_bricks(self):
         pass
 
-    def test_samplecov_allparams_one_brick(self):
+    def test_set_allparams_one_brick(self):
         pass
 
-    def test_samplecov_time_five_bricks(self):
+    def test_set_time_five_bricks(self):
         pass
 
-    def test_samplecov_time_five_bricks_strided(self):
+    def test_set_time_five_bricks_strided(self):
         pass
 
-    def test_samplecov_time_one_brick_strided(self):
+    def test_set_time_one_brick_strided(self):
         pass
 
     def test_persistence_variation1(self):
