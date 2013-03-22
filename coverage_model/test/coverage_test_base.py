@@ -144,27 +144,6 @@ class CoverageIntTestBase(object):
         with self.assertRaises(ValueError):
             scov._axis_arg_to_params(axis='AXIS')
 
-    def test_crs_temporal(self):
-        temporal_code = 'ISO 8601'
-        tcrs = CRS([AxisTypeEnum.TIME], temporal_code=temporal_code)
-        self.assertEqual(tcrs.temporal_code, temporal_code)
-
-        tcrs = CRS.standard_temporal(temporal_code=temporal_code)
-        self.assertEqual(tcrs.temporal_code, temporal_code)
-
-    def test_crs_spatial(self):
-        epsg_code = 4326
-        scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT], epsg_code=epsg_code)
-        self.assertEqual(scrs.epsg_code, epsg_code)
-
-        scrs = CRS.lat_lon(epsg_code=4326)
-        self.assertEqual(scrs.epsg_code, epsg_code)
-
-        scrs = CRS.lat_lon_height(epsg_code=4326)
-        self.assertEqual(scrs.epsg_code, epsg_code)
-
-        scrs = CRS.x_y_z(epsg_code=4326)
-        self.assertEqual(scrs.epsg_code, epsg_code)
 
     # ############################
     # CONSTRUCTION
@@ -477,19 +456,6 @@ class CoverageIntTestBase(object):
     def test_ptypescov_get_values(self):
         pass
 
-    # def test_slice_and_dice(self):
-    #     # Tests for slice and index errors across multiple bricks
-    #     time_steps = 5000
-    #     scov, cov_name = self.get_cov(brick_size=1000, nt=time_steps)
-    #     if cov_name not in OMIT_TEST_NO_DATA:
-    #         params, _slices, results, index_errors = _slice_and_dice(scov)
-    #         log.debug('slices per parameter: %s', len(_slices))
-    #         log.debug('total slices ran: %s', len(_slices) * len(params))
-    #         log.debug('data failure slices: %s', len(results))
-    #         log.debug('IndexError slices: %s\n%s', len(index_errors), index_errors)
-    #         scov.close()
-    #         self.assertTrue(len(results) + len(index_errors) == 0)
-
     def test_slice_stop_greater_than_size(self):
         # Tests that a slice defined outside the coverage data bounds raises an error when attempting retrieval
         brick_size = 1000
@@ -693,34 +659,6 @@ class CoverageIntTestBase(object):
 
     # ############################
     # PARAMETERS
-    def test_bad_pc_from_dict(self):
-        # Tests improper load of a ParameterContext
-        pc1 = ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius'))
-        with self.assertRaises(TypeError):
-            pc1._fromdict('junk', pc1.dump())
-        pc2 = pc1._fromdict(pc1.dump())
-        self.assertEquals(pc1, pc2)
-
-    def test_dump_and_load_from_dict(self):
-        # Tests improper load of a ParameterContext
-        pc1 = ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius'))
-        pc2 = pc1._fromdict(pc1.dump())
-        self.assertEquals(pc1, pc2)
-
-    def test_param_dict_from_dict(self):
-        pdict_1 = ParameterDictionary()
-        pdict_1.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')), is_temporal=True)
-        pdict_1.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
-        pdict_1.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
-        pdict_1.add_context(ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius')))
-        new_pdict = ParameterDictionary._fromdict(pdict_1._todict())
-        self.assertTrue(pdict_1 == new_pdict)
-
-    def test_parameter_properties(self):
-        pc = ParameterContext('pcname')
-        self.assertEquals(pc.name, 'pcname')
-        self.assertFalse(pc.is_coordinate)
-
     def test_get_parameter(self):
         cov, cov_name = self.get_cov()
         param = cov.get_parameter('time')
@@ -729,76 +667,6 @@ class CoverageIntTestBase(object):
         cov.close()
         with self.assertRaises(ValueError):
             cov.get_parameter('time')
-
-    def test_params(self):
-        # Tests ParameterDictionary and ParameterContext creation
-        # Instantiate a ParameterDictionary
-        pdict_1 = ParameterDictionary()
-
-        # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
-        pdict_1.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')), is_temporal=True)
-        pdict_1.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
-        pdict_1.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
-        pdict_1.add_context(ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius')))
-
-        # Instantiate a ParameterDictionary
-        pdict_2 = ParameterDictionary()
-
-        # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
-        pdict_2.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')), is_temporal=True)
-        pdict_2.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
-        pdict_2.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
-        pdict_2.add_context(ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius')))
-
-        # Instantiate a ParameterDictionary
-        pdict_3 = ParameterDictionary()
-
-        # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
-        pdict_3.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')), is_temporal=True)
-        pdict_3.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
-        pdict_3.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
-        pdict_3.add_context(ParameterContext('temp2', param_type=QuantityType(uom='degree_Celsius')))
-
-        # Instantiate a ParameterDictionary
-        pdict_4 = ParameterDictionary()
-
-        # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
-        pdict_4.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')), is_temporal=True)
-        pdict_4.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
-        pdict_4.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
-
-        temp_ctxt = ParameterContext('temp', param_type=QuantityType(uom = 'degree_Celsius'))
-        pdict_4.add_context(temp_ctxt)
-
-        temp2_ctxt = ParameterContext(name=temp_ctxt, new_name='temp2')
-        pdict_4.add_context(temp2_ctxt)
-
-        with self.assertRaises(SystemError):
-            ParameterContext([10,20,30], param_type=QuantityType(uom = 'bad name'))
-
-        with self.assertRaises(SystemError):
-            ParameterContext(None,None)
-
-        with self.assertRaises(SystemError):
-            ParameterContext(None)
-
-        with self.assertRaises(TypeError):
-            ParameterContext()
-
-        with self.assertRaises(SystemError):
-            ParameterContext(None, param_type=QuantityType(uom = 'bad name'))
-
-        log.debug('Should be equal and compare \'one-to-one\' with nothing in the None list')
-        self.assertEquals(pdict_1, pdict_2)
-        self.assertEquals(pdict_1.compare(pdict_2), {'lat': ['lat'], 'lon': ['lon'], None: [], 'temp': ['temp'], 'time': ['time']})
-
-        log.debug('Should be unequal and compare with an empty list for \'temp\' and \'temp2\' in the None list')
-        self.assertNotEquals(pdict_1, pdict_3)
-        self.assertEquals(pdict_1.compare(pdict_3), {'lat': ['lat'], 'lon': ['lon'], None: ['temp2'], 'temp': [], 'time': ['time']})
-
-        log.debug('Should be unequal and compare with both \'temp\' and \'temp2\' in \'temp\' and nothing in the None list')
-        self.assertNotEquals(pdict_1,  pdict_4)
-        self.assertEquals(pdict_1.compare(pdict_4), {'lat': ['lat'], 'lon': ['lon'], None: [], 'temp': ['temp', 'temp2'], 'time': ['time']})
 
     def test_append_parameter(self):
         results = []
@@ -830,9 +698,6 @@ class CoverageIntTestBase(object):
         scov, cov_name = self.get_cov(only_time=True, nt=50)
         with self.assertRaises(TypeError):
             scov.append_parameter('junk')
-
-    def test_list_parameters_coords_only(self):
-        pass
 
 
 def get_parameter_dict_info():
@@ -1049,37 +914,6 @@ def _make_sdom(scrs):
     # Create spatial domain object
     sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
     return sdom
-
-# def _slice_and_dice(scov):
-#     # Tests retrieving data for a variety of slice conditions
-#     results = []
-#     index_errors = []
-#     params = scov.list_parameters()
-#     _slices = []
-#     # TODO: Automatically calculate the start, stops and strides based on the brick size and time_steps
-#     starts = [0, 1, 10, 500, 1000, 1001, 3000, 4999]
-#     stops = [1, 2, 11, 501, 1001, 1002, 3001, 5000]
-#     strides = [None, 1, 2, 3, 4, 5, 50, 100, 500, 750, 999, 1000, 1001, 1249, 1250, 1500, 2000, 3000, 4000, 5000]
-#     for stride in strides:
-#         for start in starts:
-#             for stop in stops:
-#                 if stop > start and (stop-start) > stride:
-#                     _slices.append(slice(start, stop, stride))
-#     for param in params:
-#         for _slice in _slices:
-#             log.trace('working on _slice: %s', _slice)
-#             sliced_data = np.arange(5000)[_slice]
-#             try:
-#                 ret = scov.get_parameter_values(param, _slice)
-#                 if not (ret == sliced_data).all():
-#                     results.append(_slice)
-#                     log.trace('failed _slice: %s', _slice)
-#             except IndexError as ie:
-#                 log.trace('%s; moving to next slice', ie.message)
-#                 index_errors.append(_slice)
-#                 continue
-#     scov.close()
-#     return params, _slices, results, index_errors
 
 
 @attr('INT', group='cov')
