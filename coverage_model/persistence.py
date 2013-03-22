@@ -24,10 +24,11 @@ class PersistenceError(Exception):
 
 class SimplePersistenceLayer(object):
 
-    def __init__(self, root, guid, name=None, param_dict=None, mode=None, **kwargs):
+    def __init__(self, root, guid, name=None, param_dict=None, mode=None, coverage_type='simplex', **kwargs):
         root = '.' if root is ('' or None) else root
 
-        self.master_manager = MasterManager(root_dir=root, guid=guid, name=name, param_dict=param_dict, parameter_bounds=None, **kwargs)
+        self.master_manager = MasterManager(root_dir=root, guid=guid, name=name, param_dict=param_dict,
+                                            parameter_bounds=None, tree_rank=2, coverage_type=coverage_type, **kwargs)
 
         self.mode = mode
 
@@ -93,7 +94,7 @@ class PersistenceLayer(object):
     The PersistenceLayer class manages the disk-level storage (and retrieval) of the Coverage Model using HDF5 files.
     """
 
-    def __init__(self, root, guid, name=None, tdom=None, sdom=None, mode=None, bricking_scheme=None, inline_data_writes=True, auto_flush_values=True, value_caching=True, **kwargs):
+    def __init__(self, root, guid, name=None, tdom=None, sdom=None, mode=None, bricking_scheme=None, inline_data_writes=True, auto_flush_values=True, value_caching=True, coverage_type='simplex', **kwargs):
         """
         Constructor for PersistenceLayer
 
@@ -112,7 +113,7 @@ class PersistenceLayer(object):
         log.debug('Persistence GUID: %s', guid)
         root = '.' if root is ('' or None) else root
 
-        self.master_manager = MasterManager(root, guid, name=name, tdom=tdom, sdom=sdom, global_bricking_scheme=bricking_scheme, parameter_bounds=None)
+        self.master_manager = MasterManager(root, guid, name=name, tdom=tdom, sdom=sdom, global_bricking_scheme=bricking_scheme, parameter_bounds=None, coverage_type=coverage_type)
 
         self.mode = mode
         if not hasattr(self.master_manager, 'auto_flush_values'):

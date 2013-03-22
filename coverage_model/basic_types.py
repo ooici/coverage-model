@@ -374,7 +374,8 @@ class NdSpan(AbstractBase):
     def __len__(self):
         return prod(self.shape)
 
-
+import functools
+@functools.total_ordering
 class Span(AbstractBase):
 
     def __init__(self, lower_bound=None, upper_bound=None, value=None):
@@ -427,13 +428,23 @@ class Span(AbstractBase):
 
     def __eq__(self, other):
         if isinstance(other, Span):
-            if self.upper_bound == other.upper_bound and self.lower_bound == other.upper_bound:
+            if self.upper_bound == other.upper_bound and self.lower_bound == other.lower_bound:
                 return True
 
         return False
 
     def __ne__(self, other):
         return not self == other
+
+    def __lt__(self, other):
+        if isinstance(other, Span):
+            if self.lower_bound is None:
+                return True
+
+            if self.lower_bound < other.lower_bound:
+                return True
+
+        return False
 
     def __len__(self):
         if self.lower_bound is not None and self.upper_bound is not None:

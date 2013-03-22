@@ -36,7 +36,7 @@
 from ooi.logging import log
 from pyon.util.async import spawn
 
-from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_DomainOfApplication, Dictable, InMemoryStorage
+from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_DomainOfApplication, Dictable, InMemoryStorage, Span
 from coverage_model.parameter import Parameter, ParameterDictionary, ParameterContext
 from coverage_model.parameter_values import get_value_class, AbstractParameterValue
 from coverage_model.persistence import PersistenceLayer, InMemoryPersistenceLayer, SimplePersistenceLayer
@@ -63,7 +63,7 @@ class AbstractCoverage(AbstractIdentifiable):
         self._closed = False
         self._range_dictionary = ParameterDictionary()
         self._range_value = RangeValues()
-        self.value_caching = False
+        self.value_caching = True
         self._value_cache = collections.OrderedDict()
         self._bricking_scheme = {'brick_size': 100000, 'chunk_size': 100000}
 
@@ -115,7 +115,20 @@ class AbstractCoverage(AbstractIdentifiable):
         elif not isinstance(persistence_guid, basestring):
             raise ValueError('\'persistence_guid\' must be a string')
 
-        return SimplexCoverage(root_dir, persistence_guid, mode=mode)
+        # Otherwise, determine which coverage type to use to open the file
+        from persistence_helpers import get_coverage_type
+        ctype = get_coverage_type(os.path.join(root_dir, persistence_guid, '{0}_master.hdf5'.format(persistence_guid)))
+
+        if ctype == 'simplex':
+            ccls = SimplexCoverage
+        elif ctype == 'view':
+            ccls = ViewCoverage
+        elif ctype == 'complex':
+            ccls = ComplexCoverage
+        else:
+            raise TypeError('Unknown Coverage type specified in master file : {0}', ctype)
+
+        return ccls(root_dir, persistence_guid, mode=mode)
 
     @classmethod
     def save(cls, cov_obj, *args, **kwargs):
@@ -124,9 +137,10 @@ class AbstractCoverage(AbstractIdentifiable):
 
         cov_obj.flush()
 
-    @classmethod
-    def refresh(cls):
-        raise NotImplementedError('Not implemented in AbstractCoverage')
+    def refresh(self):
+        if not hasattr(self, '_in_memory_storage'):
+            self.close()
+            self.__init__(os.path.split(self.persistence_dir)[0], self.persistence_guid, mode=self.mode)
 
     @property
     def temporal_parameter_name(self):
@@ -775,6 +789,11 @@ class ViewCoverage(AbstractCoverage):
 
                 self.name = self._persistence_layer.name
 
+                if hasattr(self._persistence_layer, 'coverage_type'):
+                    self.coverage_type = self._persistence_layer.coverage_type
+                else:
+                    self.coverage_type = 'view'
+
                 self.reference_coverage = AbstractCoverage.load(self._persistence_layer.rcov_loc, mode='r')
 
                 self.__setup(self._persistence_layer.param_dict)
@@ -813,7 +832,13 @@ class ViewCoverage(AbstractCoverage):
                 # Open the reference coverage - ALWAYS in read-only mode (default)
                 self.reference_coverage = AbstractCoverage.load(reference_coverage_location)
 
-                self._persistence_layer = SimplePersistenceLayer(root_dir, persistence_guid, name=self.name, param_dict=parameter_dictionary, mode=self.mode, rcov_loc=reference_coverage_location)
+                self._persistence_layer = SimplePersistenceLayer(root_dir,
+                                                                 persistence_guid,
+                                                                 name=self.name,
+                                                                 param_dict=parameter_dictionary,
+                                                                 mode=self.mode,
+                                                                 rcov_loc=reference_coverage_location,
+                                                                 coverage_type='view')
 
                 self.__setup(parameter_dictionary)
 
@@ -842,14 +867,6 @@ class ViewCoverage(AbstractCoverage):
 
     def set_parameter_values(self, param_name, value, tdoa=None, sdoa=None):
         raise TypeError('Cannot set parameter values against a ViewCoverage')
-
-    def refresh(self):
-        self.close()
-
-        self.__init__(os.path.split(self.persistence_dir)[0],
-            self.persistence_guid,
-            reference_coverage_location=self.reference_coverage.persistence_dir,
-            mode=self.mode)
 
 
 from coverage_model.basic_types import BaseEnum
@@ -890,6 +907,11 @@ class ComplexCoverage(AbstractCoverage):
 
                 self.name = self._persistence_layer.name
 
+                if hasattr(self._persistence_layer, 'coverage_type'):
+                    self.coverage_type = self._persistence_layer.coverage_type
+                else:
+                    self.coverage_type = 'complex'
+
                 self.mode = mode
 
                 self._reference_covs = {}
@@ -919,7 +941,14 @@ class ComplexCoverage(AbstractCoverage):
 
                 self._reference_covs = {}
 
-                self._persistence_layer = SimplePersistenceLayer(root_dir, persistence_guid, name=self.name, mode=self.mode, param_dict=parameter_dictionary, rcov_locs=reference_coverage_locs, complex_type=complex_type)
+                self._persistence_layer = SimplePersistenceLayer(root_dir,
+                                                                 persistence_guid,
+                                                                 name=self.name,
+                                                                 mode=self.mode,
+                                                                 param_dict=parameter_dictionary,
+                                                                 rcov_locs=reference_coverage_locs,
+                                                                 complex_type=complex_type,
+                                                                 coverage_type='complex')
 
                 self._dobuild(complex_type,
                               reference_coverages=reference_coverage_locs,
@@ -1018,6 +1047,10 @@ class SimplexCoverage(AbstractCoverage):
                 self.name = self._persistence_layer.name
                 self.spatial_domain = self._persistence_layer.sdom
                 self.temporal_domain = self._persistence_layer.tdom
+                if hasattr(self._persistence_layer, 'coverage_type'):
+                    self.coverage_type = self._persistence_layer.coverage_type
+                else:
+                    self.coverage_type = 'simplex'
 
                 self._bricking_scheme = self._persistence_layer.global_bricking_scheme
 
@@ -1106,7 +1139,17 @@ class SimplexCoverage(AbstractCoverage):
                 if self._in_memory_storage:
                     self._persistence_layer = InMemoryPersistenceLayer()
                 else:
-                    self._persistence_layer = PersistenceLayer(root_dir, persistence_guid, name=name, tdom=self.temporal_domain, sdom=self.spatial_domain, mode=self.mode, bricking_scheme=self._bricking_scheme, inline_data_writes=inline_data_writes, auto_flush_values=auto_flush_values, value_caching=value_caching)
+                    self._persistence_layer = PersistenceLayer(root_dir,
+                                                               persistence_guid,
+                                                               name=name,
+                                                               tdom=self.temporal_domain,
+                                                               sdom=self.spatial_domain,
+                                                               mode=self.mode,
+                                                               bricking_scheme=self._bricking_scheme,
+                                                               inline_data_writes=inline_data_writes,
+                                                               auto_flush_values=auto_flush_values,
+                                                               value_caching=value_caching,
+                                                               coverage_type='simplex')
 
                 for o, pc in parameter_dictionary.itervalues():
                     self.append_parameter(pc)
@@ -1120,11 +1163,6 @@ class SimplexCoverage(AbstractCoverage):
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
         return super(SimplexCoverage, cls)._fromdict(cmdict, {'parameter_dictionary':'_range_dictionary'})
-
-    def refresh(self):
-        if not self._in_memory_storage:
-            self.close()
-            self.__init__(os.path.split(self.persistence_dir)[0], self.persistence_guid, mode=self.mode)
 
 
 #=========================
