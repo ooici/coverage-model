@@ -21,6 +21,15 @@ def get_value_class(param_type, domain_set, **kwargs):
     return classobj(parameter_type=param_type, domain_set=domain_set, **kwargs)
 
 
+def _cleanse_value(val, slice_):
+    ret = np.atleast_1d(val)
+
+    # If the array is size 1 AND a slice object was NOT part of the query
+    if ret.size == 1 and not np.atleast_1d([isinstance(s, slice) for s in slice_]).all():
+        val = ret[0]
+
+    return val
+
 #=========================
 # Abstract Parameter Value Objects
 #=========================
@@ -83,9 +92,7 @@ class AbstractParameterValue(AbstractBase):
     def __getitem__(self, slice_):
         slice_ = utils.fix_slice(slice_, self.shape)
 
-        ret = self._storage[slice_]
-
-        return ret
+        return _cleanse_value(self._storage[slice_], slice_)
 
     def __setitem__(self, slice_, value):
         slice_ = utils.fix_slice(slice_, self.shape)
@@ -218,7 +225,7 @@ class FunctionValue(AbstractComplexParameterValue):
         total_indices = utils.prod(self.shape)
         x = np.arange(total_indices).reshape(self.shape)[slice_] # CBM TODO: This is INDEX based evaluation!!!
 
-        return ne.evaluate(self.content).astype(self.value_encoding)
+        return _cleanse_value(ne.evaluate(self.content).astype(self.value_encoding), slice_)
 
     def __setitem__(self, slice_, value):
         if is_well_formed_where(value):
@@ -272,7 +279,7 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
                 import sys
                 raise ParameterFunctionException(ex.message, type(ex)), None, sys.exc_traceback
 
-            return r
+            return _cleanse_value(r, slice_)
 
     def __setitem__(self, slice_, value):
         self._memoized_values = value
@@ -325,6 +332,22 @@ class SparseConstantValue(AbstractComplexParameterValue):
 
         return rf.reshape(ss)
 
+    def _apply_value(self, stor_sub, max_i):
+        v_arr = np.empty(0, dtype=self.value_encoding)
+        for s in stor_sub:
+            if isinstance(s.value, AbstractParameterValue):
+                e = s.value[:]
+            else:
+                st = s.lower_bound or 0
+                en = s.upper_bound or max_i
+                sz = en - st
+                e = np.empty(sz, dtype=self.value_encoding)
+                e.fill(s.value)
+
+            v_arr = np.append(v_arr, e)
+
+        return v_arr
+
     def __getitem__(self, slice_):
         ind_arr = self.__indexify_slice(slice_, self.shape)
 
@@ -336,25 +359,21 @@ class SparseConstantValue(AbstractComplexParameterValue):
         fi, li = ind_arr.min(), ind_arr.max()
 
         # Find the first storage needed
-        strt_i = 0
-        end_i = 1
-        for i, s in enumerate(self._storage):
+        strt_i = None
+        end_i = None
+        enum = enumerate(self._storage)
+        for i, s in enum:
             if fi in s:
                 strt_i = i
-            elif li in s:
-                end_i = i+1
+                break
+        for i, s in reversed(list(enum)):
+            if li in s:
+                end_i = i + 1
+                break
 
         stor_sub = self._storage[strt_i:end_i]
         # Build the array of stored values
-        v_arr = np.empty(0, dtype=self.value_encoding)
-        for s in stor_sub:
-            st = s.lower_bound or 0
-            en = s.upper_bound or li + 1
-            sz = en - st
-            e = np.empty(sz, dtype=self.value_encoding)
-            e.fill(s.value)
-
-            v_arr = np.append(v_arr, e)
+        v_arr = self._apply_value(stor_sub, li + 1)
 
         if stor_sub[0].lower_bound is None:
             offset = 0
@@ -362,7 +381,8 @@ class SparseConstantValue(AbstractComplexParameterValue):
             offset = stor_sub[0].lower_bound
         io = ind_arr - offset
 
-        return v_arr[io]
+        return _cleanse_value(v_arr[io], slice_)
+
 
     def __setitem__(self, slice_, value):
         # Get the last span
@@ -418,13 +438,7 @@ class ConstantValue(AbstractComplexParameterValue):
         ret = np.empty(ret_shape, dtype=np.dtype(self.value_encoding))
         ret.fill(self.content)
 
-        # If the array is size 1 AND a slice object was NOT part of the query
-        if ret.size == 1 and not np.atleast_1d([isinstance(s, slice) for s in slice_]).all():
-            if ret.ndim == 0:
-                ret = ret[()]
-            else:
-                ret = ret[0]
-        return ret
+        return _cleanse_value(ret, slice_)
 
     def __setitem__(self, slice_, value):
         if self.parameter_type.is_valid_value(value):
@@ -477,13 +491,7 @@ class ConstantRangeValue(AbstractComplexParameterValue):
         ret = np.empty(ret_shape, dtype=np.dtype(object)) # Always object type because it's 2 values / element!!
         ret.fill(self.content)
 
-        # If the array is size 1 AND a slice object was NOT part of the query
-        if ret.size == 1 and not np.atleast_1d([isinstance(s, slice) for s in slice_]).all():
-            if ret.ndim == 0:
-                ret = ret[()]
-            else:
-                ret = ret[0]
-        return ret
+        return _cleanse_value(ret, slice_)
 
     def __setitem__(self, slice_, value):
         if self.parameter_type.is_valid_value(value):
@@ -516,14 +524,14 @@ class CategoryValue(AbstractComplexParameterValue):
     def __getitem__(self, slice_):
         slice_ = utils.fix_slice(slice_, self.shape)
 
-        ret = self._storage[slice_]
+        ret = np.atleast_1d(self._storage[slice_])
         cats = self.parameter_type.categories
         if np.iterable(ret):
             ret = np.array([cats[x] for x in ret], dtype=object)
         else:
             ret = cats[ret]
 
-        return ret
+        return _cleanse_value(ret, slice_)
 
     def __setitem__(self, slice_, value):
         slice_ = utils.fix_slice(slice_, self.shape)
@@ -584,7 +592,7 @@ class ArrayValue(AbstractComplexParameterValue):
     def __getitem__(self, slice_):
         slice_ = utils.fix_slice(slice_, self.shape)
 
-        ret = self._storage[slice_]
+        ret = _cleanse_value(self._storage[slice_], slice_)
 
         return ret
 

@@ -60,22 +60,21 @@ class TestParameterValuesUnit(CoverageModelUnitTestCase):
         for x in xrange(num_rec):
             aval[x] = np.random.bytes(np.random.randint(1,20)) # One value (which is a byte string) for each member of the domain
 
-        self.assertIsInstance(aval[0], np.ndarray)
-        self.assertIsInstance(aval[0][0], basestring)
-        self.assertTrue(1 <= len(aval[0][0]) <= 20)
+        self.assertIsInstance(aval[0], basestring)
+        self.assertTrue(1 <= len(aval[0]) <= 20)
 
         vals = [[1, 2, 3]] * num_rec
         val_arr = np.empty(num_rec, dtype=object)
         val_arr[:] = vals
 
         aval[:] = vals
-        self.assertIsInstance(aval[0], list)
         self.assertTrue(np.array_equal(aval[:], val_arr))
+        self.assertIsInstance(aval[0], list)
         self.assertEqual(aval[0], [1, 2, 3])
 
         aval[:] = val_arr
-        self.assertIsInstance(aval[0], list)
         self.assertTrue(np.array_equal(aval[:], val_arr))
+        self.assertIsInstance(aval[0], list)
         self.assertEqual(aval[0], [1, 2, 3])
 
 
@@ -190,6 +189,29 @@ class TestParameterValuesUnit(CoverageModelUnitTestCase):
         self.assertTrue(np.array_equal(scval[2:29], out[2:29]))
         self.assertTrue(np.array_equal(scval[12:25], out[12:25]))
         self.assertTrue(np.array_equal(scval[18::3], out[18::3]))
+
+    def test_sparse_referred_value(self):
+        num_rec = 0
+        scdom = SimpleDomainSet((num_rec,))
+        sctype = SparseConstantType(fill_value=-999)
+        scval = get_value_class(sctype, scdom)
+
+        qv = get_value_class(QuantityType(), SimpleDomainSet((10,)))
+        qv[:] = np.arange(10)
+        qv2 = get_value_class(QuantityType(), SimpleDomainSet((14,)))
+        qv2[:] = np.arange(100,114)
+
+        scval[:] = qv
+        scdom.shape = (10,)
+        self.assertTrue(np.array_equal(scval[:], np.arange(10)))
+
+        scval[:] = qv2
+        scdom.shape = (24,)
+        self.assertTrue(np.array_equal(scval[:10], np.arange(10)))
+        self.assertTrue(np.array_equal(scval[10:], np.arange(100,114)))
+        self.assertTrue(np.array_equal(scval[:], np.append(np.arange(10), np.arange(100,114))))
+
+
 
 
 @attr('INT',group='cov')
@@ -307,6 +329,11 @@ class TestParameterValuesInt(CoverageModelIntTestCase):
         vals = [[1, 2, 3]] * ntimes
         vals_arr = np.empty(ntimes, dtype=object)
         vals_arr[:] = vals
+        svals = []
+        for x in xrange(ntimes):
+            svals.append(np.random.bytes(np.random.randint(1,20))) # One value (which is a byte string) for each member of the domain
+        svals_arr = np.empty(ntimes, dtype=object)
+        svals_arr[:] = svals
 
         # Setup the in-memory value
         dom = SimpleDomainSet((ntimes,))
@@ -331,6 +358,16 @@ class TestParameterValuesInt(CoverageModelIntTestCase):
         # Array Assignment
         arr_val[:] = vals_arr
         cov.set_parameter_values('array', vals_arr)
+        self._interop_assertions(cov, 'array', arr_val)
+
+        # String Assignment via list
+        arr_val[:] = svals
+        cov.set_parameter_values('array', svals)
+        self._interop_assertions(cov, 'array', arr_val)
+
+        # String Assignment via array
+        arr_val[:] = svals_arr
+        cov.set_parameter_values('array', svals_arr)
         self._interop_assertions(cov, 'array', arr_val)
 
     def test_category_value_interop(self):
