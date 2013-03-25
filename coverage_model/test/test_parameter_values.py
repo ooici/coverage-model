@@ -199,7 +199,7 @@ class TestParameterValuesUnit(CoverageModelUnitTestCase):
         qv = get_value_class(QuantityType(), SimpleDomainSet((10,)))
         qv[:] = np.arange(10)
         qv2 = get_value_class(QuantityType(), SimpleDomainSet((14,)))
-        qv2[:] = np.arange(100,114)
+        qv2[:] = np.arange(100, 114)
 
         scval[:] = qv
         scdom.shape = (10,)
@@ -319,6 +319,105 @@ class TestParameterValuesInt(CoverageModelIntTestCase):
         self.assertTrue(np.array_equal(cov.get_parameter_values(pname, slice(None, None, 3)), val_cls[::3]))
         self.assertEqual(cov.get_parameter_values(pname, 0), val_cls[0])
         self.assertEqual(cov.get_parameter_values(pname, -1), val_cls[-1])
+
+    def test_numeric_values_interop(self):
+        # Setup the types
+        i8_type = QuantityType(value_encoding='int8')
+        i16_type = QuantityType(value_encoding='int16')
+        i32_type = QuantityType(value_encoding='int32')
+        i64_type = QuantityType(value_encoding='int64')
+        f32_type = QuantityType(value_encoding='float32')
+        f64_type = QuantityType(value_encoding='float64')
+
+        # Setup the values
+        ntimes = 20
+        valsi8 = range(ntimes)
+        valsi8_arr = np.arange(ntimes, dtype='int8')
+        valsi16 = range(ntimes)
+        valsi16_arr = np.arange(ntimes, dtype='int16')
+        valsi32 = range(ntimes)
+        valsi32_arr = np.arange(ntimes, dtype='int32')
+        valsi64 = range(ntimes)
+        valsi64_arr = np.arange(ntimes, dtype='int64')
+        valsf32 = range(ntimes)
+        valsf32_arr = np.arange(ntimes, dtype='float32')
+        valsf64 = range(ntimes)
+        valsf64_arr = np.arange(ntimes, dtype='float64')
+
+        # Setup the in-memory value
+        dom = SimpleDomainSet((ntimes,))
+        i8_val = get_value_class(i8_type, dom)
+        i16_val = get_value_class(i16_type, dom)
+        i32_val = get_value_class(i32_type, dom)
+        i64_val = get_value_class(i64_type, dom)
+        f32_val = get_value_class(f32_type, dom)
+        f64_val = get_value_class(f64_type, dom)
+
+        # Setup the coverage
+        pdict = ParameterDictionary()
+        # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+        pdict.add_context(ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64'))), is_temporal=True)
+        pdict.add_context(ParameterContext('i8', param_type=i8_type))
+        pdict.add_context(ParameterContext('i16', param_type=i16_type))
+        pdict.add_context(ParameterContext('i32', param_type=i32_type))
+        pdict.add_context(ParameterContext('i64', param_type=i64_type))
+        pdict.add_context(ParameterContext('f32', param_type=f32_type))
+        pdict.add_context(ParameterContext('f64', param_type=f64_type))
+        tdom = GridDomain(GridShape('temporal', [0]), CRS([AxisTypeEnum.TIME]), MutabilityEnum.EXTENSIBLE)
+
+        # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+        cov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom)
+        cov.insert_timesteps(ntimes)
+
+        # List Assignment
+        i8_val[:] = valsi8
+        cov.set_parameter_values('i8', valsi8)
+        self._interop_assertions(cov, 'i8', i8_val)
+
+        i16_val[:] = valsi16
+        cov.set_parameter_values('i16', valsi16)
+        self._interop_assertions(cov, 'i16', i16_val)
+
+        i32_val[:] = valsi32
+        cov.set_parameter_values('i32', valsi32)
+        self._interop_assertions(cov, 'i32', i32_val)
+
+        i64_val[:] = valsi64
+        cov.set_parameter_values('i64', valsi64)
+        self._interop_assertions(cov, 'i64', i64_val)
+
+        f32_val[:] = valsf32
+        cov.set_parameter_values('f32', valsf32)
+        self._interop_assertions(cov, 'f32', f32_val)
+
+        f64_val[:] = valsf64
+        cov.set_parameter_values('f64', valsf64)
+        self._interop_assertions(cov, 'f64', f64_val)
+
+        # Array Assignment
+        i8_val[:] = valsi8_arr
+        cov.set_parameter_values('i8', valsi8_arr)
+        self._interop_assertions(cov, 'i8', i8_val)
+
+        i16_val[:] = valsi16_arr
+        cov.set_parameter_values('i16', valsi16_arr)
+        self._interop_assertions(cov, 'i16', i16_val)
+
+        i32_val[:] = valsi32_arr
+        cov.set_parameter_values('i32', valsi32_arr)
+        self._interop_assertions(cov, 'i32', i32_val)
+
+        i64_val[:] = valsi64_arr
+        cov.set_parameter_values('i64', valsi64_arr)
+        self._interop_assertions(cov, 'i64', i64_val)
+
+        f32_val[:] = valsf32_arr
+        cov.set_parameter_values('f32', valsf32_arr)
+        self._interop_assertions(cov, 'f32', f32_val)
+
+        f64_val[:] = valsf64_arr
+        cov.set_parameter_values('f64', valsf64_arr)
+        self._interop_assertions(cov, 'f64', f64_val)
 
     def test_array_value_interop(self):
         # Setup the type

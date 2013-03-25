@@ -876,8 +876,8 @@ class ComplexCoverageType(BaseEnum):
     # must have coincident temporal and spatial domains
     PARAMETRIC = 'PARAMETRIC'
 
-    # Complex coverage that appends coverages along their temporal axis
-    TEMPORAL_APPEND = 'TEMPORAL_APPEND'
+    # Complex coverage that aggregates coverages along their temporal axis
+    TEMPORAL_AGGREGATION = 'TEMPORAL_AGGREGATION'
 
     # Placeholder for spatial complex - not sure what this will look like yet...
     SPATIAL_JOIN = 'SPATIAL_JOIN'
@@ -962,42 +962,134 @@ class ComplexCoverage(AbstractCoverage):
         if complex_type == ComplexCoverageType.PARAMETRIC:
             # Complex parametric - combine parameters from multiple coverages
             self._build_parametric(kwargs['reference_coverages'], kwargs['parameter_dictionary'])
-        elif complex_type == ComplexCoverageType.TEMPORAL_APPEND:
+        elif complex_type == ComplexCoverageType.TEMPORAL_AGGREGATION:
             # Complex temporal - combine coverages temporally
-            raise NotImplementedError('Not yet implemented')
+            self._build_temporal_aggregation(kwargs['reference_coverages'], kwargs['parameter_dictionary'])
         elif complex_type == ComplexCoverageType.SPATIAL_JOIN:
             # Complex spatial - combine coverages across a higher-order topology
             raise NotImplementedError('Not yet implemented')
 
+    def _verify_rcovs(self, rcovs):
+        for cpth in rcovs:
+            if not os.path.exists(cpth):
+                log.warn('Cannot find coverage \'%s\'; ignoring', cpth)
+                continue
+
+            if cpth in self._reference_covs:
+                log.info('Coverage \'%s\' already present; ignoring', cpth)
+                continue
+
+            try:
+                cov = AbstractCoverage.load(cpth)
+            except Exception as ex:
+                log.warn('Exception loading coverage \'%s\'; ignoring: ', cpth, ex.message)
+                continue
+
+            if cov.temporal_parameter_name is None:
+                log.warn('Coverage \'%s\' does not have a temporal_parameter; ignoring', cpth)
+                continue
+
+            yield cpth, cov
+
     def _build_parametric(self, rcovs, parameter_dictionary):
         ntimes = None
+        times = None
 
-        for cpth in set(rcovs):
-            if not os.path.exists(cpth):
-                log.warn('Cannot find coverage at \'%s\'; ignoring', cpth)
-                continue
-            cov = AbstractCoverage.load(cpth)
+        for cpth, cov in self._verify_rcovs(rcovs):
+
             if ntimes is None:
                 ntimes = cov.num_timesteps
+                times = cov.get_time_values()
                 self.temporal_domain = cov.temporal_domain
                 self.spatial_domain = cov.spatial_domain
+                self._reference_covs[cpth] = cov
             else:
-                if ntimes != cov.num_timesteps:
-                    raise ValueError('Coverage does not have correct # of timestseps: {0}'.format(cpth))
+                if ntimes == cov.num_timesteps and np.allclose(times, cov.get_time_values()):
+                    self._reference_covs[cpth] = cov
+                else:
+                    log.warn('Coverage timestamps do not match; cannot include: %s', cpth)
+                    continue
+
+            # Add parameters from the coverage if not already present
+            for p in cov.list_parameters():
+                if p not in parameter_dictionary:
+                    if p not in self._range_dictionary:
+                        # Add the context from the reference coverage
+                        self._range_dictionary.add_context(self._reference_covs[cpth]._range_dictionary.get_context(p))
+                        # Add the value class from the reference coverage
+                        self._range_value[p] = self._reference_covs[cpth]._range_value[p]
+                    else:
+                        log.warn('Parameter \'%s\' from coverage \'%s\' already present, skipping...', p, cpth)
+
+        # Add the parameters for this coverage
+        for pc in parameter_dictionary.itervalues():
+            self.append_parameter(pc[1])
+
+    def _build_temporal_aggregation(self, rcovs, parameter_dictionary):
+        # First open all the coverages and sort them temporally
+        time_bounds = []
+        for cpth, cov in self._verify_rcovs(rcovs):
+
+            # Get the time bounds for the coverage
+            tbnds = cov.get_data_bounds(cov.temporal_parameter_name)
+            spn = Span(tbnds[0], tbnds[1], cpth)
+
+            if spn in time_bounds:
+                log.warn('Coverage with time bounds \'%s\' already present; ignoring', spn.tuplize())
+                continue
+
+            time_bounds.append(spn)
 
             self._reference_covs[cpth] = cov
 
             # Add parameters from the coverage if not already present
             for p in cov.list_parameters():
-                if p not in parameter_dictionary and p not in self._range_dictionary:
-                    # Add the context from the reference coverage
-                    self._range_dictionary.add_context(self._reference_covs[cpth]._range_dictionary.get_context(p))
-                    # Add the value class from the reference coverage
-                    self._range_value[p] = self._reference_covs[cpth]._range_value[p]
+                if p not in parameter_dictionary:
+                    if p not in self._range_dictionary:
+                        # Add the context from the reference coverage
+                        self._range_dictionary.add_context(self._reference_covs[cpth]._range_dictionary.get_context(p))
+                        # Add the sparse value class
+                        from coverage_model.parameter_types import SparseConstantType
+                        self._range_value[p] = get_value_class(
+                            SparseConstantType(value_encoding=self._range_dictionary.get_context(p).param_type.value_encoding),
+                            DomainSet(self.temporal_domain))
+                    else:
+                        log.warn('Parameter \'%s\' from coverage \'%s\' already present, skipping...', p, cpth)
 
-        # Add the parameters for this coverage
-        for pc in parameter_dictionary.itervalues():
-            self.append_parameter(pc[1])
+        time_bounds.sort()
+
+        # Next build domain spans for each coverage
+        rcov_domain_spans = []
+        start = 0
+        for i, tb in enumerate(time_bounds):
+            cov = self._reference_covs[tb.value]
+            end = start + cov.num_timesteps
+            # if i == 0:
+            #     s = Span(None, end, tb.value)
+            # elif i == len(time_bounds):
+            #     s = Span(start, None, tb.value)
+            # else:
+            #     s = Span(start, end, tb.value)
+            # rcov_domain_spans.append(s)
+            rcov_domain_spans.append(Span(start, end, tb.value))
+            start = end
+
+        rcov_domain_spans.sort()
+
+        self.rcov_domain_spans = rcov_domain_spans
+
+        # Add data for all spans
+        for s in self.rcov_domain_spans:
+            cov = self._reference_covs[s.value]
+            for p in self.list_parameters():
+                if p in cov._range_dictionary:
+                    self._range_value[p][:] = cov._range_value[p]
+                else:
+                    self._range_value[p][:] = self._range_dictionary[p].fill_value
+            self.insert_timesteps(len(s))
+
+
+
 
 
 class SimplexCoverage(AbstractCoverage):
