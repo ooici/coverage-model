@@ -10,6 +10,7 @@
 from coverage_model import *
 from coverage_model.coverage import *
 from nose.plugins.attrib import attr
+import unittest
 import numpy as np
 import os
 from pyon.public import log
@@ -122,6 +123,7 @@ class CoverageIntTestBase(object):
         res = scov.get_data_size(parameter_name='time', slice_=None, in_bytes=False)
         self.assertEqual(res, 0.03814696)
 
+    @unittest.skip('Not yet implemented.')
     def test_get_all_metadata(self):
         #TODO: Make sure we can get all the data for all the parameters
         pass
@@ -285,6 +287,15 @@ class CoverageIntTestBase(object):
         with self.assertRaises(ValueError):
             scov.get_time_values()
 
+    def test_refresh(self):
+        brick_size = 1000
+        time_steps = 5000
+        cov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
+        cov_data_pre = cov.get_time_values()
+        cov.refresh()
+        self.assertIsInstance(cov, AbstractCoverage)
+        cov_data_post = cov.get_time_values()
+        self.assertTrue(np.array_equal(cov_data_pre, cov_data_post))
 
     # ############################
     # LOADING
@@ -511,10 +522,14 @@ class CoverageIntTestBase(object):
                         results.append(np.array_equiv(mock_data, data))
         self.assertTrue(False not in results)
 
+    @unittest.skip('Not yet implemented.')
     def test_get_by_int(self):
+        # TODO: Implement
         pass
 
+    @unittest.skip('Not yet implemented.')
     def test_get_by_list(self):
+        # TODO: Implement
         pass
 
     

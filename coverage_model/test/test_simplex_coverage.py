@@ -9,6 +9,7 @@
 
 from coverage_model import *
 from nose.plugins.attrib import attr
+import unittest
 import numpy as np
 from pyon.public import log
 import random
@@ -225,30 +226,43 @@ class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
     def _insert_set_get(self, scov=None, timesteps=None, data=None, _slice=None, param='all'):
         return True
 
+    @unittest.skip('Does not apply to empty coverage.')
+    def test_refresh(self):
+        pass
+
+    @unittest.skip('Does not apply to empty coverage.')
     def test_get_all_data_metadata(self):
         pass
 
+    @unittest.skip('Does not apply to empty coverage.')
     def test_get_data_after_load(self):
         pass
 
+    @unittest.skip('Does not apply to empty coverage.')
     def test_append_parameter(self):
         pass
 
+    @unittest.skip('Does not apply to empty coverage.')
     def test_get_time_metadata(self):
         pass
 
+    @unittest.skip('Does not apply to empty coverage.')
     def test_get_by_slice(self):
         pass
 
+    @unittest.skip('Does not apply to empty coverage.')
     def test_create_multi_bricks(self):
         pass
 
+    @unittest.skip('Does not apply to empty coverage.')
     def test_pickle_problems_in_memory(self):
         pass
 
+    @unittest.skip('Does not apply to empty coverage.')
     def test_slice_stop_greater_than_size(self):
         pass
 
+    @unittest.skip('Does not apply to empty coverage.')
     def test_slice_stop_greater_than_size_with_step(self):
         pass
 

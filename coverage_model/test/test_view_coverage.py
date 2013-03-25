@@ -9,6 +9,7 @@
 
 from coverage_model import *
 from nose.plugins.attrib import attr
+import unittest
 from pyon.public import log
 
 from test_simplex_coverage import TestSampleCovInt as sc
@@ -45,83 +46,110 @@ class TestSampleCovViewInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
         return cov, 'TestSampleCovViewInt'
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_load_init_succeeds(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_load_succeeds_with_options(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_dot_load_succeeds(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_set_time_one_brick(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_set_allparams_five_bricks(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_set_allparams_one_brick(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_set_time_five_bricks(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_set_time_five_bricks_strided(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_set_time_one_brick_strided(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_persistence_variation1(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_persistence_variation2(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_persistence_variation3(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_persistence_variation4(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_pickle_problems_in_memory(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_coverage_pickle_and_in_memory(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_load_options_pd_pg(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_dot_load_fails_bad_guid(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_append_parameter(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_close_coverage_before_done_using_it(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_error_set_invalid_parameter(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_dot_load_options_pd(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_dot_load_options_pd_pg(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_create_multi_bricks(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_get_data_after_load(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_coverage_mode_expand_domain(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_coverage_mode_set_value(self):
         pass
 
+    @unittest.skip('Does not apply to ViewCoverage.')
     def test_get_time_metadata(self):
         pass
