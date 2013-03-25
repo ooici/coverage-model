@@ -610,11 +610,14 @@ class SparseConstantType(AbstractComplexParameterType):
         fv = None
         if 'fill_value' in kwc:
             fv = kwc.pop('fill_value')
+        ve = None
+        if 'value_encoding' in kwc:
+            ve = kwc.pop('value_encoding')
         AbstractComplexParameterType.__init__(self, value_class='SparseConstantValue', **kwc)
         if base_type is not None and not isinstance(base_type, ConstantType):
             raise TypeError('\'base_type\' must be an instance of ConstantType')
 
-        self.base_type = base_type or ConstantType()
+        self.base_type = base_type or ConstantType(value_encoding=ve)
 
         self._template_attrs.update(self.base_type._template_attrs)
 
@@ -669,11 +672,14 @@ class ConstantType(AbstractComplexParameterType):
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterType; see documentation for that class for details
         """
         kwc=kwargs.copy()
+        ve = None
+        if 'value_encoding' in kwc:
+            ve = kwc.pop('value_encoding')
         AbstractComplexParameterType.__init__(self, value_class='ConstantValue', **kwc)
         if base_type is not None and not isinstance(base_type, QuantityType):
             raise TypeError('\'base_type\' must be an instance of QuantityType')
 
-        self.base_type = base_type or QuantityType()
+        self.base_type = base_type or QuantityType(value_encoding=ve)
 
         self._template_attrs.update(self.base_type._template_attrs)
 #        self._template_attrs['fill_value'] = None
