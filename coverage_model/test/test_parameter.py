@@ -77,3 +77,95 @@ class TestParameterUnit(CoverageModelUnitTestCase):
 
         self.assertEqual(('numexpr', 'gsw'), sal_ctxt.get_module_dependencies())
 
+    def test_parameter_dictionary_comparisons(self):
+        # Tests ParameterDictionary and ParameterContext creation
+        # Instantiate a ParameterDictionary
+        pdict_1 = ParameterDictionary()
+
+        # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+        pdict_1.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')), is_temporal=True)
+        pdict_1.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
+        pdict_1.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
+        pdict_1.add_context(ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius')))
+
+        # Instantiate a ParameterDictionary
+        pdict_2 = ParameterDictionary()
+
+        # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+        pdict_2.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')), is_temporal=True)
+        pdict_2.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
+        pdict_2.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
+        pdict_2.add_context(ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius')))
+
+        # Instantiate a ParameterDictionary
+        pdict_3 = ParameterDictionary()
+
+        # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+        pdict_3.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')), is_temporal=True)
+        pdict_3.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
+        pdict_3.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
+        pdict_3.add_context(ParameterContext('temp2', param_type=QuantityType(uom='degree_Celsius')))
+
+        # Instantiate a ParameterDictionary
+        pdict_4 = ParameterDictionary()
+
+        # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+        pdict_4.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')), is_temporal=True)
+        pdict_4.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
+        pdict_4.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
+
+        temp_ctxt = ParameterContext('temp', param_type=QuantityType(uom = 'degree_Celsius'))
+        pdict_4.add_context(temp_ctxt)
+
+        temp2_ctxt = ParameterContext(name=temp_ctxt, new_name='temp2')
+        pdict_4.add_context(temp2_ctxt)
+
+        with self.assertRaises(SystemError):
+            ParameterContext([10,20,30], param_type=QuantityType(uom = 'bad name'))
+
+        with self.assertRaises(SystemError):
+            ParameterContext(None,None)
+
+        with self.assertRaises(SystemError):
+            ParameterContext(None)
+
+        with self.assertRaises(TypeError):
+            ParameterContext()
+
+        with self.assertRaises(SystemError):
+            ParameterContext(None, param_type=QuantityType(uom = 'bad name'))
+
+        # Should be equal and compare one-to-one with nothing in the None list
+        self.assertEquals(pdict_1, pdict_2)
+        self.assertEquals(pdict_1.compare(pdict_2), {'lat': ['lat'], 'lon': ['lon'], None: [], 'temp': ['temp'], 'time': ['time']})
+
+        # Should be unequal and compare with an empty list for 'temp' and 'temp2' in the None list
+        self.assertNotEquals(pdict_1, pdict_3)
+        self.assertEquals(pdict_1.compare(pdict_3), {'lat': ['lat'], 'lon': ['lon'], None: ['temp2'], 'temp': [], 'time': ['time']})
+
+        # Should be unequal and compare with both 'temp' and 'temp2' in 'temp' and nothing in the None list
+        self.assertNotEquals(pdict_1,  pdict_4)
+        self.assertEquals(pdict_1.compare(pdict_4), {'lat': ['lat'], 'lon': ['lon'], None: [], 'temp': ['temp', 'temp2'], 'time': ['time']})
+
+    def test_bad_pc_from_dict(self):
+        # Tests improper load of a ParameterContext
+        pc1 = ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius'))
+        with self.assertRaises(TypeError):
+            pc1._fromdict('junk', pc1.dump())
+        pc2 = pc1._fromdict(pc1.dump())
+        self.assertEquals(pc1, pc2)
+
+    def test_dump_and_load_from_dict(self):
+        # Tests improper load of a ParameterContext
+        pc1 = ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius'))
+        pc2 = pc1._fromdict(pc1.dump())
+        self.assertEquals(pc1, pc2)
+
+    def test_param_dict_from_dict(self):
+        pdict_1 = ParameterDictionary()
+        pdict_1.add_context(ParameterContext('time', param_type=QuantityType(value_encoding='l', uom='seconds since 01-01-1970')), is_temporal=True)
+        pdict_1.add_context(ParameterContext('lat', param_type=QuantityType(uom='degree_north')))
+        pdict_1.add_context(ParameterContext('lon', param_type=QuantityType(uom='degree_east')))
+        pdict_1.add_context(ParameterContext('temp', param_type=QuantityType(uom='degree_Celsius')))
+        new_pdict = ParameterDictionary._fromdict(pdict_1._todict())
+        self.assertTrue(pdict_1 == new_pdict)

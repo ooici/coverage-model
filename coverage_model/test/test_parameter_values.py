@@ -346,5 +346,3 @@ class TestParameterValuesInt(CoverageModelIntTestCase):
         cat_val[:] = cat_vals_arr
         cov.set_parameter_values('category', cat_vals_arr)
         self._interop_assertions(cov, 'category', cat_val)
-
-
