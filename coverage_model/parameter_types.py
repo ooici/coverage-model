@@ -703,11 +703,18 @@ class ConstantRangeType(AbstractComplexParameterType):
         self._gen_template_attrs()
 
     def is_valid_value(self, value):
-        if isinstance(value, (list, tuple, np.ndarray)) and len(value) >= 2:
-            my_kind=np.dtype(self.value_encoding).kind
-            for v in value[:2]:
-                if np.asanyarray(v).dtype.kind != my_kind:
-                    raise ValueError('\'value\' must be a list or tuple of size >= 2 and kind={0}; value={1}'.format(my_kind, value))
+        # my_kind = np.dtype(self.value_encoding).kind
+        # varr = np.atleast_1d(value).flatten()
+        # v_kind = varr.dtype.kind
+        # if v_kind == np.dtype(object):
+        #     if len(varr) < 1:
+        #         raise ValueError('\'value\' must be an iterable of size >= 2 and kind={0}; value={1}'.format(my_kind, value))
+        #     else:
+        #         varr = np.atleast_1d(varr[0]).flatten()
+        #         v_kind = varr.dtype.kind
+        #
+        # if len(varr) < 2 or v_kind != my_kind:
+        #     raise ValueError('\'value\' must be an iterable of size >= 2 and kind={0}; value={1}'.format(my_kind, value))
 
         return True
 
