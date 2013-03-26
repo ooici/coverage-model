@@ -1085,7 +1085,7 @@ class ComplexCoverage(AbstractCoverage):
                 if p in cov._range_dictionary:
                     self._range_value[p][:] = cov._range_value[p]
                 else:
-                    self._range_value[p][:] = self._range_dictionary[p].fill_value
+                    self._range_value[p][:] = self._range_dictionary.get_context(p).fill_value
             self.insert_timesteps(len(s))
 
 
