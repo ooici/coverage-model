@@ -384,8 +384,7 @@ class ConstantRangeValue(AbstractComplexParameterValue):
 
             # We already know it's either a list or tuple, that it's length is >= 2, and that both of
             # the first two values are of the correct type...so...just deal with funky nesting...
-            va = np.atleast_1d(value)
-            va = va.flatten()  # Flatten the whole thing - deals with nD arrays
+            va = np.atleast_1d(value).flatten()  # Flatten the whole thing - deals with nD arrays
             if isinstance(va[0], tuple):  # Array of tuples, likely from another ConstantRangeValue
                 va = np.array(va[0])
 
