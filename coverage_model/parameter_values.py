@@ -6,7 +6,7 @@
 @author Christopher Mueller
 @brief Abstract and concrete value objects for parameters
 """
-
+from ooi.logging import log
 from coverage_model.basic_types import AbstractBase, InMemoryStorage, VariabilityEnum, Span
 from coverage_model.numexpr_utils import is_well_formed_where, nest_wheres
 from coverage_model.parameter_functions import ParameterFunctionException
@@ -296,11 +296,10 @@ class SparseConstantValue(AbstractComplexParameterValue):
         kwc=kwargs.copy()
         AbstractComplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
         self._storage.expand((1,), 0, 1)
-        self._storage[0] = Span(value=self.fill_value)
 
     @property
     def content(self):
-        return self._storage[:]
+        return self._storage[0]
 
     def expand_content(self, domain, origin, expansion):
         # No op - storage expanded in __setitem__
@@ -340,6 +339,9 @@ class SparseConstantValue(AbstractComplexParameterValue):
             else:
                 st = s.lower_bound or 0
                 en = s.upper_bound or max_i
+
+                log.trace('st: %s, en: %s', st, en)
+
                 sz = en - st
                 e = np.empty(sz, dtype=self.value_encoding)
                 e.fill(s.value)
@@ -349,10 +351,29 @@ class SparseConstantValue(AbstractComplexParameterValue):
         return v_arr
 
     def __getitem__(self, slice_):
-        ind_arr = self.__indexify_slice(slice_, self.shape)
+        slice_ = utils.fix_slice(slice_, self.shape)
 
-        # No data!
-        if len(ind_arr) is 0:
+        # Nothing asked for!
+        if len(slice_) is 0:
+            return np.empty(0, dtype=self.value_encoding)
+
+        try:
+            spans = self._storage[0]
+        except ValueError, ve:
+            if ve.message != 'No Bricks!':
+                raise
+
+            return np.empty(0, dtype=self.value_encoding)
+
+        if not hasattr(spans, '__iter__') and spans == self.fill_value:
+            ret = np.empty(utils.slice_shape(slice_, self.shape), dtype=self.value_encoding)
+            ret.fill(self.fill_value)
+            return ret
+
+        # Build the index array
+        ind_arr = self.__indexify_slice(slice_, self.shape)
+        # Empty index array!
+        if len(ind_arr) == 0:
             return np.empty(0, dtype=self.value_encoding)
 
         # Get first and last index
@@ -361,17 +382,23 @@ class SparseConstantValue(AbstractComplexParameterValue):
         # Find the first storage needed
         strt_i = None
         end_i = None
-        enum = enumerate(self._storage)
+        enum = enumerate(spans)
         for i, s in enum:
             if fi in s:
                 strt_i = i
                 break
-        for i, s in reversed(list(enum)):
-            if li in s:
-                end_i = i + 1
-                break
 
-        stor_sub = self._storage[strt_i:end_i]
+        if fi == li:
+            end_i = strt_i + 1
+        else:
+            for i, s in reversed(list(enum)):
+                if li in s:
+                    end_i = i + 1
+                    break
+
+        log.trace('srt: %s, end: %s, fi: %s, li: %s', strt_i, end_i, fi, li)
+
+        stor_sub = spans[strt_i:end_i]
         # Build the array of stored values
         v_arr = self._apply_value(stor_sub, li + 1)
 
@@ -383,29 +410,50 @@ class SparseConstantValue(AbstractComplexParameterValue):
 
         return _cleanse_value(v_arr[io], slice_)
 
-
     def __setitem__(self, slice_, value):
+        slice_ = utils.fix_slice(slice_, self.shape)
+
+        spans = self._storage[0]
+        if spans is None:
+            # No-op, there is no domain yet
+            return
+
+        if not isinstance(value, AbstractParameterValue):
+            # If the value is an array/iterable, we only take the first one
+            value = np.atleast_1d(value)[0]
+
+        if not hasattr(spans, '__iter__') and spans == self.fill_value:
+            spans = [Span(value=value)]
+            slice_ = (self.shape[0] - 1,)
+
         # Get the last span
-        lspn = self._storage[-1]
+        lspn = spans[-1]
+
+        if slice_[0] == self.shape[0] - 1:  # -1 was used for slice
+            # Change the value of the last span and return
+            lspn.value = value
+            self._storage[0] = spans
+            return
+
+        if not isinstance(value, AbstractParameterValue) and not isinstance(lspn.value, AbstractParameterValue):
+            if value == lspn.value:
+                # The previous value equals the new value - do not add a new span!
+                return
 
         # The current index becomes the upper_bound of the previous span and the start of the next span
         curr_ind = self.shape[0]
 
+        # Create the new span
         nspn = Span(curr_ind, None, value)
 
-        # New span == last span, replace and continue
-        if lspn == nspn:
-            self._storage[-1] = nspn
-            return
+        # Reset the upper_bound of the previous span
+        spans[-1] = Span(lspn.lower_bound, curr_ind, lspn.value)
 
-        # Reset the last span
-        self._storage[-1] = Span(lspn.lower_bound, curr_ind, lspn.value)
+        # Add the new span
+        spans.append(nspn)
 
-        # Expand storage
-        self._storage.expand((1,), len(self._storage), 1)
-
-        # Create the new span
-        self._storage[-1] = Span(curr_ind, None, value)
+        # Reset the storage
+        self._storage[0] = spans
 
 
 class ConstantValue(AbstractComplexParameterValue):

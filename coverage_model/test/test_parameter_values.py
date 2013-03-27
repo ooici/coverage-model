@@ -356,18 +356,18 @@ class TestParameterValuesInt(CoverageModelIntTestCase):
         # Setup the coverage
         pdict = ParameterDictionary()
         # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
-        pdict.add_context(ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64'))), is_temporal=True)
-        pdict.add_context(ParameterContext('i8', param_type=i8_type))
-        pdict.add_context(ParameterContext('i16', param_type=i16_type))
-        pdict.add_context(ParameterContext('i32', param_type=i32_type))
-        pdict.add_context(ParameterContext('i64', param_type=i64_type))
-        pdict.add_context(ParameterContext('f32', param_type=f32_type))
-        pdict.add_context(ParameterContext('f64', param_type=f64_type))
+        pdict.add_context(ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')), variability=VariabilityEnum.TEMPORAL), is_temporal=True)
+        pdict.add_context(ParameterContext('i8', param_type=i8_type, variability=VariabilityEnum.TEMPORAL))
+        pdict.add_context(ParameterContext('i16', param_type=i16_type, variability=VariabilityEnum.TEMPORAL))
+        pdict.add_context(ParameterContext('i32', param_type=i32_type, variability=VariabilityEnum.TEMPORAL))
+        pdict.add_context(ParameterContext('i64', param_type=i64_type, variability=VariabilityEnum.TEMPORAL))
+        pdict.add_context(ParameterContext('f32', param_type=f32_type, variability=VariabilityEnum.TEMPORAL))
+        pdict.add_context(ParameterContext('f64', param_type=f64_type, variability=VariabilityEnum.TEMPORAL))
         tdom = GridDomain(GridShape('temporal', [0]), CRS([AxisTypeEnum.TIME]), MutabilityEnum.EXTENSIBLE)
-
-        # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
         cov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom)
         cov.insert_timesteps(ntimes)
+
+        # Perform the assertions
 
         # List Assignment
         i8_val[:] = valsi8
@@ -441,13 +441,13 @@ class TestParameterValuesInt(CoverageModelIntTestCase):
         # Setup the coverage
         pdict = ParameterDictionary()
         # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
-        pdict.add_context(ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64'))), is_temporal=True)
-        pdict.add_context(ParameterContext('array', param_type=arr_type))
+        pdict.add_context(ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')), variability=VariabilityEnum.TEMPORAL), is_temporal=True)
+        pdict.add_context(ParameterContext('array', param_type=arr_type, variability=VariabilityEnum.TEMPORAL))
         tdom = GridDomain(GridShape('temporal', [0]), CRS([AxisTypeEnum.TIME]), MutabilityEnum.EXTENSIBLE)
-
-        # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
         cov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom)
         cov.insert_timesteps(ntimes)
+
+        # Perform the assertions
 
         # Nested List Assignment
         arr_val[:] = vals
@@ -490,13 +490,13 @@ class TestParameterValuesInt(CoverageModelIntTestCase):
         # Setup the coverage
         pdict = ParameterDictionary()
         # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
-        pdict.add_context(ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64'))), is_temporal=True)
-        pdict.add_context(ParameterContext('category', param_type=cat_type))
+        pdict.add_context(ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')), variability=VariabilityEnum.TEMPORAL), is_temporal=True)
+        pdict.add_context(ParameterContext('category', param_type=cat_type, variability=VariabilityEnum.TEMPORAL))
         tdom = GridDomain(GridShape('temporal', [0]), CRS([AxisTypeEnum.TIME]), MutabilityEnum.EXTENSIBLE)
-
-        # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
         cov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom)
         cov.insert_timesteps(ntimes)
+
+        # Perform the assertions
 
         # Assign with a list of keys
         cat_val[:] = key_vals
@@ -517,3 +517,84 @@ class TestParameterValuesInt(CoverageModelIntTestCase):
         cat_val[:] = cat_vals_arr
         cov.set_parameter_values('category', cat_vals_arr)
         self._interop_assertions(cov, 'category', cat_val)
+
+    def test_sparse_constant_value_interop(self):
+        # Setup the type
+        scv_type = SparseConstantType(fill_value='-998', value_encoding='int32')
+
+        # Setup the values
+        ntimes = 10
+        val = 20
+        val_list = [20, 40]
+        val_arr = np.array(val_list, dtype='int32')
+
+        # Setup the in-memory value
+        dom = SimpleDomainSet((ntimes,))
+        scv_val = get_value_class(scv_type, dom)
+
+        # Setup the coverage
+        pdict = ParameterDictionary()
+        pdict.add_context(ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')), variability=VariabilityEnum.TEMPORAL), is_temporal=True)
+        pdict.add_context(ParameterContext('scv', param_type=scv_type, variability=VariabilityEnum.TEMPORAL))
+        tdom = GridDomain(GridShape('temporal', [0]), CRS([AxisTypeEnum.TIME]), MutabilityEnum.EXTENSIBLE)
+        cov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom)
+        cov.insert_timesteps(ntimes)
+
+        # Perform the assertions
+
+        want = np.array([val] * ntimes, dtype='int32')
+        # Assign with val
+        scv_val[:] = val
+        cov.set_parameter_values('scv', val)
+        self._interop_assertions(cov, 'scv', scv_val)
+        self.assertTrue(np.array_equal(scv_val[:], want))
+        self.assertTrue(np.array_equal(cov.get_parameter_values('scv'), want))
+
+        # Backfill assignment
+
+        # Assign with list
+        scv_val[-1] = val_list
+        cov.set_parameter_values('scv', val_list, -1)
+        self._interop_assertions(cov, 'scv', scv_val)
+        self.assertTrue(np.array_equal(scv_val[:], want))
+        self.assertTrue(np.array_equal(cov.get_parameter_values('scv'), want))
+
+        # Asign with array
+        scv_val[-1] = val_arr
+        cov.set_parameter_values('scv', val_arr, -1)
+        self._interop_assertions(cov, 'scv', scv_val)
+        self.assertTrue(np.array_equal(scv_val[:], want))
+        self.assertTrue(np.array_equal(cov.get_parameter_values('scv'), want))
+
+        # Add a new value and expand the domain
+
+        # Change the values
+        val = 40
+        val_list = [40, 80]
+        val_arr = np.array(val_list, dtype='int32')
+        want = np.append(want, np.array([val] * ntimes, dtype='int32'))
+
+
+        # Assign with val
+        scv_val[:] = val
+        cov.set_parameter_values('scv', val)
+        # Expand the domain
+        dom.shape = (dom.shape[0] + ntimes,)
+        cov.insert_timesteps(ntimes)
+        self._interop_assertions(cov, 'scv', scv_val)
+        self.assertTrue(np.array_equal(scv_val[:], want))
+        self.assertTrue(np.array_equal(cov.get_parameter_values('scv'), want))
+
+        # Assign with list
+        scv_val[:] = val_list
+        cov.set_parameter_values('scv', val_list)
+        self._interop_assertions(cov, 'scv', scv_val)
+        self.assertTrue(np.array_equal(scv_val[:], want))
+        self.assertTrue(np.array_equal(cov.get_parameter_values('scv'), want))
+
+        # Asign with array
+        scv_val[:] = val_arr
+        cov.set_parameter_values('scv', val_arr)
+        self._interop_assertions(cov, 'scv', scv_val)
+        self.assertTrue(np.array_equal(scv_val[:], want))
+        self.assertTrue(np.array_equal(cov.get_parameter_values('scv'), want))

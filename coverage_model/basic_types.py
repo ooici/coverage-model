@@ -433,7 +433,7 @@ class Span(AbstractBase):
     def tuplize(self, with_value=False):
         ret = (self.lower_bound, self.upper_bound)
         if with_value:
-            ret += self.value
+            ret += (self.value,)
 
         return ret
 

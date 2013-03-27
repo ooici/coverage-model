@@ -239,7 +239,10 @@ class PersistenceLayer(object):
 
         self.master_manager.create_group(parameter_name)
 
-        v = PersistedStorage(pm, self.master_manager, self.brick_dispatcher, dtype=parameter_context.param_type.storage_encoding, fill_value=parameter_context.param_type.fill_value, mode=self.mode, inline_data_writes=self.inline_data_writes, auto_flush=self.auto_flush_values)
+        if parameter_context.param_type._value_class == 'SparseConstantValue':
+            v = SparsePersistedStorage(pm, self.master_manager, self.brick_dispatcher, dtype=parameter_context.param_type.storage_encoding, fill_value=parameter_context.param_type.fill_value, mode=self.mode, inline_data_writes=self.inline_data_writes, auto_flush=self.auto_flush_values)
+        else:
+            v = PersistedStorage(pm, self.master_manager, self.brick_dispatcher, dtype=parameter_context.param_type.storage_encoding, fill_value=parameter_context.param_type.fill_value, mode=self.mode, inline_data_writes=self.inline_data_writes, auto_flush=self.auto_flush_values)
         self.value_list[parameter_name] = v
 
         # CBM TODO: Consider making this optional and bulk-flushing from the coverage after all parameters have been initialized
@@ -837,6 +840,159 @@ class PersistedStorage(AbstractStorage):
             else:
                 # Queue the work for later flushing
                 self._queue_work(work_key, work_metrics, work)
+
+    def expand(self, arrshp, origin, expansion, fill_value=None):
+        pass # No op
+
+    def fill(self, value):
+        pass # No op
+
+    def __len__(self):
+        # TODO: THIS IS NOT CORRECT
+        return 1
+
+    def __iter__(self):
+        # TODO: THIS IS NOT CORRECT
+        return [1,1].__iter__()
+
+
+class SparsePersistedStorage(AbstractStorage):
+
+    def __init__(self, parameter_manager, master_manager, brick_dispatcher, dtype=None, fill_value=None, mode=None, inline_data_writes=True, auto_flush=True, **kwargs):
+        """
+        Constructor for PersistedStorage
+
+        @param parameter_manager    ParameterManager object for the coverage
+        @param master_manager   MasterManager object for the coverage
+        @param brick_dispatcher BrickDispatcher object for the coverage
+        @param dtype    Data type (HDF5/numpy) of parameter
+        @param fill_value   HDF5/numpy compatible value based on dtype, returned if no value set within valid extent request
+        @param auto_flush   Saves/flushes data to HDF5 files on every assignment
+        @param kwargs   Additional keyword arguments
+        @return N/A
+        """
+        kwc=kwargs.copy()
+        AbstractStorage.__init__(self, dtype=dtype, fill_value=fill_value, **kwc)
+
+        # Filesystem path to HDF brick file(s)
+        self.brick_path = parameter_manager.root_dir
+
+        from coverage_model.coverage import DomainSet
+        self.total_domain = DomainSet(master_manager.tdom, master_manager.sdom)
+
+        self.brick_tree = master_manager.brick_tree
+        self.brick_list = master_manager.brick_list
+        self.brick_domains = master_manager.brick_domains
+
+        self._pending_values = {}
+        self.brick_dispatcher = brick_dispatcher
+        self.mode = mode
+        self.inline_data_writes = inline_data_writes
+        self.auto_flush = auto_flush
+
+    def has_dirty_values(self):
+        return len(self._pending_values) > 0
+
+    def flush_values(self):
+        if self.has_dirty_values():
+            for k, v in self._pending_values.iteritems():
+                wk, wm = k
+                for vi in v:
+                    self.brick_dispatcher.put_work(wk, wm, vi)
+
+            self._pending_values = {}
+
+    def _queue_work(self, work_key, work_metrics, work):
+        wk = (work_key, work_metrics)
+        if wk not in self._pending_values:
+            self._pending_values[wk] = []
+
+        self._pending_values[wk].append(work)
+
+    def __getitem__(self, slice_):
+        # Always storing in first slot - ignore slice
+        if len(self.brick_list) == 0:
+            raise ValueError('No Bricks!')
+
+        bid = 'sparse_value_brick'
+
+        brick_file_path = '{0}/{1}.hdf5'.format(self.brick_path, bid)
+
+        if os.path.exists(brick_file_path):
+            with h5py.File(brick_file_path) as f:
+                ret_vals = f[bid][0]
+        else:
+            ret_vals = None
+
+        if ret_vals is None:
+            return self.fill_value
+
+        ret_vals = unpack(ret_vals)
+
+        ret = [self.__deserialize(v) for v in ret_vals]
+
+        return ret
+
+    def __setitem__(self, slice_, value):
+        # Always storing in first slot - ignore slice
+        if len(self.brick_list) == 0:
+            raise ValueError('No Bricks!')
+
+        bid = 'sparse_value_brick'
+
+        bD = (1,)
+        cD = None
+        brick_file_path = '{0}/{1}.hdf5'.format(self.brick_path, bid)
+
+        vals = [self.__serialize(v) for v in value]
+
+        vals = pack(vals)
+
+        set_arr = np.empty(1, dtype=object)
+        set_arr[0] = vals
+
+        data_type = h5py.special_dtype(vlen=str)
+
+        if self.inline_data_writes:
+            with h5py.File(brick_file_path, 'a') as f:
+                f.require_dataset(bid, shape=bD, dtype=data_type, chunks=cD, fillvalue=None)
+                f[bid][0] = set_arr
+        else:
+            work_key = bid
+            work = ((0,), set_arr)
+            work_metrics = (brick_file_path, bD, cD, data_type, None)
+
+            # If the brick file doesn't exist, 'touch' it to make sure it's immediately available
+            if not os.path.exists(brick_file_path):
+                with h5py.File(brick_file_path, 'a') as f:
+                    # TODO: Due to usage concerns, currently locking chunking to "auto"
+                    f.require_dataset(bid, shape=bD, dtype=data_type, chunks=cD, fillvalue=None)
+
+            if self.auto_flush:
+                # Immediately submit work to the dispatcher
+                self.brick_dispatcher.put_work(work_key, work_metrics, work)
+            else:
+                # Queue the work for later flushing
+                self._queue_work(work_key, work_metrics, work)
+
+    def __deserialize(self, payload):
+        if isinstance(payload, basestring) and payload.startswith('DICTABLE'):
+            i = payload.index('|', 9)
+            smod, sclass = payload[9:i].split(':')
+            value = unpack(payload[i + 1:])
+            module = __import__(smod, fromlist=[sclass])
+            classobj = getattr(module, sclass)
+            payload = classobj._fromdict(value)
+
+        return payload
+
+    def __serialize(self, payload):
+        from coverage_model.basic_types import Dictable
+        if isinstance(payload, Dictable):
+            prefix = 'DICTABLE|{0}:{1}|'.format(payload.__module__, payload.__class__.__name__)
+            payload = prefix + pack(payload.dump())
+
+        return payload
 
     def expand(self, arrshp, origin, expansion, fill_value=None):
         pass # No op
