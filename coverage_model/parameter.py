@@ -283,6 +283,12 @@ class ParameterDictionary(AbstractIdentifiable):
         self.__count += 1
         self._map[param_ctxt.name] = (self.__count, param_ctxt)
 
+    def __setitem__(self, key, value):
+        raise TypeError('\'ParameterDictionary\' object does not support item assignment: use ParameterDictionary.add_context()')
+
+    def __getitem__(self, param_name):
+        return self.get_context(param_name)
+
     def get_context(self, param_name):
         """
         Retrieve a ParameterContext by name
