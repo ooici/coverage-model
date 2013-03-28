@@ -220,6 +220,9 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
         c_data = np.append(c_data, third_data)
         self.assertTrue(np.array_equal(comp_cov.get_parameter_values('data_c'), c_data))
 
+        # Check that the head_coverage_path is correct
+        self.assertEqual(comp_cov.head_coverage_path, covc_pth)
+
         # Add some data to the last coverage (covc) and make sure it comes in
         cov_c = AbstractCoverage.load(covc_pth, mode='a')
         cov_c.insert_timesteps(size)
@@ -237,6 +240,9 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
 
         c_data = np.append(c_data, addnl_c_data)
         self.assertTrue(np.array_equal(comp_cov.get_parameter_values('data_c'), c_data))
+
+        # Check that the head_coverage_path is still correct
+        self.assertEqual(comp_cov.head_coverage_path, covc_pth)
 
     def test_temporal_aggregation_warnings(self):
         size = 100000

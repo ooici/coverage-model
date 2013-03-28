@@ -72,6 +72,8 @@ class AbstractCoverage(AbstractIdentifiable):
 
         self._persistence_layer = InMemoryPersistenceLayer()
 
+        self._head_coverage_path = None
+
         if mode is not None and isinstance(mode, basestring) and mode[0] in ['r','w','a','r+']:
             self.mode = mode
         else:
@@ -141,6 +143,10 @@ class AbstractCoverage(AbstractIdentifiable):
         if not hasattr(self, '_in_memory_storage'):
             self.close()
             self.__init__(os.path.split(self.persistence_dir)[0], self.persistence_guid, mode=self.mode)
+
+    @property
+    def head_coverage_path(self):
+        return self._head_coverage_path
 
     @property
     def temporal_parameter_name(self):
@@ -859,6 +865,8 @@ class ViewCoverage(AbstractCoverage):
         self.temporal_domain = self.reference_coverage.temporal_domain
         self.spatial_domain = self.reference_coverage.spatial_domain
 
+        self._head_coverage_path = self.reference_coverage.head_coverage_path
+
     def insert_timesteps(self, count, origin=None):
         raise TypeError('Cannot insert timesteps into a ViewCoverage')
 
@@ -1088,8 +1096,7 @@ class ComplexCoverage(AbstractCoverage):
                     self._range_value[p][:] = self._range_dictionary.get_context(p).fill_value
             self.insert_timesteps(len(s))
 
-
-
+        self._head_coverage_path = self._reference_covs[self.rcov_domain_spans[-1].value].head_coverage_path
 
 
 class SimplexCoverage(AbstractCoverage):
@@ -1248,6 +1255,8 @@ class SimplexCoverage(AbstractCoverage):
 
                 if insert_ts != 0:
                     self.insert_timesteps(insert_ts)
+
+            self._head_coverage_path = self.persistence_dir
         except:
             self._closed = True
             raise
