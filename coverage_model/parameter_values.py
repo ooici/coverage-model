@@ -418,6 +418,9 @@ class SparseConstantValue(AbstractComplexParameterValue):
             # No-op, there is no domain yet
             return
 
+        if isinstance(value, SparseConstantValue):  # RDT --> Coverage style assignment
+            value = value[0]
+
         if not isinstance(value, AbstractParameterValue):
             # If the value is an array/iterable, we only take the first one
             value = np.atleast_1d(value)[0]
