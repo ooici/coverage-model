@@ -413,10 +413,13 @@ class SparseConstantValue(AbstractComplexParameterValue):
     def __setitem__(self, slice_, value):
         slice_ = utils.fix_slice(slice_, self.shape)
 
-        spans = self._storage[0]
-        if spans is None:
-            # No-op, there is no domain yet
-            return
+        try:
+            spans = self._storage[0]
+        except ValueError, ve:
+            if ve.message != 'No Bricks!':
+                raise
+
+            spans = self.fill_value
 
         if isinstance(value, SparseConstantValue):  # RDT --> Coverage style assignment
             value = value[0]
