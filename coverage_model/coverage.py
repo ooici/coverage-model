@@ -1059,7 +1059,7 @@ class ComplexCoverage(AbstractCoverage):
                         # Add the value class from the reference coverage
                         self._range_value[p] = self._reference_covs[cpth]._range_value[p]
                     else:
-                        log.warn('Parameter \'%s\' from coverage \'%s\' already present, skipping...', p, cpth)
+                        log.info('Parameter \'%s\' from coverage \'%s\' already present, skipping...', p, cpth)
 
         # Add the parameters for this coverage
         for pc in parameter_dictionary.itervalues():
@@ -1094,7 +1094,7 @@ class ComplexCoverage(AbstractCoverage):
                             SparseConstantType(value_encoding=self._range_dictionary.get_context(p).param_type.value_encoding),
                             DomainSet(self.temporal_domain))
                     else:
-                        log.warn('Parameter \'%s\' from coverage \'%s\' already present, skipping...', p, cpth)
+                        log.info('Parameter \'%s\' from coverage \'%s\' already present, skipping...', p, cpth)
 
         time_bounds.sort()
 
@@ -1104,13 +1104,6 @@ class ComplexCoverage(AbstractCoverage):
         for i, tb in enumerate(time_bounds):
             cov = self._reference_covs[tb.value]
             end = start + cov.num_timesteps
-            # if i == 0:
-            #     s = Span(None, end, tb.value)
-            # elif i == len(time_bounds):
-            #     s = Span(start, None, tb.value)
-            # else:
-            #     s = Span(start, end, tb.value)
-            # rcov_domain_spans.append(s)
             rcov_domain_spans.append(Span(start, end, tb.value))
             start = end
 
