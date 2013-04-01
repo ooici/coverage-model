@@ -40,11 +40,48 @@ class TestSampleCovViewInt(CoverageModelIntTestCase, CoverageIntTestBase):
         view_pdict = get_parameter_dict(parameter_list=['time'])
         cov = ViewCoverage(self.working_dir,
                            create_guid(),
-                           reference_coverage_location=ref_cov.persistence_dir,
                            name='sample coverage_model',
+                           reference_coverage_location=ref_cov.persistence_dir,
                            parameter_dictionary=view_pdict)
 
         return cov, 'TestSampleCovViewInt'
+
+    def test_replace_reference_coverage(self):
+        cov1, _ = sc.get_cov(nt=10)
+
+        cov2, _ = sc.get_cov(only_time=True, nt=10)
+        cov2.set_time_values([i*2 for i in range(10)])
+
+        vcov = ViewCoverage(self.working_dir, create_guid(), name='sample view cov', reference_coverage_location=cov1.persistence_dir)
+        self.assertTrue(np.array_equal(vcov.get_time_values(), cov1.get_time_values()))
+        self.assertEqual(vcov.list_parameters(), ['conductivity', 'lat', 'lon', 'temp', 'time'])
+
+        vcov.replace_reference_coverage(cov2.persistence_dir)
+        self.assertTrue(np.array_equal(vcov.get_time_values(), cov2.get_time_values()))
+        self.assertEqual(vcov.list_parameters(), ['time'])
+
+        vcov.close()
+        vcov = AbstractCoverage.load(vcov.persistence_dir)
+        self.assertTrue(np.array_equal(vcov.get_time_values(), cov2.get_time_values()))
+        self.assertEqual(vcov.list_parameters(), ['time'])
+
+        vcov.close()
+        vcov = AbstractCoverage.load(vcov.persistence_dir, mode='a')
+        vcov.replace_reference_coverage(cov1.persistence_dir)
+
+        self.assertTrue(np.array_equal(vcov.get_time_values(), cov1.get_time_values()))
+        self.assertEqual(vcov.list_parameters(), ['conductivity', 'lat', 'lon', 'temp', 'time'])
+
+    def test_head_coverage_path(self):
+        cov1, _ = sc.get_cov(only_time=True, nt=10)
+
+        # Ensure that for a first-order (VC --> SC) ViewCoverage.head_coverage_path reveals the underlying SimplexCoverage
+        vcov1 = ViewCoverage(self.working_dir, create_guid(), name='sample view cov', reference_coverage_location=cov1.persistence_dir)
+        self.assertEqual(vcov1.head_coverage_path, cov1.persistence_dir)
+
+        # Ensure that for a second-order (VC --> VC --> SC) ViewCoverage.head_coverage_path reveals the underlying SimplexCoverage
+        vcov2 = ViewCoverage(self.working_dir, create_guid(), name='sample view cov', reference_coverage_location=vcov1.persistence_dir)
+        self.assertEqual(vcov2.head_coverage_path, cov1.persistence_dir)
 
     @unittest.skip('Does not apply to ViewCoverage.')
     def test_load_init_succeeds(self):

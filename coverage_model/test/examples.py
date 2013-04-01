@@ -744,7 +744,7 @@ def sbe37im_complexcov(num_timesteps=10, value_caching=True):
     pdict.add_context(contexts.pop('DENSITY'))
     pdict.add_context(contexts.pop('PRACSAL'))
 
-    ccov = ComplexCoverage('test_data', create_guid(), 'l1 l2 coverage for SBE 37IM', parameter_dictionary=pdict, reference_coverage_locs=[llcov.persistence_dir, scov.persistence_dir], complex_type=ComplexCoverageType.PARAMETRIC)
+    ccov = ComplexCoverage('test_data', create_guid(), 'l1 l2 coverage for SBE 37IM', parameter_dictionary=pdict, reference_coverage_locs=[llcov.persistence_dir, scov.persistence_dir], complex_type=ComplexCoverageType.PARAMETRIC_STRICT)
     # ccov.insert_timesteps(nt)
     # ccov.set_parameter_values('TIME', value=np.arange(nt))
 
