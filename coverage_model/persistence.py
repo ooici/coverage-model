@@ -152,7 +152,7 @@ class PersistenceLayer(object):
 
         self._closed = False
 
-        log.info('Persistence Layer Successfully Initialized')
+        log.debug('Persistence Layer Successfully Initialized')
 
     def __getattr__(self, key):
         if 'master_manager' in self.__dict__ and hasattr(self.master_manager, key):

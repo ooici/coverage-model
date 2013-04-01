@@ -857,6 +857,34 @@ class ViewCoverage(AbstractCoverage):
             self._closed = True
             raise
 
+    def replace_reference_coverage(self, path, use_current_param_dict=True, parameter_dictionary=None):
+        if self.mode == 'r':
+            raise IOError('Coverage not open for writing: mode == \'{0}\''.format(self.mode))
+
+        ncov = AbstractCoverage.load(path)
+
+        # Loading the coverage worked - go ahead and replace things!
+        self.reference_coverage = ncov
+        self._range_dictionary = ParameterDictionary()
+        self._range_value = RangeValues()
+        self._persistence_layer.rcov_loc = path
+
+        self.clear_value_cache()
+
+        if use_current_param_dict:
+            pd = self._persistence_layer.param_dict
+        else:
+            if parameter_dictionary is None:
+                pd = self.reference_coverage.parameter_dictionary
+            else:
+                pd = parameter_dictionary
+
+        self._persistence_layer.param_dict = pd
+
+        self.__setup(pd)
+
+        self._persistence_layer.flush()
+
     def __setup(self, parameter_dictionary):
         for p in parameter_dictionary:
             if p in self.reference_coverage._range_dictionary:
@@ -865,7 +893,7 @@ class ViewCoverage(AbstractCoverage):
                 # Add the value class from the reference coverage
                 self._range_value[p] = self.reference_coverage._range_value[p]
             else:
-                log.warn('Parameter \'{0}\' skipped; not in \'reference_coverage\'')
+                log.info('Parameter \'%s\' skipped; not in \'reference_coverage\'', p)
 
         self.temporal_domain = self.reference_coverage.temporal_domain
         self.spatial_domain = self.reference_coverage.spatial_domain
