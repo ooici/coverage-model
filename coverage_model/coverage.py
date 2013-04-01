@@ -149,6 +149,13 @@ class AbstractCoverage(AbstractIdentifiable):
         return self._head_coverage_path
 
     @property
+    def coverage_type(self):
+        if hasattr(self._persistence_layer, 'coverage_type'):
+            return self._persistence_layer.coverage_type
+        else:
+            return 'simplex'
+
+    @property
     def temporal_parameter_name(self):
         return self._range_dictionary.temporal_parameter_name
 
@@ -455,7 +462,6 @@ class AbstractCoverage(AbstractIdentifiable):
 
         # Clear any cached values for this parameter
         self._clear_value_cache_for_parameter(param_name)
-
 
     def clear_value_cache(self):
         if self.value_caching:
@@ -796,11 +802,6 @@ class ViewCoverage(AbstractCoverage):
 
                 self.name = self._persistence_layer.name
 
-                if hasattr(self._persistence_layer, 'coverage_type'):
-                    self.coverage_type = self._persistence_layer.coverage_type
-                else:
-                    self.coverage_type = 'view'
-
                 self.reference_coverage = AbstractCoverage.load(self._persistence_layer.rcov_loc, mode='r')
 
                 self.__setup(self._persistence_layer.param_dict)
@@ -919,11 +920,6 @@ class ComplexCoverage(AbstractCoverage):
                 self._persistence_layer = SimplePersistenceLayer(root_dir, persistence_guid, mode=self.mode)
 
                 self.name = self._persistence_layer.name
-
-                if hasattr(self._persistence_layer, 'coverage_type'):
-                    self.coverage_type = self._persistence_layer.coverage_type
-                else:
-                    self.coverage_type = 'complex'
 
                 self.mode = mode
 
@@ -1154,10 +1150,6 @@ class SimplexCoverage(AbstractCoverage):
                 self.name = self._persistence_layer.name
                 self.spatial_domain = self._persistence_layer.sdom
                 self.temporal_domain = self._persistence_layer.tdom
-                if hasattr(self._persistence_layer, 'coverage_type'):
-                    self.coverage_type = self._persistence_layer.coverage_type
-                else:
-                    self.coverage_type = 'simplex'
 
                 self._bricking_scheme = self._persistence_layer.global_bricking_scheme
 
@@ -1274,7 +1266,7 @@ class SimplexCoverage(AbstractCoverage):
 
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
-        return super(SimplexCoverage, cls)._fromdict(cmdict, {'parameter_dictionary':'_range_dictionary'})
+        return super(SimplexCoverage, cls)._fromdict(cmdict, {'parameter_dictionary': '_range_dictionary'})
 
 
 #=========================
