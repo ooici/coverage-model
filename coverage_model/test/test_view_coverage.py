@@ -40,8 +40,8 @@ class TestSampleCovViewInt(CoverageModelIntTestCase, CoverageIntTestBase):
         view_pdict = get_parameter_dict(parameter_list=['time'])
         cov = ViewCoverage(self.working_dir,
                            create_guid(),
-                           reference_coverage_location=ref_cov.persistence_dir,
                            name='sample coverage_model',
+                           reference_coverage_location=ref_cov.persistence_dir,
                            parameter_dictionary=view_pdict)
 
         return cov, 'TestSampleCovViewInt'

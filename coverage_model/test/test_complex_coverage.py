@@ -66,7 +66,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
     def tearDown(self):
         pass
 
-    def test_parametric(self):
+    def test_parametric_strict(self):
         num_times = 10
 
         first_data = np.arange(num_times, dtype='float32') * 0.2
@@ -94,7 +94,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
         ccov = ComplexCoverage(self.working_dir, create_guid(), 'sample complex coverage',
                                reference_coverage_locs=[cova_pth, covb_pth, covc_pth],
                                parameter_dictionary=pdict,
-                               complex_type=ComplexCoverageType.PARAMETRIC)
+                               complex_type=ComplexCoverageType.PARAMETRIC_STRICT)
 
         self.assertEqual(ccov.list_parameters(),
                          ['aXb', 'apples', 'apples_to_oranges', 'first_param', 'oranges', 'second_param', 'time'])
@@ -112,7 +112,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
         aplorng_want = apple_data * np.cos(np.sin(orange_data)) + first_data
         self.assertTrue(np.allclose(ccov.get_parameter_values('apples_to_oranges'), aplorng_want))
 
-    def test_parametric_warnings(self):
+    def test_parametric_strict_warnings(self):
         num_times = 10
 
         first_data = np.arange(num_times, dtype='float32') * 0.2
@@ -140,7 +140,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
             ccov = ComplexCoverage(self.working_dir, create_guid(), 'sample complex coverage',
                                    reference_coverage_locs=[cova_pth, covb_pth, covc_pth],
                                    parameter_dictionary=pdict,
-                                   complex_type=ComplexCoverageType.PARAMETRIC)
+                                   complex_type=ComplexCoverageType.PARAMETRIC_STRICT)
 
             self.assertEquals(log_mock.warn.call_args_list[0],
                               mock.call('Coverage timestamps do not match; cannot include: %s', covb_pth))
@@ -151,7 +151,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
             ccov = ComplexCoverage(self.working_dir, create_guid(), 'sample complex coverage',
                                    reference_coverage_locs=[cova_pth, cova_pth],
                                    parameter_dictionary=pdict,
-                                   complex_type=ComplexCoverageType.PARAMETRIC)
+                                   complex_type=ComplexCoverageType.PARAMETRIC_STRICT)
 
             self.assertEquals(log_mock.info.call_args_list[0],
                               mock.call("Coverage '%s' already present; ignoring", cova_pth))
@@ -161,7 +161,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
             ccov = ComplexCoverage(self.working_dir, create_guid(), 'sample complex coverage',
                                    reference_coverage_locs=[cova_pth, covb_pth],
                                    parameter_dictionary=pdict,
-                                   complex_type=ComplexCoverageType.PARAMETRIC)
+                                   complex_type=ComplexCoverageType.PARAMETRIC_STRICT)
 
             self.assertEquals(log_mock.warn.call_args_list[0],
                               mock.call("Coverage '%s' does not have a temporal_parameter; ignoring", covb_pth))

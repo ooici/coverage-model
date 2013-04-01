@@ -774,7 +774,8 @@ class ViewCoverage(AbstractCoverage):
     """
     References 1 AbstractCoverage and applies a Filter
     """
-    def __init__(self, root_dir, persistence_guid, reference_coverage_location=None, name=None, parameter_dictionary=None, mode=None):
+    def __init__(self, root_dir, persistence_guid, name=None, reference_coverage_location=None,
+                 parameter_dictionary=None, mode=None):
         AbstractCoverage.__init__(self, mode=mode)
 
         try:
@@ -811,8 +812,8 @@ class ViewCoverage(AbstractCoverage):
             else:
                 # This appears to be a new coverage
                 # Make sure name and parameter_dictionary are not None
-                if reference_coverage_location is None or name is None or parameter_dictionary is None:
-                    raise SystemError('\'reference_coverage_location\', \'name\' and \'parameter_dictionary\' cannot be None')
+                if reference_coverage_location is None or name is None:
+                    raise SystemError('\'reference_coverage_location\' and \'name\' cannot be None')
 
                 # If the coverage directory exists, load it instead!!
                 if os.path.exists(pth):
@@ -837,6 +838,9 @@ class ViewCoverage(AbstractCoverage):
 
                 # Open the reference coverage - ALWAYS in read-only mode (default)
                 self.reference_coverage = AbstractCoverage.load(reference_coverage_location)
+
+                if parameter_dictionary is None:
+                    parameter_dictionary = self.reference_coverage.parameter_dictionary
 
                 self._persistence_layer = SimplePersistenceLayer(root_dir,
                                                                  persistence_guid,
@@ -881,8 +885,8 @@ from coverage_model.basic_types import BaseEnum
 class ComplexCoverageType(BaseEnum):
 
     # Complex coverage that combines parameters from multiple coverages
-    # must have coincident temporal and spatial domains
-    PARAMETRIC = 'PARAMETRIC'
+    # must have coincident temporal and spatial geometry
+    PARAMETRIC_STRICT = 'PARAMETRIC_STRICT'
 
     # Complex coverage that aggregates coverages along their temporal axis
     TEMPORAL_AGGREGATION = 'TEMPORAL_AGGREGATION'
@@ -895,7 +899,8 @@ class ComplexCoverage(AbstractCoverage):
     """
     References 1-n coverages
     """
-    def __init__(self, root_dir, persistence_guid, name=None, parameter_dictionary=None, temporal_domain=None, spatial_domain=None, mode=None, reference_coverage_locs=None, complex_type=ComplexCoverageType.PARAMETRIC):
+    def __init__(self, root_dir, persistence_guid, name=None, reference_coverage_locs=None, parameter_dictionary=None,
+                 mode=None, complex_type=ComplexCoverageType.PARAMETRIC_STRICT, temporal_domain=None, spatial_domain=None):
         AbstractCoverage.__init__(self, mode='w')
 
         try:
@@ -949,6 +954,9 @@ class ComplexCoverage(AbstractCoverage):
 
                 self._reference_covs = {}
 
+                if not hasattr(reference_coverage_locs, '__iter__'):
+                    reference_coverage_locs = [reference_coverage_locs]
+
                 self._persistence_layer = SimplePersistenceLayer(root_dir,
                                                                  persistence_guid,
                                                                  name=self.name,
@@ -967,7 +975,7 @@ class ComplexCoverage(AbstractCoverage):
             raise
 
     def _dobuild(self, complex_type, **kwargs):
-        if complex_type == ComplexCoverageType.PARAMETRIC:
+        if complex_type == ComplexCoverageType.PARAMETRIC_STRICT:
             # Complex parametric - combine parameters from multiple coverages
             self._build_parametric(kwargs['reference_coverages'], kwargs['parameter_dictionary'])
         elif complex_type == ComplexCoverageType.TEMPORAL_AGGREGATION:
