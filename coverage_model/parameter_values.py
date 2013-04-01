@@ -6,8 +6,8 @@
 @author Christopher Mueller
 @brief Abstract and concrete value objects for parameters
 """
-
-from coverage_model.basic_types import AbstractBase, InMemoryStorage, VariabilityEnum
+from ooi.logging import log
+from coverage_model.basic_types import AbstractBase, InMemoryStorage, VariabilityEnum, Span
 from coverage_model.numexpr_utils import is_well_formed_where, nest_wheres
 from coverage_model.parameter_functions import ParameterFunctionException
 from coverage_model import utils
@@ -20,6 +20,15 @@ def get_value_class(param_type, domain_set, **kwargs):
     classobj = getattr(module, param_type._value_class)
     return classobj(parameter_type=param_type, domain_set=domain_set, **kwargs)
 
+
+def _cleanse_value(val, slice_):
+    ret = np.atleast_1d(val)
+
+    # If the array is size 1 AND a slice object was NOT part of the query
+    if ret.size == 1 and not np.atleast_1d([isinstance(s, slice) for s in slice_]).all():
+        val = ret[0]
+
+    return val
 
 #=========================
 # Abstract Parameter Value Objects
@@ -83,9 +92,7 @@ class AbstractParameterValue(AbstractBase):
     def __getitem__(self, slice_):
         slice_ = utils.fix_slice(slice_, self.shape)
 
-        ret = self._storage[slice_]
-
-        return ret
+        return _cleanse_value(self._storage[slice_], slice_)
 
     def __setitem__(self, slice_, value):
         slice_ = utils.fix_slice(slice_, self.shape)
@@ -218,7 +225,7 @@ class FunctionValue(AbstractComplexParameterValue):
         total_indices = utils.prod(self.shape)
         x = np.arange(total_indices).reshape(self.shape)[slice_] # CBM TODO: This is INDEX based evaluation!!!
 
-        return ne.evaluate(self.content).astype(self.value_encoding)
+        return _cleanse_value(ne.evaluate(self.content).astype(self.value_encoding), slice_)
 
     def __setitem__(self, slice_, value):
         if is_well_formed_where(value):
@@ -272,11 +279,187 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
                 import sys
                 raise ParameterFunctionException(ex.message, type(ex)), None, sys.exc_traceback
 
-            return r
+            return _cleanse_value(r, slice_)
 
     def __setitem__(self, slice_, value):
         self._memoized_values = value
 #        raise ValueError('Values cannot be set against ParameterFunctionValues!')
+
+
+class SparseConstantValue(AbstractComplexParameterValue):
+
+    def __init__(self, parameter_type, domain_set, storage=None, **kwargs):
+        """
+
+        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterValue; see documentation for that class for details
+        """
+        kwc=kwargs.copy()
+        AbstractComplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
+        self._storage.expand((1,), 0, 1)
+
+    @property
+    def content(self):
+        return self._storage[0]
+
+    def expand_content(self, domain, origin, expansion):
+        # No op - storage expanded in __setitem__
+        pass
+
+    def __indexify_slice(self, slice_, total_shape):
+        ## ONLY WORKS FOR 1D ARRAYS!!!
+        fsl = utils.fix_slice(slice_, total_shape)
+        ss = utils.slice_shape(slice_, total_shape)
+        ret = np.empty(ss, dtype=int)
+        rf = ret.flatten()
+
+        ci = 0
+        for s, shape in zip(fsl, total_shape):
+            if isinstance(s,slice):
+                ind = range(*s.indices(shape))
+                ll = len(ind)
+                rf[ci:ll] = ind
+                ci += ll
+            elif isinstance(s, (list,tuple)):
+                ll = len(s)
+                rf[ci:ll] = s
+                ci += ll
+            elif isinstance(s, int):
+                rf[ci] = s
+                ci += 1
+            else:
+                raise TypeError('Unsupported slice method') # TODO: Better error message
+
+        return rf.reshape(ss)
+
+    def _apply_value(self, stor_sub, max_i):
+        v_arr = np.empty(0, dtype=self.value_encoding)
+        for s in stor_sub:
+            if isinstance(s.value, AbstractParameterValue):
+                e = s.value[:]
+            else:
+                st = s.lower_bound or 0
+                en = s.upper_bound or max_i
+
+                log.trace('st: %s, en: %s', st, en)
+
+                sz = en - st
+                e = np.empty(sz, dtype=self.value_encoding)
+                e.fill(s.value)
+
+            v_arr = np.append(v_arr, e)
+
+        return v_arr
+
+    def __getitem__(self, slice_):
+        slice_ = utils.fix_slice(slice_, self.shape)
+
+        # Nothing asked for!
+        if len(slice_) is 0:
+            return np.empty(0, dtype=self.value_encoding)
+
+        try:
+            spans = self._storage[0]
+        except ValueError, ve:
+            if ve.message != 'No Bricks!':
+                raise
+
+            return np.empty(0, dtype=self.value_encoding)
+
+        if not hasattr(spans, '__iter__') and spans == self.fill_value:
+            ret = np.empty(utils.slice_shape(slice_, self.shape), dtype=self.value_encoding)
+            ret.fill(self.fill_value)
+            return ret
+
+        # Build the index array
+        ind_arr = self.__indexify_slice(slice_, self.shape)
+        # Empty index array!
+        if len(ind_arr) == 0:
+            return np.empty(0, dtype=self.value_encoding)
+
+        # Get first and last index
+        fi, li = ind_arr.min(), ind_arr.max()
+
+        # Find the first storage needed
+        strt_i = None
+        end_i = None
+        enum = enumerate(spans)
+        for i, s in enum:
+            if fi in s:
+                strt_i = i
+                break
+
+        if fi == li:
+            end_i = strt_i + 1
+        else:
+            for i, s in reversed(list(enum)):
+                if li in s:
+                    end_i = i + 1
+                    break
+
+        log.trace('srt: %s, end: %s, fi: %s, li: %s', strt_i, end_i, fi, li)
+
+        stor_sub = spans[strt_i:end_i]
+        # Build the array of stored values
+        v_arr = self._apply_value(stor_sub, li + 1)
+
+        if stor_sub[0].lower_bound is None:
+            offset = 0
+        else:
+            offset = stor_sub[0].lower_bound
+        io = ind_arr - offset
+
+        return _cleanse_value(v_arr[io], slice_)
+
+    def __setitem__(self, slice_, value):
+        slice_ = utils.fix_slice(slice_, self.shape)
+
+        try:
+            spans = self._storage[0]
+        except ValueError, ve:
+            if ve.message != 'No Bricks!':
+                raise
+
+            spans = self.fill_value
+
+        if isinstance(value, SparseConstantValue):  # RDT --> Coverage style assignment
+            value = value[0]
+
+        if not isinstance(value, AbstractParameterValue):
+            # If the value is an array/iterable, we only take the first one
+            value = np.atleast_1d(value)[0]
+
+        if not hasattr(spans, '__iter__') and spans == self.fill_value:
+            spans = [Span(value=value)]
+            slice_ = (self.shape[0] - 1,)
+
+        # Get the last span
+        lspn = spans[-1]
+
+        if slice_[0] == self.shape[0] - 1:  # -1 was used for slice
+            # Change the value of the last span and return
+            lspn.value = value
+            self._storage[0] = spans
+            return
+
+        if not isinstance(value, AbstractParameterValue) and not isinstance(lspn.value, AbstractParameterValue):
+            if value == lspn.value:
+                # The previous value equals the new value - do not add a new span!
+                return
+
+        # The current index becomes the upper_bound of the previous span and the start of the next span
+        curr_ind = self.shape[0]
+
+        # Create the new span
+        nspn = Span(curr_ind, None, value)
+
+        # Reset the upper_bound of the previous span
+        spans[-1] = Span(lspn.lower_bound, curr_ind, lspn.value)
+
+        # Add the new span
+        spans.append(nspn)
+
+        # Reset the storage
+        self._storage[0] = spans
 
 
 class ConstantValue(AbstractComplexParameterValue):
@@ -305,17 +488,11 @@ class ConstantValue(AbstractComplexParameterValue):
     def __getitem__(self, slice_):
         slice_ = utils.fix_slice(slice_, self.shape)
 
-        ret_shape = utils.get_shape_from_slice(slice_, self.shape)
+        ret_shape = utils.slice_shape(slice_, self.shape)
         ret = np.empty(ret_shape, dtype=np.dtype(self.value_encoding))
         ret.fill(self.content)
 
-        # If the array is size 1 AND a slice object was NOT part of the query
-        if ret.size == 1 and not np.atleast_1d([isinstance(s, slice) for s in slice_]).all():
-            if ret.ndim == 0:
-                ret = ret[()]
-            else:
-                ret = ret[0]
-        return ret
+        return _cleanse_value(ret, slice_)
 
     def __setitem__(self, slice_, value):
         if self.parameter_type.is_valid_value(value):
@@ -364,17 +541,11 @@ class ConstantRangeValue(AbstractComplexParameterValue):
     def __getitem__(self, slice_):
         slice_ = utils.fix_slice(slice_, self.shape)
 
-        ret_shape = utils.get_shape_from_slice(slice_, self.shape)
-        ret = np.empty(ret_shape, dtype=np.dtype(object))  # Always object type because it's 2 values / element!!
+        ret_shape = utils.slice_shape(slice_, self.shape)
+        ret = np.empty(ret_shape, dtype=np.dtype(object)) # Always object type because it's 2 values / element!!
         ret.fill(self.content)
 
-        # If the array is size 1 AND a slice object was NOT part of the query
-        if ret.size == 1 and not np.atleast_1d([isinstance(s, slice) for s in slice_]).all():
-            if ret.ndim == 0:
-                ret = ret[()]
-            else:
-                ret = ret[0]
-        return ret
+        return _cleanse_value(ret, slice_)
 
     def __setitem__(self, slice_, value):
         if self.parameter_type.is_valid_value(value):
@@ -387,6 +558,9 @@ class ConstantRangeValue(AbstractComplexParameterValue):
             va = np.atleast_1d(value).flatten()  # Flatten the whole thing - deals with nD arrays
             if isinstance(va[0], tuple):  # Array of tuples, likely from another ConstantRangeValue
                 va = np.array(va[0])
+
+            if np.dtype(self.value_encoding).kind == 'S':
+                va = [str(v) for v in va]
 
             self._storage[:2] = np.array(va[:2], dtype=self.value_encoding)
 
@@ -407,14 +581,14 @@ class CategoryValue(AbstractComplexParameterValue):
     def __getitem__(self, slice_):
         slice_ = utils.fix_slice(slice_, self.shape)
 
-        ret = self._storage[slice_]
+        ret = np.atleast_1d(self._storage[slice_])
         cats = self.parameter_type.categories
         if np.iterable(ret):
             ret = np.array([cats[x] for x in ret], dtype=object)
         else:
             ret = cats[ret]
 
-        return ret
+        return _cleanse_value(ret, slice_)
 
     def __setitem__(self, slice_, value):
         slice_ = utils.fix_slice(slice_, self.shape)
@@ -475,7 +649,7 @@ class ArrayValue(AbstractComplexParameterValue):
     def __getitem__(self, slice_):
         slice_ = utils.fix_slice(slice_, self.shape)
 
-        ret = self._storage[slice_]
+        ret = _cleanse_value(self._storage[slice_], slice_)
 
         return ret
 

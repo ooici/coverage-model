@@ -10,6 +10,9 @@
 from unittest import TestCase
 import os, shutil, tempfile
 
+from pyon.core import log as logutil
+if not logutil.is_logging_configured():
+    logutil.configure_logging(logutil.DEFAULT_LOGGING_PATHS)
 
 class CoverageModelUnitTestCase(TestCase):
 
