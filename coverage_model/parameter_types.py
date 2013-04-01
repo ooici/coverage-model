@@ -596,6 +596,37 @@ class ParameterFunctionType(AbstractSimplexParameterType):
 
         return ret
 
+
+class SparseConstantType(AbstractComplexParameterType):
+    """
+
+    """
+    def __init__(self, base_type=None, **kwargs):
+        """
+
+        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterType; see documentation for that class for details
+        """
+        kwc=kwargs.copy()
+        fv = None
+        if 'fill_value' in kwc:
+            fv = kwc.pop('fill_value')
+        ve = None
+        if 'value_encoding' in kwc:
+            ve = kwc.pop('value_encoding')
+        AbstractComplexParameterType.__init__(self, value_class='SparseConstantValue', **kwc)
+        if base_type is not None and not isinstance(base_type, ConstantType):
+            raise TypeError('\'base_type\' must be an instance of ConstantType')
+
+        self.base_type = base_type or ConstantType(value_encoding=ve)
+
+        self._template_attrs.update(self.base_type._template_attrs)
+
+        self._gen_template_attrs()
+
+        if fv is not None:
+            self.fill_value = fv
+
+
 class FunctionType(AbstractComplexParameterType):
     """
 
@@ -622,7 +653,7 @@ class FunctionType(AbstractComplexParameterType):
 
     def is_valid_value(self, value):
         if not is_well_formed_where(value):
-            raise ValueError('\value\' must be a string matching the form (may be nested): \'{0}\' ; for example, \'where(x > 99, 8, -999)\', \'where((x > 0) & (x <= 100), 55, 100)\', or \'where(x <= 10, 10, where(x <= 30, 100, where(x < 50, 150, nan)))\''.format(single_where_match))
+            raise ValueError('\'value\' must be a string matching the form (may be nested): \'{0}\' ; for example, \'where(x > 99, 8, -999)\', \'where((x > 0) & (x <= 100), 55, 100)\', or \'where(x <= 10, 10, where(x <= 30, 100, where(x < 50, 150, nan)))\''.format(single_where_match))
 
     def __eq__(self, other):
         if super(FunctionType, self).__eq__(other):
@@ -641,11 +672,14 @@ class ConstantType(AbstractComplexParameterType):
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterType; see documentation for that class for details
         """
         kwc=kwargs.copy()
+        ve = None
+        if 'value_encoding' in kwc:
+            ve = kwc.pop('value_encoding')
         AbstractComplexParameterType.__init__(self, value_class='ConstantValue', **kwc)
         if base_type is not None and not isinstance(base_type, QuantityType):
             raise TypeError('\'base_type\' must be an instance of QuantityType')
 
-        self.base_type = base_type or QuantityType()
+        self.base_type = base_type or QuantityType(value_encoding=ve)
 
         self._template_attrs.update(self.base_type._template_attrs)
 #        self._template_attrs['fill_value'] = None
@@ -693,11 +727,14 @@ class ConstantRangeType(AbstractComplexParameterType):
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterType; see documentation for that class for details
         """
         kwc=kwargs.copy()
+        ve = None
+        if 'value_encoding' in kwc:
+            ve = kwc.pop('value_encoding')
         AbstractComplexParameterType.__init__(self, value_class='ConstantRangeValue', **kwc)
         if base_type is not None and not isinstance(base_type, QuantityType):
             raise TypeError('\'base_type\' must be an instance of QuantityType')
 
-        self.base_type = base_type or QuantityType()
+        self.base_type = base_type or QuantityType(value_encoding=ve)
         self._template_attrs.update(self.base_type._template_attrs)
 
         self._gen_template_attrs()

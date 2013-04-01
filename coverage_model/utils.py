@@ -13,6 +13,7 @@ import re
 import math
 from putil.hash import hash_any
 
+
 def create_guid():
     """
     @retval Return global unique id string
@@ -20,13 +21,16 @@ def create_guid():
     # guids seem to be more readable if they are UPPERCASE
     return str(uuid.uuid4()).upper()
 
+
 def is_guid(str_val):
     guid_match = r'^\w{8}-\w{4}-\w{4}-\w{4}-\w{12}'
     return re.match(guid_match, str_val) is not None
 
+
 def prod(lst):
     import operator
     return reduce(operator.mul, lst, 1)
+
 
 def is_valid_constraint(v):
     ret = False
@@ -35,6 +39,7 @@ def is_valid_constraint(v):
         ret = True
 
     return ret
+
 
 def find_nearest_index(seq, val):
     """
@@ -50,6 +55,7 @@ def find_nearest_index(seq, val):
     """
     idx = np.abs(np.asanyarray(seq)-val).argmin()
     return idx
+
 
 def find_nearest_value(seq, val):
     """
@@ -71,11 +77,13 @@ def find_nearest_value(seq, val):
     else:
         return fv
 
+
 def _raise_index_error_int(slice_, size, dim):
     if slice_ < 0:
         raise IndexError('On dimension {0}; index cannot be < 0: index => {0}'.format(dim, slice_))
     if slice_ >= size:
         raise IndexError('On dimension {0}; index cannot be >= the size: index => {1}, size => {2}'.format(dim, slice_, size))
+
 
 def _raise_index_error_list(slice_, size, dim):
     last = -1
@@ -86,6 +94,7 @@ def _raise_index_error_list(slice_, size, dim):
         last = c
         if slice_[i] >= size:
             raise IndexError('On dimension {0}; index {1} of list cannot be >= the size: list => {2}, size => {3}'.format(dim, i, slice_, size))
+
 
 def _raise_index_error_slice(slice_, size, dim):
     if slice_.start is not None:
@@ -105,7 +114,11 @@ def _raise_index_error_slice(slice_, size, dim):
         if slice_.start >= slice_.stop:
             raise IndexError('On dimension {0}; start index of slice cannot be >= stop index: slice => {1}'.format(dim, slice_))
 
+
 def get_shape_from_slice(slice_, max_shp):
+    """
+    @deprecated Use slice_shape instead
+    """
     shp=[]
     for i, s in enumerate(slice_):
         if isinstance(s, int):
@@ -117,6 +130,7 @@ def get_shape_from_slice(slice_, max_shp):
             shp.append(len(range(*s.indices(st))))
 
     return tuple(shp)
+
 
 def fix_slice(slice_, shape):
     # CBM: First swack - see this for more possible checks: http://code.google.com/p/netcdf4-python/source/browse/trunk/netCDF4_utils.py
@@ -189,6 +203,7 @@ def fix_slice(slice_, shape):
     # Finally, make it a tuple
     return tuple(slice_)
 
+
 def slice_shape(slice_, shape):
     """
     Returns a tuple containing the length of each dimension
@@ -218,16 +233,18 @@ def slice_shape(slice_, shape):
 
     return tuple(dim_lengths)
 
+
 def express_slice(slice_, total_shape):
-    fsl=fix_slice(slice_, total_shape)
-    ret=[]
+    fsl = fix_slice(slice_, total_shape)
+    ret = []
     for i, x in enumerate(fsl):
         if isinstance(x, slice):
-            start=x.start if not x.start is None else 0
-            stop=x.stop if not x.stop is None else total_shape[i]
-            step=x.step if not x.step is None else 1
+            start = x.start if not x.start is None else 0
+            stop = x.stop if not x.stop is None else total_shape[i]
+            step = x.step if not x.step is None else 1
             ret.append(slice(start,stop,step))
         else:
             ret.append(x)
 
     return tuple(ret)
+

@@ -57,7 +57,7 @@ def get_bricks_from_slice(slice_, rtree, total_domain=None):
         sl += (slice(None),)
 
     if rtree.properties.dimension != rank:
-        raise ValueError('\'slice_\' does not have the same rank as \'rtree\'')
+        raise ValueError('\'slice_\' does not have the same rank as \'rtree\': {0} != {1}'.format(rank, rtree.properties.dimension))
 
     bnds = rtree.bounds
     log.trace('slice_ ==> %s', sl)

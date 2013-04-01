@@ -353,8 +353,20 @@ class NdSpan(AbstractBase):
 
         return True
 
-    def tuplize(self):
-        return tuple([s.tuplize() for s in self.spans])
+    def tuplize(self, with_value=False):
+        ret = tuple([s.tuplize() for s in self.spans])
+        if with_value:
+            ret += (self.value,)
+
+        return ret
+
+    @classmethod
+    def from_iterable(cls, initer):
+        spans = []
+        for i in initer[:-1]:
+            spans.append(Span(*i))
+
+        return NdSpan(spans, initer[-1])
 
     @property
     def shape(self):
@@ -373,6 +385,12 @@ class NdSpan(AbstractBase):
 
     def __len__(self):
         return prod(self.shape)
+
+    def __repr__(self):
+        return str(self.tuplize())
+
+    def __str__(self):
+        return 'NdSpan(%s)' % [str(s) for s in self.spans]
 
 import functools
 @functools.total_ordering
@@ -412,19 +430,20 @@ class Span(AbstractBase):
 
         return np.arange(lower, upper, dtype='int32')
 
-    def tuplize(self):
-        return self.lower_bound, self.upper_bound
+    def tuplize(self, with_value=False):
+        ret = (self.lower_bound, self.upper_bound)
+        if with_value:
+            ret += (self.value,)
+
+        return ret
 
     @property
     def shape(self):
         return (len(self),)
 
     @classmethod
-    def from_tuple(cls, tup):
-        if isinstance(tup, tuple) and len(tup) >= 2:
-            return Span.__init__(*tup)
-
-        raise ValueError('\'tup\' must be an iterable with a length of at least 2')
+    def from_iterable(cls, initer):
+        return Span(*initer)
 
     def __eq__(self, other):
         if isinstance(other, Span):
@@ -452,6 +471,11 @@ class Span(AbstractBase):
         else:
             return 0
 
+    def __repr__(self):
+        return str(self.tuplize())
+
+    def __str__(self):
+        return 'Span(%s, %s)' % (self.lower_bound, self.upper_bound)
 
 class BaseEnum(object):
 
