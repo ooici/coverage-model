@@ -149,6 +149,13 @@ class AbstractCoverage(AbstractIdentifiable):
         return self._head_coverage_path
 
     @property
+    def coverage_type(self):
+        if hasattr(self._persistence_layer, 'coverage_type'):
+            return self._persistence_layer.coverage_type
+        else:
+            return 'simplex'
+
+    @property
     def temporal_parameter_name(self):
         return self._range_dictionary.temporal_parameter_name
 
@@ -455,7 +462,6 @@ class AbstractCoverage(AbstractIdentifiable):
 
         # Clear any cached values for this parameter
         self._clear_value_cache_for_parameter(param_name)
-
 
     def clear_value_cache(self):
         if self.value_caching:
@@ -774,7 +780,8 @@ class ViewCoverage(AbstractCoverage):
     """
     References 1 AbstractCoverage and applies a Filter
     """
-    def __init__(self, root_dir, persistence_guid, reference_coverage_location=None, name=None, parameter_dictionary=None, mode=None):
+    def __init__(self, root_dir, persistence_guid, name=None, reference_coverage_location=None,
+                 parameter_dictionary=None, mode=None):
         AbstractCoverage.__init__(self, mode=mode)
 
         try:
@@ -795,11 +802,6 @@ class ViewCoverage(AbstractCoverage):
 
                 self.name = self._persistence_layer.name
 
-                if hasattr(self._persistence_layer, 'coverage_type'):
-                    self.coverage_type = self._persistence_layer.coverage_type
-                else:
-                    self.coverage_type = 'view'
-
                 self.reference_coverage = AbstractCoverage.load(self._persistence_layer.rcov_loc, mode='r')
 
                 self.__setup(self._persistence_layer.param_dict)
@@ -811,8 +813,8 @@ class ViewCoverage(AbstractCoverage):
             else:
                 # This appears to be a new coverage
                 # Make sure name and parameter_dictionary are not None
-                if reference_coverage_location is None or name is None or parameter_dictionary is None:
-                    raise SystemError('\'reference_coverage_location\', \'name\' and \'parameter_dictionary\' cannot be None')
+                if reference_coverage_location is None or name is None:
+                    raise SystemError('\'reference_coverage_location\' and \'name\' cannot be None')
 
                 # If the coverage directory exists, load it instead!!
                 if os.path.exists(pth):
@@ -838,6 +840,9 @@ class ViewCoverage(AbstractCoverage):
                 # Open the reference coverage - ALWAYS in read-only mode (default)
                 self.reference_coverage = AbstractCoverage.load(reference_coverage_location)
 
+                if parameter_dictionary is None:
+                    parameter_dictionary = self.reference_coverage.parameter_dictionary
+
                 self._persistence_layer = SimplePersistenceLayer(root_dir,
                                                                  persistence_guid,
                                                                  name=self.name,
@@ -852,6 +857,34 @@ class ViewCoverage(AbstractCoverage):
             self._closed = True
             raise
 
+    def replace_reference_coverage(self, path, use_current_param_dict=True, parameter_dictionary=None):
+        if self.mode == 'r':
+            raise IOError('Coverage not open for writing: mode == \'{0}\''.format(self.mode))
+
+        ncov = AbstractCoverage.load(path)
+
+        # Loading the coverage worked - go ahead and replace things!
+        self.reference_coverage = ncov
+        self._range_dictionary = ParameterDictionary()
+        self._range_value = RangeValues()
+        self._persistence_layer.rcov_loc = path
+
+        self.clear_value_cache()
+
+        if use_current_param_dict:
+            pd = self._persistence_layer.param_dict
+        else:
+            if parameter_dictionary is None:
+                pd = self.reference_coverage.parameter_dictionary
+            else:
+                pd = parameter_dictionary
+
+        self._persistence_layer.param_dict = pd
+
+        self.__setup(pd)
+
+        self._persistence_layer.flush()
+
     def __setup(self, parameter_dictionary):
         for p in parameter_dictionary:
             if p in self.reference_coverage._range_dictionary:
@@ -860,7 +893,7 @@ class ViewCoverage(AbstractCoverage):
                 # Add the value class from the reference coverage
                 self._range_value[p] = self.reference_coverage._range_value[p]
             else:
-                log.warn('Parameter \'{0}\' skipped; not in \'reference_coverage\'')
+                log.info('Parameter \'%s\' skipped; not in \'reference_coverage\'', p)
 
         self.temporal_domain = self.reference_coverage.temporal_domain
         self.spatial_domain = self.reference_coverage.spatial_domain
@@ -881,8 +914,8 @@ from coverage_model.basic_types import BaseEnum
 class ComplexCoverageType(BaseEnum):
 
     # Complex coverage that combines parameters from multiple coverages
-    # must have coincident temporal and spatial domains
-    PARAMETRIC = 'PARAMETRIC'
+    # must have coincident temporal and spatial geometry
+    PARAMETRIC_STRICT = 'PARAMETRIC_STRICT'
 
     # Complex coverage that aggregates coverages along their temporal axis
     TEMPORAL_AGGREGATION = 'TEMPORAL_AGGREGATION'
@@ -895,7 +928,8 @@ class ComplexCoverage(AbstractCoverage):
     """
     References 1-n coverages
     """
-    def __init__(self, root_dir, persistence_guid, name=None, parameter_dictionary=None, temporal_domain=None, spatial_domain=None, mode=None, reference_coverage_locs=None, complex_type=ComplexCoverageType.PARAMETRIC):
+    def __init__(self, root_dir, persistence_guid, name=None, reference_coverage_locs=None, parameter_dictionary=None,
+                 mode=None, complex_type=ComplexCoverageType.PARAMETRIC_STRICT, temporal_domain=None, spatial_domain=None):
         AbstractCoverage.__init__(self, mode='w')
 
         try:
@@ -914,11 +948,6 @@ class ComplexCoverage(AbstractCoverage):
                 self._persistence_layer = SimplePersistenceLayer(root_dir, persistence_guid, mode=self.mode)
 
                 self.name = self._persistence_layer.name
-
-                if hasattr(self._persistence_layer, 'coverage_type'):
-                    self.coverage_type = self._persistence_layer.coverage_type
-                else:
-                    self.coverage_type = 'complex'
 
                 self.mode = mode
 
@@ -949,6 +978,9 @@ class ComplexCoverage(AbstractCoverage):
 
                 self._reference_covs = {}
 
+                if not hasattr(reference_coverage_locs, '__iter__'):
+                    reference_coverage_locs = [reference_coverage_locs]
+
                 self._persistence_layer = SimplePersistenceLayer(root_dir,
                                                                  persistence_guid,
                                                                  name=self.name,
@@ -967,7 +999,7 @@ class ComplexCoverage(AbstractCoverage):
             raise
 
     def _dobuild(self, complex_type, **kwargs):
-        if complex_type == ComplexCoverageType.PARAMETRIC:
+        if complex_type == ComplexCoverageType.PARAMETRIC_STRICT:
             # Complex parametric - combine parameters from multiple coverages
             self._build_parametric(kwargs['reference_coverages'], kwargs['parameter_dictionary'])
         elif complex_type == ComplexCoverageType.TEMPORAL_AGGREGATION:
@@ -1027,7 +1059,7 @@ class ComplexCoverage(AbstractCoverage):
                         # Add the value class from the reference coverage
                         self._range_value[p] = self._reference_covs[cpth]._range_value[p]
                     else:
-                        log.warn('Parameter \'%s\' from coverage \'%s\' already present, skipping...', p, cpth)
+                        log.info('Parameter \'%s\' from coverage \'%s\' already present, skipping...', p, cpth)
 
         # Add the parameters for this coverage
         for pc in parameter_dictionary.itervalues():
@@ -1062,7 +1094,7 @@ class ComplexCoverage(AbstractCoverage):
                             SparseConstantType(value_encoding=self._range_dictionary.get_context(p).param_type.value_encoding),
                             DomainSet(self.temporal_domain))
                     else:
-                        log.warn('Parameter \'%s\' from coverage \'%s\' already present, skipping...', p, cpth)
+                        log.info('Parameter \'%s\' from coverage \'%s\' already present, skipping...', p, cpth)
 
         time_bounds.sort()
 
@@ -1072,13 +1104,6 @@ class ComplexCoverage(AbstractCoverage):
         for i, tb in enumerate(time_bounds):
             cov = self._reference_covs[tb.value]
             end = start + cov.num_timesteps
-            # if i == 0:
-            #     s = Span(None, end, tb.value)
-            # elif i == len(time_bounds):
-            #     s = Span(start, None, tb.value)
-            # else:
-            #     s = Span(start, end, tb.value)
-            # rcov_domain_spans.append(s)
             rcov_domain_spans.append(Span(start, end, tb.value))
             start = end
 
@@ -1146,10 +1171,6 @@ class SimplexCoverage(AbstractCoverage):
                 self.name = self._persistence_layer.name
                 self.spatial_domain = self._persistence_layer.sdom
                 self.temporal_domain = self._persistence_layer.tdom
-                if hasattr(self._persistence_layer, 'coverage_type'):
-                    self.coverage_type = self._persistence_layer.coverage_type
-                else:
-                    self.coverage_type = 'simplex'
 
                 self._bricking_scheme = self._persistence_layer.global_bricking_scheme
 
@@ -1266,7 +1287,7 @@ class SimplexCoverage(AbstractCoverage):
 
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
-        return super(SimplexCoverage, cls)._fromdict(cmdict, {'parameter_dictionary':'_range_dictionary'})
+        return super(SimplexCoverage, cls)._fromdict(cmdict, {'parameter_dictionary': '_range_dictionary'})
 
 
 #=========================
