@@ -935,9 +935,6 @@ class SparsePersistedStorage(AbstractStorage):
 
     def __setitem__(self, slice_, value):
         # Always storing in first slot - ignore slice
-        if len(self.brick_list) == 0:
-            raise ValueError('No Bricks!')
-
         bid = 'sparse_value_brick'
 
         bD = (1,)
