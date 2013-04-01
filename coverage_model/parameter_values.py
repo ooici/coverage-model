@@ -559,6 +559,9 @@ class ConstantRangeValue(AbstractComplexParameterValue):
             if isinstance(va[0], tuple):  # Array of tuples, likely from another ConstantRangeValue
                 va = np.array(va[0])
 
+            if np.dtype(self.value_encoding).kind == 'S':
+                va = [str(v) for v in va]
+
             self._storage[:2] = np.array(va[:2], dtype=self.value_encoding)
 
             self._update_min_max(self.content)
