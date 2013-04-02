@@ -84,18 +84,6 @@ class TestSampleCovViewInt(CoverageModelIntTestCase, CoverageIntTestBase):
         self.assertEqual(vcov2.head_coverage_path, cov1.persistence_dir)
 
     @unittest.skip('Does not apply to ViewCoverage.')
-    def test_load_init_succeeds(self):
-        pass
-
-    @unittest.skip('Does not apply to ViewCoverage.')
-    def test_load_succeeds_with_options(self):
-        pass
-
-    @unittest.skip('Does not apply to ViewCoverage.')
-    def test_dot_load_succeeds(self):
-        pass
-
-    @unittest.skip('Does not apply to ViewCoverage.')
     def test_set_time_one_brick(self):
         pass
 
