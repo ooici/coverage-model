@@ -300,39 +300,41 @@ class CoverageIntTestBase(object):
     # ############################
     # LOADING
     def test_load_init_succeeds(self):
-        # Creates a valid coverage, inserts data and loads coverage back up from the HDF5 files.
+        # Creates a valid coverage and loads coverage back up from the HDF5 files.
         scov, cov_name = self.get_cov()
-        self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='time')
         pl = scov._persistence_layer
         guid = scov.persistence_guid
         root_path = pl.master_manager.root_dir
         base_path = root_path.replace(guid,'')
         scov.close()
-        lcov = SimplexCoverage(base_path, guid)
-        self.assertIsInstance(lcov, AbstractCoverage)
 
-        lcov = SimplexCoverage.load(scov.persistence_dir)
+        lcov = SimplexCoverage(base_path, guid)
         self.assertIsInstance(lcov, AbstractCoverage)
         lcov.close()
 
     def test_dot_load_succeeds(self):
-        # Creates a valid coverage, inserts data and .load coverage back up from the HDF5 files.
+        # Creates a valid coverage and .load coverage back up from the HDF5 files.
         scov, cov_name = self.get_cov()
-        self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='time')
         pl = scov._persistence_layer
         guid = scov.persistence_guid
         root_path = pl.master_manager.root_dir
         base_path = root_path.replace(guid,'')
         scov.close()
+
         lcov = SimplexCoverage.load(base_path, guid)
         lcov.close()
         self.assertIsInstance(lcov, AbstractCoverage)
+        lcov.close()
+
+        acov = AbstractCoverage.load(base_path, guid)
+        acov.close()
+        self.assertIsInstance(acov, AbstractCoverage)
+        acov.close()
 
     def test_get_data_after_load(self):
         # Creates a valid coverage, inserts data and .load coverage back up from the HDF5 files.
         results =[]
         scov, cov_name = self.get_cov(nt=50)
-        # self._insert_set_get(scov=scov, timesteps=50, data=np.arange(50), _slice=slice(0,50), param='time')
         pl = scov._persistence_layer
         guid = scov.persistence_guid
         root_path = pl.master_manager.root_dir
