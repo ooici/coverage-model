@@ -145,7 +145,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
 
             self.assertEquals(log_mock.warn.call_args_list[0],
                               mock.call('Coverage timestamps do not match; cannot include: %s', covb_pth))
-            self.assertEquals(log_mock.warn.call_args_list[1],
+            self.assertEquals(log_mock.info.call_args_list[1],
                               mock.call("Parameter '%s' from coverage '%s' already present, skipping...", 'time', covc_pth))
 
         with mock.patch('coverage_model.coverage.log') as log_mock:
@@ -272,10 +272,10 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
             self.assertEquals(log_mock.warn.call_args_list[0],
                               mock.call("Coverage with time bounds '%s' already present; ignoring", (first_times.min(), first_times.max())))
 
-            self.assertEquals(log_mock.warn.call_args_list[1],
+            self.assertEquals(log_mock.info.call_args_list[1],
                               mock.call("Parameter '%s' from coverage '%s' already present, skipping...", 'data_all', covc_pth))
 
-            self.assertEquals(log_mock.warn.call_args_list[2],
+            self.assertEquals(log_mock.info.call_args_list[2],
                               mock.call("Parameter '%s' from coverage '%s' already present, skipping...", 'time', covc_pth))
 
     def test_head_coverage_path(self):
