@@ -355,47 +355,14 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         return scov, 'TestPtypesCovInt'
 
     def _insert_set_get(self, scov=None, timesteps=None, data=None, _slice=None, param='all'):
-        return True
-        # # Function to test variable occurances of getting and setting values across parameter(s)
-        # data = data[_slice]
-        # ret = []
-        #
-        # scov.insert_timesteps(timesteps)
-        #
-        # scov.set_parameter_values('time', value=data, slice=_slice)
-        # if param == 'all':
-        #     scov.set_parameter_values('boolean', value=[True, True, True], tdoa=[[2,4,14]])
-        #     scov.set_parameter_values('const_float', value=-71.11) # Set a constant with correct data type
-        #     scov.set_parameter_values('const_int', value=45.32) # Set a constant with incorrect data type (fixed under the hood)
-        #     scov.set_parameter_values('const_str', value='constant string value') # Set with a string
-        #     scov.set_parameter_values('const_rng_flt', value=(12.8, 55.2)) # Set with a tuple
-        #     scov.set_parameter_values('const_rng_int', value=[-10, 10]) # Set with a list
-        #
-        #     scov.set_parameter_values('quantity', value=np.random.random_sample(nt)*(26-23)+23, slice=_slice)
-        #
-        #     arrval = []
-        #     recval = []
-        #     catval = []
-        #     fstrval = []
-        #     catkeys = EXEMPLAR_CATEGORIES.keys()
-        #     letts='abcdefghijklmnopqrstuvwxyz'
-        #     while len(letts) < nt:
-        #         letts += 'abcdefghijklmnopqrstuvwxyz'
-        #     for x in xrange(nt):
-        #         arrval.append(np.random.bytes(np.random.randint(1,20))) # One value (which is a byte string) for each member of the domain
-        #         d = {letts[x]: letts[x:]}
-        #         recval.append(d) # One value (which is a dict) for each member of the domain
-        #         catval.append(random.choice(catkeys))
-        #         fstrval.append(''.join([random.choice(letts) for x in xrange(8)])) # A random string of length 8
-        #     scov.set_parameter_values('array', value=arrval)
-        #     scov.set_parameter_values('record', value=recval)
-        #     scov.set_parameter_values('category', value=catval)
-        #     scov.set_parameter_values('fixed_str', value=fstrval)
-        #
-        # #TODO: Loop over all parameters?????
-        # ret = scov.get_parameter_values('time', slice=_slice)
-        #
-        # return (ret == data).all()
+        # TODO: Only tests time parameter so far.
+        param = 'time'
+        data = data[_slice]
+        scov.insert_timesteps(timesteps)
+        scov.set_parameter_values(param, data, _slice)
+        scov.get_dirty_values_async_result().get(timeout=60)
+        ret = scov.get_parameter_values(param, _slice)
+        return (ret == data).all()
 
     def test_ptypescov_get_values(self):
         # Tests retrieval of values from QuantityType, ConstantType,
