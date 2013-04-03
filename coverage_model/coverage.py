@@ -934,6 +934,8 @@ class ComplexCoverage(AbstractCoverage):
     """
     def __init__(self, root_dir, persistence_guid, name=None, reference_coverage_locs=None, parameter_dictionary=None,
                  mode=None, complex_type=ComplexCoverageType.PARAMETRIC_STRICT, temporal_domain=None, spatial_domain=None):
+
+        # Should always be in WRITE mode because we do domain work when setting up
         AbstractCoverage.__init__(self, mode='w')
 
         try:
@@ -953,7 +955,7 @@ class ComplexCoverage(AbstractCoverage):
 
                 self.name = self._persistence_layer.name
 
-                self.mode = mode
+                self.mode = self.mode
 
                 self._reference_covs = {}
 
