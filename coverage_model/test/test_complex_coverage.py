@@ -270,13 +270,77 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
                                        complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 
             self.assertEquals(log_mock.warn.call_args_list[0],
-                              mock.call("Coverage with time bounds '%s' already present; ignoring", (first_times.min(), first_times.max())))
+                              mock.call("Coverage with time bounds '%s' already present; ignoring", (first_times.min(), first_times.max(), 0)))
 
             self.assertEquals(log_mock.info.call_args_list[1],
                               mock.call("Parameter '%s' from coverage '%s' already present, skipping...", 'data_all', covc_pth))
 
             self.assertEquals(log_mock.info.call_args_list[2],
                               mock.call("Parameter '%s' from coverage '%s' already present, skipping...", 'time', covc_pth))
+
+    def test_temporal_interleaved(self):
+        num_times = 2000
+        tpc = num_times / 2
+
+        first_times = np.random.random_sample(tpc) * (20 - 0) + 0
+        # first_times =  np.array([0,1,2,5,6,10,11,13,14,16], dtype='float32')
+        first_times.sort()
+        first_data = np.arange(tpc, dtype='float32') * 0.2
+        first_full = np.random.random_sample(tpc) * (80 - 60) + 60
+
+        second_times = np.random.random_sample(tpc) * (20 - 0) + 0
+        # second_times = np.array([3,4,7,8,9,12,15,17,18,19], dtype='float32')
+        second_times.sort()
+        second_data = np.random.random_sample(tpc) * (50 - 10) + 10
+        second_full = np.random.random_sample(tpc) * (80 - 60) + 60
+
+        log.debug('\nCov A info:\n%s\n%s\n%s\n---------', first_times, first_data, first_full)
+        log.debug('\nCov B info:\n%s\n%s\n%s\n---------', second_times, second_data, second_full)
+
+        # We want a float time parameter for this tests
+        t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('float32')))
+        t_ctxt.uom = 'seconds since 01-01-1970'
+        t_ctxt.axis = AxisTypeEnum.TIME
+
+        cova_pth = _make_cov(self.working_dir,
+                             [t_ctxt, 'first_param', 'full_param'], nt=tpc,
+                             data_dict={'time': first_times, 'first_param': first_data, 'full_param': first_full},
+                             make_temporal=False)
+        covb_pth = _make_cov(self.working_dir,
+                             [t_ctxt, 'second_param', 'full_param'], nt=tpc,
+                             data_dict={'time': second_times, 'second_param': second_data, 'full_param': second_full},
+                             make_temporal=False)
+
+        # Instantiate a ParameterDictionary
+        pdict = ParameterDictionary()
+
+        # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+        ccov = ComplexCoverage(self.working_dir, create_guid(), 'sample complex coverage',
+                               reference_coverage_locs=[cova_pth, covb_pth],
+                               parameter_dictionary=pdict,
+                               complex_type=ComplexCoverageType.TEMPORAL_INTERLEAVED)
+
+        self.assertEqual(ccov.list_parameters(), ['first_param', 'full_param', 'second_param', 'time'])
+
+        self.assertEqual(ccov.temporal_parameter_name, 'time')
+        self.assertEqual(ccov.num_timesteps, num_times)
+
+        time_interleave = np.append(first_times, second_times)
+        sort_i = np.argsort(time_interleave)
+        self.assertTrue(np.allclose(ccov.get_time_values(), time_interleave[sort_i]))
+
+        full_interleave = np.append(first_full, second_full)
+        self.assertTrue(np.allclose(ccov.get_parameter_values('full_param'), full_interleave[sort_i]))
+
+        first_interleave = np.empty((num_times,))
+        first_interleave.fill(ccov.get_parameter_context('first_param').fill_value)
+        first_interleave[:tpc] = first_data
+        self.assertTrue(np.allclose(ccov.get_parameter_values('first_param'), first_interleave[sort_i]))
+
+        second_interleave = np.empty((num_times,))
+        second_interleave.fill(ccov.get_parameter_context('second_param').fill_value)
+        second_interleave[tpc:] = second_data
+        self.assertTrue(np.allclose(ccov.get_parameter_values('second_param'), second_interleave[sort_i]))
 
     def test_head_coverage_path(self):
         size = 10
