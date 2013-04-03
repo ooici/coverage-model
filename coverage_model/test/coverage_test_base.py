@@ -321,7 +321,7 @@ class CoverageIntTestBase(object):
 
         # Refresh the read coverage
         read_cov.refresh()
-        
+
         self.assertTrue(np.array_equal(write_cov.get_time_values(), read_cov.get_time_values()))
 
     # ############################
