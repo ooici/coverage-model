@@ -1,4 +1,4 @@
-from basic_types import AxisTypeEnum, MutabilityEnum, VariabilityEnum
+from basic_types import AxisTypeEnum, MutabilityEnum, VariabilityEnum, Span
 from coverage import AbstractCoverage, SimplexCoverage, ViewCoverage, ComplexCoverage, ComplexCoverageType, \
     SimpleDomainSet, GridDomain, GridShape, CRS
 from coverage_model.parameter_functions import PythonFunction, NumexprFunction
@@ -28,6 +28,7 @@ _core = [
     'AxisTypeEnum',
     'MutabilityEnum',
     'VariabilityEnum',
+    'Span',
     ]
 
 _types = [
