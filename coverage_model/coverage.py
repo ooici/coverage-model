@@ -140,7 +140,7 @@ class AbstractCoverage(AbstractIdentifiable):
         cov_obj.flush()
 
     def refresh(self):
-        if not hasattr(self, '_in_memory_storage'):
+        if not hasattr(self, '_in_memory_storage') or not self._in_memory_storage:
             self.close()
             self.__init__(os.path.split(self.persistence_dir)[0], self.persistence_guid, mode=self.mode)
 

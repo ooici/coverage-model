@@ -307,12 +307,22 @@ class CoverageIntTestBase(object):
     def test_refresh(self):
         brick_size = 1000
         time_steps = 5000
-        cov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
-        cov_data_pre = cov.get_time_values()
-        cov.refresh()
-        self.assertIsInstance(cov, AbstractCoverage)
-        cov_data_post = cov.get_time_values()
-        self.assertTrue(np.array_equal(cov_data_pre, cov_data_post))
+
+        # Get a writable coverage
+        write_cov, cov_name = self.get_cov(only_time=True, brick_size=brick_size, nt=time_steps)
+
+        # Get a read-only copy of that coverage
+        read_cov = AbstractCoverage.load(write_cov.persistence_dir)
+
+        # Add some data to the writable copy & ensure a flush
+        write_cov.insert_timesteps(100)
+        tdat = range(write_cov.num_timesteps - 100, write_cov.num_timesteps)
+        write_cov.set_time_values(tdat, slice(-100, None))
+
+        # Refresh the read coverage
+        read_cov.refresh()
+        
+        self.assertTrue(np.array_equal(write_cov.get_time_values(), read_cov.get_time_values()))
 
     # ############################
     # LOADING
