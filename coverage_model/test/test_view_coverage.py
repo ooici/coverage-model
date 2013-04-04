@@ -35,9 +35,9 @@ class TestSampleCovViewInt(CoverageModelIntTestCase, CoverageIntTestBase):
         pass
 
     @classmethod
-    def get_cov(self, only_time=False, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=False):
+    def get_cov(self, only_time=False, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=True):
         ref_cov, ref_cov_name = sc.get_cov(only_time=only_time, save_coverage=save_coverage, in_memory=in_memory, inline_data_writes=inline_data_writes, brick_size=brick_size, make_empty=make_empty, nt=nt, auto_flush_values=auto_flush_values)
-        view_pdict = get_parameter_dict(parameter_list=['time'])
+        view_pdict = get_parameter_dict(parameter_list=['time','lat'])
         cov = ViewCoverage(self.working_dir,
                            create_guid(),
                            name='sample coverage_model',
@@ -173,12 +173,4 @@ class TestSampleCovViewInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
     @unittest.skip('Does not apply to ViewCoverage.')
     def test_coverage_mode_set_value(self):
-        pass
-
-    @unittest.skip('Does not apply to ViewCoverage.')
-    def test_get_time_data_metrics(self):
-        pass
-
-    @unittest.skip('Does not apply to empty coverage.')
-    def test_get_all_data_metrics(self):
         pass

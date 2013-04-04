@@ -14,8 +14,9 @@ import numpy as np
 from pyon.public import log
 import random
 from copy import deepcopy
+import os
 
-from coverage_test_base import *
+from coverage_test_base import CoverageIntTestBase, get_props, get_parameter_dict, EXEMPLAR_CATEGORIES
 
 @attr('INT', group='cov')
 class TestSampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
@@ -35,7 +36,7 @@ class TestSampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         pass
 
     @classmethod
-    def get_cov(self, only_time=False, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=False):
+    def get_cov(self, only_time=False, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=True):
         # Instantiate a ParameterDictionary
         pname_filter = ['time',
                         'lat',
@@ -118,7 +119,7 @@ class TestOneParamCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
     def setUp(self):
         pass
 
-    def get_cov(self, only_time=False, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=False):
+    def get_cov(self, only_time=False, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=True):
         """
         Construct coverage
         """
@@ -195,7 +196,7 @@ class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
     def setUp(self):
         pass
 
-    def get_cov(self, only_time=False, param_filter=None, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=False):
+    def get_cov(self, only_time=False, param_filter=None, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=True):
         # Instantiate a ParameterDictionary
         pname_filter = ['time',
                             'lat',
@@ -285,7 +286,7 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
     def setUp(self):
         pass
 
-    def get_cov(self, only_time=False, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=False):
+    def get_cov(self, only_time=False, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=True):
         """
         Construct coverage
         """

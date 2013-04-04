@@ -110,7 +110,7 @@ class CoverageIntTestBase(object):
     # ############################
     # METADATA
     def test_get_time_data_metrics(self):
-        scov, cov_name = self.get_cov(only_time=True, in_memory=True, inline_data_writes=True, auto_flush_values=True, nt=5000)
+        scov, cov_name = self.get_cov(only_time=True, nt=5000)
         res = scov.get_data_bounds(parameter_name='time')
         self.assertEqual(res, (0, 4999))
         res = scov.get_data_bounds_by_axis(axis=AxisTypeEnum.TIME)
