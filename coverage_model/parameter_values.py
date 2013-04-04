@@ -331,9 +331,11 @@ class SparseConstantValue(AbstractComplexParameterValue):
 
         return rf.reshape(ss)
 
-    def _apply_value(self, stor_sub, max_i):
+    def _apply_value(self, stor_sub):
         v_arr = np.empty(0, dtype=self.value_encoding)
+        max_i = self.shape[0]
         for s in stor_sub:
+            # log.trace('s: %s, max_i: %s', s, max_i)
             st = s.lower_bound or 0
             en = s.upper_bound or max_i
             # log.trace('st: %s, en: %s, offset: %s', st, en, s.offset)
@@ -404,7 +406,7 @@ class SparseConstantValue(AbstractComplexParameterValue):
 
         stor_sub = spans[strt_i:end_i]
         # Build the array of stored values
-        v_arr = self._apply_value(stor_sub, li + 1)
+        v_arr = self._apply_value(stor_sub)
 
         if stor_sub[0].lower_bound is None:
             offset = 0

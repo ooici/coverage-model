@@ -10,6 +10,7 @@
 from ooi.logging import log
 import os
 import numpy as np
+import random
 from coverage_model import *
 from nose.plugins.attrib import attr
 import mock
@@ -49,9 +50,15 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
     scov.insert_timesteps(nt)
     for p in scov.list_parameters():
         if data_dict is not None and p in data_dict:
-            scov.set_parameter_values(p, data_dict[p])
+            dat = data_dict[p]
         else:
-            scov.set_parameter_values(p, range(nt))
+            dat = range(nt)
+
+        try:
+            scov.set_parameter_values(p, dat)
+        except Exception as ex:
+            import sys
+            raise Exception('Error setting values for %s: %s', p, data_dict[p]), None, sys.exc_traceback
 
     scov.close()
 
@@ -199,6 +206,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
         all_data = np.append(all_data, second_data)
         all_data = np.append(all_data, third_data)
         self.assertTrue(np.array_equal(comp_cov.get_parameter_values('data_all'), all_data))
+        self.assertTrue(np.array_equal(comp_cov.get_parameter_values('data_all', slice(0,size)), first_data))
 
         fill_arr = np.empty(size, dtype='float32')
         fill_arr[:] = -9999.0
@@ -275,6 +283,84 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
 
             self.assertEquals(log_mock.info.call_args_list[2],
                               mock.call("Parameter '%s' from coverage '%s' already present, skipping...", 'time', covc_pth))
+
+    def test_temporal_aggregation_all_param_types(self):
+        size = 10
+
+        # Setup types
+        types = []
+        types.append(('qtype', QuantityType()))
+        types.append(('atype_n', ArrayType()))
+        types.append(('atype_s', ArrayType()))
+        letts='abcdefghijklmnopqrstuvwxyz'
+        while len(letts) < size:
+            letts += letts
+        types.append(('rtype', RecordType()))
+        types.append(('btype', BooleanType()))
+        types.append(('ctype_n', ConstantType(QuantityType(value_encoding=np.dtype('int32')))))
+        types.append(('ctype_s', ConstantType(QuantityType(value_encoding=np.dtype('S21')))))
+        types.append(('crtype', ConstantRangeType(QuantityType(value_encoding=np.dtype('int16')))))
+        types.append(('pftype', ParameterFunctionType(NumexprFunction('v*10', 'v*10', ['v'], {'v': 'ctype_n'}))))
+        cat = {99:'empty',0:'turkey',1:'duck',2:'chicken'}
+        catkeys = cat.keys()
+        types.append(('cattype', CategoryType(categories=cat)))
+        types.append(('sctype', SparseConstantType(fill_value=-998, value_encoding='int32')))
+
+        # Make coverages
+        num_covs = 3
+        covs = []
+        cov_data = []
+        for i in xrange(num_covs):
+            ii = i + 1
+            # Make parameters
+            pdict = ParameterDictionary()
+            tpc = ParameterContext('time', param_type=QuantityType(value_encoding='int64'))
+            tpc.axis = AxisTypeEnum.TIME
+            pdict.add_context(tpc)
+            for t in types:
+                pdict.add_context(ParameterContext(t[0], param_type=t[1], variability=VariabilityEnum.TEMPORAL))
+
+            # Make the data
+            data_dict = {}
+            data_dict['time'] = np.arange(i*size, ii*size, dtype='int64')
+            data_dict['atype_n'] = [[ii for a in xrange(random.choice(range(1,size)))] for r in xrange(size)]
+            data_dict['atype_s'] = [np.random.bytes(np.random.randint(1,20)) for r in xrange(size)]
+            data_dict['qtype'] = np.random.random_sample(size) * (50 - 10) + 10
+            data_dict['rtype'] = [{letts[r]: letts[r:]} for r in xrange(size)]
+            data_dict['btype'] = [random.choice([True, False]) for r in xrange(size)]
+            data_dict['ctype_n'] = [ii*20] * size
+            data_dict['ctype_s'] = ['const_str_{0}'.format(i)] * size
+            crarr = np.empty(size, dtype=object)
+            crarr[:] = [(ii*10, ii*20)]
+            data_dict['crtype'] = crarr
+            #    data_dict['pftype'] # Calculated on demand, nothing assigned!!
+            data_dict['cattype'] = [random.choice(catkeys) for r in xrange(size)]
+            data_dict['sctype'] = [ii*30] * size
+
+            # Create the coverage
+            covs.append(_make_cov(self.working_dir, pdict, nt=size, data_dict=data_dict))
+
+            # Now add values for pftype, for later comparison
+            data_dict['pftype'] = [x*10 for x in data_dict['ctype_n']]
+            # And update the values for cattype
+            data_dict['cattype'] = [cat[k] for k in data_dict['cattype']]
+
+            # Add the data_dict to the cov_data list
+            cov_data.append(data_dict)
+
+        comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+                                   reference_coverage_locs=covs,
+                                   complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
+
+        for p in comp_cov.list_parameters():
+            for i in xrange(len(covs)):
+                ddict = cov_data[i]
+                if p == 'qtype':
+                    self.assertTrue(np.allclose(comp_cov.get_parameter_values(p, slice(i*size, (i+1)*size)), ddict[p]))
+                elif p == 'ctype_s':
+                    self.assertTrue(np.atleast_1d(comp_cov.get_parameter_values(p, slice(i*size, (i+1)*size)) == ddict[p]).all())
+                else:
+                    self.assertTrue(np.array_equal(comp_cov.get_parameter_values(p, slice(i*size, (i+1)*size)), ddict[p]))
 
     def test_temporal_interleaved(self):
         num_times = 200
