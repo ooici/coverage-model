@@ -174,6 +174,15 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
             self.assertEquals(log_mock.warn.call_args_list[0],
                               mock.call("Coverage '%s' does not have a temporal_parameter; ignoring", covb_pth))
 
+        with mock.patch('coverage_model.coverage.log') as log_mock:
+            pdict.add_context(ParameterContext('discard_me'))
+            ccov = ComplexCoverage(self.working_dir, create_guid(), 'sample complex coverage',
+                                   reference_coverage_locs=[cova_pth, cova_pth],
+                                   parameter_dictionary=pdict,
+                                   complex_type=ComplexCoverageType.PARAMETRIC_STRICT)
+            self.assertEqual(log_mock.warn.call_args_list[0],
+                             mock.call("Parameters stored in a ComplexCoverage must be ParameterFunctionType parameters: discarding '%s'", 'discard_me'))
+
     def test_temporal_aggregation(self):
         size = 100000
         first_times = np.arange(0, size, dtype='int64')

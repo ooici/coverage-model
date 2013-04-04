@@ -977,6 +977,12 @@ class ComplexCoverage(AbstractCoverage):
 
                 if parameter_dictionary is None:
                     parameter_dictionary = ParameterDictionary()
+                else:
+                    from coverage_model import ParameterFunctionType
+                    for pn, pc in parameter_dictionary.iteritems():
+                        if not isinstance(pc[1].param_type, ParameterFunctionType):
+                            log.warn('Parameters stored in a ComplexCoverage must be ParameterFunctionType parameters: discarding \'%s\'', pn)
+                            parameter_dictionary._map.pop(pn)
 
                 # Must be in 'a' for a new coverage
                 self.mode = 'a'
