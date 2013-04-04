@@ -959,10 +959,6 @@ class ComplexCoverage(AbstractCoverage):
 
                 self._reference_covs = {}
 
-                self._dobuild(self._persistence_layer.complex_type,
-                              reference_coverages=self._persistence_layer.rcov_locs,
-                              parameter_dictionary=self._persistence_layer.param_dict)
-
             if os.path.exists(pth):
                 _doload(self)
             else:
@@ -999,24 +995,27 @@ class ComplexCoverage(AbstractCoverage):
                                                                  complex_type=complex_type,
                                                                  coverage_type='complex')
 
-                self._dobuild(complex_type,
-                              reference_coverages=reference_coverage_locs,
-                              parameter_dictionary=parameter_dictionary)
+            self._dobuild()
 
         except:
             self._closed = True
             raise
 
-    def _dobuild(self, complex_type, **kwargs):
+    def _dobuild(self):
+        complex_type = self._persistence_layer.complex_type
+        reference_coverages = self._persistence_layer.rcov_locs
+        parameter_dictionary = self._persistence_layer.param_dict
+
+
         if complex_type == ComplexCoverageType.PARAMETRIC_STRICT:
             # PARAMETRIC_STRICT - combine parameters from multiple coverages - MUST HAVE IDENTICAL TIME VALUES
-            self._build_parametric(kwargs['reference_coverages'], kwargs['parameter_dictionary'])
+            self._build_parametric(reference_coverages, parameter_dictionary)
         elif complex_type == ComplexCoverageType.TEMPORAL_INTERLEAVED:
             # TEMPORAL_INTERLEAVED - combine parameters from multiple coverages - may have differing time values
-            self._build_temporal_interleaved(kwargs['reference_coverages'], kwargs['parameter_dictionary'])
+            self._build_temporal_interleaved(reference_coverages, parameter_dictionary)
         elif complex_type == ComplexCoverageType.TEMPORAL_AGGREGATION:
             # TEMPORAL_AGGREGATION - combine coverages temporally
-            self._build_temporal_aggregation(kwargs['reference_coverages'], kwargs['parameter_dictionary'])
+            self._build_temporal_aggregation(reference_coverages, parameter_dictionary)
         elif complex_type == ComplexCoverageType.SPATIAL_JOIN:
             # Complex spatial - combine coverages across a higher-order topology
             raise NotImplementedError('Not yet implemented')
