@@ -174,6 +174,10 @@ class TestOneParamCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
             ret = scov.get_parameter_values(param, _slice)
         return (ret == data).all()
 
+    @unittest.skip('Does not apply to empty coverage.')
+    def test_get_all_data_metrics(self):
+        pass
+
 @attr('INT', group='cov')
 class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
@@ -231,7 +235,11 @@ class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         pass
 
     @unittest.skip('Does not apply to empty coverage.')
-    def test_get_all_data_metadata(self):
+    def test_get_time_data_metrics(self):
+        pass
+
+    @unittest.skip('Does not apply to empty coverage.')
+    def test_get_all_data_metrics(self):
         pass
 
     @unittest.skip('Does not apply to empty coverage.')
@@ -243,11 +251,15 @@ class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         pass
 
     @unittest.skip('Does not apply to empty coverage.')
-    def test_get_time_metadata(self):
+    def test_get_by_slice(self):
         pass
 
     @unittest.skip('Does not apply to empty coverage.')
-    def test_get_by_slice(self):
+    def test_get_by_int(self):
+        pass
+
+    @unittest.skip('Does not apply to empty coverage.')
+    def test_get_by_list(self):
         pass
 
     @unittest.skip('Does not apply to empty coverage.')
@@ -379,3 +391,7 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         results.append(ptypes_cov._range_value.const_rng_int[0] == (-10, 10))
         ptypes_cov.close()
         self.assertTrue(False not in results)
+
+    @unittest.skip('Does not apply to empty coverage.')
+    def test_get_all_data_metrics(self):
+        pass

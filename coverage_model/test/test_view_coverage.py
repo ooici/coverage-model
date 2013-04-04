@@ -176,5 +176,9 @@ class TestSampleCovViewInt(CoverageModelIntTestCase, CoverageIntTestBase):
         pass
 
     @unittest.skip('Does not apply to ViewCoverage.')
-    def test_get_time_metadata(self):
+    def test_get_time_data_metrics(self):
+        pass
+
+    @unittest.skip('Does not apply to empty coverage.')
+    def test_get_all_data_metrics(self):
         pass
