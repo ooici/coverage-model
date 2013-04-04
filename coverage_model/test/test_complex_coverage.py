@@ -279,7 +279,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
                               mock.call("Parameter '%s' from coverage '%s' already present, skipping...", 'time', covc_pth))
 
     def test_temporal_interleaved(self):
-        num_times = 2000
+        num_times = 200
         tpc = num_times / 2
 
         first_times = np.random.random_sample(tpc) * (20 - 0) + 0
