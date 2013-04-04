@@ -957,7 +957,7 @@ class ComplexCoverage(AbstractCoverage):
 
                 self.mode = self.mode
 
-                self._reference_covs = {}
+                self._reference_covs = collections.OrderedDict()
 
             if os.path.exists(pth):
                 _doload(self)
@@ -981,7 +981,7 @@ class ComplexCoverage(AbstractCoverage):
                 # Must be in 'a' for a new coverage
                 self.mode = 'a'
 
-                self._reference_covs = {}
+                self._reference_covs = collections.OrderedDict()
 
                 if not hasattr(reference_coverage_locs, '__iter__'):
                     reference_coverage_locs = [reference_coverage_locs]
@@ -1019,6 +1019,29 @@ class ComplexCoverage(AbstractCoverage):
         elif complex_type == ComplexCoverageType.SPATIAL_JOIN:
             # Complex spatial - combine coverages across a higher-order topology
             raise NotImplementedError('Not yet implemented')
+
+    def append_reference_coverage(self, path):
+        ncov = AbstractCoverage.load(path)
+
+        # Loading the coverage worked - proceed...
+        # Get the current set of reference coverages
+        if path in self._persistence_layer.rcov_locs:
+            # Already there, note it and just return
+            log.info('Coverage already referenced: \'%s\'', path)
+            return
+
+        self._persistence_layer.rcov_locs.append(path)
+
+        # Reset things to ensure we don't munge everything
+        self._reference_covs = collections.OrderedDict()
+        self._range_dictionary = ParameterDictionary()
+        self._range_value = RangeValues()
+        self.temporal_domain = GridDomain(GridShape('temporal',[0]), CRS.standard_temporal(), MutabilityEnum.EXTENSIBLE)
+        self.spatial_domain = None
+        self._head_coverage_path = None
+
+        # Then, rebuild this badboy!
+        self._dobuild()
 
     def _verify_rcovs(self, rcovs):
         for cpth in rcovs:

@@ -422,6 +422,41 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
         second_interleave[tpc:] = second_data
         self.assertTrue(np.allclose(ccov.get_parameter_values('second_param'), second_interleave[sort_i]))
 
+    def test_append_reference_coverage(self):
+        size = 100000
+        first_times = np.arange(0, size, dtype='int64')
+        first_data = np.arange(size, size*2, dtype='float32')
+
+        second_times = np.arange(size, size*2, dtype='int64')
+        second_data = np.arange(size*4, size*5, dtype='float32')
+
+        third_times = np.arange(size*2, size*3, dtype='int64')
+        third_data = np.arange(size*7, size*8, dtype='float32')
+
+        cova_pth = _make_cov(self.working_dir, ['data_all', 'data_a'], nt=size,
+                             data_dict={'time': first_times, 'data_all': first_data, 'data_a': first_data})
+        covb_pth = _make_cov(self.working_dir, ['data_all', 'data_b'], nt=size,
+                             data_dict={'time': second_times, 'data_all': second_data, 'data_b': second_data})
+        covc_pth = _make_cov(self.working_dir, ['data_all', 'data_c'], nt=size,
+                             data_dict={'time': third_times, 'data_all': third_data, 'data_c': third_data})
+
+        comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+                                   reference_coverage_locs=[cova_pth, covb_pth],
+                                   complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
+
+        # Verify stuff worked normally...
+        self.assertEqual(comp_cov.num_timesteps, 2*size)
+        tvals = comp_cov.get_time_values()
+        self.assertTrue(np.array_equal(tvals, np.arange(2*size, dtype='int64')))
+
+        # Append the new coverage
+        comp_cov.append_reference_coverage(covc_pth)
+
+        # Now make sure the new data is there!
+        self.assertEqual(comp_cov.num_timesteps, 3*size)
+        tvals = comp_cov.get_time_values()
+        self.assertTrue(np.array_equal(tvals, np.arange(3*size, dtype='int64')))
+
     def test_head_coverage_path(self):
         size = 10
         first_times = np.arange(0, size, dtype='int64')
