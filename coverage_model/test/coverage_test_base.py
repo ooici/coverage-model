@@ -109,9 +109,8 @@ class CoverageIntTestBase(object):
 
     # ############################
     # METADATA
-    def test_get_time_metadata(self):
-        scov, cov_name = self.get_cov(only_time=True, in_memory=True, inline_data_writes=True, auto_flush_values=True, nt=5000)
-        # self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='time')
+    def test_get_time_data_metrics(self):
+        scov, cov_name = self.get_cov(only_time=True, nt=5000)
         res = scov.get_data_bounds(parameter_name='time')
         self.assertEqual(res, (0, 4999))
         res = scov.get_data_bounds_by_axis(axis=AxisTypeEnum.TIME)
@@ -123,10 +122,29 @@ class CoverageIntTestBase(object):
         res = scov.get_data_size(parameter_name='time', slice_=None, in_bytes=False)
         self.assertEqual(res, 0.03814696)
 
-    @unittest.skip('Not yet implemented.')
-    def test_get_all_metadata(self):
-        #TODO: Make sure we can get all the data for all the parameters
-        pass
+    def test_get_all_data_metrics(self):
+        brick_size = 1000
+        time_steps = 5000
+        scov, cov_name = self.get_cov(nt=time_steps)
+
+        check_vals = {}
+        for p in scov.list_parameters():
+            check_vals[p] = scov.get_parameter_values(p)
+
+        # Data bounds
+        bnds = scov.get_data_bounds()
+        for i,v in enumerate(bnds):
+            self.assertTrue(np.allclose((check_vals[v].min(), check_vals[v].max()), bnds[v]))
+
+        bnds = scov.get_data_bounds(parameter_name=['time','lat'])
+        for i,v in enumerate(bnds):
+            self.assertTrue(np.allclose((check_vals[v].min(), check_vals[v].max()), bnds[v]))
+
+        # Data extents
+        extents = scov.get_data_extents()
+        for i, v in enumerate(extents):
+            res = (len(scov.get_parameter_values(v)),)
+            self.assertEqual(extents[v], res)
 
     def test_get_param_by_axis(self):
         scov, cov_name = self.get_cov()
@@ -150,7 +168,6 @@ class CoverageIntTestBase(object):
     # ############################
     # CONSTRUCTION
     @get_props()
-
     def test_create_cov(self):
         props = self.test_create_cov.props
         time_steps = props['time_steps']
@@ -524,15 +541,29 @@ class CoverageIntTestBase(object):
                         results.append(np.array_equiv(mock_data, data))
         self.assertTrue(False not in results)
 
-    @unittest.skip('Not yet implemented.')
     def test_get_by_int(self):
-        # TODO: Implement
-        pass
+        results = []
+        brick_size = 10
+        time_steps = 30
+        cov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
+        dat = cov.get_parameter_values('time')
+        for s in range(len(dat)):
+            mock_data = s
+            data = cov.get_parameter_values('time', s)
+            results.append(np.array_equiv(mock_data, data))
+        self.assertTrue(False not in results)
 
-    @unittest.skip('Not yet implemented.')
     def test_get_by_list(self):
-        # TODO: Implement
-        pass
+        results = []
+        brick_size = 10
+        time_steps = 30
+        cov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
+        dat = cov.get_parameter_values('time')
+        for s in range(len(dat)):
+            mock_data = s
+            data = cov.get_parameter_values('time', [s])
+            results.append(np.array_equiv(mock_data, data))
+        self.assertTrue(False not in results)
 
     
     # ############################
