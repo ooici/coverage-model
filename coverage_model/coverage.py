@@ -962,12 +962,12 @@ class ComplexCoverage(AbstractCoverage):
                 self._dobuild(self._persistence_layer.complex_type,
                               reference_coverages=self._persistence_layer.rcov_locs,
                               parameter_dictionary=self._persistence_layer.param_dict)
-            # if reference_coverage_locs is None or name is None or parameter_dictionary is None:
+
             if os.path.exists(pth):
                 _doload(self)
             else:
-                if reference_coverage_locs is None or name is None or parameter_dictionary is None:
-                    raise SystemError('\'reference_coverages\', \'name\' and \'parameter_dictionary\' cannot be None')
+                if reference_coverage_locs is None or name is None:
+                    raise SystemError('\'reference_coverages\' and \'name\' cannot be None')
 
                 # If the coverage directory exists, load it instead!!
                 if os.path.exists(pth):
@@ -978,6 +978,9 @@ class ComplexCoverage(AbstractCoverage):
                 if not isinstance(name, basestring):
                     raise TypeError('\'name\' must be of type basestring')
                 self.name = name
+
+                if parameter_dictionary is None:
+                    parameter_dictionary = ParameterDictionary()
 
                 # Must be in 'a' for a new coverage
                 self.mode = 'a'

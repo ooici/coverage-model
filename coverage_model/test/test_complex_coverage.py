@@ -91,7 +91,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
         aplorng_ctxt = ParameterContext('apples_to_oranges', param_type=ParameterFunctionType(function=aplorng_func, value_encoding=np.dtype('float32')))
         pdict.add_context(aplorng_ctxt)
 
-        # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+        # Instantiate the ComplexCoverage
         ccov = ComplexCoverage(self.working_dir, create_guid(), 'sample complex coverage',
                                reference_coverage_locs=[cova_pth, covb_pth, covc_pth],
                                parameter_dictionary=pdict,
@@ -187,7 +187,6 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
 
         comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
                                    reference_coverage_locs=[cova_pth, covb_pth, covc_pth],
-                                   parameter_dictionary=ParameterDictionary(),
                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 
         self.assertEqual(comp_cov.num_timesteps, 3*size)
@@ -266,7 +265,6 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
         with mock.patch('coverage_model.coverage.log') as log_mock:
             comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
                                        reference_coverage_locs=[cova_pth, covb_pth, covc_pth],
-                                       parameter_dictionary=ParameterDictionary(),
                                        complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 
             self.assertEquals(log_mock.warn.call_args_list[0],
@@ -311,13 +309,9 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
                              data_dict={'time': second_times, 'second_param': second_data, 'full_param': second_full},
                              make_temporal=False)
 
-        # Instantiate a ParameterDictionary
-        pdict = ParameterDictionary()
-
-        # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+        # Instantiate the ComplexCoverage
         ccov = ComplexCoverage(self.working_dir, create_guid(), 'sample complex coverage',
                                reference_coverage_locs=[cova_pth, covb_pth],
-                               parameter_dictionary=pdict,
                                complex_type=ComplexCoverageType.TEMPORAL_INTERLEAVED)
 
         self.assertEqual(ccov.list_parameters(), ['first_param', 'full_param', 'second_param', 'time'])
@@ -358,7 +352,6 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
         # Ensure the correct path is returned from ComplexCoverage.head_coverage_path in CC --> SC & SC scenario
         comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
                                    reference_coverage_locs=[cova_pth, covb_pth],
-                                   parameter_dictionary=ParameterDictionary(),
                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
         self.assertEqual(comp_cov.head_coverage_path, covb_pth)
 
@@ -366,7 +359,6 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
         vcov = ViewCoverage(self.working_dir, create_guid(), 'test', covb_pth)
         comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
                                    reference_coverage_locs=[cova_pth, vcov.persistence_dir],
-                                   parameter_dictionary=ParameterDictionary(),
                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
         self.assertEqual(comp_cov.head_coverage_path, covb_pth)
         self.assertEqual(comp_cov.head_coverage_path, vcov.head_coverage_path)
