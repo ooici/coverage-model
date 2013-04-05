@@ -396,7 +396,7 @@ import functools
 @functools.total_ordering
 class Span(AbstractBase):
 
-    def __init__(self, lower_bound=None, upper_bound=None, value=None):
+    def __init__(self, lower_bound=None, upper_bound=None, offset=0, value=None):
         AbstractBase.__init__(self)
         if lower_bound is not None and upper_bound is not None and lower_bound >= upper_bound:
             raise ValueError('\'lower_bound\' cannot be >= \'upper_bound\'')
@@ -404,6 +404,7 @@ class Span(AbstractBase):
         self.lower_bound = lower_bound
         self.upper_bound = upper_bound
         self.value = value
+        self.offset = offset
 
     def __contains__(self, index):
 
@@ -418,32 +419,50 @@ class Span(AbstractBase):
 
         return False
 
-    def get_index_array(self, lower=None, upper=None):
-        if lower is None:
-            if self.lower_bound is None:
-                raise ValueError('Both \'lower\' and \'self.lower_bound\' are None; cannot continue')
-            lower = self.lower_bound
-        if upper is None:
-            if self.upper_bound is None:
-                raise ValueError('Both \'upper\' and \'self.upper_bound\' are None; cannot continue')
-            upper = self.upper_bound
+    def indices(self, length):
+        return slice(self.lower_bound, self.upper_bound).indices(length)
 
-        return np.arange(lower, upper, dtype='int32')
+    def offset_indices(self, length):
+        return self.get_offset_span().indices(length)
 
     def tuplize(self, with_value=False):
-        ret = (self.lower_bound, self.upper_bound)
+        ret = (self.lower_bound, self.upper_bound, self.offset)
         if with_value:
             ret += (self.value,)
 
         return ret
 
+    def get_offset_span(self):
+        lb = self.lower_bound + self.offset if self.lower_bound is not None else self.lower_bound
+        ub = self.upper_bound + self.offset if self.upper_bound is not None else self.upper_bound
+        return Span(lb, ub, value=self.value)
+
+    def to_slice(self):
+        return slice(self.lower_bound, self.upper_bound)
+
     @property
     def shape(self):
         return (len(self),)
 
+    @property
+    def start(self):
+        return self.lower_bound
+
+    @property
+    def stop(self):
+        return self.upper_bound
+
+    @property
+    def step(self):
+        return 1
+
     @classmethod
     def from_iterable(cls, initer):
         return Span(*initer)
+
+    @classmethod
+    def from_slice(cls, slice_):
+        return Span(slice_.start, slice_.stop)
 
     def __eq__(self, other):
         if isinstance(other, Span):

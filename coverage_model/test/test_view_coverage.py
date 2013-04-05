@@ -72,6 +72,51 @@ class TestSampleCovViewInt(CoverageModelIntTestCase, CoverageIntTestBase):
         self.assertTrue(np.array_equal(vcov.get_time_values(), cov1.get_time_values()))
         self.assertEqual(vcov.list_parameters(), ['conductivity', 'lat', 'lon', 'temp', 'time'])
 
+    def test_replace_simplex_with_complex(self):
+        cov, _ = sc.get_cov(nt=10)
+        cov_pth = cov.persistence_dir
+        cov.close()
+        del cov
+
+        vcov = ViewCoverage(self.working_dir, create_guid(), name='sample view cov', reference_coverage_location=cov_pth)
+        self.assertEqual(vcov.head_coverage_path, cov_pth)
+        self.assertEqual(vcov.list_parameters(), ['conductivity', 'lat', 'lon', 'temp', 'time'])
+
+        # Grab the view coverage path, then close it and delete the reference (for cleanliness)
+        vcov_pth = vcov.persistence_dir
+        vcov.close()
+        del vcov
+
+        # Load the view coverage WITH WRITE PERMISSIONS
+        vcov = AbstractCoverage.load(vcov_pth, mode='a')
+
+        # Create a complex coverage that uses the simplex coverage reference by the view coverage
+        ccov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+                               reference_coverage_locs=[vcov.head_coverage_path,],
+                               parameter_dictionary=ParameterDictionary(),
+                               complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
+        ccov_pth = ccov.persistence_dir
+        self.assertEqual(ccov.head_coverage_path, cov_pth)
+        self.assertEqual(vcov.list_parameters(), ['conductivity', 'lat', 'lon', 'temp', 'time'])
+        ccov.close()
+        del ccov
+
+        # Then replace the path in the view coverage
+        vcov.replace_reference_coverage(ccov_pth)
+
+        # Refresh the ViewCoverage - not actually be required, but...
+        vcov.refresh()
+
+        # Open the view,
+        vcov = AbstractCoverage.load(vcov_pth)
+        # and ensure that the .reference_coverage is the complex,
+        self.assertEqual(vcov.reference_coverage.persistence_dir, ccov_pth)
+        # but the .head_coverage_path is the simplex
+        self.assertEqual(vcov.head_coverage_path, cov_pth)
+        self.assertEqual(vcov.list_parameters(), ['conductivity', 'lat', 'lon', 'temp', 'time'])
+
+
+
     def test_head_coverage_path(self):
         cov1, _ = sc.get_cov(only_time=True, nt=10)
 
@@ -82,6 +127,27 @@ class TestSampleCovViewInt(CoverageModelIntTestCase, CoverageIntTestBase):
         # Ensure that for a second-order (VC --> VC --> SC) ViewCoverage.head_coverage_path reveals the underlying SimplexCoverage
         vcov2 = ViewCoverage(self.working_dir, create_guid(), name='sample view cov', reference_coverage_location=vcov1.persistence_dir)
         self.assertEqual(vcov2.head_coverage_path, cov1.persistence_dir)
+
+    def test_refresh(self):
+        brick_size = 1000
+        time_steps = 5000
+
+        from coverage_model.test.test_simplex_coverage import TestSampleCovInt as sc
+        # Get a writable coverage
+        write_cov, cov_name = sc.get_cov(only_time=True, brick_size=brick_size, nt=time_steps)
+
+        # Get a ViewCoverage of that coverage
+        read_cov = ViewCoverage(self.working_dir, create_guid(), name='sample view cov', reference_coverage_location=write_cov.persistence_dir)
+
+        # Add some data to the writable copy & ensure a flush
+        write_cov.insert_timesteps(100)
+        tdat = range(write_cov.num_timesteps - 100, write_cov.num_timesteps)
+        write_cov.set_time_values(tdat, slice(-100, None))
+
+        # Refresh the read coverage
+        read_cov.refresh()
+
+        self.assertTrue(np.array_equal(write_cov.get_time_values(), read_cov.get_time_values()))
 
     @unittest.skip('Does not apply to ViewCoverage.')
     def test_set_time_one_brick(self):
