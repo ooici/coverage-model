@@ -27,10 +27,12 @@ class TestBasicTypesUnit(CoverageModelUnitTestCase):
         self.assertIn(max_int, s)
         self.assertEqual(len(s), 0)
         self.assertEqual(s.value, 10)
+        self.assertEqual(s.indices(7), (0, 7, 1))
+        self.assertEqual(s.offset_indices(7), (0, 7, 1))
 
 
         # Unlimited lower bound
-        s = Span(None, 5, value='bob')
+        s = Span(None, 5, offset=3, value='bob')
         self.assertIn(min_int, s)
         self.assertIn(-18, s)
         self.assertIn(0, s)
@@ -39,9 +41,11 @@ class TestBasicTypesUnit(CoverageModelUnitTestCase):
         self.assertNotIn(19, s)
         self.assertEqual(len(s), 0)
         self.assertEqual(s.value, 'bob')
+        self.assertEqual(s.indices(10), (0, 5, 1))
+        self.assertEqual(s.offset_indices(10), (0, 8, 1))
 
         # Unlimited upper bound
-        s = Span(5, None, value=9.38)
+        s = Span(5, None, offset=-2, value=9.38)
         self.assertIn(max_int, s)
         self.assertIn(18, s)
         self.assertIn(6, s)
@@ -50,20 +54,24 @@ class TestBasicTypesUnit(CoverageModelUnitTestCase):
         self.assertNotIn(-12, s)
         self.assertEqual(len(s), 0)
         self.assertEqual(s.value, 9.38)
+        self.assertEqual(s.indices(12), (5, 12, 1))
+        self.assertEqual(s.offset_indices(12), (3, 12, 1))
 
         # Fully bounded
-        s = Span(10, 68, value=4)
+        s = Span(10, 68, offset=6, value=4)
         self.assertIn(34, s)
         self.assertNotIn(8, s)
         self.assertNotIn(90, s)
         self.assertEqual(len(s), 58)
         self.assertEqual(s.value, 4)
+        self.assertEqual(s.indices(30), (10, 30, 1))
+        self.assertEqual(s.offset_indices(30), (16, 30, 1))
 
     def test_ndspan(self):
         min_int = np.iinfo('int64').min
         max_int = np.iinfo('int64').max
         
-        s = NdSpan([Span(None,10), Span(3,30), Span(20,None)])
+        s = NdSpan([Span(None, 10), Span(3, 30), Span(20, None)])
         self.assertIn((8, 5, 23), s)
         self.assertIn((min_int, 29, max_int), s)
         self.assertNotIn((12, 5, 28), s)
@@ -72,7 +80,7 @@ class TestBasicTypesUnit(CoverageModelUnitTestCase):
         self.assertEqual(s.shape, (0, 27, 0))
         self.assertEqual(len(s), 0)
 
-        s = NdSpan([Span(0, 20), Span(4,8), Span(9, 18)])
+        s = NdSpan([Span(0, 20), Span(4, 8), Span(9, 18)])
         self.assertIn((7, 4, 15), s)
         self.assertIn((0, 7, 10), s)
         self.assertNotIn((20, 3, 18), s)

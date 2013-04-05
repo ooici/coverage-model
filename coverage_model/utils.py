@@ -33,8 +33,9 @@ def prod(lst):
 
 
 def is_valid_constraint(v):
+    from coverage_model.basic_types import Span
     ret = False
-    if isinstance(v, (slice, int)) or\
+    if isinstance(v, (slice, int)) or isinstance(v, Span) or\
        (isinstance(v, (list,tuple)) and np.array([is_valid_constraint(e) for e in v]).all()):
         ret = True
 
@@ -133,6 +134,7 @@ def get_shape_from_slice(slice_, max_shp):
 
 
 def fix_slice(slice_, shape):
+    from coverage_model.basic_types import Span
     # CBM: First swack - see this for more possible checks: http://code.google.com/p/netcdf4-python/source/browse/trunk/netCDF4_utils.py
     if not is_valid_constraint(slice_):
         raise SystemError('invalid constraint supplied: {0}'.format(slice_))
@@ -160,7 +162,7 @@ def fix_slice(slice_, shape):
     # Next, deal with negative indices and check for IndexErrors
     # Logic for handling negative indices from: http://docs.scipy.org/doc/numpy/reference/arrays.indexing.html
     for x in xrange(rank):
-        sl=slice_[x]
+        sl = slice_[x]
         if isinstance(sl, int):
             if sl < 0:
                 sl = shape[x] + slice_[x]
@@ -197,8 +199,17 @@ def fix_slice(slice_, shape):
             slice_[x] = slice(*sl_)
 
             _raise_index_error_slice(slice_[x], shape[x], x)
+        elif isinstance(sl, Span):
 
+            if sl.lower_bound is not None and sl.lower_bound < 0:
+                sl.lower_bound = shape[x] + sl.lower_bound
 
+            if sl.upper_bound is not None and sl.upper_bound < 0:
+                sl.upper_bound = shape[x] + sl.upper_bound
+
+            slice_[x] = sl
+
+            # Spans can be assigned BEFORE domain expansion, so checking for IndexErrors is tricky (if even possible)...
 
     # Finally, make it a tuple
     return tuple(slice_)
@@ -210,6 +221,7 @@ def slice_shape(slice_, shape):
     @param slice_       A slice, integer or list/tuple of indices
     @param shape        The shape of the data
     """
+    from coverage_model.basic_types import Span
     # If shape is an integer, tuplize it
     if isinstance(shape, int):
         shape = (shape,)
@@ -219,7 +231,9 @@ def slice_shape(slice_, shape):
     dim_lengths = []
 
     for s,shape in zip(fixed_slice, shape):
-        if isinstance(s,slice):
+        if isinstance(s, (slice, Span)):
+            if isinstance(s, Span):
+                s = s.to_slice()
             start, stop, stride = s.indices(shape)
             dim_len = int(math.ceil((stop - start) / float(stride)))
         elif isinstance(s, (list,tuple)):
@@ -235,6 +249,7 @@ def slice_shape(slice_, shape):
 
 
 def express_slice(slice_, total_shape):
+    from coverage_model.basic_types import Span
     fsl = fix_slice(slice_, total_shape)
     ret = []
     for i, x in enumerate(fsl):
@@ -242,7 +257,11 @@ def express_slice(slice_, total_shape):
             start = x.start if not x.start is None else 0
             stop = x.stop if not x.stop is None else total_shape[i]
             step = x.step if not x.step is None else 1
-            ret.append(slice(start,stop,step))
+            ret.append(slice(start, stop, step))
+        elif isinstance(x, Span):
+            low = x.lower_bound if not x.lower_bound is None else 0
+            up = x.upper_bound if not x.upper_bound is None else total_shape[i]
+            ret.append(Span(low, up, x.offset, x.value))
         else:
             ret.append(x)
 

@@ -331,17 +331,23 @@ class SparseConstantValue(AbstractComplexParameterValue):
 
         return rf.reshape(ss)
 
-    def _apply_value(self, stor_sub, max_i):
+    def _apply_value(self, stor_sub):
         v_arr = np.empty(0, dtype=self.value_encoding)
+        max_i = self.shape[0]
         for s in stor_sub:
+            # log.trace('s: %s, max_i: %s', s, max_i)
+            st = s.lower_bound or 0
+            en = s.upper_bound or max_i
+            # log.trace('st: %s, en: %s, offset: %s', st, en, s.offset)
+
+            if st == en == max_i:
+                break
+
             if isinstance(s.value, AbstractParameterValue):
-                e = s.value[:]
+                st += s.offset
+                en += s.offset
+                e = s.value[st:en]
             else:
-                st = s.lower_bound or 0
-                en = s.upper_bound or max_i
-
-                log.trace('st: %s, en: %s', st, en)
-
                 sz = en - st
                 e = np.empty(sz, dtype=self.value_encoding)
                 e.fill(s.value)
@@ -396,11 +402,11 @@ class SparseConstantValue(AbstractComplexParameterValue):
                     end_i = i + 1
                     break
 
-        log.trace('srt: %s, end: %s, fi: %s, li: %s', strt_i, end_i, fi, li)
+        # log.trace('srt: %s, end: %s, fi: %s, li: %s', strt_i, end_i, fi, li)
 
         stor_sub = spans[strt_i:end_i]
         # Build the array of stored values
-        v_arr = self._apply_value(stor_sub, li + 1)
+        v_arr = self._apply_value(stor_sub)
 
         if stor_sub[0].lower_bound is None:
             offset = 0
@@ -441,6 +447,13 @@ class SparseConstantValue(AbstractComplexParameterValue):
             self._storage[0] = spans
             return
 
+        nspn_offset = 0
+        if isinstance(slice_[0], Span):
+            # TODO: This could be used to alter previous span objects, but for now, just use it to pass the offset
+            nspn_offset = slice_[0].offset
+        elif utils.slice_shape(slice_, self.shape) == self.shape:  # Full slice
+            nspn_offset = -self.shape[0]
+
         if not isinstance(value, AbstractParameterValue) and not isinstance(lspn.value, AbstractParameterValue):
             if value == lspn.value:
                 # The previous value equals the new value - do not add a new span!
@@ -449,11 +462,11 @@ class SparseConstantValue(AbstractComplexParameterValue):
         # The current index becomes the upper_bound of the previous span and the start of the next span
         curr_ind = self.shape[0]
 
-        # Create the new span
-        nspn = Span(curr_ind, None, value)
-
         # Reset the upper_bound of the previous span
-        spans[-1] = Span(lspn.lower_bound, curr_ind, lspn.value)
+        spans[-1] = Span(lspn.lower_bound, curr_ind, offset=lspn.offset, value=lspn.value)
+
+        # Create the new span
+        nspn = Span(curr_ind, None, nspn_offset, value=value)
 
         # Add the new span
         spans.append(nspn)
