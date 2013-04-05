@@ -1184,7 +1184,13 @@ class ComplexCoverage(AbstractCoverage):
         for cpth, cov in self._verify_rcovs(rcovs):
 
             # Get the time bounds for the coverage
-            tbnds = cov.get_data_bounds(cov.temporal_parameter_name)
+            if cov.num_timesteps == 0:
+                tbnds = (None, None)
+            else:
+                tbnds = cov.get_data_bounds(cov.temporal_parameter_name)
+                if tbnds[0] == tbnds[1]:
+                    tbnds = (tbnds[0], None)
+
             spn = Span(tbnds[0], tbnds[1], value=cpth)
 
             if spn in time_bounds:
