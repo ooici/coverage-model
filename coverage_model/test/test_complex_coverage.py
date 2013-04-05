@@ -33,7 +33,7 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 
         if make_temporal:
             # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
-            t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
+            t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('float32')))
             t_ctxt.uom = 'seconds since 01-01-1970'
             pdict.add_context(t_ctxt, is_temporal=True)
 
@@ -185,13 +185,13 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
 
     def test_temporal_aggregation(self):
         size = 100000
-        first_times = np.arange(0, size, dtype='int64')
+        first_times = np.arange(0, size, dtype='float32')
         first_data = np.arange(size, size*2, dtype='float32')
 
-        second_times = np.arange(size, size*2, dtype='int64')
+        second_times = np.arange(size, size*2, dtype='float32')
         second_data = np.arange(size*4, size*5, dtype='float32')
 
-        third_times = np.arange(size*2, size*3, dtype='int64')
+        third_times = np.arange(size*2, size*3, dtype='float32')
         third_data = np.arange(size*7, size*8, dtype='float32')
 
         cova_pth = _make_cov(self.working_dir, ['data_all', 'data_a'], nt=size,
@@ -207,8 +207,8 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
 
         self.assertEqual(comp_cov.num_timesteps, 3*size)
         tvals = comp_cov.get_time_values()
-        self.assertTrue(np.array_equal(tvals, np.arange(3*size, dtype='int64')))
-        self.assertEqual(tvals.dtype, np.dtype('int64'))  # np.array_equal does NOT check dtype!!
+        self.assertTrue(np.array_equal(tvals, np.arange(3*size, dtype='float32')))
+        self.assertEqual(tvals.dtype, np.dtype('float32'))  # np.array_equal does NOT check dtype!!
 
         all_data = np.empty(0, dtype='float32')
         all_data = np.append(all_data, first_data)
@@ -263,13 +263,13 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
 
     def test_temporal_aggregation_warnings(self):
         size = 100000
-        first_times = np.arange(0, size, dtype='int64')
+        first_times = np.arange(0, size, dtype='float32')
         first_data = np.arange(size, size*2, dtype='float32')
 
-        second_times = np.arange(size, size*2, dtype='int64')
+        second_times = np.arange(size, size*2, dtype='float32')
         second_data = np.arange(size*4, size*5, dtype='float32')
 
-        third_times = np.arange(size*2, size*3, dtype='int64')
+        third_times = np.arange(size*2, size*3, dtype='float32')
         third_data = np.arange(size*7, size*8, dtype='float32')
 
         cova_pth = _make_cov(self.working_dir, ['data_all', 'data_a'], nt=size,
@@ -284,7 +284,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
                                        reference_coverage_locs=[cova_pth, covb_pth, covc_pth],
                                        complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 
-            self.assertEquals(log_mock.warn.call_args_list[0],
+            self.assertEquals(log_mock.warn.call_args_list[3],
                               mock.call("Coverage with time bounds '%s' already present; ignoring", (first_times.min(), first_times.max(), 0)))
 
             self.assertEquals(log_mock.info.call_args_list[1],
@@ -293,9 +293,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
             self.assertEquals(log_mock.info.call_args_list[2],
                               mock.call("Parameter '%s' from coverage '%s' already present, skipping...", 'time', covc_pth))
 
-    def test_temporal_aggregation_all_param_types(self):
-        size = 10
-
+    def _setup_allparams(self, size=10, num_covs=2, sequential_covs=True):
         # Setup types
         types = []
         types.append(('qtype', QuantityType()))
@@ -316,14 +314,13 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
         types.append(('sctype', SparseConstantType(fill_value=-998, value_encoding='int32')))
 
         # Make coverages
-        num_covs = 3
         covs = []
         cov_data = []
         for i in xrange(num_covs):
             ii = i + 1
             # Make parameters
             pdict = ParameterDictionary()
-            tpc = ParameterContext('time', param_type=QuantityType(value_encoding='int64'))
+            tpc = ParameterContext('time', param_type=QuantityType(value_encoding='float32'))
             tpc.axis = AxisTypeEnum.TIME
             pdict.add_context(tpc)
             for t in types:
@@ -331,7 +328,15 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
 
             # Make the data
             data_dict = {}
-            data_dict['time'] = np.arange(i*size, ii*size, dtype='int64')
+            if sequential_covs:
+                tmax = ii * size
+                tmin = i * size
+                tdata = np.random.random_sample(size) * (tmax - tmin) + tmin
+                tdata.sort()
+            else:
+                tdata = np.random.random_sample(size) * (200 - 0) + 0
+                tdata.sort()
+            data_dict['time'] = tdata
             data_dict['atype_n'] = [[ii for a in xrange(random.choice(range(1,size)))] for r in xrange(size)]
             data_dict['atype_s'] = [np.random.bytes(np.random.randint(1,20)) for r in xrange(size)]
             data_dict['qtype'] = np.random.random_sample(size) * (50 - 10) + 10
@@ -357,6 +362,13 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
             # Add the data_dict to the cov_data list
             cov_data.append(data_dict)
 
+        return covs, cov_data
+
+    def test_temporal_aggregation_all_param_types(self):
+        size = 10
+
+        covs, cov_data = self._setup_allparams(size=size)
+
         comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
                                    reference_coverage_locs=covs,
                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
@@ -364,7 +376,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
         for p in comp_cov.list_parameters():
             for i in xrange(len(covs)):
                 ddict = cov_data[i]
-                if p == 'qtype':
+                if p in ['qtype', 'time']:
                     self.assertTrue(np.allclose(comp_cov.get_parameter_values(p, slice(i*size, (i+1)*size)), ddict[p]))
                 elif p == 'ctype_s':
                     self.assertTrue(np.atleast_1d(comp_cov.get_parameter_values(p, slice(i*size, (i+1)*size)) == ddict[p]).all())
@@ -390,19 +402,12 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
         log.debug('\nCov A info:\n%s\n%s\n%s\n---------', first_times, first_data, first_full)
         log.debug('\nCov B info:\n%s\n%s\n%s\n---------', second_times, second_data, second_full)
 
-        # We want a float time parameter for this tests
-        t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('float32')))
-        t_ctxt.uom = 'seconds since 01-01-1970'
-        t_ctxt.axis = AxisTypeEnum.TIME
-
         cova_pth = _make_cov(self.working_dir,
-                             [t_ctxt, 'first_param', 'full_param'], nt=tpc,
-                             data_dict={'time': first_times, 'first_param': first_data, 'full_param': first_full},
-                             make_temporal=False)
+                             ['first_param', 'full_param'], nt=tpc,
+                             data_dict={'time': first_times, 'first_param': first_data, 'full_param': first_full})
         covb_pth = _make_cov(self.working_dir,
-                             [t_ctxt, 'second_param', 'full_param'], nt=tpc,
-                             data_dict={'time': second_times, 'second_param': second_data, 'full_param': second_full},
-                             make_temporal=False)
+                             ['second_param', 'full_param'], nt=tpc,
+                             data_dict={'time': second_times, 'second_param': second_data, 'full_param': second_full})
 
         # Instantiate the ComplexCoverage
         ccov = ComplexCoverage(self.working_dir, create_guid(), 'sample complex coverage',
@@ -431,15 +436,30 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
         second_interleave[tpc:] = second_data
         self.assertTrue(np.allclose(ccov.get_parameter_values('second_param'), second_interleave[sort_i]))
 
+    def test_temporal_interleaved_all_param_types(self):
+        size = 10
+        covs, cov_data = self._setup_allparams(size=size, sequential_covs=False)
+
+        comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+                                   reference_coverage_locs=covs,
+                                   complex_type=ComplexCoverageType.TEMPORAL_INTERLEAVED)
+
+        time_interleave = np.empty(0)
+        for c in cov_data:
+            time_interleave = np.append(time_interleave, c['time'])
+        sort_i = np.argsort(time_interleave)
+
+        self.assertTrue(np.allclose(comp_cov.get_time_values(), time_interleave[sort_i]))
+
     def test_append_reference_coverage(self):
         size = 100000
-        first_times = np.arange(0, size, dtype='int64')
+        first_times = np.arange(0, size, dtype='float32')
         first_data = np.arange(size, size*2, dtype='float32')
 
-        second_times = np.arange(size, size*2, dtype='int64')
+        second_times = np.arange(size, size*2, dtype='float32')
         second_data = np.arange(size*4, size*5, dtype='float32')
 
-        third_times = np.arange(size*2, size*3, dtype='int64')
+        third_times = np.arange(size*2, size*3, dtype='float32')
         third_data = np.arange(size*7, size*8, dtype='float32')
 
         cova_pth = _make_cov(self.working_dir, ['data_all', 'data_a'], nt=size,
@@ -456,7 +476,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
         # Verify stuff worked normally...
         self.assertEqual(comp_cov.num_timesteps, 2*size)
         tvals = comp_cov.get_time_values()
-        self.assertTrue(np.array_equal(tvals, np.arange(2*size, dtype='int64')))
+        self.assertTrue(np.array_equal(tvals, np.arange(2*size, dtype='float32')))
 
         # Append the new coverage
         comp_cov.append_reference_coverage(covc_pth)
@@ -464,14 +484,14 @@ class TestComplexCoverageInt(CoverageModelIntTestCase):
         # Now make sure the new data is there!
         self.assertEqual(comp_cov.num_timesteps, 3*size)
         tvals = comp_cov.get_time_values()
-        self.assertTrue(np.array_equal(tvals, np.arange(3*size, dtype='int64')))
+        self.assertTrue(np.array_equal(tvals, np.arange(3*size, dtype='float32')))
 
     def test_head_coverage_path(self):
         size = 10
-        first_times = np.arange(0, size, dtype='int64')
+        first_times = np.arange(0, size, dtype='float32')
         first_data = np.arange(size, size*2, dtype='float32')
 
-        second_times = np.arange(size, size*2, dtype='int64')
+        second_times = np.arange(size, size*2, dtype='float32')
         second_data = np.arange(size*4, size*5, dtype='float32')
 
         cova_pth = _make_cov(self.working_dir, ['data_all', 'data_a'], nt=size,
