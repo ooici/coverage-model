@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
 """
-@package coverage_model.coverage_recovery
-@file coverage_model/coverage_recovery.py
+@package coverage_model.recovery
+@file coverage_model/recovery.py
 @author Christopher Mueller
+@author James Case
 @brief Contains utility functions for attempting to recover corrupted coverages
 """
 from ooi.logging import log
@@ -376,8 +377,8 @@ class CoverageDoctor(object):
         tdom = GridDomain.load(self._dso.temporal_domain)
         sdom = GridDomain.load(self._dso.spatial_domain)
         # TODO: Change this to the scratch directory or some other OOI-approved temporary location
-        working_dir = 'test_data/repaired_coverages'
-        # working_dir = os.path.join(tempfile.gettempdir(), 'cov_repair', self._guid)
+        # working_dir = 'test_data/repaired_coverages'
+        working_dir = tempfile.gettempdir()
 
         # Create the temporary Coverage
         tempcov = SimplexCoverage(root_dir=working_dir, persistence_guid=self._guid, name=self._guid, parameter_dictionary=pdict, spatial_domain=sdom, temporal_domain=tdom)
@@ -386,7 +387,7 @@ class CoverageDoctor(object):
         temp_dir = os.path.join(tempcov.persistence_dir, tempcov.persistence_guid)
 
         # TODO: Probably want to comment out next line since it is just for debugging
-        self._copy_original_bricks(pdict, orig_dir, temp_dir)
+        # self._copy_original_bricks(pdict, orig_dir, temp_dir)
 
         # Insert same number of timesteps into temporary coverage as is broken coverage
         brick_domains_new, new_brick_list, brick_list_spans, tD, bD, min_data_bound, max_data_bound = self.inspect_bricks(self.cov_pth, self._guid, 'time')
@@ -399,7 +400,7 @@ class CoverageDoctor(object):
         pl.master_manager.brick_domains = brick_domains_new
         pl.master_manager.brick_list = new_brick_list
 
-        # TODO: Reconstruct each parameter's group and external links to brick files
+        # Repair ExternalLinks to brick files
         f = h5py.File(pl.master_manager.file_path, 'a')
         for param_name in pdict.keys():
             del f[param_name]
@@ -452,15 +453,17 @@ class CoverageDoctor(object):
         pl_fixed.flush()
         fixed_cov.close()
 
-        # TODO: Copy Master and Parameter metadata files back to original/broken coverage (cov_pth) location
-        # shutil.copy2(os.path.join(temp_dir, self._guid, '_master.hdf5'), os.path.join(orig_dir, self._guid, '{0}_master.hdf5'.format(self._guid)))
-        # for param in pdict.keys():
-        #     shutil.copy2(os.path.join(temp_dir, self._guid, param, '{0}.hdf5'.format(param)))
+        # Copy Master and Parameter metadata files back to original/broken coverage (cov_pth) location
+        log.warn('temp_dir: %s', temp_dir)
+        log.warn('orig_dir: %s', orig_dir)
+        shutil.copy2(os.path.join(tempcov.persistence_dir, '{0}_master.hdf5'.format(self._guid)), os.path.join(self.cov_pth, '{0}_master.hdf5'.format(self._guid)))
+        for param in pdict.keys():
+            shutil.copy2(os.path.join(temp_dir, param, '{0}.hdf5'.format(param)), os.path.join(orig_dir, param, '{0}.hdf5'.format(param)))
 
         # TODO: Re-run analysis
 
-        # TODO: Remove temporary coverage
-        # shutil.rmtree(working_dir)
+        # Remove temporary coverage
+        shutil.rmtree(working_dir)
 
     def inspect_bricks(self, cov_pth, dataset_id, param_name):
         brick_domains_new = None
