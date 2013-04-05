@@ -1125,11 +1125,14 @@ class ComplexCoverage(AbstractCoverage):
             self._reference_covs[cpth] = cov
 
             # Add parameters from the coverage if not already present
-            for p in cov.list_parameters():
+            covpd = cov.parameter_dictionary # Provides a copy
+            for p, pc in covpd.iteritems():
                 if p not in parameter_dictionary:
                     if p not in self._range_dictionary:
                         # Add the context from the reference coverage
-                        self._range_dictionary.add_context(self._reference_covs[cpth]._range_dictionary.get_context(p))
+                        pc = pc[1]  # pc is a tuple (ordinal, ParameterContext)
+                        self._assign_domain(pc)
+                        self._range_dictionary.add_context(pc)
                         # Add the sparse value class
                         from coverage_model.parameter_types import SparseConstantType
                         self._range_value[p] = get_value_class(
@@ -1202,11 +1205,14 @@ class ComplexCoverage(AbstractCoverage):
             self._reference_covs[cpth] = cov
 
             # Add parameters from the coverage if not already present
-            for p in cov.list_parameters():
+            covpd = cov.parameter_dictionary # Provides a copy
+            for p, pc in covpd.iteritems():
                 if p not in parameter_dictionary:
                     if p not in self._range_dictionary:
                         # Add the context from the reference coverage
-                        self._range_dictionary.add_context(self._reference_covs[cpth]._range_dictionary.get_context(p))
+                        pc = pc[1]  # pc is a tuple (ordinal, ParameterContext)
+                        self._assign_domain(pc)
+                        self._range_dictionary.add_context(pc)
                         # Add the sparse value class
                         from coverage_model.parameter_types import SparseConstantType
                         self._range_value[p] = get_value_class(
