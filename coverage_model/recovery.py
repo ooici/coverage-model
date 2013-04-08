@@ -378,7 +378,7 @@ class CoverageDoctor(object):
         sdom = GridDomain.load(self._dso.spatial_domain)
         # TODO: Change this to the scratch directory or some other OOI-approved temporary location
         # working_dir = 'test_data/repaired_coverages'
-        working_dir = tempfile.gettempdir()
+        working_dir = tempfile.mkdtemp('covs')
 
         # Create the temporary Coverage
         tempcov = SimplexCoverage(root_dir=working_dir, persistence_guid=self._guid, name=self._guid, parameter_dictionary=pdict, spatial_domain=sdom, temporal_domain=tdom)
