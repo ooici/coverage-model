@@ -4,6 +4,7 @@
 @package coverage_model.test.test_coverage
 @file coverage_model/test/test_view_coverage.py
 @author James Case
+@author Christopher Mueller
 @brief Tests for the ViewCoverage class.
 """
 
@@ -35,16 +36,20 @@ class TestSampleCovViewInt(CoverageModelIntTestCase, CoverageIntTestBase):
         pass
 
     @classmethod
-    def get_cov(self, only_time=False, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=True):
+    def get_cov(cls, only_time=False, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=True):
         ref_cov, ref_cov_name = sc.get_cov(only_time=only_time, save_coverage=save_coverage, in_memory=in_memory, inline_data_writes=inline_data_writes, brick_size=brick_size, make_empty=make_empty, nt=nt, auto_flush_values=auto_flush_values)
         view_pdict = get_parameter_dict(parameter_list=['time','lat'])
-        cov = ViewCoverage(self.working_dir,
+        cov = ViewCoverage(cls.working_dir,
                            create_guid(),
                            name='sample coverage_model',
                            reference_coverage_location=ref_cov.persistence_dir,
                            parameter_dictionary=view_pdict)
 
         return cov, 'TestSampleCovViewInt'
+
+    ######################
+    # Additional tests specific to View Coverage
+    ######################
 
     def test_replace_reference_coverage(self):
         cov1, _ = sc.get_cov(nt=10)
@@ -115,8 +120,6 @@ class TestSampleCovViewInt(CoverageModelIntTestCase, CoverageIntTestBase):
         self.assertEqual(vcov.head_coverage_path, cov_pth)
         self.assertEqual(vcov.list_parameters(), ['conductivity', 'lat', 'lon', 'temp', 'time'])
 
-
-
     def test_head_coverage_path(self):
         cov1, _ = sc.get_cov(only_time=True, nt=10)
 
@@ -127,6 +130,10 @@ class TestSampleCovViewInt(CoverageModelIntTestCase, CoverageIntTestBase):
         # Ensure that for a second-order (VC --> VC --> SC) ViewCoverage.head_coverage_path reveals the underlying SimplexCoverage
         vcov2 = ViewCoverage(self.working_dir, create_guid(), name='sample view cov', reference_coverage_location=vcov1.persistence_dir)
         self.assertEqual(vcov2.head_coverage_path, cov1.persistence_dir)
+
+    ######################
+    # Overridden base tests
+    ######################
 
     def test_refresh(self):
         brick_size = 1000

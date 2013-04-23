@@ -490,19 +490,21 @@ class AbstractCoverage(AbstractIdentifiable):
         """
         params = []
         if axis is None:
-            params.extend(pn for pk, pn in self.temporal_domain.crs.axes.iteritems())
-            params.extend(pn for pk, pn in self.spatial_domain.crs.axes.iteritems())
+            if self.temporal_domain is not None:
+                params.extend(pn for pk, pn in self.temporal_domain.crs.axes.iteritems())
+            if self.spatial_domain is not None:
+                params.extend(pn for pk, pn in self.spatial_domain.crs.axes.iteritems())
         elif hasattr(axis, '__iter__'):
             for a in axis:
-                if a in self.temporal_domain.crs.axes:
+                if self.temporal_domain is not None and a in self.temporal_domain.crs.axes:
                     params.append(self.temporal_domain.crs.axes[a])
-                elif a in self.spatial_domain.crs.axes:
+                elif self.spatial_domain is not None and a in self.spatial_domain.crs.axes:
                     params.append(self.spatial_domain.crs.axes[a])
                 else:
                     raise ValueError('Specified axis ({0}) not found in coverage'.format(a))
-        elif axis in self.temporal_domain.crs.axes:
+        elif self.temporal_domain is not None and axis in self.temporal_domain.crs.axes:
             params.append(self.temporal_domain.crs.axes[axis])
-        elif axis in self.spatial_domain.crs.axes:
+        elif self.spatial_domain is not None and axis in self.spatial_domain.crs.axes:
             params.append(self.spatial_domain.crs.axes[axis])
         else:
             raise ValueError('Specified axis ({0}) not found in coverage'.format(axis))
@@ -750,8 +752,8 @@ class AbstractCoverage(AbstractIdentifiable):
         indent = ' '
         lst.append('ID: {0}'.format(self._id))
         lst.append('Name: {0}'.format(self.name))
-        lst.append('Temporal Domain:\n{0}'.format(self.temporal_domain.__str__(indent*2)))
-        lst.append('Spatial Domain:\n{0}'.format(self.spatial_domain.__str__(indent*2)))
+        lst.append('Temporal Domain:\n{0}'.format(self.temporal_domain.__str__(indent*2) if self.temporal_domain is not None else 'None'))
+        lst.append('Spatial Domain:\n{0}'.format(self.spatial_domain.__str__(indent*2) if self.spatial_domain is not None else 'None'))
 
         lst.append('Parameters:')
         for x in self._range_value:
@@ -764,8 +766,14 @@ class AbstractCoverage(AbstractIdentifiable):
         indent = ' '
         lst.append('ID: {0}'.format(self._id))
         lst.append('Name: {0}'.format(self.name))
-        lst.append('TemporalDomain: Shape=>{0} Axes=>{1}'.format(self.temporal_domain.shape.extents, self.temporal_domain.crs.axes))
-        lst.append('SpatialDomain: Shape=>{0} Axes=>{1}'.format(self.spatial_domain.shape.extents, self.spatial_domain.crs.axes))
+        if self.temporal_domain is not None:
+            lst.append('TemporalDomain: Shape=>{0} Axes=>{1}'.format(self.temporal_domain.shape.extents, self.temporal_domain.crs.axes))
+        else:
+            lst.append('TemporalDomain: None')
+        if self.spatial_domain is not None:
+            lst.append('SpatialDomain: Shape=>{0} Axes=>{1}'.format(self.spatial_domain.shape.extents, self.spatial_domain.crs.axes))
+        else:
+            lst.append('SpatialDomain: None')
         lst.append('Coordinate Parameters: {0}'.format(self.list_parameters(coords_only=True)))
         lst.append('Data Parameters: {0}'.format(self.list_parameters(coords_only=False, data_only=True)))
 
@@ -1028,6 +1036,15 @@ class ComplexCoverage(AbstractCoverage):
             # Complex spatial - combine coverages across a higher-order topology
             raise NotImplementedError('Not yet implemented')
 
+    def append_parameter(self, parameter_context):
+        if not isinstance(parameter_context, ParameterContext):
+            raise TypeError('\'parameter_context\' must be an instance of ParameterContext, not {0}'.format(type(parameter_context)))
+        from coverage_model import ParameterFunctionType
+        if not isinstance(parameter_context.param_type, ParameterFunctionType):
+            raise ValueError('Parameters stored in a ComplexCoverage must be ParameterFunctionType parameters: cannot append parameter \'{0}\''.format(parameter_context.name))
+
+        super(ComplexCoverage, self).append_parameter(parameter_context)
+
     def append_reference_coverage(self, path):
         ncov = AbstractCoverage.load(path)
 
@@ -1137,8 +1154,10 @@ class ComplexCoverage(AbstractCoverage):
                         self._range_dictionary.add_context(pc)
                         # Add the sparse value class
                         from coverage_model.parameter_types import SparseConstantType
+                        ppt=self._range_dictionary.get_context(p).param_type
                         self._range_value[p] = get_value_class(
-                            SparseConstantType(value_encoding=self._range_dictionary.get_context(p).param_type.value_encoding),
+                            SparseConstantType(value_encoding=ppt.value_encoding,
+                                               fill_value=ppt.fill_value),
                             DomainSet(self.temporal_domain))
                     else:
                         log.info('Parameter \'%s\' from coverage \'%s\' already present, skipping...', p, cpth)
@@ -1222,8 +1241,10 @@ class ComplexCoverage(AbstractCoverage):
                         self._range_dictionary.add_context(pc)
                         # Add the sparse value class
                         from coverage_model.parameter_types import SparseConstantType
+                        ppt=self._range_dictionary.get_context(p).param_type
                         self._range_value[p] = get_value_class(
-                            SparseConstantType(value_encoding=self._range_dictionary.get_context(p).param_type.value_encoding),
+                            SparseConstantType(value_encoding=ppt.value_encoding,
+                                               fill_value=ppt.fill_value),
                             DomainSet(self.temporal_domain))
                     else:
                         log.info('Parameter \'%s\' from coverage \'%s\' already present, skipping...', p, cpth)

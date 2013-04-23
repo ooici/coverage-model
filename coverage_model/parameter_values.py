@@ -106,7 +106,7 @@ class AbstractParameterValue(AbstractBase):
         # TODO: There is a flaw here when OVERWRITING:
         # overwritten values may still appear to be a min/max value as
         # recalculation of the full array does not occur...
-        if np.dtype(self.value_encoding).kind != 'S':  # No min/max for strings
+        if np.dtype(self.value_encoding).kind not in ['S', 'O']:  # No min/max for strings or objects
             v = np.atleast_1d(value)
             # All values are fill_values, leave what we have!
             if np.atleast_1d(v == self.fill_value).all():
@@ -305,6 +305,22 @@ class SparseConstantValue(AbstractComplexParameterValue):
         # No op - storage expanded in __setitem__
         pass
 
+    def _update_min_max(self, value):
+        # TODO: There is a flaw here when OVERWRITING:
+        # overwritten values may still appear to be a min/max value as
+        # recalculation of the full array does not occur...\
+        if np.dtype(self.value_encoding).kind not in ['S', 'O']:  # No min/max for strings or objects
+            v = np.atleast_1d(value)
+            # All values are fill_values, leave what we have!
+            if np.atleast_1d(v == self.fill_value).all():
+                return
+            # Mask fill_value so it's not included in the calculation
+            v = np.atleast_1d(np.ma.masked_equal(v, self.fill_value, copy=False))
+            # Update min
+            self._min = min(v.min(), self._min) if self._min != self.fill_value else v.min()
+            # Update max
+            self._max = max(v.max(), self._max) if self._min != self.fill_value else v.max()
+
     def __indexify_slice(self, slice_, total_shape):
         ## ONLY WORKS FOR 1D ARRAYS!!!
         fsl = utils.fix_slice(slice_, total_shape)
@@ -433,6 +449,9 @@ class SparseConstantValue(AbstractComplexParameterValue):
         if not isinstance(value, AbstractParameterValue):
             # If the value is an array/iterable, we only take the first one
             value = np.atleast_1d(value)[0]
+            bnds = (value, value)
+        else:
+            bnds = value.bounds
 
         if not hasattr(spans, '__iter__') and spans == self.fill_value:
             spans = [Span(value=value)]
@@ -442,37 +461,38 @@ class SparseConstantValue(AbstractComplexParameterValue):
         lspn = spans[-1]
 
         if slice_[0] == self.shape[0] - 1:  # -1 was used for slice
-            # Change the value of the last span and return
+            # Change the value of the last span
             lspn.value = value
-            self._storage[0] = spans
-            return
+        else:
+            nspn_offset = 0
+            if isinstance(slice_[0], Span):
+                # TODO: This could be used to alter previous span objects, but for now, just use it to pass the offset
+                nspn_offset = slice_[0].offset
+            elif utils.slice_shape(slice_, self.shape) == self.shape:  # Full slice
+                nspn_offset = -self.shape[0]
 
-        nspn_offset = 0
-        if isinstance(slice_[0], Span):
-            # TODO: This could be used to alter previous span objects, but for now, just use it to pass the offset
-            nspn_offset = slice_[0].offset
-        elif utils.slice_shape(slice_, self.shape) == self.shape:  # Full slice
-            nspn_offset = -self.shape[0]
+            if not isinstance(value, AbstractParameterValue) and not isinstance(lspn.value, AbstractParameterValue):
+                if value == lspn.value:
+                    # The previous value equals the new value - do not add a new span!
+                    return
 
-        if not isinstance(value, AbstractParameterValue) and not isinstance(lspn.value, AbstractParameterValue):
-            if value == lspn.value:
-                # The previous value equals the new value - do not add a new span!
-                return
+            # The current index becomes the upper_bound of the previous span and the start of the next span
+            curr_ind = self.shape[0]
 
-        # The current index becomes the upper_bound of the previous span and the start of the next span
-        curr_ind = self.shape[0]
+            # Reset the upper_bound of the previous span
+            spans[-1] = Span(lspn.lower_bound, curr_ind, offset=lspn.offset, value=lspn.value)
 
-        # Reset the upper_bound of the previous span
-        spans[-1] = Span(lspn.lower_bound, curr_ind, offset=lspn.offset, value=lspn.value)
+            # Create the new span
+            nspn = Span(curr_ind, None, nspn_offset, value=value)
 
-        # Create the new span
-        nspn = Span(curr_ind, None, nspn_offset, value=value)
-
-        # Add the new span
-        spans.append(nspn)
+            # Add the new span
+            spans.append(nspn)
 
         # Reset the storage
         self._storage[0] = spans
+
+        # Update the bounds
+        self._update_min_max(bnds)
 
 
 class ConstantValue(AbstractComplexParameterValue):
