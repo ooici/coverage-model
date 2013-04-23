@@ -4,6 +4,7 @@
 @package coverage_model.test.test_coverage
 @file coverage_model/test/
 @author James Case
+@author Christopher Mueller
 @brief Base tests for all coverages
 """
 
@@ -101,7 +102,8 @@ class CoverageIntTestBase(object):
     def setUp(self):
         pass
 
-    def get_cov(self, only_time=False, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=True):
+    @classmethod
+    def get_cov(cls, only_time=False, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=True):
         raise NotImplementedError()
 
     def _insert_set_get(self, scov=None, timesteps=None, data=None, _slice=None, param='all'):
@@ -109,7 +111,14 @@ class CoverageIntTestBase(object):
 
     # ############################
     # METADATA
+    @get_props()
     def test_get_time_data_metrics(self):
+        props = self.test_get_time_data_metrics.props
+        if 'time_data_size' in props:
+            tsize = props['time_data_size']
+        else:
+            tsize = 0.03814696
+
         scov, cov_name = self.get_cov(only_time=True, nt=5000)
         res = scov.get_data_bounds(parameter_name='time')
         self.assertEqual(res, (0, 4999))
@@ -120,7 +129,7 @@ class CoverageIntTestBase(object):
         res = scov.get_data_extents_by_axis(axis=AxisTypeEnum.TIME)
         self.assertEqual(res, (5000,))
         res = scov.get_data_size(parameter_name='time', slice_=None, in_bytes=False)
-        self.assertEqual(res, 0.03814696)
+        self.assertEqual(res, tsize)
 
     def test_get_all_data_metrics(self):
         brick_size = 1000
@@ -129,22 +138,27 @@ class CoverageIntTestBase(object):
 
         check_vals = {}
         for p in scov.list_parameters():
-            check_vals[p] = scov.get_parameter_values(p)
+            fv = scov.get_parameter_context(p).fill_value
+            vals = scov.get_parameter_values(p)
+            vals = np.atleast_1d(np.ma.masked_equal(vals, fv, copy=False))
+            check_vals[p] = vals
 
-        # Data bounds
+        # Get All data bounds
         bnds = scov.get_data_bounds()
         for i,v in enumerate(bnds):
             self.assertTrue(np.allclose((check_vals[v].min(), check_vals[v].max()), bnds[v]))
 
-        bnds = scov.get_data_bounds(parameter_name=['time','lat'])
+        # Get a data bounds for a specific subset of parameters
+        from random import choice
+        params = scov.list_parameters()
+        bnds = scov.get_data_bounds(parameter_name=[choice(params), choice(params)])
         for i,v in enumerate(bnds):
             self.assertTrue(np.allclose((check_vals[v].min(), check_vals[v].max()), bnds[v]))
 
-        # Data extents
+        # Get all data extents
         extents = scov.get_data_extents()
         for i, v in enumerate(extents):
-            res = (len(scov.get_parameter_values(v)),)
-            self.assertEqual(extents[v], res)
+            self.assertEqual(extents[v], (len(check_vals[v]),))
 
     def test_get_param_by_axis(self):
         scov, cov_name = self.get_cov()
@@ -176,7 +190,7 @@ class CoverageIntTestBase(object):
         self.assertIsInstance(cov, AbstractCoverage)
         cov_info_str = cov.info
         self.assertIsInstance(cov_info_str, basestring)
-        self.assertEqual(cov.name, 'sample coverage_model')
+        # self.assertEqual(cov.name, 'sample coverage_model')
 
         self.assertEqual(cov.num_timesteps, time_steps)
         self.assertEqual(list(cov.temporal_domain.shape.extents), [time_steps])
@@ -533,11 +547,13 @@ class CoverageIntTestBase(object):
         with self.assertRaises(IndexError):
             scov.get_parameter_values('time', [[5,9000]])
 
+    @get_props()
     def test_get_by_slice(self):
         # Tests retrieving data across multiple bricks for a variety of slices
         results = []
         brick_size = 10
         time_steps = 30
+
         cov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
         dat = cov.get_parameter_values('time')
         for s in range(len(dat)):
@@ -702,7 +718,7 @@ class CoverageIntTestBase(object):
             SimplexCoverage.pickle_load('some_bad_file_location.cov')
 
         with self.assertRaises(StandardError):
-            SimplexCoverage.pickle_save('nat_a_SimplexCoverage', pickled_coverage_file)
+            SimplexCoverage.pickle_save('not_a_SimplexCoverage', pickled_coverage_file)
 
     # ############################
     # PARAMETERS
@@ -716,27 +732,32 @@ class CoverageIntTestBase(object):
             cov.get_parameter('time')
 
     def test_append_parameter(self):
-        results = []
-        scov, cov_name = self.get_cov(inline_data_writes=True, nt=50)
+        nt = 50
+        scov, cov_name = self.get_cov(inline_data_writes=True, nt=nt)
 
         parameter_name = 'turbidity'
         pc_in = ParameterContext(parameter_name, param_type=QuantityType(value_encoding=np.dtype('float32')))
         pc_in.uom = 'FTU'
 
         scov.append_parameter(pc_in)
+        fill_arr = np.empty(nt, dtype='f')
+        fill_arr.fill(pc_in.fill_value)
 
-        nt = 50
+        self.assertTrue(np.array_equal(scov.get_parameter_values(parameter_name), fill_arr))
+
         sample_values = np.arange(nt, dtype='f')
-        scov.set_parameter_values('turbidity', value=sample_values)
+        scov.set_parameter_values(parameter_name, value=sample_values)
 
-        ret_data = scov.get_parameter_values('turbidity')
-        self.assertTrue(np.array_equal(sample_values, ret_data))
+        self.assertTrue(np.array_equal(sample_values, scov.get_parameter_values(parameter_name)))
 
         scov.insert_timesteps(100)
-        self.assertTrue(len(scov.get_parameter_values('turbidity')) == 150)
+        self.assertEqual(len(scov.get_parameter_values(parameter_name)), nt + 100)
 
-        scov.set_parameter_values('turbidity', value=np.arange(150, dtype='f'))
-        self.assertTrue(np.array_equal(np.arange(150, dtype='f'), scov.get_parameter_values('turbidity')))
+        nvals = np.arange(nt, nt + 100, dtype='f')
+        scov.set_parameter_values(parameter_name, value=nvals, tdoa=slice(nt, None))
+        sample_values = np.append(sample_values, nvals)
+
+        self.assertTrue(np.array_equal(sample_values, scov.get_parameter_values(parameter_name)))
 
         with self.assertRaises(ValueError):
             scov.append_parameter(pc_in)

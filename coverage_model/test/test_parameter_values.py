@@ -675,7 +675,7 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
 
     def test_sparse_constant_value_interop(self):
         # Setup the type
-        scv_type = SparseConstantType(fill_value='-998', value_encoding='int32')
+        scv_type = SparseConstantType(fill_value=-998, value_encoding='int32')
 
         # Setup the values
         ntimes = 10

@@ -267,3 +267,6 @@ def express_slice(slice_, total_shape):
 
     return tuple(ret)
 
+
+def get_random_sample(length, min, max):
+    return np.random.random_sample(length) * (max - min) + min

@@ -14,6 +14,10 @@ import random
 from coverage_model import *
 from nose.plugins.attrib import attr
 import mock
+import unittest
+from copy import deepcopy
+
+from coverage_test_base import CoverageIntTestBase, get_props
 
 
 def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
@@ -58,7 +62,7 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
             scov.set_parameter_values(p, dat)
         except Exception as ex:
             import sys
-            raise Exception('Error setting values for %s: %s', p, data_dict[p]), None, sys.exc_traceback
+            raise Exception('Error setting values for {0}: {1}'.format(p, data_dict[p])), None, sys.exc_traceback
 
     scov.close()
 
@@ -66,13 +70,141 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 
 
 @attr('INT',group='cov')
-class TestComplexCoverageInt(CoverageModelIntTestCase):
+class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
+
+    # Make a deep copy of the base TESTING_PROPERTIES dict and then modify for this class
+    TESTING_PROPERTIES = deepcopy(CoverageIntTestBase.TESTING_PROPERTIES)
+    TESTING_PROPERTIES['test_props_decorator'] = {'test_props': 10}
+    TESTING_PROPERTIES['test_get_time_data_metrics'] = {'time_data_size': 0.01907348}
+
+    @get_props()
+    def test_props_decorator(self):
+        props = self.test_props_decorator.props
+        self.assertIsInstance(props, dict)
+        expected = {'time_steps': 30, 'test_props': 10, 'brick_size': 1000}
+        self.assertEqual(props, expected)
 
     def setUp(self):
         pass
 
     def tearDown(self):
         pass
+
+    @classmethod
+    def get_cov(cls, only_time=False, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=30, auto_flush_values=True):
+        # Many tests assume nt is the 'total' number of timesteps, must divide between the 3 coverages
+        sz1 = sz2 = sz3 = int(nt) / 3
+        sz3 += nt - sum([sz1, sz2, sz3])
+
+        first_times = np.arange(0, sz1, dtype='float32')
+        first_data = np.arange(0, sz1, dtype='float32')
+
+        second_times = np.arange(sz1, sz1+sz2, dtype='float32')
+        second_data = np.arange(sz1, sz1+sz2, dtype='float32')
+
+        third_times = np.arange(sz1+sz2, nt, dtype='float32')
+        third_data = np.arange(sz1+sz2, nt, dtype='float32')
+
+        cova_pth = _make_cov(cls.working_dir, ['data_all', 'data_a'], nt=sz1,
+                             data_dict={'time': first_times, 'data_all': first_data, 'data_a': first_data})
+        covb_pth = _make_cov(cls.working_dir, ['data_all', 'data_b'], nt=sz2,
+                             data_dict={'time': second_times, 'data_all': second_data, 'data_b': second_data})
+        covc_pth = _make_cov(cls.working_dir, ['data_all', 'data_c'], nt=sz3,
+                             data_dict={'time': third_times, 'data_all': third_data, 'data_c': third_data})
+
+        comp_cov = ComplexCoverage(cls.working_dir, create_guid(), 'sample temporal aggregation coverage',
+                                   reference_coverage_locs=[cova_pth, covb_pth, covc_pth],
+                                   complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
+
+        return comp_cov, 'TestComplexCoverageInt'
+
+    ######################
+    # Overridden base tests
+    ######################
+
+    def _insert_set_get(self, scov=None, timesteps=None, data=None, _slice=None, param='all'):
+        # Cannot set values against a ComplexCoverage - just return True
+        return True
+
+    def test_append_parameter(self):
+        nt = 60
+        ccov, cov_name = self.get_cov(inline_data_writes=True, nt=nt)
+
+        parameter_name = 'a*b'
+        func = NumexprFunction('a*b', 'a*b', ['a', 'b'], {'a': 'data_a', 'b': 'data_b'})
+        pc_in = ParameterContext(parameter_name, param_type=ParameterFunctionType(function=func, value_encoding=np.dtype('float32')))
+
+        ccov.append_parameter(pc_in)
+
+        sample_values = ccov.get_parameter_values('data_a') * ccov.get_parameter_values('data_b')
+
+        self.assertTrue(np.array_equal(sample_values, ccov.get_parameter_values(parameter_name)))
+
+        ccov.insert_timesteps(100)
+        self.assertEqual(len(ccov.get_parameter_values(parameter_name)), nt + 100)
+
+        nvals = np.arange(nt, nt + 100, dtype='f')
+        ccov.set_parameter_values('data_a', value=nvals, tdoa=slice(nt, None))
+        ccov.set_parameter_values('data_b', value=nvals, tdoa=slice(nt, None))
+
+        sample_values = ccov.get_parameter_values('data_a') * ccov.get_parameter_values('data_b')
+
+        self.assertTrue(np.array_equal(sample_values, ccov.get_parameter_values(parameter_name)))
+
+        with self.assertRaises(ValueError):
+            ccov.append_parameter(pc_in)
+
+    @unittest.skip('Functionality verified in \'test_temporal_aggregation\'')
+    def test_refresh(self):
+        pass
+
+    @unittest.skip('Does not apply to ComplexCoverage')
+    def test_create_multi_bricks(self):
+        pass
+
+    @unittest.skip('Does not apply to ComplexCoverage')
+    def test_coverage_pickle_and_in_memory(self):
+        pass
+
+    @unittest.skip('Does not apply to ComplexCoverage')
+    def test_coverage_mode_expand_domain(self):
+        pass
+
+    @unittest.skip('Does not apply to ComplexCoverage')
+    def test_coverage_mode_set_value(self):
+        pass
+
+    @unittest.skip('Does not apply to ComplexCoverage')
+    def test_pickle_problems_in_memory(self):
+        pass
+
+    @unittest.skip('Does not apply to ComplexCoverage')
+    def test_set_allparams_five_bricks(self):
+        pass
+
+    @unittest.skip('Does not apply to ComplexCoverage')
+    def test_set_allparams_one_brick(self):
+        pass
+
+    @unittest.skip('Does not apply to ComplexCoverage')
+    def test_set_time_five_bricks(self):
+        pass
+
+    @unittest.skip('Does not apply to ComplexCoverage')
+    def test_set_time_five_bricks_strided(self):
+        pass
+
+    @unittest.skip('Does not apply to ComplexCoverage')
+    def test_set_time_one_brick(self):
+        pass
+
+    @unittest.skip('Does not apply to ComplexCoverage')
+    def test_set_time_one_brick_strided(self):
+        pass
+
+    ######################
+    # Additional tests specific to Complex Coverage
+    ######################
 
     def test_parametric_strict(self):
         num_times = 10
