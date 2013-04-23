@@ -1026,8 +1026,6 @@ class ComplexCoverage(AbstractCoverage):
             self._build_parametric(reference_coverages, parameter_dictionary)
         elif complex_type == ComplexCoverageType.TEMPORAL_INTERLEAVED:
             # TEMPORAL_INTERLEAVED - combine parameters from multiple coverages - may have differing time values
-            if len(reference_coverages) > 2:
-                raise NotImplementedError('Cannot support interleaving of more than 2 coverages at this time.')
             self._build_temporal_interleaved(reference_coverages, parameter_dictionary)
         elif complex_type == ComplexCoverageType.TEMPORAL_AGGREGATION:
             # TEMPORAL_AGGREGATION - combine coverages temporally
@@ -1181,8 +1179,8 @@ class ComplexCoverage(AbstractCoverage):
             else:
                 low = min(curr)
                 high = max(curr) + 1
-                rcov_domain_spans.append(Span(low, high, offset=counter[key] - low, value=s))
-                counter[key] += len(curr)
+                rcov_domain_spans.append(Span(low, high, offset=counter[s] - low, value=s))
+                counter[s] += high-low
                 curr = []
                 s = key
                 curr.append(i)
@@ -1190,7 +1188,6 @@ class ComplexCoverage(AbstractCoverage):
         # Don't forget the last one!
         low = min(curr)
         high = max(curr) + 1
-        counter[key] -= len(curr)
         rcov_domain_spans.append(Span(low, high, offset=counter[key] - low, value=s))
 
         self.rcov_domain_spans = rcov_domain_spans
