@@ -52,6 +52,10 @@ class SimplePersistenceLayer(object):
         else:
             super(SimplePersistenceLayer, self).__setattr__(key, value)
 
+    def update_parameter_bounds(self, parameter_name, bounds):
+        # No-op - would be called by parameters stored in a ComplexCoverage, which can only be ParameterFunctions
+        pass
+
     def has_dirty_values(self):
         # Never has dirty values
         return False

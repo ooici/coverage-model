@@ -1028,6 +1028,15 @@ class ComplexCoverage(AbstractCoverage):
             # Complex spatial - combine coverages across a higher-order topology
             raise NotImplementedError('Not yet implemented')
 
+    def append_parameter(self, parameter_context):
+        if not isinstance(parameter_context, ParameterContext):
+            raise TypeError('\'parameter_context\' must be an instance of ParameterContext, not {0}'.format(type(parameter_context)))
+        from coverage_model import ParameterFunctionType
+        if not isinstance(parameter_context.param_type, ParameterFunctionType):
+            raise ValueError('Parameters stored in a ComplexCoverage must be ParameterFunctionType parameters: cannot append parameter \'{0}\''.format(parameter_context.name))
+
+        super(ComplexCoverage, self).append_parameter(parameter_context)
+
     def append_reference_coverage(self, path):
         ncov = AbstractCoverage.load(path)
 
@@ -1137,8 +1146,10 @@ class ComplexCoverage(AbstractCoverage):
                         self._range_dictionary.add_context(pc)
                         # Add the sparse value class
                         from coverage_model.parameter_types import SparseConstantType
+                        ppt=self._range_dictionary.get_context(p).param_type
                         self._range_value[p] = get_value_class(
-                            SparseConstantType(value_encoding=self._range_dictionary.get_context(p).param_type.value_encoding),
+                            SparseConstantType(value_encoding=ppt.value_encoding,
+                                               fill_value=ppt.fill_value),
                             DomainSet(self.temporal_domain))
                     else:
                         log.info('Parameter \'%s\' from coverage \'%s\' already present, skipping...', p, cpth)
@@ -1222,8 +1233,10 @@ class ComplexCoverage(AbstractCoverage):
                         self._range_dictionary.add_context(pc)
                         # Add the sparse value class
                         from coverage_model.parameter_types import SparseConstantType
+                        ppt=self._range_dictionary.get_context(p).param_type
                         self._range_value[p] = get_value_class(
-                            SparseConstantType(value_encoding=self._range_dictionary.get_context(p).param_type.value_encoding),
+                            SparseConstantType(value_encoding=ppt.value_encoding,
+                                               fill_value=ppt.fill_value),
                             DomainSet(self.temporal_domain))
                     else:
                         log.info('Parameter \'%s\' from coverage \'%s\' already present, skipping...', p, cpth)
