@@ -151,7 +151,11 @@ class CoverageIntTestBase(object):
         # Get a data bounds for a specific subset of parameters
         from random import choice
         params = scov.list_parameters()
-        bnds = scov.get_data_bounds(parameter_name=[choice(params), choice(params)])
+        p1 = choice(params)
+        p2 = choice(params)
+        while p2 == p1:
+            p2 = choice(params)
+        bnds = scov.get_data_bounds(parameter_name=[p1, p2])
         for i,v in enumerate(bnds):
             self.assertTrue(np.allclose((check_vals[v].min(), check_vals[v].max()), bnds[v]))
 
