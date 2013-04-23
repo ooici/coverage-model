@@ -4,6 +4,7 @@
 @package coverage_model.test.test_coverage
 @file coverage_model/test/test_simplex_coverage.py
 @author James Case
+@author Christopher Mueller
 @brief Tests for the SimplexCoverage class.
 """
 
@@ -36,7 +37,7 @@ class TestSampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         pass
 
     @classmethod
-    def get_cov(self, only_time=False, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=True):
+    def get_cov(cls, only_time=False, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=True):
         # Instantiate a ParameterDictionary
         pname_filter = ['time',
                         'lat',
@@ -62,7 +63,7 @@ class TestSampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
             bricking_scheme = None
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-        scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory, bricking_scheme=bricking_scheme, auto_flush_values=auto_flush_values)
+        scov = SimplexCoverage(cls.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory, bricking_scheme=bricking_scheme, auto_flush_values=auto_flush_values)
 
         # Insert some timesteps (automatically expands other arrays)
         if (nt is None) or (nt == 0) or (make_empty is True):
@@ -78,12 +79,12 @@ class TestSampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
                 # make a random sample of 10 values between 23 and 26
                 # Ref: http://docs.scipy.org/doc/numpy/reference/generated/numpy.random.random_sample.html#numpy.random.random_sample
                 # --> To sample  multiply the output of random_sample by (b-a) and add a
-                tvals=np.random.random_sample(nt)*(26-23)+23
+                tvals = utils.get_random_sample(nt, 23, 26)
                 scov.set_parameter_values('temp', value=tvals)
-                scov.set_parameter_values('conductivity', value=np.random.random_sample(nt)*(110-90)+90)
+                scov.set_parameter_values('conductivity', value=utils.get_random_sample(nt, 90, 110))
 
         if in_memory and save_coverage:
-            SimplexCoverage.pickle_save(scov, os.path.join(self.working_dir, 'sample.cov'))
+            SimplexCoverage.pickle_save(scov, os.path.join(cls.working_dir, 'sample.cov'))
 
         return scov, 'TestSampleCovInt'
 
@@ -119,7 +120,8 @@ class TestOneParamCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
     def setUp(self):
         pass
 
-    def get_cov(self, only_time=False, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=True):
+    @classmethod
+    def get_cov(cls, only_time=False, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=True):
         """
         Construct coverage
         """
@@ -140,7 +142,7 @@ class TestOneParamCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
             bricking_scheme = None
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-        scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory, bricking_scheme=bricking_scheme, auto_flush_values=auto_flush_values)
+        scov = SimplexCoverage(cls.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory, bricking_scheme=bricking_scheme, auto_flush_values=auto_flush_values)
 
         # Insert some timesteps (automatically expands other arrays)
         if (nt is None) or (nt == 0) or (make_empty is True):
@@ -152,7 +154,7 @@ class TestOneParamCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
             scov.set_parameter_values('time', value=np.arange(nt))
 
         if in_memory and save_coverage:
-            SimplexCoverage.pickle_save(scov, os.path.join(self.working_dir, 'sample.cov'))
+            SimplexCoverage.pickle_save(scov, os.path.join(cls.working_dir, 'sample.cov'))
 
         return scov, 'TestOneParamCovInt'
 
@@ -196,7 +198,8 @@ class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
     def setUp(self):
         pass
 
-    def get_cov(self, only_time=False, param_filter=None, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=True):
+    @classmethod
+    def get_cov(cls, only_time=False, param_filter=None, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=True):
         # Instantiate a ParameterDictionary
         pname_filter = ['time',
                             'lat',
@@ -221,10 +224,10 @@ class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
             bricking_scheme = None
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-        scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory, bricking_scheme=bricking_scheme, auto_flush_values=auto_flush_values)
+        scov = SimplexCoverage(cls.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory, bricking_scheme=bricking_scheme, auto_flush_values=auto_flush_values)
 
         if in_memory and save_coverage:
-            SimplexCoverage.pickle_save(scov, os.path.join(self.working_dir, 'sample.cov'))
+            SimplexCoverage.pickle_save(scov, os.path.join(cls.working_dir, 'sample.cov'))
 
         return scov, 'TestEmptySampleCovInt'
 
@@ -286,7 +289,8 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
     def setUp(self):
         pass
 
-    def get_cov(self, only_time=False, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=True):
+    @classmethod
+    def get_cov(cls, only_time=False, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=True):
         """
         Construct coverage
         """
@@ -323,7 +327,7 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
             bricking_scheme = None
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-        scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory, bricking_scheme=bricking_scheme, auto_flush_values=auto_flush_values)
+        scov = SimplexCoverage(cls.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory, bricking_scheme=bricking_scheme, auto_flush_values=auto_flush_values)
 
         # Insert some timesteps (automatically expands other arrays)
         if (nt is None) or (nt == 0) or (make_empty is True):
@@ -363,7 +367,7 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
                 scov.set_parameter_values('fixed_str', value=fstrval)
 
         if in_memory and save_coverage:
-            SimplexCoverage.pickle_save(scov, os.path.join(self.working_dir, 'sample.cov'))
+            SimplexCoverage.pickle_save(scov, os.path.join(cls.working_dir, 'sample.cov'))
 
         return scov, 'TestPtypesCovInt'
 
