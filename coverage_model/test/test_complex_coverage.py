@@ -570,7 +570,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
     def test_temporal_interleaved_all_param_types(self):
         size = 10
-        covs, cov_data = self._setup_allparams(size=size, sequential_covs=False)
+        covs, cov_data = self._setup_allparams(size=size, num_covs=5, sequential_covs=False)
 
         comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
                                    reference_coverage_locs=covs,
