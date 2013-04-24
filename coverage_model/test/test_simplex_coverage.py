@@ -234,17 +234,91 @@ class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
     def _insert_set_get(self, scov=None, timesteps=None, data=None, _slice=None, param='all'):
         return True
 
-    @unittest.skip('Does not apply to empty coverage.')
-    def test_refresh(self):
-        pass
+    def test_get_by_slice(self):
+        cov = self.get_cov()[0]
 
-    @unittest.skip('Does not apply to empty coverage.')
+        expected = np.empty(0, dtype=cov.get_parameter_context('time').param_type.value_encoding)
+
+        slices = [slice(None), slice(0, None), slice(None, 10), slice(2, 8), slice(3, 19, 8)]
+
+        for s in slices:
+            ret = cov.get_parameter_values('time', s)
+            self.assertTrue(np.array_equal(ret, expected))
+
+    def test_get_by_int(self):
+        cov = self.get_cov()[0]
+
+        expected = np.empty(0, dtype=cov.get_parameter_context('time').param_type.value_encoding)
+
+        ints = [0, 2, 5, 109]
+
+        for i in ints:
+            ret = cov.get_parameter_values('time', i)
+            self.assertTrue(np.array_equal(ret, expected))
+
+    def test_get_by_list(self):
+        cov = self.get_cov()[0]
+
+        expected = np.empty(0, dtype=cov.get_parameter_context('time').param_type.value_encoding)
+
+        lists = [[[1,2,3]], [[3,5,19]]]
+
+        for l in lists:
+            ret = cov.get_parameter_values('time', l)
+            self.assertTrue(np.array_equal(ret, expected))
+
+    def test_slice_raises_index_error_out_out(self):
+        # Tests that an array defined totally outside the coverage data bounds raises an error when attempting retrieval
+        brick_size = 1000
+        time_steps = 5000
+        scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
+        _slice = slice(5010, 5020, None)
+        self.assertTrue(np.array_equal(
+            scov.get_parameter_values('time', _slice),
+            np.empty(0, dtype=scov.get_parameter_context('time').param_type.value_encoding)))
+
+    def test_int_raises_index_error(self):
+        # Tests that an integer defined outside the coverage data bounds raises an error when attempting retrieval
+        brick_size = 1000
+        time_steps = 5000
+        scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
+        self.assertTrue(np.array_equal(
+            scov.get_parameter_values('time', 9000),
+            np.empty(0, dtype=scov.get_parameter_context('time').param_type.value_encoding)))
+
+    def test_array_raises_index_error(self):
+        # Tests that an array defined outside the coverage data bounds raises an error when attempting retrieval
+        brick_size = 1000
+        time_steps = 5000
+        scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
+        self.assertTrue(np.array_equal(
+            scov.get_parameter_values('time', [[5,9000]]),
+            np.empty(0, dtype=scov.get_parameter_context('time').param_type.value_encoding)))
+
+    # @unittest.skip('Does not apply to empty coverage.')
+    # def test_refresh(self):
+    #     pass
+
     def test_get_time_data_metrics(self):
-        pass
+        cov = self.get_cov(only_time=True)[0]
 
-    @unittest.skip('Does not apply to empty coverage.')
+        with self.assertRaises(ValueError):
+            cov.get_data_bounds('time')
+
+        with self.assertRaises(ValueError):
+            cov.get_data_bounds_by_axis(axis=AxisTypeEnum.TIME)
+
+        self.assertEqual(cov.get_data_extents('time'), (0,))
+        self.assertEqual(cov.get_data_extents_by_axis(AxisTypeEnum.TIME), (0,))
+
     def test_get_all_data_metrics(self):
-        pass
+        cov = self.get_cov()[0]
+
+        with self.assertRaises(ValueError):
+            cov.get_data_bounds()
+
+        self.assertEqual(cov.get_data_extents(),
+                         {'conductivity': (0,), 'lat': (0,), 'lon': (0,), 'temp': (0,), 'time': (0,)})
 
     @unittest.skip('Does not apply to empty coverage.')
     def test_get_data_after_load(self):
@@ -252,18 +326,6 @@ class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
     @unittest.skip('Does not apply to empty coverage.')
     def test_append_parameter(self):
-        pass
-
-    @unittest.skip('Does not apply to empty coverage.')
-    def test_get_by_slice(self):
-        pass
-
-    @unittest.skip('Does not apply to empty coverage.')
-    def test_get_by_int(self):
-        pass
-
-    @unittest.skip('Does not apply to empty coverage.')
-    def test_get_by_list(self):
         pass
 
     @unittest.skip('Does not apply to empty coverage.')

@@ -551,7 +551,6 @@ class CoverageIntTestBase(object):
         with self.assertRaises(IndexError):
             scov.get_parameter_values('time', [[5,9000]])
 
-    @get_props()
     def test_get_by_slice(self):
         # Tests retrieving data across multiple bricks for a variety of slices
         results = []
