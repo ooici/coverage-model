@@ -633,6 +633,9 @@ class PersistedStorage(AbstractStorage):
         from coverage_model import bricking_utils, utils
 
         extents = tuple([s for s in self.total_domain.total_extents if s != 0])
+        if extents == ():  # Empty domain(s) - no data, return empty array
+            return np.empty(0, dtype=self.dtype)
+
         # bricks is a list of tuples [(b_ord, b_guid), ...]
         slice_ = utils.fix_slice(deepcopy(slice_), extents)
         log.trace('slice_=%s', slice_)

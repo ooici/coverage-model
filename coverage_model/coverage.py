@@ -367,6 +367,10 @@ class AbstractCoverage(AbstractIdentifiable):
             log.debug('Spatial doa: %s', sdoa.slices)
             slice_.extend(sdoa.slices)
 
+        # If this coverage is empty - return an empty array
+        if np.atleast_1d(np.atleast_1d(total_shape) == 0).all():
+            return np.empty(0, dtype=self._range_value[param_name].value_encoding)
+
         slice_ = utils.fix_slice(slice_, total_shape)
         log.debug('Getting slice: %s', slice_)
 
