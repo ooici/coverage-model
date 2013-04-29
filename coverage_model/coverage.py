@@ -869,6 +869,18 @@ class ViewCoverage(AbstractCoverage):
             self._closed = True
             raise
 
+    def close(self, force=False, timeout=None):
+        if not hasattr(self, '_closed'):
+            # _closed is the first attribute added to the coverage object (in AbstractCoverage)
+            # If it's not there, a TypeError has likely occurred while instantiating the coverage
+            # nothing else exists and we can just return
+            return
+        if not self._closed:
+            log.info('Closing reference coverage \'%s\'', self.reference_coverage.name if hasattr(self.reference_coverage,'name') else 'unnamed')
+            self.reference_coverage.close(force, timeout)
+
+        super(ViewCoverage, self).close(force, timeout)
+
     def replace_reference_coverage(self, path, use_current_param_dict=True, parameter_dictionary=None):
         if self.mode == 'r':
             raise IOError('Coverage not open for writing: mode == \'{0}\''.format(self.mode))
@@ -1038,6 +1050,19 @@ class ComplexCoverage(AbstractCoverage):
             # Complex spatial - combine coverages across a higher-order topology
             raise NotImplementedError('Not yet implemented')
 
+    def close(self, force=False, timeout=None):
+        if not hasattr(self, '_closed'):
+            # _closed is the first attribute added to the coverage object (in AbstractCoverage)
+            # If it's not there, a TypeError has likely occurred while instantiating the coverage
+            # nothing else exists and we can just return
+            return
+        if not self._closed:
+            for cov_pth, cov in self._reference_covs.iteritems():
+                log.info('Closing reference coverage \'%s\'', cov.name if hasattr(cov,'name') else 'unnamed')
+                cov.close(force, timeout)
+
+        super(ComplexCoverage, self).close(force, timeout)
+
     def append_parameter(self, parameter_context):
         if not isinstance(parameter_context, ParameterContext):
             raise TypeError('\'parameter_context\' must be an instance of ParameterContext, not {0}'.format(type(parameter_context)))
@@ -1049,6 +1074,7 @@ class ComplexCoverage(AbstractCoverage):
 
     def append_reference_coverage(self, path):
         ncov = AbstractCoverage.load(path)
+        ncov.close()
 
         # Loading the coverage worked - proceed...
         # Get the current set of reference coverages
