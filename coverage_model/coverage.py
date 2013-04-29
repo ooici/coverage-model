@@ -950,6 +950,9 @@ class ComplexCoverageType(BaseEnum):
     # Complex coverage that aggregates coverages along their temporal axis
     TEMPORAL_AGGREGATION = 'TEMPORAL_AGGREGATION'
 
+    # Complex coverage that broadcasts other coverages onto the temporal axis of the "primary" covreage
+    TEMPORAL_BROADCAST = 'TEMPORAL_BROADCAST'
+
     # Placeholder for spatial complex - not sure what this will look like yet...
     SPATIAL_JOIN = 'SPATIAL_JOIN'
 
@@ -1048,6 +1051,9 @@ class ComplexCoverage(AbstractCoverage):
         elif complex_type == ComplexCoverageType.TEMPORAL_AGGREGATION:
             # TEMPORAL_AGGREGATION - combine coverages temporally
             self._build_temporal_aggregation(reference_coverages, parameter_dictionary)
+        elif complex_type == ComplexCoverageType.TEMPORAL_BROADCAST:
+            # TEMPORAL_BROADCAST - combine coverages temporally, broadcasting non-primary coverages
+            self._build_temporal_broadcast(reference_coverages, parameter_dictionary)
         elif complex_type == ComplexCoverageType.SPATIAL_JOIN:
             # Complex spatial - combine coverages across a higher-order topology
             raise NotImplementedError('Not yet implemented')
@@ -1153,6 +1159,97 @@ class ComplexCoverage(AbstractCoverage):
         # Add the parameters for this coverage
         for pc in parameter_dictionary.itervalues():
             self.append_parameter(pc[1])
+
+        self._head_coverage_path = None
+
+    def _build_temporal_broadcast(self, rcovs, parameter_dictionary):
+        primary_times = None
+        for cpth, cov in self._verify_rcovs(rcovs):
+            if primary_times is None:
+                # The primary coverage provides the temporal (and spatial) topology & geometry
+                primary_times = cov.get_time_values()
+                self.temporal_domain = cov.temporal_domain
+                self.spatial_domain = cov.spatial_domain
+                self._reference_covs[cpth] = cov
+
+                # Add the parameters from this coverage
+                for p in cov.list_parameters():
+                    if p not in parameter_dictionary:
+                        # Add the context from the reference coverage
+                        self._range_dictionary.add_context(cov._range_dictionary.get_context(p))
+                        # Add teh value class from the reference coverage
+                        self._range_value[p] = cov._range_value[p]
+
+                # Add the parameters for this coverage
+                for pc in parameter_dictionary.itervalues():
+                    self.append_parameter(pc[1])
+
+            else:
+                # Add parameters from this coverage that are not already present
+                covpd = cov.parameter_dictionary  # Provides a copy
+                params = []
+                for p, pc in covpd.iteritems():
+                    if p not in self._range_dictionary:
+                        pc = pc[1]
+                        self._assign_domain(pc)
+                        self._range_dictionary.add_context(pc)
+                        # Add the sparse value class
+                        from coverage_model.parameter_types import SparseConstantType
+                        ppt = self._range_dictionary.get_context(p).param_type
+                        self._range_value[p] = get_value_class(
+                            SparseConstantType(value_encoding=ppt.value_encoding,
+                                               fill_value=ppt.fill_value),
+                            DomainSet(self.temporal_domain))
+                        params.append(p)
+                    else:
+                        log.info('Parameter \'%s\' from coverage \'%s\' already present, skipping...', p, cpth)
+
+                # Sort out the spans
+                spns = {p: [] for p in params}
+
+                def _add_span(start, end, t=None):
+                    for p in params:
+                        if t is not None:
+                            v = cov._range_value[p][t]
+                        else:
+                            v = cov._range_value[p].fill_value
+
+                        spns[p].append(Span(start, end, value=v))
+
+                cov_times = cov.get_time_values()
+                end = None
+                lend = None
+                for t in xrange(len(cov_times) - 1):
+                    if cov_times[t] > primary_times[-1]:  # We've gone past the end of the primary cov, bail
+                        break
+
+                    start = utils.find_nearest_index(primary_times, cov_times[t])
+                    end = utils.find_nearest_index(primary_times, cov_times[t + 1])
+                    if end == start:
+                        end += 1
+
+                    if start != 0 and t == 0:
+                        _add_span(0, start)
+                    elif lend is not None and start != lend:
+                        _add_span(lend, start)
+
+                    _add_span(start, end, t)
+                    lend = end
+
+                if cov_times[-1] > primary_times[-1]:
+                    for p in params:
+                        spns[p][-1].upper_bound = len(primary_times)
+                else:
+                    start = end if end is not None else utils.find_nearest_index(primary_times, cov_times[-1])
+                    end = len(primary_times)
+                    _add_span(start, end, -1)
+
+                for p, s in spns.iteritems():
+                    # Set the spans against the SparseConstantValue manually
+                    self._range_value[p]._storage[0] = s
+                    # Direct assignment of the spans bypasses min/max updating, perform manually
+                    for sp in s:
+                        self._range_value[p]._update_min_max(sp.value)
 
         self._head_coverage_path = None
 
