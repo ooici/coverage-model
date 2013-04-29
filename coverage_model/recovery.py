@@ -264,7 +264,10 @@ class CoverageDoctor(object):
         master_pth = os.path.join(self.cov_pth, self._guid + '_master.hdf5')
 
         st = StatusEnum.CORRUPT if hdf_utils.has_corruption(master_pth) else StatusEnum.NORMAL
-        sz=hdf_utils.space_ratio(master_pth)
+        if st == StatusEnum.CORRUPT:
+                sz = 0
+        else:
+            sz=hdf_utils.space_ratio(master_pth)
         ar.set_master_status(master_pth, st, sz)
 
         for p in os.walk(self._inner_dir).next()[1]:
