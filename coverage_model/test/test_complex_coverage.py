@@ -585,6 +585,53 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
         self.assertTrue(np.allclose(comp_cov.get_time_values(), time_interleave[sort_i]))
 
+    def test_temporal_broadcast(self):
+        first_num_times = 14
+        first_time_data= np.arange(first_num_times, dtype='int64')
+        first_data = utils.get_random_sample(first_num_times, 10, 20)
+        first_common_data = utils.get_random_sample(first_num_times, 20, 40)
+
+        second_num_times = 4
+        second_time_data = np.array([0, 4, 11, 12], dtype='int64')
+        second_data = utils.get_random_sample(second_num_times, 40, 50)
+        second_common_data = utils.get_random_sample(second_num_times, 20, 40)
+
+        third_num_times = 5
+        third_time_data = np.array([3, 6, 8, 15, 19], dtype='int64')
+        third_data = utils.get_random_sample(third_num_times, 70, 80)
+        third_common_data = utils.get_random_sample(third_num_times, 20, 40)
+
+
+        cova_pth = _make_cov(self.working_dir, ['A', 'Common'], data_dict={'A': first_data, 'Common': first_common_data, 'time': first_time_data}, nt=first_num_times)
+        covb_pth = _make_cov(self.working_dir, ['B', 'Common'], data_dict={'B': second_data, 'Common': second_common_data, 'time': second_time_data}, nt=second_num_times)
+        covc_pth = _make_cov(self.working_dir, ['C', 'Common'], data_dict={'C': third_data, 'Common': third_common_data, 'time': third_time_data}, nt=third_num_times)
+
+        cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal broadcast coverage',
+                                   reference_coverage_locs=[cova_pth, covb_pth, covc_pth],
+                                   complex_type=ComplexCoverageType.TEMPORAL_BROADCAST)
+
+        a_data = first_data
+        b_data = np.empty(first_num_times, dtype='float32')
+        b_data[:4] = second_data[0]
+        b_data[4:11] = second_data[1]
+        b_data[11:12] = second_data[2]
+        b_data[12:] = second_data[3]
+
+        c_data = np.empty(first_num_times, dtype='float32')
+        c_data[0:3] = cov.get_parameter_context('B').param_type.fill_value
+        c_data[3:6] = third_data[0]
+        c_data[6:8] = third_data[1]
+        c_data[8:] = third_data[2]
+
+        self.assertTrue(np.allclose(cov.get_parameter_values('A'), a_data))
+        self.assertTrue(np.allclose(cov.get_parameter_values('B'), b_data))
+        self.assertTrue(np.allclose(cov.get_parameter_values('C'), c_data))
+
+        bnds = cov.get_data_bounds()
+        self.assertEqual(bnds['A'], (a_data.min(), a_data.max()))
+        self.assertEqual(bnds['B'], (b_data.min(), b_data.max()))
+        self.assertEqual(bnds['C'], (c_data[3:].min(), c_data.max()))
+
     def test_append_reference_coverage(self):
         size = 100000
         first_times = np.arange(0, size, dtype='float32')
@@ -633,17 +680,18 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         covb_pth = _make_cov(self.working_dir, ['data_all', 'data_b'], nt=size,
                              data_dict={'time': second_times, 'data_all': second_data, 'data_b': second_data})
 
-        # Ensure the correct path is returned from ComplexCoverage.head_coverage_path in CC --> SC & SC scenario
         comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
                                    reference_coverage_locs=[cova_pth, covb_pth],
                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
+
+        vcov = ViewCoverage(self.working_dir, create_guid(), 'test', covb_pth)
+        comp_cov2 = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+                                   reference_coverage_locs=[cova_pth, vcov.persistence_dir],
+                                   complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
+
+        # Ensure the correct path is returned from ComplexCoverage.head_coverage_path in CC --> SC & SC scenario
         self.assertEqual(comp_cov.head_coverage_path, covb_pth)
 
         # Ensure the correct path is returned from ComplexCoverage.head_coverage_path in CC --> SC & VC scenario
-        vcov = ViewCoverage(self.working_dir, create_guid(), 'test', covb_pth)
-        comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
-                                   reference_coverage_locs=[cova_pth, vcov.persistence_dir],
-                                   complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
-        self.assertEqual(comp_cov.head_coverage_path, covb_pth)
-        self.assertEqual(comp_cov.head_coverage_path, vcov.head_coverage_path)
-
+        self.assertEqual(comp_cov2.head_coverage_path, covb_pth)
+        self.assertEqual(comp_cov2.head_coverage_path, vcov.head_coverage_path)
