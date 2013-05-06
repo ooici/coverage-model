@@ -787,11 +787,14 @@ class ArrayType(AbstractComplexParameterType):
     """
     Homogeneous set of unnamed things (array)
     """
-    def __init__(self, **kwargs):
+    def __init__(self, inner_encoding=None, **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterType; see documentation for that class for details
         """
         kwc=kwargs.copy()
         AbstractComplexParameterType.__init__(self, value_class='ArrayValue', **kwc)
+
+        self.inner_encoding = inner_encoding
+
         self._gen_template_attrs()

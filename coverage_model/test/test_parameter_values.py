@@ -61,7 +61,7 @@ class TestParameterValuesUnit(CoverageModelUnitTestCase):
         for x in xrange(num_rec):
             aval[x] = np.random.bytes(np.random.randint(1,20)) # One value (which is a byte string) for each member of the domain
 
-        self.assertIsInstance(aval[0], basestring)
+        self.assertIsInstance(aval[0][0], basestring)
         self.assertTrue(1 <= len(aval[0]) <= 20)
 
         vals = [[1, 2, 3]] * num_rec
@@ -70,13 +70,13 @@ class TestParameterValuesUnit(CoverageModelUnitTestCase):
 
         aval[:] = vals
         self.assertTrue(np.array_equal(aval[:], val_arr))
-        self.assertIsInstance(aval[0], list)
-        self.assertEqual(aval[0], [1, 2, 3])
+        self.assertIsInstance(aval[0][0], list)
+        self.assertEqual(aval[0][0], [1, 2, 3])
 
         aval[:] = val_arr
         self.assertTrue(np.array_equal(aval[:], val_arr))
-        self.assertIsInstance(aval[0], list)
-        self.assertEqual(aval[0], [1, 2, 3])
+        self.assertIsInstance(aval[0][0], list)
+        self.assertEqual(aval[0][0], [1, 2, 3])
 
 
     # RecordType
@@ -329,8 +329,12 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         self.assertTrue(np.array_equal(cov.get_parameter_values(pname), val_cls[:]))
         self.assertTrue(np.array_equal(cov.get_parameter_values(pname, slice(-1, None)), val_cls[-1:]))
         self.assertTrue(np.array_equal(cov.get_parameter_values(pname, slice(None, None, 3)), val_cls[::3]))
-        self.assertEqual(cov.get_parameter_values(pname, 0), val_cls[0])
-        self.assertEqual(cov.get_parameter_values(pname, -1), val_cls[-1])
+        if isinstance(val_cls.parameter_type, ArrayType):
+            self.assertTrue(np.array_equal(cov.get_parameter_values(pname, 0), val_cls[0]))
+            self.assertTrue(np.array_equal(cov.get_parameter_values(pname, -1), val_cls[-1]))
+        else:
+            self.assertEqual(cov.get_parameter_values(pname, 0), val_cls[0])
+            self.assertEqual(cov.get_parameter_values(pname, -1), val_cls[-1])
 
     ## Must use a specialized set of assertions because np.array_equal doesn't work on arrays of type Sn!!
     def _interop_assertions_str(self, cov, pname, val_cls, assn_vals=None):
@@ -605,12 +609,16 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
     def test_array_value_interop(self):
         # Setup the type
         arr_type = ArrayType()
+        arr_type_ie = ArrayType(inner_encoding='float32')
 
         # Setup the values
         ntimes = 20
         vals = [[1, 2, 3]] * ntimes
+        vals_ie = [[1.2,2.3,3.4]] * ntimes
         vals_arr = np.empty(ntimes, dtype=object)
+        vals_arr_ie = np.empty(ntimes, dtype=object)
         vals_arr[:] = vals
+        vals_arr_ie[:] = vals_ie
         svals = []
         for x in xrange(ntimes):
             svals.append(np.random.bytes(np.random.randint(1,20))) # One value (which is a byte string) for each member of the domain
@@ -620,17 +628,20 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         # Setup the in-memory value
         dom = SimpleDomainSet((ntimes,))
         arr_val = get_value_class(arr_type, dom)
+        arr_val_ie = get_value_class(arr_type_ie, dom)
 
         # Setup the coverage
-        cov = self._setup_cov(ntimes, ['array'], [arr_type])
+        cov = self._setup_cov(ntimes, ['array', 'array_ie'], [arr_type, arr_type_ie])
 
         # Perform the assertions
 
         # Nested List Assignment
         self._interop_assertions(cov, 'array', arr_val, vals)
+        self._interop_assertions(cov, 'array_ie', arr_val_ie, vals_ie)
 
         # Array Assignment
         self._interop_assertions(cov, 'array', arr_val, vals_arr)
+        self._interop_assertions(cov, 'array_ie', arr_val_ie, vals_arr_ie)
 
         # String Assignment via list
         self._interop_assertions(cov, 'array', arr_val, svals)

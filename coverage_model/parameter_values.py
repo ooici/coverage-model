@@ -682,7 +682,21 @@ class ArrayValue(AbstractComplexParameterValue):
     def __getitem__(self, slice_):
         slice_ = utils.fix_slice(slice_, self.shape)
 
-        ret = _cleanse_value(self._storage[slice_], slice_)
+        if isinstance(slice_[0], int):
+            slice_ = (slice(slice_[0], slice_[0] + 1),) + slice_[1:]
+
+        vals = np.atleast_1d(self._storage[slice_])
+
+        ie = self.parameter_type.inner_encoding
+        if ie is not None and np.dtype(ie).kind not in ['O', 'S']:
+            mx = max([len(a) for a in vals])
+            r = np.empty((vals.shape[0], mx), dtype=ie)
+            r.fill(-999)
+            for i, v in enumerate(vals):
+                r[i,:len(v)] = v
+            vals = r
+
+        ret = _cleanse_value(vals, slice_)
 
         return ret
 
@@ -700,6 +714,9 @@ class ArrayValue(AbstractComplexParameterValue):
                     v[i] = iv
 
             value = v
+
+        if isinstance(slice_[0], int):
+            slice_ = (slice(slice_[0], slice_[0] + 1),) + slice_[1:]
 
         self._storage[slice_] = value[:]
 
