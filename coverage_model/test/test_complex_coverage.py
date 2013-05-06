@@ -686,12 +686,19 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
         vcov = ViewCoverage(self.working_dir, create_guid(), 'test', covb_pth)
         comp_cov2 = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
-                                   reference_coverage_locs=[cova_pth, vcov.persistence_dir],
-                                   complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
+                                    reference_coverage_locs=[cova_pth, vcov.persistence_dir],
+                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 
-        # Ensure the correct path is returned from ComplexCoverage.head_coverage_path in CC --> SC & SC scenario
+        comp_cov3 = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal broadcast coverage',
+                                     reference_coverage_locs=[comp_cov2.persistence_dir, cova_pth],
+                                     complex_type=ComplexCoverageType.TEMPORAL_BROADCAST)
+
+        # Ensure the correct path is returned from ComplexCoverage.head_coverage_path in CC --> [SC & SC] scenario
         self.assertEqual(comp_cov.head_coverage_path, covb_pth)
 
-        # Ensure the correct path is returned from ComplexCoverage.head_coverage_path in CC --> SC & VC scenario
+        # Ensure the correct path is returned from ComplexCoverage.head_coverage_path in CC --> [SC & VC] scenario
         self.assertEqual(comp_cov2.head_coverage_path, covb_pth)
         self.assertEqual(comp_cov2.head_coverage_path, vcov.head_coverage_path)
+
+        # Ensure the correct path is returned from ComplexCoverage.head_coverage_path in CC --> [SC & CC --> [VC & SC]] scenario
+        self.assertEqual(comp_cov3.head_coverage_path, covb_pth)

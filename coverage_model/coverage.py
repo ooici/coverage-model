@@ -1184,6 +1184,7 @@ class ComplexCoverage(AbstractCoverage):
                 for pc in parameter_dictionary.itervalues():
                     self.append_parameter(pc[1])
 
+                self._head_coverage_path = self._reference_covs[cpth].head_coverage_path
             else:
                 # Add parameters from this coverage that are not already present
                 covpd = cov.parameter_dictionary  # Provides a copy
@@ -1250,8 +1251,6 @@ class ComplexCoverage(AbstractCoverage):
                     # Direct assignment of the spans bypasses min/max updating, perform manually
                     for sp in s:
                         self._range_value[p]._update_min_max(sp.value)
-
-        self._head_coverage_path = None
 
     def _build_temporal_interleaved(self, rcovs, parameter_dictionary):
 
