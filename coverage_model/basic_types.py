@@ -51,17 +51,17 @@ class Dictable(object):
         exclude = exclude if exclude is not None else []
 
         def walk(obj):
+            if isinstance(obj, np.dtype):
+                return {'__np__': obj.str}
             if hasattr(obj, '_todict'):
                 return obj._todict()
-            elif isinstance(obj, dict):
+            if isinstance(obj, dict):
                 return {k: walk(v) for k, v in obj.iteritems()}
-            elif isinstance(obj, (list, tuple)):
-                r=[]
-                for x in obj:
-                    r.append(walk(x))
+            if isinstance(obj, (list, tuple)):
+                r = map(walk, obj)
                 return r if isinstance(obj, list) else tuple(r)
-            else:
-                return obj
+
+            return obj
 
 #        ret = dict((k,v._todict() if hasattr(v, '_todict') else v) for k, v in self.__dict__.iteritems() if k not in exclude)
         ret = {}
@@ -105,7 +105,7 @@ class Dictable(object):
             if spec.defaults: # if None, all are required
                 for i in spec.defaults:
                     args.remove(args[-1])
-            kwa={}
+            kwa = {}
 
             def walk(obj):
                 if isinstance(obj, dict):
@@ -114,15 +114,14 @@ class Dictable(object):
                         module = __import__(ms, fromlist=[cs])
                         classobj = getattr(module, cs)
                         return classobj._fromdict(obj)
-                    else:
-                        return {k: walk(v) for k, v in obj.iteritems()}
-                elif isinstance(obj, (list, tuple)):
-                    r=[]
-                    for vi in obj:
-                        r.append(walk(vi))
+                    if '__np__' in obj and len(obj) == 1:
+                        return np.dtype(obj['__np__'])
+                    return {k: walk(v) for k, v in obj.iteritems()}
+                if isinstance(obj, (list, tuple)):
+                    r = map(walk, obj)
                     return r if isinstance(obj, list) else tuple(r)
-                else:
-                    return obj
+
+                return obj
 
             for a in args:
                 # Apply any argument masking
