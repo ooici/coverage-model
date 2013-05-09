@@ -88,7 +88,7 @@ class AbstractParameterType(AbstractIdentifiable):
                     if dtk == 'i':
                         self._fill_value = np.iinfo(dt).max
                     elif dtk == 'f':
-                        self._fill_value = np.finfo(dt).max
+                        self._fill_value = np.asscalar(np.finfo(dt).max)
 
         else:
             self._fill_value = value
