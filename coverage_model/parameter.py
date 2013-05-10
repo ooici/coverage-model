@@ -267,6 +267,9 @@ class ParameterDictionary(AbstractIdentifiable):
         if not isinstance(param_ctxt, ParameterContext):
             raise TypeError('param_ctxt must be a ParameterContext object')
 
+        if param_ctxt.name in self._map:
+            raise ValueError('The dictionary already contains a parameter named \'%s\'', param_ctxt.name)
+
         # CBM TODO: Fix this logic - never reaches "param_ctxt.axis = None",
         # that line and "if claims_time:" should replace the "raise NameError" which should be turned into a warning
         claims_time = param_ctxt.axis == AxisTypeEnum.TIME
