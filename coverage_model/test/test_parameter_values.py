@@ -61,7 +61,7 @@ class TestParameterValuesUnit(CoverageModelUnitTestCase):
         for x in xrange(num_rec):
             aval[x] = np.random.bytes(np.random.randint(1,20)) # One value (which is a byte string) for each member of the domain
 
-        self.assertIsInstance(aval[0][0], basestring)
+        self.assertIsInstance(aval[0], basestring)
         self.assertTrue(1 <= len(aval[0]) <= 20)
 
         vals = [[1, 2, 3]] * num_rec
@@ -70,13 +70,13 @@ class TestParameterValuesUnit(CoverageModelUnitTestCase):
 
         aval[:] = vals
         self.assertTrue(np.array_equal(aval[:], val_arr))
-        self.assertIsInstance(aval[0][0], list)
-        self.assertEqual(aval[0][0], [1, 2, 3])
+        self.assertIsInstance(aval[0], list)
+        self.assertEqual(aval[0], [1, 2, 3])
 
         aval[:] = val_arr
         self.assertTrue(np.array_equal(aval[:], val_arr))
-        self.assertIsInstance(aval[0][0], list)
-        self.assertEqual(aval[0][0], [1, 2, 3])
+        self.assertIsInstance(aval[0], list)
+        self.assertEqual(aval[0], [1, 2, 3])
 
 
     # RecordType
@@ -644,10 +644,10 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         self._interop_assertions(cov, 'array_ie', arr_val_ie, vals_arr_ie)
 
         # String Assignment via list
-        self._interop_assertions(cov, 'array', arr_val, svals)
+        self._interop_assertions_str(cov, 'array', arr_val, svals)
 
         # String Assignment via array
-        self._interop_assertions(cov, 'array', arr_val, svals_arr)
+        self._interop_assertions_str(cov, 'array', arr_val, svals_arr)
 
     def test_category_value_interop(self):
         # Setup the type
@@ -673,16 +673,16 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         # Perform the assertions
 
         # Assign with a list of keys
-        self._interop_assertions(cov, 'category', cat_val, key_vals)
+        self._interop_assertions_str(cov, 'category', cat_val, key_vals)
 
         # Assign with a list of categories
-        self._interop_assertions(cov, 'category', cat_val, cat_vals)
+        self._interop_assertions_str(cov, 'category', cat_val, cat_vals)
 
         # Assign with an array of keys
-        self._interop_assertions(cov, 'category', cat_val, key_vals_arr)
+        self._interop_assertions_str(cov, 'category', cat_val, key_vals_arr)
 
         # Assign with an array of categories
-        self._interop_assertions(cov, 'category', cat_val, cat_vals_arr)
+        self._interop_assertions_str(cov, 'category', cat_val, cat_vals_arr)
 
     def test_sparse_constant_value_interop(self):
         # Setup the type
