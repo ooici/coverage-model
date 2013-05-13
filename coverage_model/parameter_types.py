@@ -36,6 +36,55 @@ if platform.uname()[-2] != 'armv7l':
 # Abstract Parameter Type Objects
 #==================
 
+
+def verify_encoding(value_encoding):
+    if value_encoding is None:
+        value_encoding = np.dtype('float32').str
+    else:
+        try:
+            dt = np.dtype(value_encoding)
+            if dt.isbuiltin not in (0,1):
+                raise TypeError('\'value_encoding\' must be a valid numpy dtype: {0}'.format(value_encoding))
+            if dt in UNSUPPORTED_DTYPES:
+                raise TypeError('\'value_encoding\' {0} is not supported by H5py: UNSUPPORTED types ==> {1}'.format(value_encoding, UNSUPPORTED_DTYPES))
+
+            value_encoding = dt.str
+
+        except TypeError:
+            raise
+
+    return value_encoding
+
+
+def verify_fill_value(value_encoding, value, is_object_type):
+    if value_encoding is not None:
+        dt = np.dtype(value_encoding)
+        dtk = dt.kind
+        if dtk == 'O' or is_object_type: # object & CategoryRangeType must be None for now...
+            return None
+
+        elif dtk == 'u': # Unsigned integer's must be positive
+            if value is not None:
+                return abs(value)
+            else:
+                return np.iinfo(dt).max
+
+        elif dtk == 'S': # must be a string value
+            return str(value)
+
+        else:
+            if value is not None:
+                return value
+            else:
+                if dtk == 'i':
+                    return np.iinfo(dt).max
+                elif dtk == 'f':
+                    return np.asscalar(np.finfo(dt).max)
+
+    else:
+        return value
+
+
 class AbstractParameterType(AbstractIdentifiable):
     """
     Base class for parameter typing
@@ -66,32 +115,7 @@ class AbstractParameterType(AbstractIdentifiable):
 
     @fill_value.setter
     def fill_value(self, value):
-        if hasattr(self, 'value_encoding'):
-            dt = np.dtype(self.value_encoding)
-            dtk = dt.kind
-            if dtk == 'O' or isinstance(self, ConstantRangeType): # object & CategoryRangeType must be None for now...
-                self._fill_value = None
-
-            elif dtk == 'u': # Unsigned integer's must be positive
-                if value is not None:
-                    self._fill_value = abs(value)
-                else:
-                    self._fill_value = np.iinfo(dt).max
-
-            elif dtk == 'S': # must be a string value
-                self._fill_value = str(value)
-
-            else:
-                if value is not None:
-                    self._fill_value = value
-                else:
-                    if dtk == 'i':
-                        self._fill_value = np.iinfo(dt).max
-                    elif dtk == 'f':
-                        self._fill_value = np.asscalar(np.finfo(dt).max)
-
-        else:
-            self._fill_value = value
+        self._fill_value = verify_fill_value(self.value_encoding, value, isinstance(self, ConstantRangeType))
 
     @property
     def value_encoding(self):
@@ -469,6 +493,8 @@ class TextType(AbstractSimplexParameterType):
         kwc=kwargs.copy()
         AbstractSimplexParameterType.__init__(self, **kwc)
 
+        self._value_encoding = str
+
         self._template_attrs['fill_value'] = ''
 
         self._gen_template_attrs()
@@ -614,8 +640,8 @@ class SparseConstantType(AbstractComplexParameterType):
         if 'value_encoding' in kwc:
             ve = kwc.pop('value_encoding')
         AbstractComplexParameterType.__init__(self, value_class='SparseConstantValue', **kwc)
-        if base_type is not None and not isinstance(base_type, ConstantType):
-            raise TypeError('\'base_type\' must be an instance of ConstantType')
+        if base_type is not None and not isinstance(base_type, (ConstantType, ArrayType)):
+            raise TypeError('\'base_type\' must be an instance of ConstantType or ArrayType')
 
         self.base_type = base_type or ConstantType(value_encoding=ve)
 
@@ -787,7 +813,7 @@ class ArrayType(AbstractComplexParameterType):
     """
     Homogeneous set of unnamed things (array)
     """
-    def __init__(self, inner_encoding=None, **kwargs):
+    def __init__(self, inner_encoding=None, inner_fill_value=None, **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterType; see documentation for that class for details
@@ -795,6 +821,11 @@ class ArrayType(AbstractComplexParameterType):
         kwc=kwargs.copy()
         AbstractComplexParameterType.__init__(self, value_class='ArrayValue', **kwc)
 
-        self.inner_encoding = inner_encoding
+        if inner_encoding is None or np.dtype(inner_encoding).kind in ['S', 'O']:
+            self.inner_encoding = None
+        else:
+            self.inner_encoding = verify_encoding(inner_encoding)
+
+        self.inner_fill_value = verify_fill_value(self.inner_encoding, inner_fill_value, False)
 
         self._gen_template_attrs()
