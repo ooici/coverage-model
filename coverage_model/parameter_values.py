@@ -22,17 +22,18 @@ def get_value_class(param_type, domain_set, **kwargs):
 
 
 def _cleanse_value(val, slice_):
-    val = np.atleast_1d(val).squeeze()
-
     ret = np.atleast_1d(val)
 
     # If the array is size 1 AND a slice object was NOT part of the query
     if ret.size == 1 and not np.atleast_1d([isinstance(s, slice) for s in slice_]).all():
-        val = ret[0]
+        if ret.ndim == 0:
+            val = ret[()]
+        else:
+            val = ret[0]
 
-
+    # Ensure we don't return 0-d numpy arrays (they're annoying)
     if isinstance(val, np.ndarray) and val.ndim == 0:
-        val = val[()]
+        val = np.atleast_1d(val)
 
     return val
 
@@ -540,10 +541,11 @@ class ConstantValue(AbstractComplexParameterValue):
 
     def __setitem__(self, slice_, value):
         if self.parameter_type.is_valid_value(value):
-            if np.iterable(value) and not isinstance(value, basestring):
-                value = value[0]
+            value = np.atleast_1d(value)[0]
+
             if np.dtype(self.value_encoding).kind == 'S': # If we're dealing with a str
                 value = str(value) # Ensure the value is a str!!
+
             self._storage[0] = value
 
             self._update_min_max(value)
@@ -692,35 +694,41 @@ class ArrayValue(AbstractComplexParameterValue):
 
     @classmethod
     def _apply_inner_encoding(cls, vals, param_type):
-        if not hasattr(param_type, 'inner_encoding') or not hasattr(param_type, 'inner_fill_value'):
-            raise TypeError('Parameter type does not have \'inner_encoding\' or \'inner_fill_value\' fields')
+        if vals is not None:
+            if not hasattr(param_type, 'inner_encoding') or not hasattr(param_type, 'inner_fill_value'):
+                raise TypeError('Parameter type does not have \'inner_encoding\' or \'inner_fill_value\' fields')
 
-        if param_type.inner_encoding is not None and np.dtype(param_type.inner_encoding).kind not in ['O', 'S']:
-            mx = max([len(a) for a in vals])
-            r = np.empty((vals.shape[0], mx), dtype=param_type.inner_encoding)
-            r.fill(param_type.inner_fill_value)
-            for i, v in enumerate(vals):
-                r[i,:len(v)] = v
-            vals = r
+            if param_type.inner_encoding is not None and np.dtype(param_type.inner_encoding).kind not in ['O', 'S']:
+                lens = [len(a) if a is not None else 1 for a in vals]
+                mx = max(lens)
+                r = np.empty((vals.shape[0], mx), dtype=param_type.inner_encoding)
+                r.fill(param_type.inner_fill_value)
+                for i, v in enumerate(vals):
+                    if v is not None:
+                        r[i, :lens[i]] = v
+                vals = r
 
         return vals
 
     def __getitem__(self, slice_):
-        slice_ = utils.fix_slice(slice_, self.shape)
+        oslice = slice_ = utils.fix_slice(slice_, self.shape)
 
-        if isinstance(slice_[0], int):
+        if isinstance(slice_[0], int):  # Must always pass a slice so we don't lose the dimension
             slice_ = (slice(slice_[0], slice_[0] + 1),) + slice_[1:]
 
         vals = np.atleast_1d(self._storage[slice_])
 
-        self._apply_inner_encoding(vals, self.parameter_type)
+        vals = self._apply_inner_encoding(vals, self.parameter_type)
 
-        ret = _cleanse_value(vals, slice_)
+        ret = _cleanse_value(vals, oslice)
 
         return ret
 
     def __setitem__(self, slice_, value):
         slice_ = utils.fix_slice(slice_, self.shape)
+
+        if isinstance(value, AbstractParameterValue):
+            value = np.atleast_1d(value[:])
 
         value = np.atleast_1d(value)
         if len(value.shape) > 1:
