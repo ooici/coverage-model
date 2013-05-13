@@ -436,7 +436,12 @@ class SparseConstantValue(AbstractComplexParameterValue):
             offset = stor_sub[0].lower_bound
         io = ind_arr - offset
 
-        return _cleanse_value(v_arr[io], slice_)
+        vals = v_arr[io]
+
+        if hasattr(self.parameter_type.base_type, 'inner_encoding'):
+            vals = ArrayValue._apply_inner_encoding(vals, self.parameter_type.base_type.inner_encoding)
+
+        return _cleanse_value(vals, slice_)
 
     def __setitem__(self, slice_, value):
         slice_ = utils.fix_slice(slice_, self.shape)
@@ -478,7 +483,7 @@ class SparseConstantValue(AbstractComplexParameterValue):
                 nspn_offset = -self.shape[0]
 
             if not isinstance(value, AbstractParameterValue) and not isinstance(lspn.value, AbstractParameterValue):
-                if value == lspn.value:
+                if np.atleast_1d(np.atleast_1d(value) == np.atleast_1d(lspn.value)).all():
                     # The previous value equals the new value - do not add a new span!
                     return
 
@@ -685,6 +690,18 @@ class ArrayValue(AbstractComplexParameterValue):
         AbstractComplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
         self._storage.expand(self.shape, 0, self.shape[0])
 
+    @classmethod
+    def _apply_inner_encoding(cls, vals, inner_encoding):
+        if inner_encoding is not None and np.dtype(inner_encoding).kind not in ['O', 'S']:
+            mx = max([len(a) for a in vals])
+            r = np.empty((vals.shape[0], mx), dtype=inner_encoding)
+            r.fill(-999)
+            for i, v in enumerate(vals):
+                r[i,:len(v)] = v
+            vals = r
+
+        return vals
+
     def __getitem__(self, slice_):
         slice_ = utils.fix_slice(slice_, self.shape)
 
@@ -693,14 +710,7 @@ class ArrayValue(AbstractComplexParameterValue):
 
         vals = np.atleast_1d(self._storage[slice_])
 
-        ie = self.parameter_type.inner_encoding
-        if ie is not None and np.dtype(ie).kind not in ['O', 'S']:
-            mx = max([len(a) for a in vals])
-            r = np.empty((vals.shape[0], mx), dtype=ie)
-            r.fill(-999)
-            for i, v in enumerate(vals):
-                r[i,:len(v)] = v
-            vals = r
+        self._apply_inner_encoding(vals, self.parameter_type.inner_encoding)
 
         ret = _cleanse_value(vals, slice_)
 

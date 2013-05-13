@@ -614,8 +614,8 @@ class SparseConstantType(AbstractComplexParameterType):
         if 'value_encoding' in kwc:
             ve = kwc.pop('value_encoding')
         AbstractComplexParameterType.__init__(self, value_class='SparseConstantValue', **kwc)
-        if base_type is not None and not isinstance(base_type, ConstantType):
-            raise TypeError('\'base_type\' must be an instance of ConstantType')
+        if base_type is not None and not isinstance(base_type, (ConstantType, ArrayType)):
+            raise TypeError('\'base_type\' must be an instance of ConstantType or ArrayType')
 
         self.base_type = base_type or ConstantType(value_encoding=ve)
 
