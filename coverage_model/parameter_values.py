@@ -22,11 +22,17 @@ def get_value_class(param_type, domain_set, **kwargs):
 
 
 def _cleanse_value(val, slice_):
+    val = np.atleast_1d(val).squeeze()
+
     ret = np.atleast_1d(val)
 
     # If the array is size 1 AND a slice object was NOT part of the query
     if ret.size == 1 and not np.atleast_1d([isinstance(s, slice) for s in slice_]).all():
         val = ret[0]
+
+
+    if isinstance(val, np.ndarray) and val.ndim == 0:
+        val = val[()]
 
     return val
 
@@ -682,7 +688,21 @@ class ArrayValue(AbstractComplexParameterValue):
     def __getitem__(self, slice_):
         slice_ = utils.fix_slice(slice_, self.shape)
 
-        ret = _cleanse_value(self._storage[slice_], slice_)
+        if isinstance(slice_[0], int):
+            slice_ = (slice(slice_[0], slice_[0] + 1),) + slice_[1:]
+
+        vals = np.atleast_1d(self._storage[slice_])
+
+        ie = self.parameter_type.inner_encoding
+        if ie is not None and np.dtype(ie).kind not in ['O', 'S']:
+            mx = max([len(a) for a in vals])
+            r = np.empty((vals.shape[0], mx), dtype=ie)
+            r.fill(-999)
+            for i, v in enumerate(vals):
+                r[i,:len(v)] = v
+            vals = r
+
+        ret = _cleanse_value(vals, slice_)
 
         return ret
 
@@ -700,6 +720,9 @@ class ArrayValue(AbstractComplexParameterValue):
                     v[i] = iv
 
             value = v
+
+        if isinstance(slice_[0], int):
+            slice_ = (slice(slice_[0], slice_[0] + 1),) + slice_[1:]
 
         self._storage[slice_] = value[:]
 

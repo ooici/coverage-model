@@ -329,8 +329,12 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         self.assertTrue(np.array_equal(cov.get_parameter_values(pname), val_cls[:]))
         self.assertTrue(np.array_equal(cov.get_parameter_values(pname, slice(-1, None)), val_cls[-1:]))
         self.assertTrue(np.array_equal(cov.get_parameter_values(pname, slice(None, None, 3)), val_cls[::3]))
-        self.assertEqual(cov.get_parameter_values(pname, 0), val_cls[0])
-        self.assertEqual(cov.get_parameter_values(pname, -1), val_cls[-1])
+        if isinstance(val_cls.parameter_type, ArrayType):
+            self.assertTrue(np.array_equal(cov.get_parameter_values(pname, 0), val_cls[0]))
+            self.assertTrue(np.array_equal(cov.get_parameter_values(pname, -1), val_cls[-1]))
+        else:
+            self.assertEqual(cov.get_parameter_values(pname, 0), val_cls[0])
+            self.assertEqual(cov.get_parameter_values(pname, -1), val_cls[-1])
 
     ## Must use a specialized set of assertions because np.array_equal doesn't work on arrays of type Sn!!
     def _interop_assertions_str(self, cov, pname, val_cls, assn_vals=None):
@@ -605,12 +609,16 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
     def test_array_value_interop(self):
         # Setup the type
         arr_type = ArrayType()
+        arr_type_ie = ArrayType(inner_encoding='float32')
 
         # Setup the values
         ntimes = 20
         vals = [[1, 2, 3]] * ntimes
+        vals_ie = [[1.2,2.3,3.4]] * ntimes
         vals_arr = np.empty(ntimes, dtype=object)
+        vals_arr_ie = np.empty(ntimes, dtype=object)
         vals_arr[:] = vals
+        vals_arr_ie[:] = vals_ie
         svals = []
         for x in xrange(ntimes):
             svals.append(np.random.bytes(np.random.randint(1,20))) # One value (which is a byte string) for each member of the domain
@@ -620,23 +628,26 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         # Setup the in-memory value
         dom = SimpleDomainSet((ntimes,))
         arr_val = get_value_class(arr_type, dom)
+        arr_val_ie = get_value_class(arr_type_ie, dom)
 
         # Setup the coverage
-        cov = self._setup_cov(ntimes, ['array'], [arr_type])
+        cov = self._setup_cov(ntimes, ['array', 'array_ie'], [arr_type, arr_type_ie])
 
         # Perform the assertions
 
         # Nested List Assignment
         self._interop_assertions(cov, 'array', arr_val, vals)
+        self._interop_assertions(cov, 'array_ie', arr_val_ie, vals_ie)
 
         # Array Assignment
         self._interop_assertions(cov, 'array', arr_val, vals_arr)
+        self._interop_assertions(cov, 'array_ie', arr_val_ie, vals_arr_ie)
 
         # String Assignment via list
-        self._interop_assertions(cov, 'array', arr_val, svals)
+        self._interop_assertions_str(cov, 'array', arr_val, svals)
 
         # String Assignment via array
-        self._interop_assertions(cov, 'array', arr_val, svals_arr)
+        self._interop_assertions_str(cov, 'array', arr_val, svals_arr)
 
     def test_category_value_interop(self):
         # Setup the type
@@ -662,16 +673,16 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         # Perform the assertions
 
         # Assign with a list of keys
-        self._interop_assertions(cov, 'category', cat_val, key_vals)
+        self._interop_assertions_str(cov, 'category', cat_val, key_vals)
 
         # Assign with a list of categories
-        self._interop_assertions(cov, 'category', cat_val, cat_vals)
+        self._interop_assertions_str(cov, 'category', cat_val, cat_vals)
 
         # Assign with an array of keys
-        self._interop_assertions(cov, 'category', cat_val, key_vals_arr)
+        self._interop_assertions_str(cov, 'category', cat_val, key_vals_arr)
 
         # Assign with an array of categories
-        self._interop_assertions(cov, 'category', cat_val, cat_vals_arr)
+        self._interop_assertions_str(cov, 'category', cat_val, cat_vals_arr)
 
     def test_sparse_constant_value_interop(self):
         # Setup the type
