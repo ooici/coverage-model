@@ -439,7 +439,7 @@ class SparseConstantValue(AbstractComplexParameterValue):
         vals = v_arr[io]
 
         if hasattr(self.parameter_type.base_type, 'inner_encoding'):
-            vals = ArrayValue._apply_inner_encoding(vals, self.parameter_type.base_type.inner_encoding)
+            vals = ArrayValue._apply_inner_encoding(vals, self.parameter_type.base_type)
 
         return _cleanse_value(vals, slice_)
 
@@ -691,11 +691,14 @@ class ArrayValue(AbstractComplexParameterValue):
         self._storage.expand(self.shape, 0, self.shape[0])
 
     @classmethod
-    def _apply_inner_encoding(cls, vals, inner_encoding):
-        if inner_encoding is not None and np.dtype(inner_encoding).kind not in ['O', 'S']:
+    def _apply_inner_encoding(cls, vals, param_type):
+        if not hasattr(param_type, 'inner_encoding') or not hasattr(param_type, 'inner_fill_value'):
+            raise TypeError('Parameter type does not have \'inner_encoding\' or \'inner_fill_value\' fields')
+
+        if param_type.inner_encoding is not None and np.dtype(param_type.inner_encoding).kind not in ['O', 'S']:
             mx = max([len(a) for a in vals])
-            r = np.empty((vals.shape[0], mx), dtype=inner_encoding)
-            r.fill(-999)
+            r = np.empty((vals.shape[0], mx), dtype=param_type.inner_encoding)
+            r.fill(param_type.inner_fill_value)
             for i, v in enumerate(vals):
                 r[i,:len(v)] = v
             vals = r
@@ -710,7 +713,7 @@ class ArrayValue(AbstractComplexParameterValue):
 
         vals = np.atleast_1d(self._storage[slice_])
 
-        self._apply_inner_encoding(vals, self.parameter_type.inner_encoding)
+        self._apply_inner_encoding(vals, self.parameter_type)
 
         ret = _cleanse_value(vals, slice_)
 

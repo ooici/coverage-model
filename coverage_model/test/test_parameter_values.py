@@ -610,7 +610,7 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
     def test_array_value_interop(self):
         # Setup the type
         arr_type = ArrayType()
-        arr_type_ie = ArrayType(inner_encoding='float32')
+        arr_type_ie = ArrayType(inner_encoding=np.dtype('int32'))
 
         # Setup the values
         ntimes = 20
@@ -688,7 +688,8 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
     def test_sparse_constant_value_interop(self):
          # Setup the type
         scv_type = SparseConstantType(fill_value=-998, value_encoding='int32')
-        scv_arr_type = SparseConstantType(base_type=ArrayType(inner_encoding='float32'))
+        ifv = 827.38
+        scv_arr_type = SparseConstantType(base_type=ArrayType(inner_encoding='float32', inner_fill_value=ifv))
 
         # Setup the values
         ntimes = 10
@@ -759,7 +760,7 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         aval = [[39, 2, 394, 55]]
         aval_arr = np.empty(1, dtype=object)
         aval_arr[0] = aval
-        awant = np.hstack((awant, np.array([[-999.]] * ntimes)))
+        awant = np.hstack((awant, np.array([[827.38]] * ntimes)))
         awant = np.vstack((awant, np.array(aval * ntimes, dtype='float32')))
 
         # Assign with val
@@ -780,8 +781,8 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         self.assertTrue(np.array_equal(cov.get_parameter_values('scv'), want))
 
         self._interop_assertions(cov, 'scv_arr', scv_arr_val)
-        self.assertTrue(np.array_equal(scv_arr_val[:], awant))
-        self.assertTrue(np.array_equal(cov.get_parameter_values('scv_arr'), awant))
+        self.assertTrue(np.allclose(scv_arr_val[:], awant))
+        self.assertTrue(np.allclose(cov.get_parameter_values('scv_arr'), awant))
 
         # Reassign last segment
         val = 44
@@ -804,5 +805,5 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         self.assertTrue(np.array_equal(cov.get_parameter_values('scv'), want))
 
         self._interop_assertions(cov, 'scv_arr', scv_arr_val)
-        self.assertTrue(np.array_equal(scv_arr_val[:], awant))
-        self.assertTrue(np.array_equal(cov.get_parameter_values('scv_arr'), awant))
+        self.assertTrue(np.allclose(scv_arr_val[:], awant))
+        self.assertTrue(np.allclose(cov.get_parameter_values('scv_arr'), awant))
