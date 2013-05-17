@@ -380,9 +380,7 @@ class AbstractCoverage(AbstractIdentifiable):
             key = (param_name, utils.hash_any(slk))
             try:
                 return_value = self._value_cache.pop(key)
-            #                print 'Vals from cache for \'%s\'' % param_name
             except KeyError:
-            #                print 'New vals for \'%s\'' % param_name
                 return_value = self._range_value[param_name][slice_]
                 if len(self._value_cache) >= self.VALUE_CACHE_LIMIT:
                     k, v = self._value_cache.popitem(0)
@@ -782,9 +780,6 @@ class AbstractCoverage(AbstractIdentifiable):
         lst.append('Data Parameters: {0}'.format(self.list_parameters(coords_only=False, data_only=True)))
 
         return '\n'.join(lst)
-
-    def __del__(self):
-        self.close()
 
 
 class ViewCoverage(AbstractCoverage):
@@ -1437,6 +1432,9 @@ class SimplexCoverage(AbstractCoverage):
                     self._bricking_scheme = bricking_scheme
 
                 self.value_caching = value_caching
+
+                # LOCK inline_data_writes to True
+                inline_data_writes = True
 
                 self._in_memory_storage = in_memory_storage
                 if self._in_memory_storage:
