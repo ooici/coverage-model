@@ -14,7 +14,6 @@ from coverage_model.persistence_helpers import MasterManager, ParameterManager, 
 import numpy as np
 import h5py
 import os
-import rtree
 import itertools
 from copy import deepcopy
 
