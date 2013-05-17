@@ -116,22 +116,28 @@ class BaseManager(object):
 
     def flush(self):
         if self.is_dirty(True):
-            with h5py.File(self.file_path, 'a') as f:
-                for k in list(self._dirty):
-                    v = getattr(self, k)
-#                    log.debug('FLUSH: key=%s  v=%s', k, v)
-                    if isinstance(v, Dictable):
-                        prefix='DICTABLE|{0}:{1}|'.format(v.__module__, v.__class__.__name__)
-                        value = prefix + pack(v.dump())
-                    else:
-                        value = pack(v)
+            try:
+                with h5py.File(self.file_path, 'a') as f:
+                    for k in list(self._dirty):
+                        v = getattr(self, k)
+    #                    log.debug('FLUSH: key=%s  v=%s', k, v)
+                        if isinstance(v, Dictable):
+                            prefix='DICTABLE|{0}:{1}|'.format(v.__module__, v.__class__.__name__)
+                            value = prefix + pack(v.dump())
+                        else:
+                            value = pack(v)
 
-                    f.attrs[k] = value
+                        f.attrs[k] = value
 
-                    # Update the hash_value in _hmap
-                    self._hmap[k] = utils.hash_any(v)
-                    # Remove the key from the _dirty set
-                    self._dirty.remove(k)
+                        # Update the hash_value in _hmap
+                        self._hmap[k] = utils.hash_any(v)
+                        # Remove the key from the _dirty set
+                        self._dirty.remove(k)
+            except IOError, ex:
+                if "unable to create file (File accessability: Unable to open file)" in ex.message:
+                    log.info('Issue writing to hdf file during master_manager.flush - this is not likely a huge problem: %s', ex.message)
+                else:
+                    raise
 
             super(BaseManager, self).__setattr__('_is_dirty',False)
 
