@@ -15,8 +15,8 @@ from coverage_model.persistence_helpers import MasterManager, ParameterManager
 import os
 import shutil
 from coverage_model import create_guid
+from coverage_model.persistence_helpers import RTreeProxy
 
-from rtree import index
 import numpy as np
 import h5py
 
@@ -55,11 +55,10 @@ class BrickingAssessor(object):
         self.brick_extents, self.rtree_extents = bricking_utils.calc_brick_and_rtree_extents(self.brick_origins,
                                                                                              self.brick_sizes)
         self.build_bricks()
-        p = index.Property()
-        tdl = len(self.total_domain)
-        p.dimension = tdl if tdl > 1 else tdl + 1
 
-        self.rtree = index.Index(BrickingAssessor.rtree_populator(self.rtree_extents, self.brick_extents), properties=p)
+        self.rtree = RTreeProxy()
+        for x in BrickingAssessor.rtree_populator(self.rtree_extents, self.brick_extents):
+            self.rtree.insert(*x)
 
     @classmethod
     def rtree_populator(cls, rtree_extents, brick_extents):
