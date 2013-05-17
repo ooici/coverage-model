@@ -54,6 +54,8 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
     scov.insert_timesteps(nt)
     for p in scov.list_parameters():
         if data_dict is not None and p in data_dict:
+            if data_dict[p] is None:
+                continue
             dat = data_dict[p]
         else:
             dat = range(nt)
