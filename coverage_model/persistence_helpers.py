@@ -13,7 +13,6 @@ from coverage_model.basic_types import Dictable
 from coverage_model import utils
 
 import os
-import rtree
 import h5py
 import msgpack
 
