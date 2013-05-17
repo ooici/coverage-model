@@ -183,22 +183,11 @@ class PersistenceLayer(object):
         log.debug('Performing Rtree dict setup')
         # tD = parameter_context.dom.total_extents
         bD,cD = self.calculate_brick_size(tD, bricking_scheme) #remains same for each parameter
-        # Verify domain is Rtree friendly
-        tree_rank = len(bD)
-        log.debug('tree_rank: %s', tree_rank)
-        if tree_rank == 1:
-            tree_rank += 1
-        log.debug('tree_rank: %s', tree_rank)
-        p = rtree.index.Property()
-        p.dimension = tree_rank
 
-        brick_tree = rtree.index.Index(properties=p)
+        self.master_manager._init_rtree(bD)
 
         self.master_manager.brick_list = {}
         self.master_manager.brick_domains = [tD, bD, cD, bricking_scheme]
-
-        self.master_manager.tree_rank = tree_rank
-        self.master_manager.brick_tree = brick_tree
 
     # CBM TODO: This needs to be improved greatly - should callback all the way to the Application layer as a "failure handler"
     def write_failure_callback(self, message, work):
@@ -569,56 +558,6 @@ class PersistedStorage(AbstractStorage):
             self._pending_values[wk] = []
 
         self._pending_values[wk].append(work)
-
-    # Calculates the bricks from Rtree (brick_tree) using the slice_
-    def _bricks_from_slice(self, slice_):
-        """
-        Calculates the a list of bricks from the rtree based on the requested slice
-
-        @param slice_   Requested slice
-        @return Sorted list of tuples denoting the bricks
-        """
-
-        # Make sure we don't modify the global slice_ object
-        sl = deepcopy(slice_)
-
-        # Ensure the slice_ is iterable
-        if not isinstance(sl, (list,tuple)):
-            sl = [sl]
-
-        # Check the rank of the slice and pad if == 1 to satisfy Rtree requirement of rank >= 2
-        rank = len(sl)
-        if rank == 1:
-            rank += 1
-            sl += (0,)
-
-        if self.brick_tree.properties.dimension != rank:
-            raise ValueError('slice_ is of incorrect rank: is {0}, must be {1}'.format(rank, self.brick_tree.properties.dimension))
-
-        bnds = self.brick_tree.bounds
-
-        # Perform the calculations for the slice_ start and stop bounds in Rtree format
-        # CBM TODO: INACCURATE BRICK SELECTION --> THIS IS NOT LIKELY TO WORK FOR ANY RANK > 1!!!
-        start = []
-        end = []
-        for x in xrange(rank):
-            sx=sl[x]
-            if isinstance(sx, slice):
-                si=sx.start if sx.start is not None else bnds[x::rank][0]
-                start.append(si)
-                ei=sx.stop-1 if sx.stop is not None else bnds[x::rank][1]
-                end.append(ei)
-            elif isinstance(sx, (list, tuple)):
-                start.append(min(sx))
-                end.append(max(sx))
-            elif isinstance(sx, int):
-                start.append(sx)
-                end.append(sx)
-
-        hits = list(self.brick_tree.intersection(tuple(start+end), objects=True))
-        ret = [(h.id,h.object) for h in hits]
-        ret.sort()
-        return ret
 
     def __getitem__(self, slice_):
         """

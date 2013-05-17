@@ -37,7 +37,7 @@ setup(  name = 'coverage-model',
         'netCDF4>=0.9.8',
         'numexpr==2.1',
         'h5py==2.1.1a2', 
-        'rtree==0.7.0',
+        # 'rtree==0.7.0', # Removed due to memory leak - see commit: 2e4af870905c64d5f3435744177084c905833db3
         'pidantic',
         'nose==1.1.2',  # must specify to avoid GSW from getting the latest version - which conflicts with pyon's
         'gsw==3.0.1a1',

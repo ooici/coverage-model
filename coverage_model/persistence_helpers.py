@@ -36,6 +36,63 @@ def get_coverage_type(path):
     return ctype
 
 
+class RTreeItem(object):
+
+    def __init__(self, item_id, obj):
+        self.id = item_id
+        self.object = obj
+
+
+class RTreeProxy(object):
+
+    def __init__(self):
+        self._spans = []
+
+        # Proxy the properties.dimension property, pia...
+        class HoldDim(object):
+            def __init__(self, dim=2):
+                self.dimension = dim
+
+        self.properties = HoldDim()
+
+    def insert(self, count, extents, obj=None):
+        # The extents from the old rtree impl are [xmin,ymin,xmax,ymax]
+        minval = extents[0]
+        maxval = extents[2]
+
+        from coverage_model.basic_types import Span
+        span = Span(minval, maxval, value=obj)
+
+        if span not in self._spans:
+            self._spans.append(span)
+
+    def intersection(self, coords, objects=True):
+        minval = coords[0]
+        maxval = coords[2]
+
+        si = 0
+        ei = len(self._spans)
+        for i, s in enumerate(self._spans):
+            if minval in s:
+                si = i
+                break
+
+        for i, s in enumerate(self._spans):
+            if maxval in s:
+                ei = i+1
+                break
+
+        ret = []
+        for i, s in enumerate(self._spans[si:ei]):
+            ret.append(RTreeItem(si+i, s.value))
+        return ret
+
+    @property
+    def bounds(self):
+        lb = float(self._spans[0].lower_bound) if len(self._spans) > 0 else 0.0
+        ub = float(self._spans[0].upper_bound) if len(self._spans) > 0 else 0.0
+        return [lb, 0.0, ub, 0.0]
+
 class BaseManager(object):
 
     def __init__(self, root_dir, file_name, **kwargs):
@@ -153,6 +210,9 @@ class MasterManager(BaseManager):
 
             self.brick_tree.insert(count, extents, obj=obj)
 
+    def _init_rtree(self, bD):
+        self.brick_tree = RTreeProxy()
+
     def _load(self):
         with h5py.File(self.file_path, 'r') as f:
             self._base_load(f)
@@ -163,9 +223,6 @@ class MasterManager(BaseManager):
             self.param_groups.discard('rtree')
 
             # Don't forget brick_tree!
-            p = rtree.index.Property()
-            p.dimension = self.tree_rank
-
             if 'rtree' in f.keys():
                 # Populate brick tree from the 'rtree' dataset
                 ds = f['/rtree']
@@ -175,9 +232,13 @@ class MasterManager(BaseManager):
                         ext, obj = unpack(x)
                         yield (i, ext, obj)
 
-                setattr(self, 'brick_tree', rtree.index.Index(tree_loader(ds[:]), properties=p))
+                rtp = RTreeProxy()
+                for x in tree_loader(ds[:]):
+                    rtp.insert(*x)
+
+                setattr(self, 'brick_tree', rtp)
             else:
-                setattr(self, 'brick_tree', rtree.index.Index(properties=p))
+                setattr(self, 'brick_tree', RTreeProxy())
 
     def add_external_link(self, link_path, rel_ext_path, link_name):
         with h5py.File(self.file_path, 'r+') as f:
