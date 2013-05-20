@@ -79,6 +79,13 @@ class AbstractCoverage(AbstractIdentifiable):
         else:
             self.mode = 'r'
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # Ensure the coverage is closed
+        self.close()
+
     @classmethod
     def pickle_save(cls, cov_obj, file_path, use_ascii=False):
         if not isinstance(cov_obj, AbstractCoverage):
