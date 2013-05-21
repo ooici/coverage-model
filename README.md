@@ -14,22 +14,20 @@ This assumes basic development environment setup (git, directory structure). Ple
 
 **Install the following if not yet present:**
 
-**Install** git 1.7.7:
-*Download the Mac or Linux installer and run it*
-
 *OS Packages and package management:*
 For Mac, use homebrew
 
     /usr/bin/ruby -e "$(curl -fsSL https://raw.github.com/gist/323731)"
 
+  * git
   * python 2.7
   * hdf5
   * netcdf
 
 
-**Install** python, hdf5 and netcdf with Homebrew
+**Install** git, python, hdf5 and netcdf with Homebrew
     
-    brew install python hdf5 netcdf
+    brew install git python hdf5 netcdf
     
 You'll also need the various dependencies of the pyon project:
 
