@@ -108,10 +108,10 @@ Next, simply import functions from the module and then try them out!
 For example:
 
     from coverage_model.test.examples import *
-    stn_cov, _ = ncstation2cov() # Generates a coverage from the test_data/usgs.nc file
-    print stn_cov
+    sample_cov = samplecov() # Generates a sample coverage with a few simple parameters
+    print sample_cov
    
-    grid_cov, _ = ncgrid2cov() # Generates a coverage from the test_data/ncom.nc file
+    ptypes_cov = ptypescov() # Generates a coverage with a parameter of each of the parameter types
     print grid_cov
     
 #Saving and Loading coverages
