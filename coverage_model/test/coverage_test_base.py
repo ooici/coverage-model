@@ -204,6 +204,22 @@ class CoverageIntTestBase(object):
             pc = cov.get_parameter_context(param)
             self.assertEqual(len(pc.dom.identifier), 36)
 
+    @get_props()
+    def test_context_management(self):
+        props = self.test_context_management.props
+        nt = props['time_steps']
+
+        with self.get_cov(nt=nt)[0] as cov:
+            self.assertEqual(cov.num_timesteps, nt)
+            for p in cov.list_parameters():
+                self.assertEqual(len(cov.get_parameter_values(p)), nt)
+            pdir = cov.persistence_dir
+
+        with AbstractCoverage.load(pdir) as cov:
+            self.assertEqual(cov.num_timesteps, nt)
+            for p in cov.list_parameters():
+                self.assertEqual(len(cov.get_parameter_values(p)), nt)
+
     def test_create_guid_valid(self):
         # Tests that the create_guid() function outputs a properly formed GUID
         self.assertTrue(len(create_guid()) == 36)
