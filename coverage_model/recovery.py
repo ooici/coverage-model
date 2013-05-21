@@ -7,7 +7,6 @@
 @author James Case
 @brief Contains utility functions for attempting to recover corrupted coverages
 """
-from ooi.logging import log
 from coverage_model import hdf_utils, SimplexCoverage, AbstractCoverage, ParameterDictionary, GridDomain
 from coverage_model.persistence_helpers import pack
 from coverage_model.basic_types import BaseEnum, Span
@@ -15,6 +14,7 @@ import os
 import shutil
 import tempfile
 import h5py
+from pyon.public import log
 
 MASTER_ATTRS = [
     'auto_flush_values',
@@ -265,7 +265,7 @@ class CoverageDoctor(object):
 
         st = StatusEnum.CORRUPT if hdf_utils.has_corruption(master_pth) else StatusEnum.NORMAL
         if st == StatusEnum.CORRUPT:
-                sz = 0
+                sz = -1
         else:
             sz=hdf_utils.space_ratio(master_pth)
         ar.set_master_status(master_pth, st, sz)
@@ -275,17 +275,23 @@ class CoverageDoctor(object):
 
             # Check parameter file
             st = StatusEnum.CORRUPT if hdf_utils.has_corruption(pset['param']) else StatusEnum.NORMAL
-            sz=hdf_utils.space_ratio(pset['param'])
+            if st == StatusEnum.CORRUPT:
+                sz = -1
+            else:
+                sz=hdf_utils.space_ratio(pset['param'])
             ar.add_param_status(p, pset['param'], st, sz)
 
             # Check each brick file
             for b_pth in pset['bricks']:
                 if analyze_bricks:
                     st = StatusEnum.CORRUPT if hdf_utils.has_corruption(b_pth) else StatusEnum.NORMAL
-                    sz=hdf_utils.space_ratio(b_pth)
+                    if st == StatusEnum.CORRUPT:
+                        sz = -1
+                    else:
+                        sz=hdf_utils.space_ratio(b_pth)
                 else:
                     st = StatusEnum.UNKNOWN
-                    sz = StatusEnum.UNKNOWN
+                    sz = -1
 
                 ar.add_brick_status(p, b_pth, st, sz)
 
@@ -298,175 +304,149 @@ class CoverageDoctor(object):
         return self._ar
 
     def repair(self, reanalyze=False):
-        if self._ar is None or reanalyze:
-            self._ar = self._do_analysis()
-
-        if self._ar.is_corrupt:
-            if len(self._ar.get_brick_corruptions()) == 0:
-                if len(self._ar.get_corruptions()) > 1 and len(self._ar.get_master_corruption()) == 1:
-                    raise NotImplementedError('Corruption in master and one or more parameters.  Cannot repair at this time!! :(')
-                else:
-                    # Rename the top level directory
-
-                    # Repair the corrupt file(s)
-
-                    # Repair master file corruption
-                    if len(self._ar.get_master_corruption()) == 1:
-                        # Get the path to the master file
-                        m_orig = self._ar.get_master_corruption()[0]
-                        # Make the path to the repr file
-                        m_repr = self._get_repr_file_path(m_orig)
-
-                        # Fix any bad attributes
-                        self._repair_file_attrs(m_orig, m_repr, self._get_master_attribute, MASTER_ATTRS)
-
-                        # Copy all groups (and subgroups) to the new file
-                        have_groups=[]
-                        error_groups=[]
-                        have_datasets={}
-                        with h5py.File(m_orig, 'r') as orig:
-                            with h5py.File(m_repr) as new:
-                                for k in orig.keys():
-                                    try:
-                                        orig.copy(k, new)
-                                        have_groups.append(k)
-                                        have_datasets[k]=orig[k].keys()
-                                    except IOError:
-                                        error_groups.append(k)
-
-                        #TODO: Now look at the files in the directory tree and make sure we've accounted for everything
-                        missing = self._compare_to_tree(have_groups, have_datasets, error_groups)
-                        if len(missing) > 0: # There are files present in the tree that are missing from the coverage!!!
-                            log.error('Files missing from coverage!!!: {0}'.format(missing))
-
-                        # Rename the original
-                        m_old = m_orig.replace('.hdf5', '_old.hdf5')
-                        os.rename(m_orig, m_old)
-                        # Rename the fixed
-                        os.rename(m_repr, m_orig)
-
-                        log.info('Fixed Master!  Original file moved to: %s' % m_old)
-
-                    elif len(self._ar.get_param_corruptions()) > 0:
-                        for p_orig in self._ar.get_param_corruptions():
-                            p_repr = self._get_repr_file_path(p_orig)
-
-                            # Fix any bad attributes
-                            self._repair_file_attrs(p_orig, p_repr, self._get_parameter_attribute, PARAMETER_ATTRS)
-
-                            # Fix the rtree dataset
-                            # TODO: How do we know if it's corrupt or if something is missing?!? :o
-
-
-                    else:
-                        raise NotImplementedError('Don\'t really know how you got here!!')
-
-                    # Rename the top level directory back to it's original value
-            else:
-                raise NotImplementedError('Brick corruption.  Cannot repair at this time!!! :(')
-        else:
-            log.info('Coverage is not corrupt, nothing to repair!! :)')
-
-    def repair_metadata(self):
         """
         Heavy repair tool that recreates a blank persisted Coverage from the broken coverage's
         original construction parameters, then reconstructs the Master and Parameter metadata
         files by inspection of the ION objects and "valid" brick files.
         @return:
         """
+        if self._ar is None or reanalyze:
+            self._ar = self._do_analysis(analyze_bricks=True)
 
-        # Need the ParameterDictionary, TemporalDomain and SpatialDomain
-        pdict = ParameterDictionary.load(self._dso.parameter_dictionary)
-        tdom = GridDomain.load(self._dso.temporal_domain)
-        sdom = GridDomain.load(self._dso.spatial_domain)
-        # TODO: Change this to the scratch directory or some other OOI-approved temporary location
-        # working_dir = 'test_data/repaired_coverages'
-        working_dir = tempfile.mkdtemp('covs')
+        if self._ar.is_corrupt:
+            if len(self._ar.get_brick_corruptions()) > 0:
+                raise NotImplementedError('Brick corruption.  Cannot repair at this time!!!')
+            else:
+                # Repair the Master and Parameter metadata files
 
-        # Create the temporary Coverage
-        tempcov = SimplexCoverage(root_dir=working_dir, persistence_guid=self._guid, name=self._guid, parameter_dictionary=pdict, spatial_domain=sdom, temporal_domain=tdom)
+                # Need the ParameterDictionary, TemporalDomain and SpatialDomain
+                pdict = ParameterDictionary.load(self._dso.parameter_dictionary)
+                tdom = GridDomain.load(self._dso.temporal_domain)
+                sdom = GridDomain.load(self._dso.spatial_domain)
 
-        orig_dir = os.path.join(self.cov_pth, self._guid)
-        temp_dir = os.path.join(tempcov.persistence_dir, tempcov.persistence_guid)
+                # Set up the working directory for the recovered coverage
+                tempcov_dir = tempfile.mkdtemp('covs')
 
-        # TODO: Probably want to comment out next line since it is just for debugging
-        # self._copy_original_bricks(pdict, orig_dir, temp_dir)
+                # Create the temporary Coverage
+                tempcov = SimplexCoverage(root_dir=tempcov_dir, persistence_guid=self._guid, name=self._guid, parameter_dictionary=pdict, spatial_domain=sdom, temporal_domain=tdom)
 
-        # Insert same number of timesteps into temporary coverage as is broken coverage
-        brick_domains_new, new_brick_list, brick_list_spans, tD, bD, min_data_bound, max_data_bound = self.inspect_bricks(self.cov_pth, self._guid, 'time')
-        bls = [s.value for s in brick_list_spans]
-        maxes = [sum(b[3]) for b in new_brick_list.values()]
-        tempcov.insert_timesteps(sum(maxes))
+                # Set up the original and temporary coverage path strings
+                orig_dir = os.path.join(self.cov_pth, self._guid)
+                temp_dir = os.path.join(tempcov.persistence_dir, tempcov.persistence_guid)
 
-        # REPLACE METADATA IN MASTER FILE
-        pl = tempcov._persistence_layer
-        pl.master_manager.brick_domains = brick_domains_new
-        pl.master_manager.brick_list = new_brick_list
+                # Insert same number of timesteps into temporary coverage as in broken coverage
+                brick_domains_new, new_brick_list, brick_list_spans, tD, bD, min_data_bound, max_data_bound = self.inspect_bricks(self.cov_pth, self._guid, 'time')
+                bls = [s.value for s in brick_list_spans]
+                maxes = [sum(b[3]) for b in new_brick_list.values()]
+                tempcov.insert_timesteps(sum(maxes))
 
-        # Repair ExternalLinks to brick files
-        f = h5py.File(pl.master_manager.file_path, 'a')
-        for param_name in pdict.keys():
-            del f[param_name]
-            f.create_group(param_name)
-            for brick in bls:
-                link_path = '/{0}/{1}'.format(param_name, brick[0])
-                brick_file_name = '{0}.hdf5'.format(brick[0])
-                brick_rel_path = os.path.join(pl.parameter_metadata[param_name].root_dir.replace(tempcov.persistence_dir, '.'), brick_file_name)
-                log.debug('link_path: %s', link_path)
-                log.debug('brick_rel_path: %s', brick_rel_path)
-                pl.master_manager.add_external_link(link_path, brick_rel_path, brick[0])
+                # Replace metadata is the Master file
+                pl = tempcov._persistence_layer
+                pl.master_manager.brick_domains = brick_domains_new
+                pl.master_manager.brick_list = new_brick_list
 
-        pl.flush_values()
-        pl.flush()
-        tempcov.close()
+                # Repair ExternalLinks to brick files
+                f = h5py.File(pl.master_manager.file_path, 'a')
+                for param_name in pdict.keys():
+                    del f[param_name]
+                    f.create_group(param_name)
+                    for brick in bls:
+                        link_path = '/{0}/{1}'.format(param_name, brick[0])
+                        brick_file_name = '{0}.hdf5'.format(brick[0])
+                        brick_rel_path = os.path.join(pl.parameter_metadata[param_name].root_dir.replace(tempcov.persistence_dir, '.'), brick_file_name)
+                        log.debug('link_path: %s', link_path)
+                        log.debug('brick_rel_path: %s', brick_rel_path)
+                        pl.master_manager.add_external_link(link_path, brick_rel_path, brick[0])
 
-        # Remove 'rtree' dataset from Master file to make way for reconstruction
-        #remove existing dataset????  It may not exist yet because we didn't expand the domain
-        f = h5py.File(tempcov._persistence_layer.master_manager.file_path, 'a')
-        del f['rtree']
-        f.close()
+                pl.flush_values()
+                pl.flush()
+                tempcov.close()
 
-        # Reconstruct 'rtree' dataset
-        # Open temporary Coverage and PersistenceLayer objects
-        fixed_cov = AbstractCoverage.load(tempcov.persistence_dir, mode='a')
-        pl_fixed = fixed_cov._persistence_layer
+                # Remove 'rtree' dataset from Master file if it already exists (post domain expansion)
+                # to make way for reconstruction
+                f = h5py.File(pl.master_manager.file_path, 'a')
+                if 'rtree' in f.keys():
+                    del f['rtree']
+                f.close()
 
-        # Call update_rtree for each brick using PersistenceLayer builtin
-        brick_count = 0
+                # Reconstruct 'rtree' dataset
+                # Open temporary Coverage and PersistenceLayer objects
+                fixed_cov = AbstractCoverage.load(tempcov.persistence_dir, mode='a')
+                pl_fixed = fixed_cov._persistence_layer
 
-        for brick in bls:
-            rtree_extents, brick_extents, brick_active_size = pl_fixed.calculate_extents(brick[1][1],bD,tD)
-            pl_fixed.master_manager.update_rtree(brick_count, rtree_extents, obj=brick[0])
-            brick_count += 1
+                # Call update_rtree for each brick using PersistenceLayer builtin
+                brick_count = 0
 
+                for brick in bls:
+                    rtree_extents, brick_extents, brick_active_size = pl_fixed.calculate_extents(brick[1][1],bD,tD)
+                    pl_fixed.master_manager.update_rtree(brick_count, rtree_extents, obj=brick[0])
+                    brick_count += 1
 
-        # Update parameter_bounds property based on each parameter's brick data using deep inspection
-        valid_bounds_types = [
-            'BooleanType',
-            'ConstantType',
-            'QuantityType',
-            'ConstantRangeType'
-        ]
+                # Update parameter_bounds property based on each parameter's brick data using deep inspection
+                valid_bounds_types = [
+                    'BooleanType',
+                    'ConstantType',
+                    'QuantityType',
+                    'ConstantRangeType'
+                ]
 
-        for param in pdict.keys():
-            if pdict.get_context(param).param_type.__class__.__name__ in valid_bounds_types:
-                brick_domains_new, new_brick_list, brick_list_spans, tD, bD, min_data_bound, max_data_bound = self.inspect_bricks(self.cov_pth, self._guid, param)
-                # Update the metadata
-                pl_fixed.update_parameter_bounds(param, [min_data_bound, max_data_bound])
-        pl_fixed.flush()
-        fixed_cov.close()
+                for param in pdict.keys():
+                    if pdict.get_context(param).param_type.__class__.__name__ in valid_bounds_types:
+                        brick_domains_new, new_brick_list, brick_list_spans, tD, bD, min_data_bound, max_data_bound = self.inspect_bricks(self.cov_pth, self._guid, param)
+                        # Update the metadata
+                        pl_fixed.update_parameter_bounds(param, [min_data_bound, max_data_bound])
+                pl_fixed.flush()
+                fixed_cov.close()
 
-        # Copy Master and Parameter metadata files back to original/broken coverage (cov_pth) location
-        log.warn('temp_dir: %s', temp_dir)
-        log.warn('orig_dir: %s', orig_dir)
-        shutil.copy2(os.path.join(tempcov.persistence_dir, '{0}_master.hdf5'.format(self._guid)), os.path.join(self.cov_pth, '{0}_master.hdf5'.format(self._guid)))
-        for param in pdict.keys():
-            shutil.copy2(os.path.join(temp_dir, param, '{0}.hdf5'.format(param)), os.path.join(orig_dir, param, '{0}.hdf5'.format(param)))
+                # Create backup copy of original Master and Parameter files
+                import datetime
+                orig_master_file = os.path.join(self.cov_pth, '{0}_master.hdf5'.format(self._guid))
 
-        # TODO: Re-run analysis
+                # Generate the timestamp
+                tstamp_format = '%Y%m%d%H%M%S'
+                tstamp = datetime.datetime.now().strftime(tstamp_format)
 
-        # Remove temporary coverage
-        shutil.rmtree(working_dir)
+                backup_master_file = os.path.join(self.cov_pth, '{0}_master.{1}.hdf5'.format(self._guid, tstamp))
+
+                shutil.copy2(orig_master_file, backup_master_file)
+
+                for param in pdict.keys():
+                    param_orig = os.path.join(orig_dir, param, '{0}.hdf5'.format(param))
+                    param_backup = os.path.join(orig_dir, param, '{0}.{1}.hdf5'.format(param, tstamp))
+                    shutil.copy2(param_orig, param_backup)
+
+                # Copy Master and Parameter metadata files back to original/broken coverage (cov_pth) location
+                shutil.copy2(os.path.join(tempcov.persistence_dir, '{0}_master.hdf5'.format(self._guid)), os.path.join(self.cov_pth, '{0}_master.hdf5'.format(self._guid)))
+                for param in pdict.keys():
+                    shutil.copy2(os.path.join(temp_dir, param, '{0}.hdf5'.format(param)), os.path.join(orig_dir, param, '{0}.hdf5'.format(param)))
+
+                # Reanalyze the repaired coverage
+                self._ar = self._do_analysis(analyze_bricks=True)
+
+                # Verify repair worked, clean up if not
+                if self._ar.is_corrupt:
+                    # Remove backed up files and clean up the repair attempt
+                    log.info('Repair attempt failed.  Reverting to pre-repair state.')
+                    # Use backup copy to replace post-repair file.
+                    shutil.copy2(backup_master_file, orig_master_file)
+                    # Delete the backup
+                    os.remove(backup_master_file)
+
+                    # Iterate over parameters and revert to pre-repair state
+                    for param in pdict.keys():
+                        param_orig = os.path.join(orig_dir, param, '{0}.hdf5'.format(param))
+                        param_backup = os.path.join(orig_dir, param, '{0}.{1}.hdf5'.format(param, tstamp))
+                        # Use backup copy to replace post-repair file.
+                        shutil.copy2(param_backup, param_orig)
+                        # Delete the backup
+                        os.remove(param_backup)
+
+                    raise ValueError('Coverage repair failed! Revert to stored backup version, if possible.')
+
+                # Remove temporary coverage
+                shutil.rmtree(tempcov_dir)
+        else:
+            log.info('Coverage is not corrupt, nothing to repair!')
 
     def inspect_bricks(self, cov_pth, dataset_id, param_name):
         brick_domains_new = None
