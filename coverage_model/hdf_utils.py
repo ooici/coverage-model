@@ -72,7 +72,6 @@ def has_corruption(infile_path):
         # Try dumping the file - most read corruptions can be found this way
         _=dump(infile_path)
     except subprocess.CalledProcessError:
-        print "blah"
         return True
 
     # Other mechanisms for detecting corruption?
