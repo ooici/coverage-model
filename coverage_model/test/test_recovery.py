@@ -100,6 +100,70 @@ class TestRecoveryInt(CoverageModelIntTestCase):
         fixed_cov.close()
         self.assertTrue(np.array_equiv(time_vals_orig, time_vals_fixed))
 
+    def test_recovery_failed_backup(self):
+        # Create the coverage
+        cov, dset = self.get_cov()
+        cov_pth = cov.persistence_dir
+        cov.close()
+
+        # Analyze the valid coverage
+        dr = CoverageDoctor(cov_pth, 'dprod', dset)
+
+        dr_result = dr.analyze()
+
+        # Corrupt the Master File
+        fo = open(cov._persistence_layer.master_manager.file_path, "wb")
+        fo.write('Junk')
+        fo.close()
+        # Corrupt the lon Parameter file
+        fo = open(cov._persistence_layer.parameter_metadata['lon'].file_path, "wb")
+        fo.write('Junk')
+        fo.close()
+
+        corrupt_res = dr.analyze(reanalyze=True)
+        self.assertTrue(corrupt_res.is_corrupt)
+
+        # Repair the metadata files
+        with self.assertRaises(ValueError):
+            temp_cov_dir = dr.repair(reanalyze=True, backup=True, copy_over=False, keep_temp=True)
+            log.info('Temporary Coverage Directory: {0}', temp_cov_dir)
+            self.assertTrue(os.path.exists(temp_cov_dir))
+
+        nofix_res = dr.analyze(reanalyze=True)
+        self.assertTrue(nofix_res.is_corrupt)
+
+    def test_recovery_failed_nobackup(self):
+        # Create the coverage
+        cov, dset = self.get_cov()
+        cov_pth = cov.persistence_dir
+        cov.close()
+
+        # Analyze the valid coverage
+        dr = CoverageDoctor(cov_pth, 'dprod', dset)
+
+        dr_result = dr.analyze()
+
+        # Corrupt the Master File
+        fo = open(cov._persistence_layer.master_manager.file_path, "wb")
+        fo.write('Junk')
+        fo.close()
+        # Corrupt the lon Parameter file
+        fo = open(cov._persistence_layer.parameter_metadata['lon'].file_path, "wb")
+        fo.write('Junk')
+        fo.close()
+
+        corrupt_res = dr.analyze(reanalyze=True)
+        self.assertTrue(corrupt_res.is_corrupt)
+
+        # Repair the metadata files
+        with self.assertRaises(ValueError):
+            temp_cov_dir = dr.repair(reanalyze=True, backup=False, copy_over=False, keep_temp=False)
+            log.info('Temporary Coverage Directory: {0}', temp_cov_dir)
+            self.assertFalse(os.path.exists(temp_cov_dir))
+
+        nofix_res = dr.analyze(reanalyze=True)
+        self.assertTrue(nofix_res.is_corrupt)
+
     def get_cov(self):
         # Instantiate a ParameterDictionary
         pdict = ParameterDictionary()

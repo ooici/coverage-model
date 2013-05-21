@@ -303,7 +303,7 @@ class CoverageDoctor(object):
             self._ar = ar
         return self._ar
 
-    def repair(self, reanalyze=False):
+    def repair(self, reanalyze=False, backup=True, copy_over=True, keep_temp=False):
         """
         Heavy repair tool that recreates a blank persisted Coverage from the broken coverage's
         original construction parameters, then reconstructs the Master and Parameter metadata
@@ -399,52 +399,59 @@ class CoverageDoctor(object):
                 fixed_cov.close()
 
                 # Create backup copy of original Master and Parameter files
-                import datetime
-                orig_master_file = os.path.join(self.cov_pth, '{0}_master.hdf5'.format(self._guid))
+                if backup:
+                    import datetime
+                    orig_master_file = os.path.join(self.cov_pth, '{0}_master.hdf5'.format(self._guid))
 
-                # Generate the timestamp
-                tstamp_format = '%Y%m%d%H%M%S'
-                tstamp = datetime.datetime.now().strftime(tstamp_format)
+                    # Generate the timestamp
+                    tstamp_format = '%Y%m%d%H%M%S'
+                    tstamp = datetime.datetime.now().strftime(tstamp_format)
 
-                backup_master_file = os.path.join(self.cov_pth, '{0}_master.{1}.hdf5'.format(self._guid, tstamp))
+                    backup_master_file = os.path.join(self.cov_pth, '{0}_master.{1}.hdf5'.format(self._guid, tstamp))
 
-                shutil.copy2(orig_master_file, backup_master_file)
+                    shutil.copy2(orig_master_file, backup_master_file)
 
-                for param in pdict.keys():
-                    param_orig = os.path.join(orig_dir, param, '{0}.hdf5'.format(param))
-                    param_backup = os.path.join(orig_dir, param, '{0}.{1}.hdf5'.format(param, tstamp))
-                    shutil.copy2(param_orig, param_backup)
+                    for param in pdict.keys():
+                        param_orig = os.path.join(orig_dir, param, '{0}.hdf5'.format(param))
+                        param_backup = os.path.join(orig_dir, param, '{0}.{1}.hdf5'.format(param, tstamp))
+                        shutil.copy2(param_orig, param_backup)
 
                 # Copy Master and Parameter metadata files back to original/broken coverage (cov_pth) location
-                shutil.copy2(os.path.join(tempcov.persistence_dir, '{0}_master.hdf5'.format(self._guid)), os.path.join(self.cov_pth, '{0}_master.hdf5'.format(self._guid)))
-                for param in pdict.keys():
-                    shutil.copy2(os.path.join(temp_dir, param, '{0}.hdf5'.format(param)), os.path.join(orig_dir, param, '{0}.hdf5'.format(param)))
+                if copy_over == True:
+                    shutil.copy2(os.path.join(tempcov.persistence_dir, '{0}_master.hdf5'.format(self._guid)), os.path.join(self.cov_pth, '{0}_master.hdf5'.format(self._guid)))
+                    for param in pdict.keys():
+                        shutil.copy2(os.path.join(temp_dir, param, '{0}.hdf5'.format(param)), os.path.join(orig_dir, param, '{0}.hdf5'.format(param)))
 
                 # Reanalyze the repaired coverage
                 self._ar = self._do_analysis(analyze_bricks=True)
 
                 # Verify repair worked, clean up if not
                 if self._ar.is_corrupt:
-                    # Remove backed up files and clean up the repair attempt
-                    log.info('Repair attempt failed.  Reverting to pre-repair state.')
-                    # Use backup copy to replace post-repair file.
-                    shutil.copy2(backup_master_file, orig_master_file)
-                    # Delete the backup
-                    os.remove(backup_master_file)
-
-                    # Iterate over parameters and revert to pre-repair state
-                    for param in pdict.keys():
-                        param_orig = os.path.join(orig_dir, param, '{0}.hdf5'.format(param))
-                        param_backup = os.path.join(orig_dir, param, '{0}.{1}.hdf5'.format(param, tstamp))
+                    # If the files were backed up then revert
+                    if backup:
+                        # Remove backed up files and clean up the repair attempt
+                        log.info('Repair attempt failed.  Reverting to pre-repair state.')
                         # Use backup copy to replace post-repair file.
-                        shutil.copy2(param_backup, param_orig)
+                        shutil.copy2(backup_master_file, orig_master_file)
                         # Delete the backup
-                        os.remove(param_backup)
+                        os.remove(backup_master_file)
+
+                        # Iterate over parameters and revert to pre-repair state
+                        for param in pdict.keys():
+                            param_orig = os.path.join(orig_dir, param, '{0}.hdf5'.format(param))
+                            param_backup = os.path.join(orig_dir, param, '{0}.{1}.hdf5'.format(param, tstamp))
+                            # Use backup copy to replace post-repair file.
+                            shutil.copy2(param_backup, param_orig)
+                            # Delete the backup
+                            os.remove(param_backup)
 
                     raise ValueError('Coverage repair failed! Revert to stored backup version, if possible.')
 
                 # Remove temporary coverage
-                shutil.rmtree(tempcov_dir)
+                if keep_temp == False:
+                    shutil.rmtree(tempcov_dir)
+                else:
+                    return tempcov_dir
         else:
             log.info('Coverage is not corrupt, nothing to repair!')
 
