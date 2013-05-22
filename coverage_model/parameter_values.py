@@ -397,7 +397,7 @@ class SparseConstantValue(AbstractComplexParameterValue):
         if not hasattr(spans, '__iter__') and spans == self.fill_value:
             ret = np.empty(utils.slice_shape(slice_, self.shape), dtype=self.value_encoding)
             ret.fill(self.fill_value)
-            return ret
+            return _cleanse_value(ret, slice_)
 
         # Build the index array
         ind_arr = self.__indexify_slice(slice_, self.shape)
@@ -418,7 +418,7 @@ class SparseConstantValue(AbstractComplexParameterValue):
                 break
 
         if fi == li:
-            end_i = strt_i + 1
+            end_i = strt_i + 1  # If this breaks, it's probably because there's a gap in the spans...
         else:
             for i, s in reversed(list(enum)):
                 if li in s:
