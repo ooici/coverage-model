@@ -100,6 +100,8 @@ class TestRecoveryInt(CoverageModelIntTestCase):
         fixed_cov.close()
         self.assertTrue(np.array_equiv(time_vals_orig, time_vals_fixed))
 
+    @unittest.skipIf(not_have_h5stat, 'h5stat is not accessible in current PATH')
+    @unittest.skipIf(not not_have_h5stat and not h5stat_correct_version, 'HDF is the incorrect version: %s' % version_str)
     def test_recovery_failed_backup(self):
         # Create the coverage
         cov, dset = self.get_cov()
@@ -132,6 +134,8 @@ class TestRecoveryInt(CoverageModelIntTestCase):
         nofix_res = dr.analyze(reanalyze=True)
         self.assertTrue(nofix_res.is_corrupt)
 
+    @unittest.skipIf(not_have_h5stat, 'h5stat is not accessible in current PATH')
+    @unittest.skipIf(not not_have_h5stat and not h5stat_correct_version, 'HDF is the incorrect version: %s' % version_str)
     def test_recovery_failed_nobackup(self):
         # Create the coverage
         cov, dset = self.get_cov()
