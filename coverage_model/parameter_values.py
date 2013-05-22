@@ -282,6 +282,12 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
 
             try:
                 r = self.content.evaluate(self._pval_callback, slice_, self.parameter_type.fill_value)
+                ve = self.parameter_type.value_encoding
+                if hasattr(self.parameter_type, 'inner_encoding'):
+                    ve = self.parameter_type.inner_encoding
+
+                if ve is not None:
+                    r = np.asanyarray(r, dtype=ve)
             except Exception as ex:
                 import sys
                 raise ParameterFunctionException(ex.message, type(ex)), None, sys.exc_traceback
