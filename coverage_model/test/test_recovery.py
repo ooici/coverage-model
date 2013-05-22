@@ -13,8 +13,11 @@ from coverage_model.recovery import CoverageDoctor
 from nose.plugins.attrib import attr
 import unittest
 import numpy as np
+import os
+import tempfile
 from coverage_model.base_test_cases import CoverageModelIntTestCase
 from interface.objects import Dataset
+from pyon.public import log
 
 from subprocess import call
 import re
@@ -30,6 +33,8 @@ if not not_have_h5stat:
 @attr('INT', group='rec')
 class TestRecoveryInt(CoverageModelIntTestCase):
 
+    working_dir = os.path.join(tempfile.gettempdir(), 'cov_rec_tests')
+
     def setUp(self):
         pass
 
@@ -42,6 +47,7 @@ class TestRecoveryInt(CoverageModelIntTestCase):
         # Create the coverage
         cov, dset = self.get_cov()
         cov_pth = cov.persistence_dir
+        cov.close()
 
         # Analyze the valid coverage
         dr = CoverageDoctor(cov_pth, 'dprod', dset)
@@ -67,30 +73,100 @@ class TestRecoveryInt(CoverageModelIntTestCase):
         # Get original values (mock)
         orig_cov = AbstractCoverage.load(cov_pth)
         time_vals_orig = orig_cov.get_time_values()
+        orig_cov.close()
 
         # Corrupt the Master File
         fo = open(cov._persistence_layer.master_manager.file_path, "wb")
         fo.write('Junk')
         fo.close()
-        # corrupt_res = dr.analyze(reanalyze=True)
-        # self.assertTrue(corrupt_res.is_corrupt)
+        # Corrupt the lon Parameter file
+        fo = open(cov._persistence_layer.parameter_metadata['lon'].file_path, "wb")
+        fo.write('Junk')
+        fo.close()
 
-        # TODO: Destroy the metadata files
-
-        # TODO: RE-analyze coverage
-
-        # TODO: Should be corrupt, take action to repair if so
+        corrupt_res = dr.analyze(reanalyze=True)
+        self.assertTrue(corrupt_res.is_corrupt)
 
         # Repair the metadata files
-        dr.repair_metadata()
+        dr.repair(reanalyze=True)
 
-        # TODO: Re-analyze fixed coverage
+        fixed_res = dr.analyze(reanalyze=True)
+        self.assertFalse(fixed_res.is_corrupt)
 
         fixed_cov = AbstractCoverage.load(cov_pth)
         self.assertIsInstance(fixed_cov, AbstractCoverage)
 
         time_vals_fixed = fixed_cov.get_time_values()
+        fixed_cov.close()
         self.assertTrue(np.array_equiv(time_vals_orig, time_vals_fixed))
+
+    @unittest.skipIf(not_have_h5stat, 'h5stat is not accessible in current PATH')
+    @unittest.skipIf(not not_have_h5stat and not h5stat_correct_version, 'HDF is the incorrect version: %s' % version_str)
+    def test_recovery_failed_backup(self):
+        # Create the coverage
+        cov, dset = self.get_cov()
+        cov_pth = cov.persistence_dir
+        cov.close()
+
+        # Analyze the valid coverage
+        dr = CoverageDoctor(cov_pth, 'dprod', dset)
+
+        dr_result = dr.analyze()
+
+        # Corrupt the Master File
+        fo = open(cov._persistence_layer.master_manager.file_path, "wb")
+        fo.write('Junk')
+        fo.close()
+        # Corrupt the lon Parameter file
+        fo = open(cov._persistence_layer.parameter_metadata['lon'].file_path, "wb")
+        fo.write('Junk')
+        fo.close()
+
+        corrupt_res = dr.analyze(reanalyze=True)
+        self.assertTrue(corrupt_res.is_corrupt)
+
+        # Repair the metadata files
+        with self.assertRaises(ValueError):
+            temp_cov_dir = dr.repair(reanalyze=True, backup=True, copy_over=False, keep_temp=True)
+            log.info('Temporary Coverage Directory: {0}', temp_cov_dir)
+            self.assertTrue(os.path.exists(temp_cov_dir))
+
+        nofix_res = dr.analyze(reanalyze=True)
+        self.assertTrue(nofix_res.is_corrupt)
+
+    @unittest.skipIf(not_have_h5stat, 'h5stat is not accessible in current PATH')
+    @unittest.skipIf(not not_have_h5stat and not h5stat_correct_version, 'HDF is the incorrect version: %s' % version_str)
+    def test_recovery_failed_nobackup(self):
+        # Create the coverage
+        cov, dset = self.get_cov()
+        cov_pth = cov.persistence_dir
+        cov.close()
+
+        # Analyze the valid coverage
+        dr = CoverageDoctor(cov_pth, 'dprod', dset)
+
+        dr_result = dr.analyze()
+
+        # Corrupt the Master File
+        fo = open(cov._persistence_layer.master_manager.file_path, "wb")
+        fo.write('Junk')
+        fo.close()
+        # Corrupt the lon Parameter file
+        fo = open(cov._persistence_layer.parameter_metadata['lon'].file_path, "wb")
+        fo.write('Junk')
+        fo.close()
+
+        corrupt_res = dr.analyze(reanalyze=True)
+        self.assertTrue(corrupt_res.is_corrupt)
+
+        # Repair the metadata files
+        with self.assertRaises(ValueError):
+            temp_cov_dir = dr.repair(reanalyze=True, backup=False, copy_over=False, keep_temp=False)
+            log.info('Temporary Coverage Directory: {0}', temp_cov_dir)
+            self.assertFalse(os.path.exists(temp_cov_dir))
+
+        nofix_res = dr.analyze(reanalyze=True)
+        self.assertTrue(nofix_res.is_corrupt)
 
     def get_cov(self):
         # Instantiate a ParameterDictionary

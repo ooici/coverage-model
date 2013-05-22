@@ -59,7 +59,7 @@ def dump(infile_path):
         raise IOError('Input file does not exist: \'{0}\''.format(infile_path))
 
     try:
-        return subprocess.check_output(['h5dump', '-BHA', infile_path])
+        subprocess.check_output(['h5dump', '-BHA', infile_path], stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError:
         raise
 
