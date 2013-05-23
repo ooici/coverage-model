@@ -588,6 +588,12 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
 
         # Perform the assertions
 
+        # Make sure the value_encoding is enforced
+        self.assertEqual(numexpr_val[:].dtype, np.dtype('int32'))
+        self.assertEqual(pyfunc_val[:].dtype, np.dtype('float32'))
+        self.assertEqual(cov.get_parameter_values('numexpr').dtype, np.dtype('int32'))
+        self.assertEqual(cov.get_parameter_values('pyfunc').dtype, np.dtype('float32'))
+
         # NumexprFunction
         self._interop_assertions(cov, 'numexpr', numexpr_val)
 
