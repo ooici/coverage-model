@@ -249,7 +249,7 @@ def sampleviewcov():
     pdict.add_context(temp_ctxt)
 
     cov = ViewCoverage('test_data',
-                       'test_view',
+                       create_guid(),
                        reference_coverage_location=ref_cov,
                        name='test ViewCoverage',
                        parameter_dictionary=pdict)
@@ -280,7 +280,7 @@ def samplecomplexcov():
     pdict.add_context(val_ctxt)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    ccov = ComplexCoverage('test_data', 'test_complex', 'sample complex coverage', parameter_dictionary=pdict,
+    ccov = ComplexCoverage('test_data', create_guid(), 'sample complex coverage', parameter_dictionary=pdict,
                            mode='a', reference_coverage_locs=rcov_locs)
 
     return ccov
