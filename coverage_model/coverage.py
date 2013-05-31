@@ -871,6 +871,9 @@ class ViewCoverage(AbstractCoverage):
             self._closed = True
             raise
 
+        # Avoid duplicating cache entries by assigning the ViewCoverage's _value_cache to that of the reference_coverage
+        self._value_cache = self.reference_coverage._value_cache
+
     def close(self, force=False, timeout=None):
         if not hasattr(self, '_closed'):
             # _closed is the first attribute added to the coverage object (in AbstractCoverage)
