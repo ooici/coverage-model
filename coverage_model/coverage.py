@@ -226,7 +226,7 @@ class AbstractCoverage(AbstractIdentifiable):
         # Get the parameter variability; assign to VariabilityEnum.NONE if None
         pv = pcontext.variability or VariabilityEnum.NONE
         if no_sdom and pv in (VariabilityEnum.SPATIAL, VariabilityEnum.BOTH):
-            log.warn('ParameterContext \'{0}\' indicates Spatial variability, but coverage has no Spatial Domain'.format(pcontext.name))
+            log.info('ParameterContext \'{0}\' indicates Spatial variability, but coverage has no Spatial Domain'.format(pcontext.name))
 
         if pv == VariabilityEnum.TEMPORAL: # Only varies in the Temporal Domain
             pcontext.dom = DomainSet(self.temporal_domain, None)
