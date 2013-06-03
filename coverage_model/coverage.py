@@ -816,7 +816,12 @@ class ViewCoverage(AbstractCoverage):
 
                 self.name = self._persistence_layer.name
 
-                self.reference_coverage = AbstractCoverage.load(self._persistence_layer.rcov_loc, mode='r')
+                try:
+                    self.reference_coverage = AbstractCoverage.load(self._persistence_layer.rcov_loc, mode='r')
+                except IOError, ex:
+                    if 'unable to create file' in ex.message:
+                        raise IOError('Unable to open reference coverage: \'{0}\''.format(self._persistence_layer.rcov_loc))
+                    raise
 
                 self.__setup(self._persistence_layer.param_dict)
 
@@ -852,7 +857,12 @@ class ViewCoverage(AbstractCoverage):
                 self.name = name
 
                 # Open the reference coverage - ALWAYS in read-only mode (default)
-                self.reference_coverage = AbstractCoverage.load(reference_coverage_location)
+                try:
+                    self.reference_coverage = AbstractCoverage.load(reference_coverage_location)
+                except IOError, ex:
+                    if 'unable to create file' in ex.message:
+                        raise IOError('Unable to open reference coverage: \'{0}\''.format(self._persistence_layer.rcov_loc))
+                    raise
 
                 if parameter_dictionary is None:
                     parameter_dictionary = self.reference_coverage.parameter_dictionary
