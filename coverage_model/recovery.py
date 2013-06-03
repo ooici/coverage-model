@@ -329,6 +329,8 @@ class CoverageDoctor(object):
 
                 # Create the temporary Coverage
                 tempcov = SimplexCoverage(root_dir=tempcov_dir, persistence_guid=self._guid, name=self._guid, parameter_dictionary=pdict, spatial_domain=sdom, temporal_domain=tdom)
+                # Handle to persistence layer for tempcov
+                pl = tempcov._persistence_layer
 
                 # Set up the original and temporary coverage path strings
                 orig_dir = os.path.join(self.cov_pth, self._guid)
@@ -336,27 +338,28 @@ class CoverageDoctor(object):
 
                 # Insert same number of timesteps into temporary coverage as in broken coverage
                 brick_domains_new, new_brick_list, brick_list_spans, tD, bD, min_data_bound, max_data_bound = self.inspect_bricks(self.cov_pth, self._guid, 'time')
-                bls = [s.value for s in brick_list_spans]
-                maxes = [sum(b[3]) for b in new_brick_list.values()]
-                tempcov.insert_timesteps(sum(maxes))
+                empty_cov = brick_list_spans is None # If None, there are no brick files --> no timesteps, empty coverage!
+                if not empty_cov: # If None, there are no brick files --> no timesteps, empty coverage!
+                    bls = [s.value for s in brick_list_spans]
+                    maxes = [sum(b[3]) for b in new_brick_list.values()]
+                    tempcov.insert_timesteps(sum(maxes))
 
-                # Replace metadata is the Master file
-                pl = tempcov._persistence_layer
-                pl.master_manager.brick_domains = brick_domains_new
-                pl.master_manager.brick_list = new_brick_list
+                    # Replace metadata is the Master file
+                    pl.master_manager.brick_domains = brick_domains_new
+                    pl.master_manager.brick_list = new_brick_list
 
-                # Repair ExternalLinks to brick files
-                f = h5py.File(pl.master_manager.file_path, 'a')
-                for param_name in pdict.keys():
-                    del f[param_name]
-                    f.create_group(param_name)
-                    for brick in bls:
-                        link_path = '/{0}/{1}'.format(param_name, brick[0])
-                        brick_file_name = '{0}.hdf5'.format(brick[0])
-                        brick_rel_path = os.path.join(pl.parameter_metadata[param_name].root_dir.replace(tempcov.persistence_dir, '.'), brick_file_name)
-                        log.debug('link_path: %s', link_path)
-                        log.debug('brick_rel_path: %s', brick_rel_path)
-                        pl.master_manager.add_external_link(link_path, brick_rel_path, brick[0])
+                    # Repair ExternalLinks to brick files
+                    f = h5py.File(pl.master_manager.file_path, 'a')
+                    for param_name in pdict.keys():
+                        del f[param_name]
+                        f.create_group(param_name)
+                        for brick in bls:
+                            link_path = '/{0}/{1}'.format(param_name, brick[0])
+                            brick_file_name = '{0}.hdf5'.format(brick[0])
+                            brick_rel_path = os.path.join(pl.parameter_metadata[param_name].root_dir.replace(tempcov.persistence_dir, '.'), brick_file_name)
+                            log.debug('link_path: %s', link_path)
+                            log.debug('brick_rel_path: %s', brick_rel_path)
+                            pl.master_manager.add_external_link(link_path, brick_rel_path, brick[0])
 
                 pl.flush_values()
                 pl.flush()
@@ -377,10 +380,11 @@ class CoverageDoctor(object):
                 # Call update_rtree for each brick using PersistenceLayer builtin
                 brick_count = 0
 
-                for brick in bls:
-                    rtree_extents, brick_extents, brick_active_size = pl_fixed.calculate_extents(brick[1][1],bD,tD)
-                    pl_fixed.master_manager.update_rtree(brick_count, rtree_extents, obj=brick[0])
-                    brick_count += 1
+                if not empty_cov:
+                    for brick in bls:
+                        rtree_extents, brick_extents, brick_active_size = pl_fixed.calculate_extents(brick[1][1],bD,tD)
+                        pl_fixed.master_manager.update_rtree(brick_count, rtree_extents, obj=brick[0])
+                        brick_count += 1
 
                 # Update parameter_bounds property based on each parameter's brick data using deep inspection
                 valid_bounds_types = [
@@ -390,11 +394,12 @@ class CoverageDoctor(object):
                     'ConstantRangeType'
                 ]
 
-                for param in pdict.keys():
-                    if pdict.get_context(param).param_type.__class__.__name__ in valid_bounds_types:
-                        brick_domains_new, new_brick_list, brick_list_spans, tD, bD, min_data_bound, max_data_bound = self.inspect_bricks(self.cov_pth, self._guid, param)
-                        # Update the metadata
-                        pl_fixed.update_parameter_bounds(param, [min_data_bound, max_data_bound])
+                if not empty_cov:
+                    for param in pdict.keys():
+                        if pdict.get_context(param).param_type.__class__.__name__ in valid_bounds_types:
+                            brick_domains_new, new_brick_list, brick_list_spans, tD, bD, min_data_bound, max_data_bound = self.inspect_bricks(self.cov_pth, self._guid, param)
+                            # Update the metadata
+                            pl_fixed.update_parameter_bounds(param, [min_data_bound, max_data_bound])
                 pl_fixed.flush()
                 fixed_cov.close()
 
