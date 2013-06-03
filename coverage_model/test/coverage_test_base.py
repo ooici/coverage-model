@@ -657,6 +657,7 @@ class CoverageIntTestBase(object):
 
     # ############################
     # INLINE & OUT OF BAND R/W
+    @unittest.skip('Out-of-band writes are not currently allowed')
     def test_run_test_dispatcher(self):
         from coverage_model.brick_dispatch import run_test_dispatcher
         disp=run_test_dispatcher(work_count=20, num_workers=1)

@@ -599,7 +599,7 @@ class PersistedStorage(AbstractStorage):
             log.trace('brick_slice=%s\tbrick_mm=%s', brick_slice, brick_mm)
 
             if None in brick_slice:
-                log.info('Brick does not contain any of the requested indices: Move to next brick')
+                log.debug('Brick does not contain any of the requested indices: Move to next brick')
                 continue
 
             ret_slice = bricking_utils.get_value_slice_nd(slice_, ret_shp, bbnds, brick_slice, brick_mm)
