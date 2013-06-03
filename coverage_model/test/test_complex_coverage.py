@@ -418,13 +418,13 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
                                        reference_coverage_locs=[cova_pth, covb_pth, covc_pth],
                                        complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 
-            self.assertEquals(log_mock.warn.call_args_list[3],
+            self.assertEquals(log_mock.warn.call_args_list[0],
                               mock.call("Coverage with time bounds '%s' already present; ignoring", (first_times.min(), first_times.max(), 0)))
 
-            self.assertEquals(log_mock.info.call_args_list[0],
+            self.assertEquals(log_mock.info.call_args_list[4],
                               mock.call("Parameter '%s' from coverage '%s' already present, skipping...", 'data_all', covc_pth))
 
-            self.assertEquals(log_mock.info.call_args_list[1],
+            self.assertEquals(log_mock.info.call_args_list[5],
                               mock.call("Parameter '%s' from coverage '%s' already present, skipping...", 'time', covc_pth))
 
     def _setup_allparams(self, size=10, num_covs=2, sequential_covs=True):
