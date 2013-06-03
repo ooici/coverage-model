@@ -1,6 +1,9 @@
 [run]
 source = coverage_model
+[report]
 omit =
     */test/*
+    */brick_worker*
+    */brick_dispatch*
 [html]
 directory = coverage_results
