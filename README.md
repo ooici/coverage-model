@@ -55,6 +55,8 @@ You will need to upgrade couchdb to at least 1.1.0.
 Setup a virtualenv to run coverage-model (use any name you like):
 
     mkvirtualenv --python=python2.7 coverage_model
+    workon coverage_model
+    pip install numpy==1.6.2
 
 **Optional:** *To run any of the example functions that result in graphical output, you must also install matplotlib*
 
