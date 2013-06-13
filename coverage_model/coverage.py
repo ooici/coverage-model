@@ -864,8 +864,7 @@ class ViewCoverage(AbstractCoverage):
                         raise IOError('Unable to open reference coverage: \'{0}\''.format(self._persistence_layer.rcov_loc))
                     raise
 
-                if parameter_dictionary is None:
-                    parameter_dictionary = self.reference_coverage.parameter_dictionary
+                parameter_dictionary = self.__normalize_param_dict(parameter_dictionary)
 
                 self._persistence_layer = SimplePersistenceLayer(root_dir,
                                                                  persistence_guid,
@@ -896,14 +895,17 @@ class ViewCoverage(AbstractCoverage):
 
         super(ViewCoverage, self).close(force, timeout)
 
-    def replace_reference_coverage(self, path, use_current_param_dict=True, parameter_dictionary=None):
+    def replace_reference_coverage(self, path=None, use_current_param_dict=True, parameter_dictionary=None):
         if self.mode == 'r':
             raise IOError('Coverage not open for writing: mode == \'{0}\''.format(self.mode))
 
-        ncov = AbstractCoverage.load(path)
+        if path is not None:
+            ncov = AbstractCoverage.load(path)
+            # Loading the coverage worked - go ahead and replace things!
+            self.reference_coverage = ncov
+        else:
+            path = self.reference_coverage.persistence_dir
 
-        # Loading the coverage worked - go ahead and replace things!
-        self.reference_coverage = ncov
         self._range_dictionary = ParameterDictionary()
         self._range_value = RangeValues()
         self._persistence_layer.rcov_loc = path
@@ -911,16 +913,13 @@ class ViewCoverage(AbstractCoverage):
         self.clear_value_cache()
 
         if use_current_param_dict:
-            pd = self._persistence_layer.param_dict
+            parameter_dictionary = self._persistence_layer.param_dict
         else:
-            if parameter_dictionary is None:
-                pd = self.reference_coverage.parameter_dictionary
-            else:
-                pd = parameter_dictionary
+            parameter_dictionary = self.__normalize_param_dict(parameter_dictionary)
 
-        self._persistence_layer.param_dict = pd
+        self._persistence_layer.param_dict = parameter_dictionary
 
-        self.__setup(pd)
+        self.__setup(parameter_dictionary)
 
         self._persistence_layer.flush()
 
@@ -938,6 +937,16 @@ class ViewCoverage(AbstractCoverage):
         self.spatial_domain = self.reference_coverage.spatial_domain
 
         self._head_coverage_path = self.reference_coverage.head_coverage_path
+
+    def __normalize_param_dict(self, parameter_dictionary):
+        if parameter_dictionary is None:
+            parameter_dictionary = self.reference_coverage.parameter_dictionary.keys()
+        elif hasattr(parameter_dictionary, 'keys'):
+            parameter_dictionary = parameter_dictionary.keys()
+        elif not hasattr(parameter_dictionary, '__iter__'):
+            parameter_dictionary = [parameter_dictionary,]
+
+        return parameter_dictionary
 
     def insert_timesteps(self, count, origin=None):
         raise TypeError('Cannot insert timesteps into a ViewCoverage')
