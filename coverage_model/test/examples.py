@@ -636,7 +636,7 @@ def sbe37im_samplecov(num_timesteps=100000, value_caching=True):
     # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
     from coverage_model.test.test_parameter_functions import _create_all_params
     contexts = _create_all_params()
-    pdict.add_context(contexts.pop('TIME'), is_temporal=True)  # Add time
+    pdict.add_context(contexts.pop('time'), is_temporal=True)  # Add time
     map(pdict.add_context, contexts.values())  # Add others
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
@@ -647,9 +647,9 @@ def sbe37im_samplecov(num_timesteps=100000, value_caching=True):
     scov.insert_timesteps(nt)
 
     # Add data for each parameter
-    scov.set_parameter_values('TIME', value=np.arange(nt))
-    scov.set_parameter_values('LAT', value=45)
-    scov.set_parameter_values('LON', value=-71)
+    scov.set_parameter_values('time', value=np.arange(nt))
+    scov.set_parameter_values('lat', value=45)
+    scov.set_parameter_values('lon', value=-71)
 
     # Make a bunch of data to assign to the dependent parameters.  This would be added to the coverage via ingestion
     # From DPS info:
@@ -658,11 +658,11 @@ def sbe37im_samplecov(num_timesteps=100000, value_caching=True):
     # and the seabird website here: http://www.seabird.com/products/spec_sheets/37imdata.htm
 
     # SBE 37IM - temperature in 't_dec' example range between 280000 and 350000
-    scov.set_parameter_values('TEMPWAT_L0', value=np.random.random_sample(nt)*(350000-280000)+280000)
+    scov.set_parameter_values('tempwat_l0', value=np.random.random_sample(nt)*(350000-280000)+280000)
     # SBE 37IM - conductivity, ranging between 100000 & 750000 (not 0 because never 0 in seawater)
-    scov.set_parameter_values('CONDWAT_L0', value=np.random.random_sample(nt)*(750000-100000)+100000)
+    scov.set_parameter_values('condwat_l0', value=np.random.random_sample(nt)*(750000-100000)+100000)
     # SBE 37IM - pressure, ranging between 2789 and 10000 (couldn't find a range in the DPS, this seems reasonable!)
-    scov.set_parameter_values('PRESWAT_L0', value=np.random.random_sample(nt)*(10000-2789)+2789)
+    scov.set_parameter_values('preswat_l0', value=np.random.random_sample(nt)*(10000-2789)+2789)
 
 
     return scov
@@ -681,7 +681,7 @@ def sbe37im_complexcov(num_timesteps=10, value_caching=True):
     from coverage_model.test.test_parameter_functions import _create_all_params
     contexts = _create_all_params()
 
-    tctxt = contexts.pop('TIME')
+    tctxt = contexts.pop('time')
 
     # Make the llcov
 
@@ -690,8 +690,8 @@ def sbe37im_complexcov(num_timesteps=10, value_caching=True):
 
     pdict.add_context(tctxt, is_temporal=True)  # Add time
     # Add lat, lon, time parameters
-    pdict.add_context(contexts.pop('LAT'))
-    pdict.add_context(contexts.pop('LON'))
+    pdict.add_context(contexts.pop('lat'))
+    pdict.add_context(contexts.pop('lon'))
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
     llcov = SimplexCoverage('test_data', create_guid(), 'lat lon coverage for an SBE 37IM', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, value_caching=value_caching)
@@ -701,9 +701,9 @@ def sbe37im_complexcov(num_timesteps=10, value_caching=True):
     llcov.insert_timesteps(nt)
 
     # Add data for the llcov
-    llcov.set_parameter_values('TIME', value=np.arange(nt))
-    llcov.set_parameter_values('LAT', value=45)
-    llcov.set_parameter_values('LON', value=-71)
+    llcov.set_parameter_values('time', value=np.arange(nt))
+    llcov.set_parameter_values('lat', value=45)
+    llcov.set_parameter_values('lon', value=-71)
 
     llcov.close()
 
@@ -712,23 +712,23 @@ def sbe37im_complexcov(num_timesteps=10, value_caching=True):
     pdict.add_context(tctxt, is_temporal=True)
 
     # Add L0 params
-    pdict.add_context(contexts.pop('TEMPWAT_L0'))
-    pdict.add_context(contexts.pop('CONDWAT_L0'))
-    pdict.add_context(contexts.pop('PRESWAT_L0'))
+    pdict.add_context(contexts.pop('tempwat_l0'))
+    pdict.add_context(contexts.pop('condwat_l0'))
+    pdict.add_context(contexts.pop('preswat_l0'))
 
     scov = SimplexCoverage('test_data', create_guid(), 'lat lon coverage for an SBE 37IM', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, value_caching=value_caching)
 
     scov.insert_timesteps(nt)
 
     # Add data for the L0 cov
-    scov.set_parameter_values('TIME', value=np.arange(nt))
+    scov.set_parameter_values('time', value=np.arange(nt))
 
     # SBE 37IM - temperature in 't_dec' example range between 280000 and 350000
-    scov.set_parameter_values('TEMPWAT_L0', value=np.random.random_sample(nt)*(350000-280000)+280000)
+    scov.set_parameter_values('tempwat_l0', value=np.random.random_sample(nt)*(350000-280000)+280000)
     # SBE 37IM - conductivity, ranging between 100000 & 750000 (not 0 because never 0 in seawater)
-    scov.set_parameter_values('CONDWAT_L0', value=np.random.random_sample(nt)*(750000-100000)+100000)
+    scov.set_parameter_values('condwat_l0', value=np.random.random_sample(nt)*(750000-100000)+100000)
     # SBE 37IM - pressure, ranging between 2789 and 10000 (couldn't find a range in the DPS, this seems reasonable!)
-    scov.set_parameter_values('PRESWAT_L0', value=np.random.random_sample(nt)*(10000-2789)+2789)
+    scov.set_parameter_values('preswat_l0', value=np.random.random_sample(nt)*(10000-2789)+2789)
 
     scov.close()
 
@@ -738,11 +738,11 @@ def sbe37im_complexcov(num_timesteps=10, value_caching=True):
     pdict.add_context(tctxt, is_temporal=True)
 
     # Add L1/L2 params
-    pdict.add_context(contexts.pop('TEMPWAT_L1'))
-    pdict.add_context(contexts.pop('CONDWAT_L1'))
-    pdict.add_context(contexts.pop('PRESWAT_L1'))
-    pdict.add_context(contexts.pop('DENSITY'))
-    pdict.add_context(contexts.pop('PRACSAL'))
+    pdict.add_context(contexts.pop('tempwat_l1'))
+    pdict.add_context(contexts.pop('condwat_l1'))
+    pdict.add_context(contexts.pop('preswat_l1'))
+    pdict.add_context(contexts.pop('density'))
+    pdict.add_context(contexts.pop('pracsal'))
 
     ccov = ComplexCoverage('test_data', create_guid(), 'l1 l2 coverage for SBE 37IM', parameter_dictionary=pdict, reference_coverage_locs=[llcov.persistence_dir, scov.persistence_dir], complex_type=ComplexCoverageType.PARAMETRIC_STRICT)
     # ccov.insert_timesteps(nt)
