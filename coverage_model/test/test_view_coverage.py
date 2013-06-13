@@ -77,6 +77,28 @@ class TestSampleCovViewInt(CoverageModelIntTestCase, CoverageIntTestBase):
         self.assertTrue(np.array_equal(vcov.get_time_values(), cov1.get_time_values()))
         self.assertEqual(vcov.list_parameters(), ['conductivity', 'lat', 'lon', 'temp', 'time'])
 
+    def test_replace_reference_coverage_change_pdict(self):
+        cov1, _ = sc.get_cov(nt=10)
+
+        cov2, _ = sc.get_cov(only_time=True, nt=10)
+        cov2.set_time_values([i*2 for i in range(10)])
+
+        vcov = ViewCoverage(self.working_dir, create_guid(), name='sample view cov', reference_coverage_location=cov1.persistence_dir)
+        self.assertEqual(vcov.list_parameters(), ['conductivity', 'lat', 'lon', 'temp', 'time'])
+        np.testing.assert_array_equal(vcov.get_time_values(), cov1.get_time_values())
+
+        vcov.replace_reference_coverage(use_current_param_dict=False, parameter_dictionary=['time', 'temp'])
+        self.assertEqual(vcov.list_parameters(), ['temp', 'time'])
+        np.testing.assert_array_equal(vcov.get_time_values(), cov1.get_time_values())
+
+        vcov.replace_reference_coverage(use_current_param_dict=False, parameter_dictionary='temp')
+        self.assertEqual(vcov.list_parameters(), ['temp'])
+        np.testing.assert_array_equal(vcov.get_parameter_values('temp'), cov1.get_parameter_values('temp'))
+
+        vcov.replace_reference_coverage(use_current_param_dict=False, parameter_dictionary=None)
+        self.assertEqual(vcov.list_parameters(), ['conductivity', 'lat', 'lon', 'temp', 'time'])
+        np.testing.assert_array_equal(vcov.get_time_values(), cov1.get_time_values())
+
     def test_replace_simplex_with_complex(self):
         cov, _ = sc.get_cov(nt=10)
         cov_pth = cov.persistence_dir
