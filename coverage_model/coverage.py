@@ -670,6 +670,44 @@ class AbstractCoverage(AbstractIdentifiable):
 
         return size
 
+    def repair_temporal_geometry(self):
+        if self.closed:
+            raise IOError('I/O operation on closed file')
+
+        if self.mode == 'r':
+            raise IOError('Coverage not open for writing: mode == \'{0}\''.format(self.mode))
+
+        if isinstance(self, (ViewCoverage, ComplexCoverage)):
+            raise TypeError('This action is only available for SimplexCoverages: {0}'.format(type(self)))
+
+        ont = self.get_time_values()
+        nt, inds = np.unique(ont, return_index=True)
+        sl = (np.s_[inds.tolist()],)
+
+        # Check if there are any duplicates
+        num_dups = len(ont) - len(nt)
+        if num_dups == 0:  # No duplicates!!
+            log.info('The coverage does not have duplicate timesteps')
+            print 'The coverage does not have duplicate timesteps'
+            return
+
+        log.debug('Coverage contains %s duplicate timesteps', num_dups)
+        print 'Coverage contains %s duplicate timesteps' % num_dups
+        # Overwrite all the values, padding num_dups at the end with fill_value
+        for p in self.list_parameters():
+            if p == self.temporal_parameter_name:
+                nv = nt
+            else:
+                nv = self.get_parameter_values(p)[sl]
+
+            self.set_parameter_values(p, np.append(nv, self._range_value[p].get_fill_array(num_dups)))
+            del nv
+
+        self.temporal_domain.shape.extents = (len(nt),) + self.temporal_domain.shape.extents[1:]
+        self._persistence_layer.shrink_domain(self.temporal_domain.shape.extents)
+
+        self.flush()
+
     @property
     def persistence_guid(self):
         if isinstance(self._persistence_layer, InMemoryPersistenceLayer):

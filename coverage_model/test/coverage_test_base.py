@@ -502,6 +502,58 @@ class CoverageIntTestBase(object):
         with self.assertRaises(IOError):
             rcov._range_value.time[0] = 1
 
+    def _do_temporal_repair_assertions(self, cov, ts):
+        if isinstance(cov, (ViewCoverage, ComplexCoverage)):
+            with self.assertRaises(TypeError):
+                cov.repair_temporal_geometry()
+            return
+        
+        times = cov.get_time_values()
+        otimes = times.copy() # Retain the original times for later comparison
+
+        # Add half again as many duplicate times and reorder them
+        times = np.append(times, times[int(ts/2):])
+        np.random.shuffle(times)
+
+        # Expand the temporal domain accordingly and set the new values
+        cov.insert_timesteps(len(times)-ts)
+        cov.set_time_values(times)
+
+        # Resolve the temporal domain issues
+        cov.repair_temporal_geometry()
+
+        self.assertEqual(cov.num_timesteps, ts)
+        ntimes = cov.get_time_values()
+        np.testing.assert_array_equal(otimes, ntimes)
+        np.testing.assert_array_equal(np.sort(ntimes), ntimes)
+
+        lcov = AbstractCoverage.load(cov.persistence_dir)
+        with self.assertRaises(IOError):
+            lcov.repair_temporal_geometry()
+
+        cov.close()
+        with self.assertRaises(IOError):
+            cov.repair_temporal_geometry()
+
+    @get_props()
+    def test_repair_temporal_geometry(self):
+        props = self.test_repair_temporal_geometry.props
+        ts = props['time_steps']
+        if ts > 0:
+            scov, cov_name = self.get_cov(nt=ts)
+            self._do_temporal_repair_assertions(scov, ts)
+
+    @get_props()
+    def test_repair_temporal_geometry_from_load(self):
+        props = self.test_repair_temporal_geometry_from_load.props
+        ts = props['time_steps']
+        if ts > 0:
+            scov, cov_name = self.get_cov(nt=ts)
+            scov.close()
+            scov = AbstractCoverage.load(scov.persistence_dir, mode='w')
+
+            self._do_temporal_repair_assertions(scov, ts)
+
     def test_persistence_variation1(self):
         scov, cov_name = self.get_cov(only_time=True, in_memory=False, inline_data_writes=False, auto_flush_values=True)
         res = self._insert_set_get(scov=scov, timesteps=5000, data=np.arange(5000), _slice=slice(0,5000), param='time')

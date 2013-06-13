@@ -87,6 +87,9 @@ class SimplePersistenceLayer(object):
         # No Op - storage expanded by *Value classes
         pass
 
+    def shrink_domain(self, total_domain, do_flush=True):
+        pass
+
     def init_parameter(self, parameter_context, *args, **kwargs):
         return InMemoryStorage(dtype=parameter_context.param_type.value_encoding, fill_value=parameter_context.param_type.fill_value)
 
@@ -416,6 +419,34 @@ class PersistenceLayer(object):
         self.master_manager.flush()
         if do_flush:
             # If necessary (i.e. write_brick has been called), flush the master_manager461
+            if self.master_manager.is_dirty():
+                self.master_manager.flush()
+
+    def shrink_domain(self, total_domain, do_flush=True):
+        from coverage_model import bricking_utils
+        # Find the last brick needed to contain the domain
+        brick = bricking_utils.get_bricks_from_slice(total_domain, self.master_manager.brick_tree)
+
+        bid, bguid = brick[0]
+
+        # Get the brick_guids for all the bricks after the one we need
+        rm_bricks = [s.value for s in self.master_manager.brick_tree._spans[bid+1:]]
+        # Remove everything that comes after the brick we still need from the RTree
+        self.master_manager.brick_tree._spans = self.master_manager.brick_tree._spans[:bid+1]
+
+        # Remove the unnecessary bricks from the brick list
+        for r in rm_bricks:
+            del self.master_manager.brick_list[r]
+            # and the file system...
+
+
+
+        # Reset the first member of brick_domains
+        self.master_manager.brick_domains[0] = list(total_domain)
+        # And the appropriate entry in brick_list
+        self.master_manager.brick_list[bguid] = tuple(self.master_manager.brick_list[bguid][:-1]) + ((total_domain[0] - self.master_manager.brick_list[bguid][1][0],),)
+
+        if do_flush:
             if self.master_manager.is_dirty():
                 self.master_manager.flush()
 
@@ -961,6 +992,9 @@ class InMemoryPersistenceLayer(object):
 
     def expand_domain(self, *args, **kwargs):
         # No Op - storage expanded by *Value classes
+        pass
+
+    def shrink_domain(self, total_domain, do_flush=True):
         pass
 
     def init_parameter(self, parameter_context, *args, **kwargs):
