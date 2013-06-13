@@ -40,6 +40,7 @@ setup(  name = 'coverage-model',
         # 'rtree==0.7.0', # Removed due to memory leak - see commit: 2e4af870905c64d5f3435744177084c905833db3
         'pidantic',
         'nose==1.1.2',  # must specify to avoid GSW from getting the latest version - which conflicts with pyon's
+        'greenlet==0.4.0',  # must specify, some other dependency pulls 0.4.1...conflicts with pyon's
         'gsw==3.0.1a1',
         'pydot==1.0.28',
         'networkx==1.7',
