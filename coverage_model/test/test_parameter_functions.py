@@ -36,27 +36,40 @@ class TestParameterFunctionsUnit(CoverageModelUnitTestCase):
         func = NumexprFunction('v*10', 'v*10', ['v'], {'v': 'VALS'})
 
         ret = func.evaluate(_get_vals, slice(None))
-        self.assertTrue(np.array_equal(ret, np.array([1, 3, 5, 6, 23]) * 10))
+        np.testing.assert_array_equal(ret, np.array([1, 3, 5, 6, 23]) * 10)
 
     def test_numexpr_function_slice(self):
         func = NumexprFunction('v*10', 'v*10', ['v'], {'v': 'VALS'})
 
         ret = func.evaluate(_get_vals, slice(3, None))
-        self.assertTrue(np.array_equal(ret, np.array([6, 23]) * 10))
+        np.testing.assert_array_equal(ret, np.array([6, 23]) * 10)
 
     def test_nested_numexpr_function(self):
         func1 = NumexprFunction('v*10', 'v*10', ['v'], {'v': 'VALS'})
         func2 = NumexprFunction('v*10', 'v*10', ['v'], {'v': func1})
 
         ret = func2.evaluate(_get_vals, slice(None))
-        self.assertTrue(np.array_equal(ret, np.array([100, 300, 500, 600, 2300])))
+        np.testing.assert_array_equal(ret, np.array([100, 300, 500, 600, 2300]))
+
+    def test_numexpr_function_splat(self):
+        func = NumexprFunction('v*a', 'v*a', ['v', 'a*'], {'v': 'VALS', 'a*': 'VALS'})
+
+        ret = func.evaluate(_get_vals, slice(None))
+        np.testing.assert_array_equal(ret, np.array([1*23, 3*23, 5*23, 6*23, 23*23]))
 
     def test_python_function(self):
         owner = 'coverage_model.test.test_parameter_functions'
         func = PythonFunction('multiplier', owner, 'pyfunc', ['first', 'second'])
 
         ret = func.evaluate(_get_vals, slice(None))
-        self.assertTrue(np.array_equal(ret, np.array([1*1, 2*4, 3*6, 4*8, 5*10])))
+        np.testing.assert_array_equal(ret, np.array([1*1, 2*4, 3*6, 4*8, 5*10]))
+
+    def test_python_function_splat(self):
+        owner = 'coverage_model.test.test_parameter_functions'
+        func = PythonFunction('multiplier', owner, 'pyfunc', ['first', 'second*'], param_map={'first': 'first', 'second*': 'second'})
+
+        ret = func.evaluate(_get_vals, slice(None))
+        np.testing.assert_array_equal(ret, np.array([1*10, 2*10, 3*10, 4*10, 5*10]))
 
     def test_python_function_exception(self):
         owner = 'coverage_model.test.test_parameter_functions'
@@ -69,7 +82,7 @@ class TestParameterFunctionsUnit(CoverageModelUnitTestCase):
         func = PythonFunction('multiplier', owner, 'pyfunc', ['first', 'second'])
 
         ret = func.evaluate(_get_vals, slice(1, 4))
-        self.assertTrue(np.array_equal(ret, np.array([2*4, 3*6, 4*8])))
+        np.testing.assert_array_equal(ret, np.array([2*4, 3*6, 4*8]))
 
     def test_nested_python_function(self):
         owner = 'coverage_model.test.test_parameter_functions'
@@ -77,7 +90,7 @@ class TestParameterFunctionsUnit(CoverageModelUnitTestCase):
         func2 = PythonFunction('quartic', owner, 'pyfunc', [func1, func1])
 
         ret = func2.evaluate(_get_vals, slice(None))
-        self.assertTrue(np.array_equal(ret, np.array([1,  16,  81, 256, 625])))
+        np.testing.assert_array_equal(ret, np.array([1,  16,  81, 256, 625]))
 
     def get_module_dependencies(self):
         owner = 'coverage_model.test.test_parameter_functions'
@@ -239,16 +252,16 @@ class TestParameterFunctionsInt(CoverageModelIntTestCase):
 
         # tempwat_l1 = (tempwat_l0 / 10000) - 10
         t1 = (t0vals / 10000) - 10
-        self.assertTrue(np.allclose(t1val[:], t1))
+        np.testing.assert_allclose(t1val[:], t1)
 
         # condwat_l1 = (condwat_l0 / 100000) - 0.5
         c1 = (c0vals / 100000) - 0.5
-        self.assertTrue(np.allclose(c1val[:], c1))
+        np.testing.assert_allclose(c1val[:], c1)
 
         # Equation uses p_range, which is a calibration coefficient - Fixing to 679.34040721
         #   preswat_l1 = (preswat_l0 * p_range / (0.85 * 65536)) - (0.05 * p_range)
         p1 = (p0vals * 679.34040721 / (0.85 * 65536)) - (0.05 * 679.34040721)
-        self.assertTrue(np.allclose(p1val[:], p1))
+        np.testing.assert_allclose(p1val[:], p1, rtol=1e-05)
 
     def test_L2_params(self):
         self.contexts = _get_pc_dict('tempwat_l1', 'condwat_l1', 'preswat_l1',
@@ -285,7 +298,7 @@ class TestParameterFunctionsInt(CoverageModelIntTestCase):
         # pracsal = gsw.SP_from_C((condwat_l1 * 10), tempwat_l1, preswat_l1)
         import gsw
         ps = gsw.SP_from_C((c1val[:] * 10.), t1val[:], p1val[:])
-        self.assertTrue(np.allclose(psval[:], ps))
+        np.testing.assert_allclose(psval[:], ps)
 
         # absolute_salinity = gsw.SA_from_SP(pracsal, preswat_l1, longitude, latitude)
         # conservative_temperature = gsw.CT_from_t(absolute_salinity, tempwat_l1, preswat_l1)
@@ -293,7 +306,7 @@ class TestParameterFunctionsInt(CoverageModelIntTestCase):
         abs_sal = gsw.SA_from_SP(psval[:], p1val[:], lonvals, latvals)
         cons_temp = gsw.CT_from_t(abs_sal, t1val[:], p1val[:])
         rho = gsw.rho(abs_sal, cons_temp, p1val[:])
-        self.assertTrue(np.allclose(rhoval[:], rho))
+        np.testing.assert_allclose(rhoval[:], rho)
 
 import networkx as nx
 @attr('INT',group='cov')
