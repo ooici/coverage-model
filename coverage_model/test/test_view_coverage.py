@@ -18,7 +18,7 @@ from test_simplex_coverage import TestSampleCovInt as sc
 from coverage_test_base import *
 
 
-@attr('INT', group='view_cov')
+@attr('INT', group='cov')
 class TestSampleCovViewInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
     # Make a deep copy of the base TESTING_PROPERTIES dict and then modify for this class

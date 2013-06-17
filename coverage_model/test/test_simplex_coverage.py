@@ -376,7 +376,8 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
                             'quantity',
                             'array',
                             'record',
-                            'fixed_str']
+                            'fixed_str',
+                            'sparse']
 
         if only_time:
             pname_filter = ['time']
@@ -395,11 +396,19 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         if (nt is None) or (nt == 0) or (make_empty is True):
             return scov, 'TestPtypesCovInt'
         else:
-            scov.insert_timesteps(nt)
-
             # Add data for each parameter
-            scov.set_parameter_values('time', value=np.arange(nt))
-            if not only_time:
+            print nt
+            if only_time:
+                scov.insert_timesteps(nt)
+                scov.set_parameter_values('time', value=np.arange(nt))
+            else:
+                scov.set_parameter_values('sparse', [[[2, 4, 6], [8, 10, 12]]])
+                scov.insert_timesteps(nt/2)
+
+                scov.set_parameter_values('sparse', [[[4, 8], [16, 20]]])
+                scov.insert_timesteps(nt/2)
+
+                scov.set_parameter_values('time', value=np.arange(nt))
                 scov.set_parameter_values('boolean', value=[True, True, True], tdoa=[[2,4,14]])
                 scov.set_parameter_values('const_float', value=-71.11) # Set a constant with correct data type
                 scov.set_parameter_values('const_int', value=45.32) # Set a constant with incorrect data type (fixed under the hood)

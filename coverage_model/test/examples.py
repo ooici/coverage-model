@@ -571,6 +571,10 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True, mak
     fstr_ctxt.long_name = 'example of a fixed-length string parameter'
     pdict.add_context(fstr_ctxt)
 
+    sparse_ctxt = ParameterContext('sparse', param_type=SparseConstantType(base_type=ArrayType(inner_encoding='float32', inner_fill_value=-99)))
+    sparse_ctxt.long_naem = 'example of an opaque sparse constant parameter'
+    pdict.add_context(sparse_ctxt)
+
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
     scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory)
 
@@ -579,7 +583,12 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True, mak
         return scov
 
     nt = 20
-    scov.insert_timesteps(nt)
+
+    scov.set_parameter_values('sparse', [[[2, 4, 6], [8, 10, 12]]])
+    scov.insert_timesteps(nt/2)
+
+    scov.set_parameter_values('sparse', [[[4, 8], [16, 20]]])
+    scov.insert_timesteps(nt/2)
 
     # Add data for each parameter
     scov.set_parameter_values('quantity_time', value=np.arange(nt))

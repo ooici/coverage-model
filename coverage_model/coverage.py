@@ -670,6 +670,71 @@ class AbstractCoverage(AbstractIdentifiable):
 
         return size
 
+    def repair_temporal_geometry(self):
+        if self.closed:
+            raise IOError('I/O operation on closed file')
+
+        if self.mode == 'r':
+            raise IOError('Coverage not open for writing: mode == \'{0}\''.format(self.mode))
+
+        if isinstance(self, (ViewCoverage, ComplexCoverage)):
+            raise TypeError('This action is only available for SimplexCoverages: {0}'.format(type(self)))
+
+        ont = self.get_time_values()
+        nt, inds = np.unique(ont, return_index=True)
+        sl = (np.s_[inds.tolist()],)
+
+        # Check if there are any duplicates
+        num_dups = len(ont) - len(nt)
+        if num_dups == 0:  # No duplicates!!
+            log.info('The coverage does not have duplicate timesteps')
+            print 'The coverage does not have duplicate timesteps'
+            return
+
+        log.debug('Coverage contains %s duplicate timesteps', num_dups)
+        # Overwrite all the values, padding num_dups at the end with fill_value
+        for p in self.list_parameters():
+            vc = self._range_dictionary[p].param_type._value_class
+            if vc in ('ParameterFunctionValue', 'FunctionValue', 'ConstantValue', 'ConstantRangeValue'):
+                continue
+
+            elif vc == 'SparseConstantValue':
+                s = Span(None, max(inds))
+                try:
+                    spns = self._range_value[p].content
+                    if not hasattr(spns, '__iter__'):
+                        # spns is the fill_value for the parameter, no span assignment has happened yet, so just move on
+                        continue
+                except ValueError, ve:
+                    # Raised when there are no bricks (no timesteps) - this should never happen...
+                    continue
+                nspns = []
+                for spn in spns:
+                    if spn in s:
+                        nspns.append(spn)
+                    elif spn.lower_bound in s:
+                        nspns.append(Span(spn.lower_bound, None, offset=spn.offset, value=spn.value))
+                    elif spn.upper_bound is not None and spn.upper_bound in s:
+                        nspns.append(Span(s.lower_bound, spn.upper_bound, offset=spn.offset, value=spn.value))
+
+                self._range_value[p]._storage[0] = nspns
+
+            else:
+                if p == self.temporal_parameter_name:
+                    nv = nt
+                else:
+                    nv = self.get_parameter_values(p)[sl]
+
+                self.set_parameter_values(p, np.append(nv, self._range_value[p].get_fill_array(num_dups)))
+                del nv
+
+        self.temporal_domain.shape.extents = (len(nt),) + self.temporal_domain.shape.extents[1:]
+        self._persistence_layer.shrink_domain(self.temporal_domain.shape.extents)
+
+        self.flush()
+
+        self.clear_value_cache()
+
     @property
     def persistence_guid(self):
         if isinstance(self._persistence_layer, InMemoryPersistenceLayer):
