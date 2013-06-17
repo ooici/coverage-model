@@ -407,6 +407,12 @@ class Span(AbstractBase):
 
     def __contains__(self, index):
 
+        if isinstance(index, Span):
+            return index.lower_bound in self and index.upper_bound in self
+
+        if index is None:
+            return True
+
         if self.lower_bound is None and self.upper_bound is None:
             return True
         elif self.lower_bound is None and index < self.upper_bound:

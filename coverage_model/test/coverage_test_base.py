@@ -508,24 +508,34 @@ class CoverageIntTestBase(object):
                 cov.repair_temporal_geometry()
             return
         
-        times = cov.get_time_values()
-        otimes = times.copy() # Retain the original times for later comparison
+        otimes = cov.get_time_values().copy() # Retain the original times for later comparison
 
-        # Add half again as many duplicate times and reorder them
-        times = np.append(times, times[int(ts/2):])
-        np.random.shuffle(times)
+        # Collect values to use as duplicates
+        dups = {}
+        for p in cov.list_parameters():
+            if not isinstance(cov.get_parameter_context(p).param_type, (ParameterFunctionType, ConstantType, ConstantRangeType, SparseConstantType)):
+                dups[p] = cov.get_parameter_values(p, slice(None, None, 3))
 
         # Expand the temporal domain accordingly and set the new values
-        cov.insert_timesteps(len(times)-ts)
-        cov.set_time_values(times)
+        cov.insert_timesteps(len(dups[cov.temporal_parameter_name]))
+        for p in dups:
+            cov.set_parameter_values(p, dups[p], slice(-len(dups[p]), None))
+
+        before_vals = {}
+        for p in cov.list_parameters():
+            before_vals[p] = cov.get_parameter_values(p)
 
         # Resolve the temporal domain issues
         cov.repair_temporal_geometry()
 
-        self.assertEqual(cov.num_timesteps, ts)
+        cov_ts = cov.num_timesteps
+        self.assertEqual(cov_ts, ts)
         ntimes = cov.get_time_values()
         np.testing.assert_array_equal(otimes, ntimes)
         np.testing.assert_array_equal(np.sort(ntimes), ntimes)
+
+        for p in cov.list_parameters():
+            np.testing.assert_array_equal(cov.get_parameter_values(p), before_vals[p][:cov_ts])
 
         lcov = AbstractCoverage.load(cov.persistence_dir)
         with self.assertRaises(IOError):
@@ -938,6 +948,10 @@ def _make_master_parameter_dict():
     fstr_ctxt = ParameterContext('fixed_str', param_type=QuantityType(value_encoding=np.dtype('S8')), fill_value='')
     fstr_ctxt.description = 'example of a fixed-length string parameter'
     pdict.add_context(fstr_ctxt)
+
+    sparse_ctxt = ParameterContext('sparse', param_type=SparseConstantType(base_type=ArrayType(inner_encoding='float32', inner_fill_value=-99)))
+    sparse_ctxt.long_naem = 'example of an opaque sparse constant parameter'
+    pdict.add_context(sparse_ctxt)
 
     ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
     ctxt.description = ''

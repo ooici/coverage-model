@@ -692,21 +692,48 @@ class AbstractCoverage(AbstractIdentifiable):
             return
 
         log.debug('Coverage contains %s duplicate timesteps', num_dups)
-        print 'Coverage contains %s duplicate timesteps' % num_dups
         # Overwrite all the values, padding num_dups at the end with fill_value
         for p in self.list_parameters():
-            if p == self.temporal_parameter_name:
-                nv = nt
-            else:
-                nv = self.get_parameter_values(p)[sl]
+            vc = self._range_dictionary[p].param_type._value_class
+            if vc in ('ParameterFunctionValue', 'FunctionValue', 'ConstantValue', 'ConstantRangeValue'):
+                continue
 
-            self.set_parameter_values(p, np.append(nv, self._range_value[p].get_fill_array(num_dups)))
-            del nv
+            elif vc == 'SparseConstantValue':
+                s = Span(None, max(inds))
+                try:
+                    spns = self._range_value[p].content
+                    if not hasattr(spns, '__iter__'):
+                        # spns is the fill_value for the parameter, no span assignment has happened yet, so just move on
+                        continue
+                except ValueError, ve:
+                    # Raised when there are no bricks (no timesteps) - this should never happen...
+                    continue
+                nspns = []
+                for spn in spns:
+                    if spn in s:
+                        nspns.append(spn)
+                    elif spn.lower_bound in s:
+                        nspns.append(Span(spn.lower_bound, None, offset=spn.offset, value=spn.value))
+                    elif spn.upper_bound is not None and spn.upper_bound in s:
+                        nspns.append(Span(s.lower_bound, spn.upper_bound, offset=spn.offset, value=spn.value))
+
+                self._range_value[p]._storage[0] = nspns
+
+            else:
+                if p == self.temporal_parameter_name:
+                    nv = nt
+                else:
+                    nv = self.get_parameter_values(p)[sl]
+
+                self.set_parameter_values(p, np.append(nv, self._range_value[p].get_fill_array(num_dups)))
+                del nv
 
         self.temporal_domain.shape.extents = (len(nt),) + self.temporal_domain.shape.extents[1:]
         self._persistence_layer.shrink_domain(self.temporal_domain.shape.extents)
 
         self.flush()
+
+        self.clear_value_cache()
 
     @property
     def persistence_guid(self):
