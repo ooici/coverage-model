@@ -35,7 +35,7 @@ class TestParameterValuesUnit(CoverageModelUnitTestCase):
 
         data = np.arange(10)
         qval[:] = data
-        self.assertTrue(np.array_equal(data, qval[:]))
+        np.testing.assert_array_equal(data, qval[:])
 
     # BooleanType
     def test_boolean_values(self):
@@ -48,7 +48,7 @@ class TestParameterValuesUnit(CoverageModelUnitTestCase):
 
         data = [True, False, True, False, False, True, False, True, True, True]
         bval[:] = data
-        self.assertTrue(np.array_equal(data, bval[:]))
+        np.testing.assert_array_equal(data, bval[:])
 
     # ArrayType
     def test_array_values(self):
@@ -69,12 +69,12 @@ class TestParameterValuesUnit(CoverageModelUnitTestCase):
         val_arr[:] = vals
 
         aval[:] = vals
-        self.assertTrue(np.array_equal(aval[:], val_arr))
+        np.testing.assert_array_equal(aval[:], val_arr)
         self.assertIsInstance(aval[0], list)
         self.assertEqual(aval[0], [1, 2, 3])
 
         aval[:] = val_arr
-        self.assertTrue(np.array_equal(aval[:], val_arr))
+        np.testing.assert_array_equal(aval[:], val_arr)
         self.assertIsInstance(aval[0], list)
         self.assertEqual(aval[0], [1, 2, 3])
 
@@ -104,7 +104,7 @@ class TestParameterValuesUnit(CoverageModelUnitTestCase):
         self.assertEqual(cval[0], 200)
         self.assertEqual(cval[7], 200)
         self.assertEqual(cval[2,9], 200)
-        self.assertTrue(np.array_equal(cval[[2,7],], np.array([200,200], dtype='int32')))
+        np.testing.assert_array_equal(cval[[2,7],], np.array([200,200], dtype='int32'))
 
     # ConstantRangeType
     def test_constant_range_values(self):
@@ -119,7 +119,7 @@ class TestParameterValuesUnit(CoverageModelUnitTestCase):
         comp=np.empty(2,dtype='object')
         comp.fill((-10,10))
 
-        self.assertTrue(np.array_equal(crval[[2,7],], comp))
+        np.testing.assert_array_equal(crval[[2,7],], comp)
 
     # CategoryType
     def test_category_values(self):
@@ -166,19 +166,19 @@ class TestParameterValuesUnit(CoverageModelUnitTestCase):
         scval = get_value_class(sctype, dom)
 
         scval[:] = 10
-        self.assertTrue(np.array_equal(scval[:], np.empty(0, dtype=sctype.value_encoding)))
+        np.testing.assert_array_equal(scval[:], np.empty(0, dtype=sctype.value_encoding))
 
         dom.shape = (10,)
-        self.assertTrue(np.array_equal(scval[:], np.array([10] * 10, dtype=sctype.value_encoding)))
+        np.testing.assert_array_equal(scval[:], np.array([10] * 10, dtype=sctype.value_encoding))
 
         scval[:] = 20
         dom.shape = (20,)
         out = np.empty(20, dtype=sctype.value_encoding)
         out[:10] = 10
         out[10:] = 20
-        self.assertTrue(np.array_equal(scval[:], out))
-        self.assertTrue(np.array_equal(scval[2:19], out[2:19]))
-        self.assertTrue(np.array_equal(scval[8::3], out[8::3]))
+        np.testing.assert_array_equal(scval[:], out)
+        np.testing.assert_array_equal(scval[2:19], out[2:19])
+        np.testing.assert_array_equal(scval[8::3], out[8::3])
 
         scval[:] = 30
         dom.shape = (30,)
@@ -186,10 +186,10 @@ class TestParameterValuesUnit(CoverageModelUnitTestCase):
         out[:10] = 10
         out[10:20] = 20
         out[20:] = 30
-        self.assertTrue(np.array_equal(scval[:], out))
-        self.assertTrue(np.array_equal(scval[2:29], out[2:29]))
-        self.assertTrue(np.array_equal(scval[12:25], out[12:25]))
-        self.assertTrue(np.array_equal(scval[18::3], out[18::3]))
+        np.testing.assert_array_equal(scval[:], out)
+        np.testing.assert_array_equal(scval[2:29], out[2:29])
+        np.testing.assert_array_equal(scval[12:25], out[12:25])
+        np.testing.assert_array_equal(scval[18::3], out[18::3])
 
     def test_sparse_referred_value(self):
         num_rec = 0
@@ -204,13 +204,13 @@ class TestParameterValuesUnit(CoverageModelUnitTestCase):
 
         scval[:] = qv
         scdom.shape = (10,)
-        self.assertTrue(np.array_equal(scval[:], np.arange(10)))
+        np.testing.assert_array_equal(scval[:], np.arange(10))
 
         scval[:] = qv2
         scdom.shape = (24,)
-        self.assertTrue(np.array_equal(scval[:10], np.arange(10)))
-        self.assertTrue(np.array_equal(scval[10:], np.arange(100,114)))
-        self.assertTrue(np.array_equal(scval[:], np.append(np.arange(10), np.arange(100,114))))
+        np.testing.assert_array_equal(scval[:10], np.arange(10))
+        np.testing.assert_array_equal(scval[10:], np.arange(100,114))
+        np.testing.assert_array_equal(scval[:], np.append(np.arange(10), np.arange(100,114)))
 
 
 @attr('INT',group='cov')
@@ -240,20 +240,20 @@ class TestParameterValuesInt(CoverageModelIntTestCase):
 
         # Get the time values and make sure they match what we assigned
         got = cov.get_time_values()
-        self.assertTrue(np.array_equal(vals, got))
+        np.testing.assert_array_equal(vals, got)
 
         # Now check that there is 1 entry in the _value_cache and that it's a match for vals
         self.assertEqual(len(cov._value_cache), 1)
-        self.assertTrue(np.array_equal(cov._value_cache[cov._value_cache.keys()[0]], vals))
+        np.testing.assert_array_equal(cov._value_cache[cov._value_cache.keys()[0]], vals)
 
         # Now retrieve a slice and make sure it matches the same slice of vals
         sl = slice(20, 1000, 3)
         got = cov.get_time_values(sl)
-        self.assertTrue(np.array_equal(vals[sl], got))
+        np.testing.assert_array_equal(vals[sl], got)
 
         # Now check that there are 2 entries and that the second is a match for vals
         self.assertEqual(len(cov._value_cache), 2)
-        self.assertTrue(np.array_equal(cov._value_cache[cov._value_cache.keys()[1]], vals[sl]))
+        np.testing.assert_array_equal(cov._value_cache[cov._value_cache.keys()[1]], vals[sl])
 
         # Call get 40 times - check that the _value_cache stops growing @ 30
         for x in xrange(40):
@@ -278,7 +278,7 @@ class TestParameterValuesInt(CoverageModelIntTestCase):
 
         # Value cache should still hold 1 and the value should be equal to values retrieved prior to expansion ('got')
         self.assertEqual(len(cov._value_cache), 1)
-        self.assertTrue(np.array_equal(cov._value_cache[cov._value_cache.keys()[0]], got))
+        np.testing.assert_array_equal(cov._value_cache[cov._value_cache.keys()[0]], got)
 
         # Perform another get, just to make sure the following removes all entries for the parameter
         got = cov.get_time_values(slice(0, 10))
@@ -326,13 +326,13 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
             val_cls[:] = assn_vals
             cov.set_parameter_values(pname, assn_vals)
 
-        self.assertTrue(np.array_equal(cov.get_parameter_values(pname), val_cls[:]))
-        self.assertTrue(np.array_equal(cov.get_parameter_values(pname, slice(-1, None)), val_cls[-1:]))
-        self.assertTrue(np.array_equal(cov.get_parameter_values(pname, slice(None, None, 3)), val_cls[::3]))
+        np.testing.assert_array_equal(cov.get_parameter_values(pname), val_cls[:])
+        np.testing.assert_array_equal(cov.get_parameter_values(pname, slice(-1, None)), val_cls[-1:])
+        np.testing.assert_array_equal(cov.get_parameter_values(pname, slice(None, None, 3)), val_cls[::3])
         if isinstance(val_cls.parameter_type, ArrayType) or \
                 (hasattr(val_cls.parameter_type, 'base_type') and isinstance(val_cls.parameter_type.base_type, ArrayType)):
-            self.assertTrue(np.array_equal(cov.get_parameter_values(pname, 0), val_cls[0]))
-            self.assertTrue(np.array_equal(cov.get_parameter_values(pname, -1), val_cls[-1]))
+            np.testing.assert_array_equal(cov.get_parameter_values(pname, 0), val_cls[0])
+            np.testing.assert_array_equal(cov.get_parameter_values(pname, -1), val_cls[-1])
         else:
             self.assertEqual(cov.get_parameter_values(pname, 0), val_cls[0])
             self.assertEqual(cov.get_parameter_values(pname, -1), val_cls[-1])
@@ -723,15 +723,15 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         scv_val[:] = val
         cov.set_parameter_values('scv', val)
         self._interop_assertions(cov, 'scv', scv_val)
-        self.assertTrue(np.array_equal(scv_val[:], want))
-        self.assertTrue(np.array_equal(cov.get_parameter_values('scv'), want))
+        np.testing.assert_array_equal(scv_val[:], want)
+        np.testing.assert_array_equal(cov.get_parameter_values('scv'), want)
 
         # Assign with aval
         scv_arr_val[:] = aval
         cov.set_parameter_values('scv_arr', aval)
         self._interop_assertions(cov, 'scv_arr', scv_arr_val)
-        self.assertTrue(np.array_equal(scv_arr_val[:], awant))
-        self.assertTrue(np.array_equal(cov.get_parameter_values('scv_arr'), awant))
+        np.testing.assert_array_equal(scv_arr_val[:], awant)
+        np.testing.assert_array_equal(cov.get_parameter_values('scv_arr'), awant)
 
         # Backfill assignment
 
@@ -739,21 +739,21 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         scv_val[-1] = val_list
         cov.set_parameter_values('scv', val_list, -1)
         self._interop_assertions(cov, 'scv', scv_val)
-        self.assertTrue(np.array_equal(scv_val[:], want))
-        self.assertTrue(np.array_equal(cov.get_parameter_values('scv'), want))
+        np.testing.assert_array_equal(scv_val[:], want)
+        np.testing.assert_array_equal(cov.get_parameter_values('scv'), want)
 
         # Asign with array
         scv_val[-1] = val_arr
         cov.set_parameter_values('scv', val_arr, -1)
         self._interop_assertions(cov, 'scv', scv_val)
-        self.assertTrue(np.array_equal(scv_val[:], want))
-        self.assertTrue(np.array_equal(cov.get_parameter_values('scv'), want))
+        np.testing.assert_array_equal(scv_val[:], want)
+        np.testing.assert_array_equal(cov.get_parameter_values('scv'), want)
 
         scv_arr_val[-1] = aval_arr
         cov.set_parameter_values('scv_arr', aval_arr, -1)
         self._interop_assertions(cov, 'scv_arr', scv_arr_val)
-        self.assertTrue(np.array_equal(scv_arr_val[:], awant))
-        self.assertTrue(np.array_equal(cov.get_parameter_values('scv_arr'), awant))
+        np.testing.assert_array_equal(scv_arr_val[:], awant)
+        np.testing.assert_array_equal(cov.get_parameter_values('scv_arr'), awant)
 
         # Add a new value and expand the domain
 
@@ -766,7 +766,7 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         aval = [[39, 2, 394, 55]]
         aval_arr = np.empty(1, dtype=object)
         aval_arr[0] = aval
-        awant = np.hstack((awant, np.array([[827.38]] * ntimes)))
+        awant = np.hstack((awant, np.array([[ifv]] * ntimes)))
         awant = np.vstack((awant, np.array(aval * ntimes, dtype='float32')))
 
         # Assign with val
@@ -783,12 +783,12 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
 
         # Validate values
         self._interop_assertions(cov, 'scv', scv_val)
-        self.assertTrue(np.array_equal(scv_val[:], want))
-        self.assertTrue(np.array_equal(cov.get_parameter_values('scv'), want))
+        np.testing.assert_array_equal(scv_val[:], want)
+        np.testing.assert_array_equal(cov.get_parameter_values('scv'), want)
 
         self._interop_assertions(cov, 'scv_arr', scv_arr_val)
-        self.assertTrue(np.allclose(scv_arr_val[:], awant))
-        self.assertTrue(np.allclose(cov.get_parameter_values('scv_arr'), awant))
+        np.testing.assert_allclose(scv_arr_val[:], awant)
+        np.testing.assert_allclose(cov.get_parameter_values('scv_arr'), awant)
 
         # Reassign last segment
         val = 44
@@ -807,9 +807,77 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
 
         # Validate values
         self._interop_assertions(cov, 'scv', scv_val)
-        self.assertTrue(np.array_equal(scv_val[:], want))
-        self.assertTrue(np.array_equal(cov.get_parameter_values('scv'), want))
+        np.testing.assert_array_equal(scv_val[:], want)
+        np.testing.assert_array_equal(cov.get_parameter_values('scv'), want)
 
         self._interop_assertions(cov, 'scv_arr', scv_arr_val)
-        self.assertTrue(np.allclose(scv_arr_val[:], awant))
-        self.assertTrue(np.allclose(cov.get_parameter_values('scv_arr'), awant))
+        np.testing.assert_allclose(scv_arr_val[:], awant)
+        np.testing.assert_allclose(cov.get_parameter_values('scv_arr'), awant)
+
+    def test_sparse_constant_value_ndarray_interop(self):
+        ifv = 827.38
+        scv_arr_type = SparseConstantType(base_type=ArrayType(inner_encoding='float32', inner_fill_value=ifv))
+
+        # Setup the values
+        ntimes = 10
+        ndaval = [[[12, 32, 33], [3, 44, 52], [16, 2, 76]]]
+        ndaval_arr = np.array(ndaval, dtype='float32')
+        ndawant = np.array(ndaval * ntimes, dtype='float32')
+
+        # Setup the in-memory value
+        dom = SimpleDomainSet((ntimes,))
+        scv_ndarr_val = get_value_class(scv_arr_type, dom)
+
+        # Setup the coverage
+        cov = self._setup_cov(ntimes, ['scv_ndarr'], [scv_arr_type])
+
+        # Perform the assertions
+
+        # Assign with ndaval
+        scv_ndarr_val[:] = ndaval
+        cov.set_parameter_values('scv_ndarr', ndaval)
+        self._interop_assertions(cov, 'scv_ndarr', scv_ndarr_val)
+        np.testing.assert_array_equal(scv_ndarr_val[:], ndawant)
+        np.testing.assert_array_equal(cov.get_parameter_values('scv_ndarr'), ndawant)
+
+        # Backfill assignment
+
+        # Assign with array
+        scv_ndarr_val[-1] = ndaval_arr
+        cov.set_parameter_values('scv_ndarr', ndaval_arr, -1)
+        self._interop_assertions(cov, 'scv_ndarr', scv_ndarr_val)
+        np.testing.assert_array_equal(scv_ndarr_val[:], ndawant)
+        np.testing.assert_array_equal(cov.get_parameter_values('scv_ndarr'), ndawant)
+
+        # Change the values
+        ndaval = [[[88, 323], [4, 34]]]
+        ndaval_arr = np.array(ndaval, dtype='float32')
+        w = np.array([[[88, 323, ifv], [4, 34, ifv], [ifv, ifv, ifv]]]*ntimes, dtype='float32')
+        o_ndawant = ndawant.copy()
+        ndawant = np.vstack((ndawant, w))
+
+        # Assign with ndaval_arr
+        scv_ndarr_val[:] = ndaval_arr
+        cov.set_parameter_values('scv_ndarr', ndaval_arr)
+
+        # Expand the domain
+        dom.shape = (dom.shape[0] + ntimes,)
+        cov.insert_timesteps(ntimes)
+
+        # Validate the values
+        self._interop_assertions(cov, 'scv_ndarr', scv_ndarr_val)
+        np.testing.assert_allclose(scv_ndarr_val[:], ndawant)
+        np.testing.assert_allclose(cov.get_parameter_values('scv_ndarr'), ndawant)
+
+        # Reassign last segment
+        ndaval = [[[44, 581, 52], [33, 90, ifv]]]
+        w = np.array([[[44, 581, 52], [33, 90, ifv], [ifv, ifv, ifv]]]*ntimes, dtype='float32')
+        ndawant = np.vstack((o_ndawant, w))
+
+         # Assign with ndaval
+        scv_ndarr_val[-1] = ndaval
+        cov.set_parameter_values('scv_ndarr', ndaval, -1)
+
+        self._interop_assertions(cov, 'scv_ndarr', scv_ndarr_val)
+        np.testing.assert_allclose(scv_ndarr_val[:], ndawant)
+        np.testing.assert_allclose(cov.get_parameter_values('scv_ndarr'), ndawant)

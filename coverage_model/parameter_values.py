@@ -444,14 +444,6 @@ class SparseConstantValue(AbstractComplexParameterValue):
         io = ind_arr - offset
 
         vals = np.atleast_1d(v_arr[io])
-        if hasattr(vals[0], 'ndim') and vals[0].ndim > 1:
-            vs = vals.shape
-            try:
-                vals = np.concatenate(vals)
-                vals = vals.reshape(vs[0], vals.shape[0]/vs[0], *vals.shape[1:])
-            except ValueError, ve:
-                log.info('Issue concatenating: %s', ve.message)
-
         if hasattr(self.parameter_type.base_type, 'inner_encoding'):
             vals = ArrayValue._apply_inner_encoding(vals, self.parameter_type.base_type)
 
@@ -469,7 +461,7 @@ class SparseConstantValue(AbstractComplexParameterValue):
             spans = self.fill_value
 
         if isinstance(value, SparseConstantValue):  # RDT --> Coverage style assignment
-            value = value[0,:]
+            value = value[0, :]
 
         if not isinstance(value, AbstractParameterValue):
             # If the value is an array/iterable, we only take the first one of the outermost dimension
