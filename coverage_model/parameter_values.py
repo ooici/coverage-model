@@ -90,6 +90,11 @@ class AbstractParameterValue(AbstractBase):
     def fill_value(self):
         return self.parameter_type.fill_value
 
+    def get_fill_array(self, size=1):
+        ve = self.value_encoding if self.fill_value is not None else np.dtype(object)
+
+        return np.array([self.fill_value]*size, dtype=ve)
+
     def expand_content(self, domain, origin, expansion):
         if domain == VariabilityEnum.TEMPORAL: # Temporal
             self._storage.expand(self.shape[1:], origin, expansion)

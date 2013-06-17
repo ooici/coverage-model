@@ -87,14 +87,27 @@ def _raise_index_error_int(slice_, size, dim):
 
 
 def _raise_index_error_list(slice_, size, dim):
-    last = -1
-    for i in xrange(len(slice_)):
-        c=slice_[i]
-        if last >= c:
-            raise IndexError('On dimension {0}; indices must be in increasing order and cannot be duplicated: list => {1}'.format(dim, slice_))
-        last = c
-        if slice_[i] >= size:
-            raise IndexError('On dimension {0}; index {1} of list cannot be >= the size: list => {2}, size => {3}'.format(dim, i, slice_, size))
+    # This restriction is NOT in alignment with how numpy works - but HDF doesn't support non-increasing or duplication in list slicing
+    if not (np.array_equal(np.sort(slice_), slice_) and np.array_equal(np.unique(slice_), slice_)):
+        raise IndexError('On dimension {0}; indices must be in increasing order and cannot be duplicated: list => {1}'.format(dim, slice_))
+
+    if (np.array(slice_) >= size).any():
+        raise IndexError('On dimension {0}; members of the list cannot be >= the size: list => {1}, size => {2}'.format(dim, slice_, size))
+
+    # last = -1
+    # for i in xrange(len(slice_)):
+    #     ## TODO: Re-evaluate why we wanted this - numpy allows it, why shouldn't we?  more follows...
+    #     ## The main reason is because HDF doesn't allow it... :(
+    #     ## TODO: This can be done much more efficiently without a loop using:
+    #     ## if not np.array_equal(np.sort(slice_), slice_) --> Not increasing
+    #     ## if (np.array(slice_) >= size).any() --> One of the indices is too big
+    #
+    #     c=slice_[i]
+    #     if last >= c:
+    #         raise IndexError('On dimension {0}; indices must be in increasing order and cannot be duplicated: list => {1}'.format(dim, slice_))
+    #     last = c
+    #     if slice_[i] >= size:
+    #         raise IndexError('On dimension {0}; index {1} of list cannot be >= the size: list => {2}, size => {3}'.format(dim, i, slice_, size))
 
 
 def _raise_index_error_slice(slice_, size, dim):
