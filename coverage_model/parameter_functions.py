@@ -169,7 +169,7 @@ class PythonFunction(AbstractFunction):
                     [isinstance(ai, Number) for ai in a]).all():
                 args.append(a)
             else:
-                sl = -1 if a.endswith('*') else slice_
+                sl = -1 if k.endswith('*') else slice_
                 v = pval_callback(a, sl)
                 args.append(v)
 
