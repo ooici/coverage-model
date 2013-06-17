@@ -443,8 +443,7 @@ class SparseConstantValue(AbstractComplexParameterValue):
             offset = stor_sub[0].lower_bound
         io = ind_arr - offset
 
-        vals = v_arr[io]
-
+        vals = np.atleast_1d(v_arr[io])
         if hasattr(self.parameter_type.base_type, 'inner_encoding'):
             vals = ArrayValue._apply_inner_encoding(vals, self.parameter_type.base_type)
 
@@ -462,12 +461,13 @@ class SparseConstantValue(AbstractComplexParameterValue):
             spans = self.fill_value
 
         if isinstance(value, SparseConstantValue):  # RDT --> Coverage style assignment
-            value = value[0]
+            value = value[0, :]
 
         if not isinstance(value, AbstractParameterValue):
-            # If the value is an array/iterable, we only take the first one
-            value = np.atleast_1d(value)[0]
-            bnds = (value, value)
+            # If the value is an array/iterable, we only take the first one of the outermost dimension
+            value = np.atleast_1d(value)[0,...]
+            bv = np.atleast_1d(value)[0]
+            bnds = (bv, bv)
         else:
             bnds = value.bounds
 
@@ -477,6 +477,17 @@ class SparseConstantValue(AbstractComplexParameterValue):
 
         # Get the last span
         lspn = spans[-1]
+        if isinstance(lspn.value, AbstractParameterValue):
+            pndim = len(lspn.value.shape)
+        else:
+            pndim = np.atleast_1d(lspn.value).ndim
+        if isinstance(value, AbstractParameterValue):
+            nndim = len(value.shape)
+        else:
+            nndim = np.atleast_1d(value).ndim
+
+        if pndim != nndim:
+            raise ValueError('The dimensionality of the value is not compatible with the previous value: {0} != {1}'.format(pndim, nndim))
 
         if slice_[0] == self.shape[0] - 1:  # -1 was used for slice
             # Change the value of the last span
@@ -705,13 +716,24 @@ class ArrayValue(AbstractComplexParameterValue):
                 raise TypeError('Parameter type does not have \'inner_encoding\' or \'inner_fill_value\' fields')
 
             if param_type.inner_encoding is not None and np.dtype(param_type.inner_encoding).kind not in ['O', 'S']:
-                lens = [len(a) if a is not None else 1 for a in vals]
-                mx = max(lens)
-                r = np.empty((vals.shape[0], mx), dtype=param_type.inner_encoding)
+                vals = np.atleast_1d(vals)
+                lens = [a.shape if hasattr(a, 'shape') else (len(a),) if hasattr(a, '__len__') else (1,) for a in vals]
+                mx = [0 for i in lens[0]]
+                for l in lens:
+                    for i, mi in enumerate(mx):
+                        mx[i] = l[i] if l[i] > mi else mi
+                mx = tuple(mx)
+
+                r = np.empty((vals.shape[0],) + mx, dtype=param_type.inner_encoding)
                 r.fill(param_type.inner_fill_value)
                 for i, v in enumerate(vals):
                     if v is not None:
-                        r[i, :lens[i]] = v
+                        v = np.atleast_1d(v)
+                        if r.shape[1:] == v.shape:
+                            r[i, ...] = v
+                        else:
+                            isl = (i,) + tuple([slice(None, s) for s in v.shape])
+                            r[isl] = v
                 vals = r
 
         return vals

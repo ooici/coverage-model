@@ -169,7 +169,8 @@ class PythonFunction(AbstractFunction):
                     [isinstance(ai, Number) for ai in a]).all():
                 args.append(a)
             else:
-                v = pval_callback(a, slice_)
+                sl = -1 if k.endswith('*') else slice_
+                v = pval_callback(a, sl)
                 args.append(v)
 
         if self.kwarg_map is None:
@@ -212,7 +213,10 @@ class NumexprFunction(AbstractFunction):
                     [isinstance(ai, Number) for ai in a]).all():
                 ld[k] = a
             else:
-                ld[k] = pval_callback(a, slice_)
+                if k.endswith('*'):
+                    ld[k[:-1]] = pval_callback(a, -1)
+                else:
+                    ld[k] = pval_callback(a, slice_)
 
         return ne.evaluate(self.expression, local_dict=ld)
 
