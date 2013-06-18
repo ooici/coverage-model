@@ -258,37 +258,61 @@ class CoverageDoctor(object):
         if self._ar:
             return self._ar.param_file_count
 
-    def _do_analysis(self, analyze_bricks=False):
+    def _hdf_status_quick_check(self, pth):
+        # If we can open the HDF file, we're good - otherwise, we're corrupt!
+        try:
+            with h5py.File(pth):
+                pass
+        except:
+            return StatusEnum.CORRUPT
+
+        return StatusEnum.NORMAL
+
+    def _do_analysis(self, analyze_bricks=False, detailed_analysis=False):
         ar = AnalysisResult()
 
         master_pth = os.path.join(self.cov_pth, self._guid + '_master.hdf5')
 
-        st = StatusEnum.CORRUPT if hdf_utils.has_corruption(master_pth) else StatusEnum.NORMAL
-        if st == StatusEnum.CORRUPT:
-                sz = -1
+        if detailed_analysis:
+            st = StatusEnum.CORRUPT if hdf_utils.has_corruption(master_pth) else StatusEnum.NORMAL
+            if st == StatusEnum.CORRUPT:
+                    sz = -1
+            else:
+                sz = hdf_utils.space_ratio(master_pth)
         else:
-            sz=hdf_utils.space_ratio(master_pth)
+            st = self._hdf_status_quick_check(master_pth)
+            sz = -1
+
         ar.set_master_status(master_pth, st, sz)
 
         for p in os.walk(self._inner_dir).next()[1]:
             pset = self._get_parameter_fileset(p)
 
             # Check parameter file
-            st = StatusEnum.CORRUPT if hdf_utils.has_corruption(pset['param']) else StatusEnum.NORMAL
-            if st == StatusEnum.CORRUPT:
-                sz = -1
+            if detailed_analysis:
+                st = StatusEnum.CORRUPT if hdf_utils.has_corruption(pset['param']) else StatusEnum.NORMAL
+                if st == StatusEnum.CORRUPT:
+                    sz = -1
+                else:
+                    sz = hdf_utils.space_ratio(pset['param'])
             else:
-                sz=hdf_utils.space_ratio(pset['param'])
+                st = self._hdf_status_quick_check(pset['param'])
+                sz = -1
+
             ar.add_param_status(p, pset['param'], st, sz)
 
             # Check each brick file
             for b_pth in pset['bricks']:
                 if analyze_bricks:
-                    st = StatusEnum.CORRUPT if hdf_utils.has_corruption(b_pth) else StatusEnum.NORMAL
-                    if st == StatusEnum.CORRUPT:
-                        sz = -1
+                    if detailed_analysis:
+                        st = StatusEnum.CORRUPT if hdf_utils.has_corruption(b_pth) else StatusEnum.NORMAL
+                        if st == StatusEnum.CORRUPT:
+                            sz = -1
+                        else:
+                            sz = hdf_utils.space_ratio(b_pth)
                     else:
-                        sz=hdf_utils.space_ratio(b_pth)
+                        st = self._hdf_status_quick_check(b_pth)
+                        sz = -1
                 else:
                     st = StatusEnum.UNKNOWN
                     sz = -1
@@ -297,13 +321,13 @@ class CoverageDoctor(object):
 
         return ar
 
-    def analyze(self, analyze_bricks=False, reanalyze=False):
+    def analyze(self, analyze_bricks=False, reanalyze=False, detailed_analysis=False):
         if self._ar is None or reanalyze:
-            ar = self._do_analysis(analyze_bricks=analyze_bricks)
+            ar = self._do_analysis(analyze_bricks=analyze_bricks, detailed_analysis=detailed_analysis)
             self._ar = ar
         return self._ar
 
-    def repair(self, reanalyze=False, backup=True, copy_over=True, keep_temp=False):
+    def repair(self, backup=True, copy_over=True, keep_temp=False, reanalyze=False, analyze_bricks=False, detailed_analysis=False):
         """
         Heavy repair tool that recreates a blank persisted Coverage from the broken coverage's
         original construction parameters, then reconstructs the Master and Parameter metadata
@@ -311,7 +335,7 @@ class CoverageDoctor(object):
         @return:
         """
         if self._ar is None or reanalyze:
-            self._ar = self._do_analysis(analyze_bricks=True)
+            self._ar = self._do_analysis(analyze_bricks=analyze_bricks, detailed_analysis=detailed_analysis)
 
         if self._ar.is_corrupt:
             if len(self._ar.get_brick_corruptions()) > 0:
