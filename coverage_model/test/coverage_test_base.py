@@ -335,7 +335,7 @@ class CoverageIntTestBase(object):
         time_steps = 5000
         scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
         scov.close()
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IOError):
             scov.get_time_values()
 
     def test_refresh(self):
@@ -810,7 +810,7 @@ class CoverageIntTestBase(object):
         self.assertEqual(param.name, 'time')
 
         cov.close()
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IOError):
             cov.get_parameter('time')
 
     def test_append_parameter(self):

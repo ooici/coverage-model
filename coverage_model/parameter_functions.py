@@ -169,9 +169,12 @@ class PythonFunction(AbstractFunction):
                     [isinstance(ai, Number) for ai in a]).all():
                 args.append(a)
             else:
-                sl = -1 if k.endswith('*') else slice_
-                v = pval_callback(a, sl)
-                args.append(v)
+                if k == 'pv_callback':
+                    args.append(lambda arg: pval_callback(arg, slice_))
+                else:
+                    sl = -1 if k.endswith('*') else slice_
+                    v = pval_callback(a, sl)
+                    args.append(v)
 
         if self.kwarg_map is None:
             return self._callable(*args)

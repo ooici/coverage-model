@@ -314,7 +314,7 @@ class AbstractCoverage(AbstractIdentifiable):
         @throws KeyError    The coverage does not contain a parameter with name 'param_name'
         """
         if self.closed:
-            raise ValueError('I/O operation on closed file')
+            raise IOError('I/O operation on closed file')
 
         if param_name in self._range_dictionary:
             p = Parameter(deepcopy(self._range_dictionary.get_context(param_name)), self._range_value[param_name].shape, self._range_value[param_name])
@@ -353,7 +353,7 @@ class AbstractCoverage(AbstractIdentifiable):
         @throws KeyError    The coverage does not contain a parameter with name 'param_name'
         """
         if self.closed:
-            raise ValueError('I/O operation on closed file')
+            raise IOError('I/O operation on closed file')
 
         if not param_name in self._range_value:
             raise KeyError('Parameter \'{0}\' not found in coverage'.format(param_name))
