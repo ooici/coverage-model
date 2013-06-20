@@ -29,6 +29,11 @@ def _get_vals(name, slice_):
     else:
         return np.zeros(5)[slice_]
 
+def callback_arg_func(pv_callback):
+    a = pv_callback('tempwat_l0')
+    b = pv_callback('preswat_l0')
+    return a + b
+
 @attr('UNIT',group='cov')
 class TestParameterFunctionsUnit(CoverageModelUnitTestCase):
 
@@ -124,17 +129,21 @@ class TestParameterFunctionsInt(CoverageModelIntTestCase):
 
     def _get_param_vals(self, name, slice_):
         shp = utils.slice_shape(slice_, (10,))
+
         def _getarr(vmin, shp, vmax=None,):
             if vmax is None:
-                return np.empty(shp).fill(vmin)
-            return np.arange(vmin, vmax, (vmax - vmin) / int(utils.prod(shp)), dtype='float32').reshape(shp)
+                ret = np.empty(shp)
+                ret.fill(vmin)
+                return ret
+            sp = np.prod(shp)
+            while vmax-vmin < sp:
+                vmax *= 2
+            return np.arange(vmin, vmax, dtype='float32')[:10]
 
         if name == 'lat':
-            ret = np.empty(shp)
-            ret.fill(45)
+            ret = _getarr(45, shp)
         elif name == 'lon':
-            ret = np.empty(shp)
-            ret.fill(-71)
+            ret = _getarr(-71, shp)
         elif name == 'tempwat_l0':
             ret = _getarr(280000, shp, 350000)
         elif name == 'condwat_l0':
@@ -146,7 +155,7 @@ class TestParameterFunctionsInt(CoverageModelIntTestCase):
         else:
             return np.zeros(shp)
 
-        return ret
+        return ret[slice_]
 
     def _ctxt_callback(self, context_name):
         return self.contexts[context_name]
@@ -252,11 +261,11 @@ class TestParameterFunctionsInt(CoverageModelIntTestCase):
 
         # tempwat_l1 = (tempwat_l0 / 10000) - 10
         t1 = (t0vals / 10000) - 10
-        np.testing.assert_allclose(t1val[:], t1)
+        np.testing.assert_allclose(t1val[:], t1, rtol=1e-05)
 
         # condwat_l1 = (condwat_l0 / 100000) - 0.5
         c1 = (c0vals / 100000) - 0.5
-        np.testing.assert_allclose(c1val[:], c1)
+        np.testing.assert_allclose(c1val[:], c1, rtol=1e-05)
 
         # Equation uses p_range, which is a calibration coefficient - Fixing to 679.34040721
         #   preswat_l1 = (preswat_l0 * p_range / (0.85 * 65536)) - (0.05 * p_range)
@@ -307,6 +316,28 @@ class TestParameterFunctionsInt(CoverageModelIntTestCase):
         cons_temp = gsw.CT_from_t(abs_sal, t1val[:], p1val[:])
         rho = gsw.rho(abs_sal, cons_temp, p1val[:])
         np.testing.assert_allclose(rhoval[:], rho)
+
+    def test_pv_callback_argument(self):
+        self.contexts = _get_pc_dict('pv_callback')
+
+        self.value_classes = {}
+
+        dom_set = SimpleDomainSet((10,))
+
+        # Add the callback for retrieving values
+        for n, p in self.contexts.iteritems():
+            if hasattr(p, '_pval_callback'):
+                p._pval_callback = self._get_param_vals
+                p._ctxt_callback = self._ctxt_callback
+                # self.value_classes[n] = get_value_class(p.param_type, dom_set)
+
+        pvcb_val = get_value_class(self.contexts['pv_callback'].param_type, dom_set)
+
+        expect = np.array([283000.,  283002.,  283004.,  283006.,  283008.,  283010., 283012.,  283014.,  283016.,  283018.])
+        np.testing.assert_array_equal(pvcb_val[:], expect)
+        np.testing.assert_array_equal(pvcb_val[2::2], expect[2::2])
+        np.testing.assert_array_equal(pvcb_val[:-3:4], expect[:-3:4])
+
 
 import networkx as nx
 @attr('INT',group='cov')
@@ -520,6 +551,11 @@ def _create_all_params():
     dens_ctxt = ParameterContext('density', param_type=ParameterFunctionType(dens_expr), variability=VariabilityEnum.TEMPORAL)
     dens_ctxt.uom = 'kg m-3'
     contexts['density'] = dens_ctxt
+
+    owner = 'coverage_model.test.test_parameter_functions'
+    pvcb_func = PythonFunction('pv_callback', owner, 'callback_arg_func', ['pv_callback'])
+    pvcb_ctxt = ParameterContext('pv_callback', param_type=ParameterFunctionType(pvcb_func), variability=VariabilityEnum.TEMPORAL)
+    contexts['pv_callback'] = pvcb_ctxt
 
     return contexts
 
