@@ -15,6 +15,7 @@ from coverage_model import utils
 import os
 import h5py
 import msgpack
+import numpy as np
 
 
 def pack(payload):
@@ -30,7 +31,7 @@ def get_coverage_type(path):
     if os.path.exists(path):
         with h5py.File(path) as f:
             if 'coverage_type' in f.attrs:
-                ctype = unpack(f.attrs['coverage_type'])
+                ctype = unpack(f.attrs['coverage_type'][0])
 
     return ctype
 
@@ -127,7 +128,7 @@ class BaseManager(object):
                         else:
                             value = pack(v)
 
-                        f.attrs[k] = value
+                        f.attrs[k] = np.array([value])
 
                         # Update the hash_value in _hmap
                         self._hmap[k] = utils.hash_any(v)
@@ -146,6 +147,7 @@ class BaseManager(object):
 
     def _base_load(self, f):
         for key, val in f.attrs.iteritems():
+            val = val[0]
             if isinstance(val, basestring) and val.startswith('DICTABLE'):
                 i = val.index('|', 9)
                 smod, sclass = val[9:i].split(':')
