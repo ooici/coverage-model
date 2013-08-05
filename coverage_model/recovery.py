@@ -583,11 +583,11 @@ class CoverageDoctor(object):
         with h5py.File(rpr_file) as f:
             # Copy the good attributes
             for a in good_atts:
-                f.attrs[a] = good_atts[a]
+                f.attrs[a] = np.array([good_atts[a]])
 
             # Add new values for the bad attributes
             for a in bad_atts:
-                f.attrs[a] = attr_callback(a)
+                f.attrs[a] = np.array([attr_callback(a)])
 
     def _get_parameter_attribute(self, att):
         raise NotImplementedError('Not sure what to do with attribute: {0}'.format(att))
@@ -604,7 +604,7 @@ class CoverageDoctor(object):
         for a in atts:
             with h5py.File(fpath, 'r') as f:
                 try:
-                    good_atts[a] = f.attrs[a]
+                    good_atts[a] = f.attrs[a][0]
                 except IOError:
                     bad_atts.append(a)
 

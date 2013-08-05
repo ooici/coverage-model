@@ -205,18 +205,18 @@ def plGenericBricks(pctFill,fillValue):
             
             # Add temporal and spatial metadata as attributes
             temporalDomainStart = '20120815060030102030' #CCYYMMDDHHMMSSAABBCC
-            sugarCubes.attrs["temporal_domain_start"] = '{0}'.format(temporalDomainStart)
+            sugarCubes.attrs["temporal_domain_start"] = np.array(['{0}'.format(temporalDomainStart)])
             temporalDomainEnd = '20120815063000102030'
-            sugarCubes.attrs["temporal_domain_end"] = '{0}'.format(temporalDomainEnd)
+            sugarCubes.attrs["temporal_domain_end"] = np.array(['{0}'.format(temporalDomainEnd)])
 
             spatialDomainMinX = '-73' # Longitude
             spatialDomainMinY = '40' # Latitude
             spatialDomainMinZ = '-10000' # Depth below MLLW in meters
-            sugarCubes.attrs["spatial_domain_min"] = '{0},{1},{2}'.format(spatialDomainMinX, spatialDomainMinY, spatialDomainMinZ)
+            sugarCubes.attrs["spatial_domain_min"] = np.array(['{0},{1},{2}'.format(spatialDomainMinX, spatialDomainMinY, spatialDomainMinZ)])
             spatialDomainMaxX = '-70' # Longitude
             spatialDomainMaxY = '32' # Latitude
             spatialDomainMaxZ = '500' # Depth below MLLW in meters
-            sugarCubes.attrs["spatial_domain_max"] = '{0},{1},{2}'.format(spatialDomainMinX, spatialDomainMinY, spatialDomainMinZ)
+            sugarCubes.attrs["spatial_domain_max"] = np.array(['{0},{1},{2}'.format(spatialDomainMinX, spatialDomainMinY, spatialDomainMinZ)])
 
             # Close the HDF5 file that represents one brick
             sugarFile.flush()
@@ -226,10 +226,10 @@ def plGenericBricks(pctFill,fillValue):
 
             
             sugarMaster['{0}/Brick{1}'.format(sugarGroupPath,sugarBrick)] = h5py.ExternalLink(sugarFileName, '{0}/Brick{1}'.format(sugarGroupPath,sugarBrick))
-            sugarMasterGroup.attrs["temporal_domain_start"] = '{0}'.format(temporalDomainStart)
-            sugarMasterGroup.attrs["temporal_domain_end"] = '{0}'.format(temporalDomainEnd)
-            sugarMasterGroup.attrs["spatial_domain_min"] = '{0},{1},{2}'.format(spatialDomainMinX, spatialDomainMinY, spatialDomainMinZ)
-            sugarMasterGroup.attrs["spatial_domain_max"] = '{0},{1},{2}'.format(spatialDomainMinX, spatialDomainMinY, spatialDomainMinZ)
+            sugarMasterGroup.attrs["temporal_domain_start"] = np.array(['{0}'.format(temporalDomainStart)])
+            sugarMasterGroup.attrs["temporal_domain_end"] = np.array(['{0}'.format(temporalDomainEnd)])
+            sugarMasterGroup.attrs["spatial_domain_min"] = np.array(['{0},{1},{2}'.format(spatialDomainMinX, spatialDomainMinY, spatialDomainMinZ)])
+            sugarMasterGroup.attrs["spatial_domain_max"] = np.array(['{0},{1},{2}'.format(spatialDomainMinX, spatialDomainMinY, spatialDomainMinZ)])
     # Close the master HDF5 file
     log.debug('Master File Size Before Close: {0}'.format(os.path.getsize(masterFilePath)))
     sugarMaster.close()
@@ -385,18 +385,18 @@ def cov2hdf(scov):
             
             # Add temporal and spatial metadata as attributes
             temporalDomainStart = '20120815060030102030' #CCYYMMDDHHMMSSAABBCC
-            sugarCubes.attrs["temporal_domain_start"] = '{0}'.format(temporalDomainStart)
+            sugarCubes.attrs["temporal_domain_start"] = np.array(['{0}'.format(temporalDomainStart)])
             temporalDomainEnd = '20120815063000102030'
-            sugarCubes.attrs["temporal_domain_end"] = '{0}'.format(temporalDomainEnd)
+            sugarCubes.attrs["temporal_domain_end"] = np.array(['{0}'.format(temporalDomainEnd)])
 
             spatialDomainMinX = '-73' # Longitude
             spatialDomainMinY = '40' # Latitude
             spatialDomainMinZ = '-10000' # Depth below MLLW in meters
-            sugarCubes.attrs["spatial_domain_min"] = '{0},{1},{2}'.format(spatialDomainMinX, spatialDomainMinY, spatialDomainMinZ)
+            sugarCubes.attrs["spatial_domain_min"] = np.array(['{0},{1},{2}'.format(spatialDomainMinX, spatialDomainMinY, spatialDomainMinZ)])
             spatialDomainMaxX = '-70' # Longitude
             spatialDomainMaxY = '32' # Latitude
             spatialDomainMaxZ = '500' # Depth below MLLW in meters
-            sugarCubes.attrs["spatial_domain_max"] = '{0},{1},{2}'.format(spatialDomainMinX, spatialDomainMinY, spatialDomainMinZ)
+            sugarCubes.attrs["spatial_domain_max"] = np.array(['{0},{1},{2}'.format(spatialDomainMinX, spatialDomainMinY, spatialDomainMinZ)])
 
             # Close the HDF5 file that represents one brick
             sugarFile.flush()
@@ -406,10 +406,10 @@ def cov2hdf(scov):
 
             
             sugarMaster['{0}/Brick{1}'.format(sugarGroupPath,sugarBrick)] = h5py.ExternalLink(sugarFileName, '{0}/Brick{1}'.format(sugarGroupPath,sugarBrick))
-            sugarMasterGroup.attrs["temporal_domain_start"] = '{0}'.format(temporalDomainStart)
-            sugarMasterGroup.attrs["temporal_domain_end"] = '{0}'.format(temporalDomainEnd)
-            sugarMasterGroup.attrs["spatial_domain_min"] = '{0},{1},{2}'.format(spatialDomainMinX, spatialDomainMinY, spatialDomainMinZ)
-            sugarMasterGroup.attrs["spatial_domain_max"] = '{0},{1},{2}'.format(spatialDomainMinX, spatialDomainMinY, spatialDomainMinZ)
+            sugarMasterGroup.attrs["temporal_domain_start"] = np.array(['{0}'.format(temporalDomainStart)])
+            sugarMasterGroup.attrs["temporal_domain_end"] = np.array(['{0}'.format(temporalDomainEnd)])
+            sugarMasterGroup.attrs["spatial_domain_min"] = np.array(['{0},{1},{2}'.format(spatialDomainMinX, spatialDomainMinY, spatialDomainMinZ)])
+            sugarMasterGroup.attrs["spatial_domain_max"] = np.array(['{0},{1},{2}'.format(spatialDomainMinX, spatialDomainMinY, spatialDomainMinZ)])
     # Close the master HDF5 file
     log.debug('Master File Size Before Close: {0}'.format(os.path.getsize(masterFilePath)))
     sugarMaster.close()
