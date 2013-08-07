@@ -13,6 +13,7 @@ patch_all()
 from coverage_model.threads import AsyncDispatcher
 
 import h5py
+from coverage_model.hdf_utils import HDFLockingFile
 import os
 import numpy as np
 import time
@@ -32,7 +33,7 @@ class TestThreads(coverage_model.CoverageModelUnitTestCase):
     
     def block_stuff(self):
         self.remove_file()
-        with h5py.File(self.filepath) as f:
+        with HDFLockingFile(self.filepath, 'w') as f:
             ds = f.require_dataset('test_ds', shape=(5000, 10000), dtype='float32', chunks=None)
             ds[:] = np.arange(5000*10000).reshape(5000,10000)
         self.remove_file()

@@ -12,6 +12,9 @@ import re
 import shutil
 import subprocess
 import StringIO
+import fcntl
+import h5py
+import gevent.coros
 
 
 def repack(infile_path, outfile_path=None):
@@ -79,3 +82,46 @@ def has_corruption(infile_path):
 
 
     return False
+
+class HDFLockingFile(h5py.File):
+    __locks={}
+    __rlock=gevent.coros.RLock()
+
+    def __init__(self, name, mode=None, driver=None, 
+                 libver=None, userblock_size=None, **kwds):
+        h5py.File.__init__(self, name, mode=mode, driver=driver, libver=libver, 
+                userblock_size=userblock_size, **kwds)
+
+        self.lock()
+
+    def lock(self):
+        with self.__rlock:
+            if self.driver == 'sec2' and self.mode != 'r':
+                print 'Locking ', self.filename
+                if self.filename in self.__locks:
+                    raise IOError('[Errno 11] Resource temporarily unavailable')
+
+                self.__locks[self.filename] = 1 
+
+                # Using sec2 and not reading
+                fd = self.fid.get_vfd_handle()
+                # Lock the file
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    def unlock(self):
+        with self.__rlock:
+            if self.driver == 'sec2' and self.mode != 'r':
+                fd = self.fid.get_vfd_handle()
+                fcntl.flock(fd, fcntl.LOCK_UN | fcntl.LOCK_NB)
+                del self.__locks[self.filename]
+                print 'Unlocking ', self.filename
+
+    def close(self):
+        self.unlock()
+
+        h5py.File.close(self)
+
+
+
+
+
