@@ -14,6 +14,7 @@ from coverage_model.brick_dispatch import pack, unpack, FAILURE, REQUEST_WORK, S
 from coverage_model.utils import create_guid
 from gevent_zeromq import zmq
 import h5py
+from coverage_model.hdf_utils import HDFLockingFile
 import time
 import sys
 
@@ -79,7 +80,7 @@ class BrickWriterWorker(object):
                         # TODO: Uncomment this to properly turn 0 & 1 chunking into True
 #                        if 0 in cD or 1 in cD:
 #                            cD = True
-                        with h5py.File(brick_path, 'a') as f:
+                        with HDFLockingFile(brick_path, 'a') as f:
                             # TODO: Due to usage concerns, currently locking chunking to "auto"
                             f.require_dataset(brick_key, shape=bD, dtype=data_type, chunks=None, fillvalue=fill_value)
                             for w in list(work): # Iterate a copy - WARN, this is NOT deep, if the list contains objects, they're NOT copied

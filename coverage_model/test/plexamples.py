@@ -15,6 +15,7 @@ from coverage_model.parameter_types import *
 from coverage_model.persistence import PersistenceLayer, AbstractStorage, PersistedStorage
 import numpy as np
 import h5py
+from coverage_model.hdf_utils import HDFLockingFile
 import os
 import math
 import itertools
@@ -117,7 +118,7 @@ def write_brick(origin,bD,cD,coverageGUID,parameterName):
     # Set HDF5 file and group
     sugarFileName = '{0}.hdf5'.format(brickGUID)
     sugarFilePath = '{0}/{1}'.format(rootPath,sugarFileName)
-    sugarFile = h5py.File(sugarFilePath, 'w')
+    sugarFile = HDFLockingFile(sugarFilePath, 'w')
 
     sugarGroupPath = '/{0}/{1}'.format(coverageGUID,parameterName)
     sugarGroup = sugarFile.create_group(sugarGroupPath)
@@ -161,7 +162,7 @@ def plGenericBricks(pctFill,fillValue):
     coverageName = 'COV'
     
     # Open HDf5 file for writing out the SimplexCoverage
-    sugarMaster = h5py.File(masterFilePath, 'w')
+    sugarMaster = HDFLockingFile(masterFilePath, 'w')
     sugarMasterGroup = sugarMaster.create_group('/{0}'.format(coverageName))
     
     # TODO: Create coverage object from netCDF input file
@@ -186,7 +187,7 @@ def plGenericBricks(pctFill,fillValue):
             
             sugarFileName = '{0}_{1}_Brick{2}.hdf5'.format(coverageName,parameterName,sugarBrick)
             sugarFilePath = '{0}/{1}'.format(rootPath,sugarFileName)
-            sugarFile = h5py.File(sugarFilePath, 'w')
+            sugarFile = HDFLockingFile(sugarFilePath, 'w')
             
             sugarGroupPath = '/{0}/{1}'.format(coverageName,parameterName)
             sugarGroup = sugarFile.create_group(sugarGroupPath)
@@ -249,10 +250,10 @@ def DataProductDeltas():
     coverageName = 'COV'
     
     # Open HDf5 file for writing out the SimplexCoverage
-    sugarMaster = h5py.File(masterFilePath, 'w')
+    sugarMaster = HDFLockingFile(masterFilePath, 'w')
     sugarMasterGroup = sugarMaster.create_group('/{0}'.format(coverageName))
     
-    dpMaster = h5py.File(dpFilePath, 'w')
+    dpMaster = HDFLockingFile(dpFilePath, 'w')
     dpMasterGroup = dpMaster.create_group('/{0}'.format(coverageName))
     dpDeltaGroup = dpMaster.create_group('/{0}'.format('DELTAS'))
     
@@ -273,7 +274,7 @@ def DataProductDeltas():
             
             sugarFileName = '{0}_{1}_Brick{2}.hdf5'.format(coverageName,parameterName,sugarBrick)
             sugarFilePath = '{0}/{1}'.format(rootPath,sugarFileName)
-            sugarFile = h5py.File(sugarFilePath, 'w')
+            sugarFile = HDFLockingFile(sugarFilePath, 'w')
             
             sugarGroupPath = '/{0}/{1}'.format(coverageName,parameterName)
             sugarGroup = sugarFile.create_group(sugarGroupPath)
@@ -296,7 +297,7 @@ def DataProductDeltas():
     
     
     deltaFilePath = '{0}/{1}'.format(rootPath,'delta.hdf5')
-    deltaFile = h5py.File(deltaFilePath, 'w')
+    deltaFile = HDFLockingFile(deltaFilePath, 'w')
     deltaGroupPath = '/{0}/{1}'.format('DELTAS',parameterName)
     deltaGroup = deltaFile.create_group(deltaGroupPath)
     
@@ -335,7 +336,7 @@ def cov2hdf(scov):
     coverageName = scov.label
     
     # Open HDf5 file for writing out the SimplexCoverage
-    sugarMaster = h5py.File(masterFilePath, 'w')
+    sugarMaster = HDFLockingFile(masterFilePath, 'w')
     sugarMasterGroup = sugarMaster.create_group('/{0}'.format(coverageName))
     
     #  Get parameter names, context and data from the coverage
@@ -371,7 +372,7 @@ def cov2hdf(scov):
             
             sugarFileName = '{0}_{1}_Brick{2}.hdf5'.format(coverageName,parameterName,sugarBrick)
             sugarFilePath = '{0}/{1}'.format(rootPath,sugarFileName)
-            sugarFile = h5py.File(sugarFilePath, 'w')
+            sugarFile = HDFLockingFile(sugarFilePath, 'w')
             
             sugarGroupPath = '/{0}/{1}'.format(coverageName,parameterName)
             sugarGroup = sugarFile.create_group(sugarGroupPath)

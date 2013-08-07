@@ -19,6 +19,7 @@ from coverage_model.persistence_helpers import RTreeProxy
 
 import numpy as np
 import h5py
+from coverage_model.hdf_utils import HDFLockingFile
 
 
 class BrickingAssessor(object):
@@ -91,7 +92,7 @@ class BrickingAssessor(object):
             if not self.use_hdf:
                 arr.fill(-1)
             else:
-                with h5py.File(arr) as f:
+                with HDFLockingFile(arr) as f:
                     ds = f.require_dataset(str(i), shape=self.brick_sizes, dtype=self.dtype, chunks=None, fillvalue=-1)
                     ds[:] = -1
 
@@ -160,7 +161,7 @@ class BrickingAssessor(object):
                 self.bricks[bid][brick_slice] = v
             else:
                 fi = self.bricks[bid]
-                with h5py.File(fi) as f:
+                with HDFLockingFile(fi) as f:
                     ds = f.require_dataset(str(bid), shape=self.brick_sizes, dtype=self.dtype, chunks=None,
                                            fillvalue=-1)
                     ds[brick_slice] = v
@@ -186,7 +187,7 @@ class BrickingAssessor(object):
                 ret_vals = self.bricks[bid][brick_slice]
             else:
                 fi = self.bricks[bid]
-                with h5py.File(fi) as f:
+                with HDFLockingFile(fi) as f:
                     ds = f.require_dataset(str(bid), shape=self.brick_sizes, dtype=self.dtype, chunks=None,
                                            fillvalue=-1)
                     ret_vals = ds[brick_slice]

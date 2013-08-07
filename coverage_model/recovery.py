@@ -14,6 +14,7 @@ import os
 import shutil
 import tempfile
 import h5py
+from coverage_model.hdf_utils import HDFLockingFile
 from pyon.public import log
 
 MASTER_ATTRS = [
@@ -261,7 +262,7 @@ class CoverageDoctor(object):
     def _hdf_status_quick_check(self, pth):
         # If we can open the HDF file, we're good - otherwise, we're corrupt!
         try:
-            with h5py.File(pth):
+            with HDFLockingFile(pth):
                 pass
         except:
             return StatusEnum.CORRUPT
@@ -373,10 +374,11 @@ class CoverageDoctor(object):
                     pl.master_manager.brick_list = new_brick_list
 
                     # Repair ExternalLinks to brick files
-                    f = h5py.File(pl.master_manager.file_path, 'a')
+                    with HDFLockingFile(pl.master_manager.file_path, 'a') as f:
+                        for param_name in pdict.keys():
+                            del f[param_name]
+                            f.create_group(param_name)
                     for param_name in pdict.keys():
-                        del f[param_name]
-                        f.create_group(param_name)
                         for brick in bls:
                             link_path = '/{0}/{1}'.format(param_name, brick[0])
                             brick_file_name = '{0}.hdf5'.format(brick[0])
@@ -391,10 +393,9 @@ class CoverageDoctor(object):
 
                 # Remove 'rtree' dataset from Master file if it already exists (post domain expansion)
                 # to make way for reconstruction
-                f = h5py.File(pl.master_manager.file_path, 'a')
-                if 'rtree' in f.keys():
-                    del f['rtree']
-                f.close()
+                with HDFLockingFile(pl.master_manager.file_path, 'a') as f:
+                    if 'rtree' in f.keys():
+                        del f['rtree']
 
                 # Reconstruct 'rtree' dataset
                 # Open temporary Coverage and PersistenceLayer objects
@@ -499,7 +500,7 @@ class CoverageDoctor(object):
         if os.path.exists(pdir) and len(os.listdir(pdir)) > 0:
             for brick in [os.path.join(pdir, x) for x in os.listdir(pdir) if (not param_name in x) and ('.hdf5' in x)]:
                 brick_guid = os.path.basename(brick).replace('.hdf5', '')
-                with h5py.File(brick, 'r') as f:
+                with HDFLockingFile(brick, 'r') as f:
                     ds = f[brick_guid]
                     fv = ds.fillvalue
                     low = ds[0]
@@ -580,7 +581,7 @@ class CoverageDoctor(object):
     def _repair_file_attrs(self, orig_file, rpr_file, attr_callback, attr_list):
         # Sort out which attributes are bad and which aren't
         good_atts, bad_atts = self._diagnose_attrs(orig_file, attr_list)
-        with h5py.File(rpr_file) as f:
+        with HDFLockingFile(rpr_file) as f:
             # Copy the good attributes
             for a in good_atts:
                 f.attrs[a] = np.array([good_atts[a]])
@@ -602,7 +603,7 @@ class CoverageDoctor(object):
         good_atts = {}
         bad_atts = []
         for a in atts:
-            with h5py.File(fpath, 'r') as f:
+            with HDFLockingFile(fpath, 'r') as f:
                 try:
                     good_atts[a] = f.attrs[a][0]
                 except IOError:

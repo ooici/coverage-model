@@ -14,6 +14,7 @@ from coverage_model import utils
 
 import os
 import h5py
+from coverage_model.hdf_utils import HDFLockingFile
 import msgpack
 import numpy as np
 
@@ -29,7 +30,7 @@ def unpack(msg):
 def get_coverage_type(path):
     ctype = 'simplex'
     if os.path.exists(path):
-        with h5py.File(path) as f:
+        with HDFLockingFile(path) as f:
             if 'coverage_type' in f.attrs:
                 ctype = unpack(f.attrs['coverage_type'][0])
 
@@ -118,7 +119,7 @@ class BaseManager(object):
     def flush(self):
         if self.is_dirty(True):
             try:
-                with h5py.File(self.file_path, 'a') as f:
+                with HDFLockingFile(self.file_path, 'a') as f:
                     for k in list(self._dirty):
                         v = getattr(self, k)
     #                    log.debug('FLUSH: key=%s  v=%s', k, v)
@@ -210,7 +211,7 @@ class MasterManager(BaseManager):
             raise AttributeError('Cannot update rtree; object does not have a \'brick_tree\' attribute!!')
 
         log.debug('self.file_path: {0}'.format(self.file_path))
-        with h5py.File(self.file_path, 'a') as f:
+        with HDFLockingFile(self.file_path, 'a') as f:
             rtree_ds = f.require_dataset('rtree', shape=(count,), dtype=h5py.special_dtype(vlen=str), maxshape=(None,))
             rtree_ds.resize((count+1,))
             rtree_ds[count] = pack((extents, obj))
@@ -221,7 +222,7 @@ class MasterManager(BaseManager):
         self.brick_tree = RTreeProxy()
 
     def _load(self):
-        with h5py.File(self.file_path, 'r') as f:
+        with HDFLockingFile(self.file_path, 'r') as f:
             self._base_load(f)
 
             self.param_groups = set()
@@ -248,11 +249,11 @@ class MasterManager(BaseManager):
                 setattr(self, 'brick_tree', RTreeProxy())
 
     def add_external_link(self, link_path, rel_ext_path, link_name):
-        with h5py.File(self.file_path, 'r+') as f:
+        with HDFLockingFile(self.file_path, 'r+') as f:
             f[link_path] = h5py.ExternalLink(rel_ext_path, link_name)
 
     def create_group(self, group_path):
-        with h5py.File(self.file_path, 'r+') as f:
+        with HDFLockingFile(self.file_path, 'r+') as f:
             f.create_group(group_path)
 
 
@@ -274,6 +275,6 @@ class ParameterManager(BaseManager):
             super(ParameterManager, self).flush()
 
     def _load(self):
-        with h5py.File(self.file_path, 'r') as f:
+        with HDFLockingFile(self.file_path, 'r') as f:
             self._base_load(f)
 

@@ -13,6 +13,7 @@ from coverage_model.basic_types import create_guid, AbstractStorage, InMemorySto
 from coverage_model.persistence_helpers import MasterManager, ParameterManager, pack, unpack
 import numpy as np
 import h5py
+from coverage_model.hdf_utils import HDFLockingFile
 import os
 import itertools
 from copy import deepcopy
@@ -641,7 +642,7 @@ class PersistedStorage(AbstractStorage):
             else:
                 log.trace('Found real brick file: %s', brick_file_path)
 
-                with h5py.File(brick_file_path) as brick_file:
+                with HDFLockingFile(brick_file_path) as brick_file:
                     ret_vals = brick_file[bid][brick_slice]
 
                 # Check if object type
@@ -793,7 +794,7 @@ class PersistedStorage(AbstractStorage):
                 data_type = h5py.special_dtype(vlen=str)
             if 0 in cD or 1 in cD:
                 cD = True
-            with h5py.File(brick_file_path, 'a') as f:
+            with HDFLockingFile(brick_file_path, 'a') as f:
                 # TODO: Due to usage concerns, currently locking chunking to "auto"
                 f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=None, fillvalue=fv)
                 f[brick_guid][brick_slice] = vals
@@ -811,7 +812,7 @@ class PersistedStorage(AbstractStorage):
                     data_type = h5py.special_dtype(vlen=str)
                 if 0 in cD or 1 in cD:
                     cD = True
-                with h5py.File(brick_file_path, 'a') as f:
+                with HDFLockingFile(brick_file_path, 'a') as f:
                     # TODO: Due to usage concerns, currently locking chunking to "auto"
                     f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=None, fillvalue=fv)
 
@@ -900,7 +901,7 @@ class SparsePersistedStorage(AbstractStorage):
         brick_file_path = '{0}/{1}.hdf5'.format(self.brick_path, bid)
 
         if os.path.exists(brick_file_path):
-            with h5py.File(brick_file_path) as f:
+            with HDFLockingFile(brick_file_path) as f:
                 ret_vals = f[bid][0]
         else:
             ret_vals = None
@@ -932,7 +933,7 @@ class SparsePersistedStorage(AbstractStorage):
         data_type = h5py.special_dtype(vlen=str)
 
         if self.inline_data_writes:
-            with h5py.File(brick_file_path, 'a') as f:
+            with HDFLockingFile(brick_file_path, 'a') as f:
                 f.require_dataset(bid, shape=bD, dtype=data_type, chunks=cD, fillvalue=None)
                 f[bid][0] = set_arr
         else:
@@ -942,7 +943,7 @@ class SparsePersistedStorage(AbstractStorage):
 
             # If the brick file doesn't exist, 'touch' it to make sure it's immediately available
             if not os.path.exists(brick_file_path):
-                with h5py.File(brick_file_path, 'a') as f:
+                with HDFLockingFile(brick_file_path, 'a') as f:
                     # TODO: Due to usage concerns, currently locking chunking to "auto"
                     f.require_dataset(bid, shape=bD, dtype=data_type, chunks=cD, fillvalue=None)
 
