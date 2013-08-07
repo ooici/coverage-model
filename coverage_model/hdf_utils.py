@@ -97,7 +97,6 @@ class HDFLockingFile(h5py.File):
     def lock(self):
         with self.__rlock:
             if self.driver == 'sec2' and self.mode != 'r':
-                print 'Locking ', self.filename
                 if self.filename in self.__locks:
                     raise IOError('[Errno 11] Resource temporarily unavailable')
 
@@ -114,7 +113,6 @@ class HDFLockingFile(h5py.File):
                 fd = self.fid.get_vfd_handle()
                 fcntl.flock(fd, fcntl.LOCK_UN | fcntl.LOCK_NB)
                 del self.__locks[self.filename]
-                print 'Unlocking ', self.filename
 
     def close(self):
         self.unlock()
