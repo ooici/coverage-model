@@ -9,7 +9,10 @@
 
 from nose.plugins.attrib import attr
 import coverage_model.utils as utils
-from coverage_model import CoverageModelUnitTestCase
+from coverage_model import CoverageModelUnitTestCase, CoverageModelIntTestCase
+from coverage_model.hdf_utils import HDFLockingFile
+import os
+
 
 @attr('UNIT',group='cov')
 class TestUtilsUnit(CoverageModelUnitTestCase):
@@ -301,3 +304,21 @@ class TestUtilsUnit(CoverageModelUnitTestCase):
         self.assertEqual(sl, (slice(28, 47, 5),))
 
         
+@attr('UNIT',group='cov')
+class TestHDFLocking(CoverageModelIntTestCase):
+    def test_locking_contention(self):
+        guid = utils.create_guid()
+        path = os.path.join(self.working_dir, '%s.h5' % guid)
+        print path
+        f1 = HDFLockingFile(path, 'a')
+        try:
+            f2 = HDFLockingFile(path,'a')
+            raise AssertionError('Failed to raise IOError for exclusion lock')
+        except IOError as e:
+            if 'Resource temporarily unavailable' not in e.message:
+                raise
+        f1.close()
+
+
+
+
