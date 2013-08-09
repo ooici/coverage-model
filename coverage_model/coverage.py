@@ -57,6 +57,7 @@ class AbstractCoverage(AbstractIdentifiable):
     """
 
     VALUE_CACHE_LIMIT = 30
+    version = '0.0.1'
 
     def __init__(self, mode=None):
         AbstractIdentifiable.__init__(self)
@@ -878,6 +879,8 @@ class ViewCoverage(AbstractCoverage):
                     raise SystemError('Cannot find specified coverage: {0}'.format(pth))
 
                 self._persistence_layer = SimplePersistenceLayer(root_dir, persistence_guid, mode=self.mode)
+                if self._persistence_layer.version != self.version:
+                    raise IOError('Coverage Model Version Mismatch: %s != %s' %(self.version, self._persistence_layer.version))
 
                 self.name = self._persistence_layer.name
 
@@ -937,7 +940,8 @@ class ViewCoverage(AbstractCoverage):
                                                                  param_dict=parameter_dictionary,
                                                                  mode=self.mode,
                                                                  rcov_loc=reference_coverage_location,
-                                                                 coverage_type='view')
+                                                                 coverage_type='view',
+                                                                 version=self.version)
 
                 self.__setup(parameter_dictionary)
 
@@ -1068,6 +1072,8 @@ class ComplexCoverage(AbstractCoverage):
                     raise SystemError('Cannot find specified coverage: {0}'.format(pth))
 
                 self._persistence_layer = SimplePersistenceLayer(root_dir, persistence_guid, mode=self.mode)
+                if self._persistence_layer.version != self.version:
+                    raise IOError('Coverage Model Version Mismatch: %s != %s' %(self.version, self._persistence_layer.version))
 
                 self.name = self._persistence_layer.name
 
@@ -1115,7 +1121,9 @@ class ComplexCoverage(AbstractCoverage):
                                                                  param_dict=parameter_dictionary,
                                                                  rcov_locs=reference_coverage_locs,
                                                                  complex_type=complex_type,
-                                                                 coverage_type='complex')
+                                                                 coverage_type='complex',
+                                                                 version=self.version)
+
 
             self._dobuild()
 
@@ -1532,6 +1540,8 @@ class SimplexCoverage(AbstractCoverage):
 
                 # All appears well - load it up!
                 self._persistence_layer = PersistenceLayer(root_dir, persistence_guid, mode=self.mode)
+                if self._persistence_layer.version != self.version:
+                    raise IOError('Coverage Model Version Mismatch: %s != %s' %(self.version, self._persistence_layer.version))
 
                 self.name = self._persistence_layer.name
                 self.spatial_domain = self._persistence_layer.sdom
@@ -1640,7 +1650,8 @@ class SimplexCoverage(AbstractCoverage):
                                                                inline_data_writes=inline_data_writes,
                                                                auto_flush_values=auto_flush_values,
                                                                value_caching=value_caching,
-                                                               coverage_type='simplex')
+                                                               coverage_type='simplex',
+                                                               version=self.version)
 
                 for o, pc in parameter_dictionary.itervalues():
                     self.append_parameter(pc)

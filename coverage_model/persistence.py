@@ -123,7 +123,7 @@ class PersistenceLayer(object):
         log.debug('Persistence GUID: %s', guid)
         root = '.' if root is ('' or None) else root
 
-        self.master_manager = MasterManager(root, guid, name=name, tdom=tdom, sdom=sdom, global_bricking_scheme=bricking_scheme, parameter_bounds=None, coverage_type=coverage_type)
+        self.master_manager = MasterManager(root, guid, name=name, tdom=tdom, sdom=sdom, global_bricking_scheme=bricking_scheme, parameter_bounds=None, coverage_type=coverage_type, **kwargs)
 
         self.mode = mode
         if not hasattr(self.master_manager, 'auto_flush_values'):
