@@ -92,7 +92,7 @@ class BrickingAssessor(object):
             if not self.use_hdf:
                 arr.fill(-1)
             else:
-                with HDFLockingFile(arr) as f:
+                with HDFLockingFile(arr, mode='a') as f:
                     ds = f.require_dataset(str(i), shape=self.brick_sizes, dtype=self.dtype, chunks=None, fillvalue=-1)
                     ds[:] = -1
 
@@ -161,7 +161,7 @@ class BrickingAssessor(object):
                 self.bricks[bid][brick_slice] = v
             else:
                 fi = self.bricks[bid]
-                with HDFLockingFile(fi) as f:
+                with HDFLockingFile(fi, 'a') as f:
                     ds = f.require_dataset(str(bid), shape=self.brick_sizes, dtype=self.dtype, chunks=None,
                                            fillvalue=-1)
                     ds[brick_slice] = v

@@ -89,6 +89,8 @@ class HDFLockingFile(h5py.File):
 
     def __init__(self, name, mode=None, driver=None, 
                  libver=None, userblock_size=None, **kwds):
+        if mode is None:
+            mode = 'r'
         h5py.File.__init__(self, name, mode=mode, driver=driver, libver=libver, 
                 userblock_size=userblock_size, **kwds)
 
@@ -96,6 +98,7 @@ class HDFLockingFile(h5py.File):
 
     def lock(self):
         with self.__rlock:
+
             if self.driver == 'sec2' and self.mode != 'r':
                 if self.filename in self.__locks:
                     raise IOError('[Errno 11] Resource temporarily unavailable')
