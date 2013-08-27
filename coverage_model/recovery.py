@@ -286,39 +286,40 @@ class CoverageDoctor(object):
 
         ar.set_master_status(master_pth, st, sz)
 
-        for p in os.walk(self._inner_dir).next()[1]:
-            pset = self._get_parameter_fileset(p)
+        for path, subdirs, files in os.walk(self._inner_dir):
+            for p in subdirs:
+                pset = self._get_parameter_fileset(p)
 
-            # Check parameter file
-            if detailed_analysis:
-                st = StatusEnum.CORRUPT if hdf_utils.has_corruption(pset['param']) else StatusEnum.NORMAL
-                if st == StatusEnum.CORRUPT:
-                    sz = -1
-                else:
-                    sz = hdf_utils.space_ratio(pset['param'])
-            else:
-                st = self._hdf_status_quick_check(pset['param'])
-                sz = -1
-
-            ar.add_param_status(p, pset['param'], st, sz)
-
-            # Check each brick file
-            for b_pth in pset['bricks']:
-                if analyze_bricks:
-                    if detailed_analysis:
-                        st = StatusEnum.CORRUPT if hdf_utils.has_corruption(b_pth) else StatusEnum.NORMAL
-                        if st == StatusEnum.CORRUPT:
-                            sz = -1
-                        else:
-                            sz = hdf_utils.space_ratio(b_pth)
-                    else:
-                        st = self._hdf_status_quick_check(b_pth)
+                # Check parameter file
+                if detailed_analysis:
+                    st = StatusEnum.CORRUPT if hdf_utils.has_corruption(pset['param']) else StatusEnum.NORMAL
+                    if st == StatusEnum.CORRUPT:
                         sz = -1
+                    else:
+                        sz = hdf_utils.space_ratio(pset['param'])
                 else:
-                    st = StatusEnum.UNKNOWN
+                    st = self._hdf_status_quick_check(pset['param'])
                     sz = -1
 
-                ar.add_brick_status(p, b_pth, st, sz)
+                ar.add_param_status(p, pset['param'], st, sz)
+
+                # Check each brick file
+                for b_pth in pset['bricks']:
+                    if analyze_bricks:
+                        if detailed_analysis:
+                            st = StatusEnum.CORRUPT if hdf_utils.has_corruption(b_pth) else StatusEnum.NORMAL
+                            if st == StatusEnum.CORRUPT:
+                                sz = -1
+                            else:
+                                sz = hdf_utils.space_ratio(b_pth)
+                        else:
+                            st = self._hdf_status_quick_check(b_pth)
+                            sz = -1
+                    else:
+                        st = StatusEnum.UNKNOWN
+                        sz = -1
+
+                    ar.add_brick_status(p, b_pth, st, sz)
 
         return ar
 
@@ -374,7 +375,7 @@ class CoverageDoctor(object):
                     pl.master_manager.brick_list = new_brick_list
 
                     # Repair ExternalLinks to brick files
-                    with HDFLockingFile(pl.master_manager.file_path, 'a') as f:
+                    with HDFLockingFile(pl.master_manager.file_path, 'r+') as f:
                         for param_name in pdict.keys():
                             del f[param_name]
                             f.create_group(param_name)
@@ -393,13 +394,13 @@ class CoverageDoctor(object):
 
                 # Remove 'rtree' dataset from Master file if it already exists (post domain expansion)
                 # to make way for reconstruction
-                with HDFLockingFile(pl.master_manager.file_path, 'a') as f:
+                with HDFLockingFile(pl.master_manager.file_path, 'r+') as f:
                     if 'rtree' in f.keys():
                         del f['rtree']
 
                 # Reconstruct 'rtree' dataset
                 # Open temporary Coverage and PersistenceLayer objects
-                fixed_cov = AbstractCoverage.load(tempcov.persistence_dir, mode='a')
+                fixed_cov = AbstractCoverage.load(tempcov.persistence_dir, mode='r+')
                 pl_fixed = fixed_cov._persistence_layer
 
                 # Call update_rtree for each brick using PersistenceLayer builtin
@@ -581,7 +582,7 @@ class CoverageDoctor(object):
     def _repair_file_attrs(self, orig_file, rpr_file, attr_callback, attr_list):
         # Sort out which attributes are bad and which aren't
         good_atts, bad_atts = self._diagnose_attrs(orig_file, attr_list)
-        with HDFLockingFile(rpr_file) as f:
+        with HDFLockingFile(rpr_file, mode='r+') as f:
             # Copy the good attributes
             for a in good_atts:
                 f.attrs[a] = np.array([good_atts[a]])

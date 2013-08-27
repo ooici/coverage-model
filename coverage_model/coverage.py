@@ -889,6 +889,8 @@ class ViewCoverage(AbstractCoverage):
                 except IOError, ex:
                     if 'unable to create file' in ex.message:
                         raise IOError('Unable to open reference coverage: \'{0}\''.format(self._persistence_layer.rcov_loc))
+                    if 'unable to open file' in ex.message:
+                        raise IOError('Unable to open reference coverage: \'{0}\''.format(self._persistence_layer.rcov_loc))
                     raise
 
                 self.__setup(self._persistence_layer.param_dict)
