@@ -208,6 +208,31 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
     # Additional tests specific to Complex Coverage
     ######################
 
+    @unittest.skip('UTIL')
+    def test_something(self):
+
+        # Create a large dataset spanning a year
+        # Each coverage represents a week
+    
+
+        cova_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(10),'value_set' : np.arange(10)})
+        covb_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(20,30), 'value_set': np.arange(10)})
+
+        cov = SimplexCoverage.load(cova_pth, mode='r+')
+
+        cov_pths = [cova_pth, covb_pth]
+
+
+        ccov = ComplexCoverage(self.working_dir, create_guid(), 'complex coverage', 
+                reference_coverage_locs=cov_pths,
+                parameter_dictionary=ParameterDictionary(),
+                complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
+
+        from pyon.util.breakpoint import breakpoint
+        breakpoint(locals(), globals())
+
+
+
     def test_parametric_strict(self):
         num_times = 10
 
