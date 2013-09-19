@@ -964,7 +964,7 @@ class ViewCoverage(AbstractCoverage):
             log.info('Closing reference coverage \'%s\'', self.reference_coverage.name if hasattr(self.reference_coverage,'name') else 'unnamed')
             self.reference_coverage.close(force, timeout)
 
-        super(ViewCoverage, self).close(force, timeout)
+        AbstractCoverage.close(self, force, timeout)
 
     def replace_reference_coverage(self, path=None, use_current_param_dict=True, parameter_dictionary=None):
         if self.mode == 'r':
@@ -1067,71 +1067,65 @@ class ComplexCoverage(AbstractCoverage):
 
             root_dir = root_dir if not root_dir.endswith(persistence_guid) else os.path.split(root_dir)[0]
 
+
             pth = os.path.join(root_dir, persistence_guid)
-
-            def _doload(self):
-                if not os.path.exists(pth):
-                    raise SystemError('Cannot find specified coverage: {0}'.format(pth))
-
-                self._persistence_layer = SimplePersistenceLayer(root_dir, persistence_guid, mode=self.mode)
-                if self._persistence_layer.version != self.version:
-                    raise IOError('Coverage Model Version Mismatch: %s != %s' %(self.version, self._persistence_layer.version))
-
-                self.name = self._persistence_layer.name
-
-                self.mode = self.mode
-
-                self._reference_covs = collections.OrderedDict()
-
             if os.path.exists(pth):
-                _doload(self)
+                self._existing_coverage(root_dir, persistence_guid)
             else:
-                if reference_coverage_locs is None or name is None:
-                    raise SystemError('\'reference_coverages\' and \'name\' cannot be None')
-
-                # If the coverage directory exists, load it instead!!
-                if os.path.exists(pth):
-                    log.warn('The specified coverage already exists - performing load of \'{0}\''.format(pth))
-                    _doload(self)
-                    return
-
-                if not isinstance(name, basestring):
-                    raise TypeError('\'name\' must be of type basestring')
-                self.name = name
-
-                if parameter_dictionary is None:
-                    parameter_dictionary = ParameterDictionary()
-                else:
-                    from coverage_model import ParameterFunctionType
-                    for pn, pc in parameter_dictionary.iteritems():
-                        if not isinstance(pc[1].param_type, ParameterFunctionType):
-                            log.warn('Parameters stored in a ComplexCoverage must be ParameterFunctionType parameters: discarding \'%s\'', pn)
-                            parameter_dictionary._map.pop(pn)
-
-                # Must be in 'a' for a new coverage
-                self.mode = 'a'
-
-                self._reference_covs = collections.OrderedDict()
-
-                if not hasattr(reference_coverage_locs, '__iter__'):
-                    reference_coverage_locs = [reference_coverage_locs]
-
-                self._persistence_layer = SimplePersistenceLayer(root_dir,
-                                                                 persistence_guid,
-                                                                 name=self.name,
-                                                                 mode=self.mode,
-                                                                 param_dict=parameter_dictionary,
-                                                                 rcov_locs=reference_coverage_locs,
-                                                                 complex_type=complex_type,
-                                                                 coverage_type='complex',
-                                                                 version=self.version)
-
+                self._new_coverage(root_dir, persistence_guid, name, reference_coverage_locs, parameter_dictionary, complex_type)
 
             self._dobuild()
 
         except:
             self._closed = True
             raise
+
+    def _existing_coverage(self, root_dir, persistence_guid):
+        # If the path does exist, initialize the simple persistence layer
+        pth = os.path.join(root_dir, persistence_guid)
+        if not os.path.exists(pth):
+            raise SystemError('Cannot find specified coverage: {0}'.format(pth))
+        self._persistence_layer = SimplePersistenceLayer(root_dir, persistence_guid, mode=self.mode)
+        if self._persistence_layer.version != self.version:
+            raise IOError('Coverage Model Version Mismatch: %s != %s' %(self.version, self._persistence_layer.version))
+        self.name = self._persistence_layer.name
+        self.mode = self.mode
+        self._reference_covs = collections.OrderedDict()
+
+    def _new_coverage(self, root_dir, persistence_guid, name, reference_coverage_locs, parameter_dictionary, complex_type):
+        # Coverage doesn't exist, make a new one
+        if reference_coverage_locs is None or name is None:
+            raise SystemError('\'reference_coverages\' and \'name\' cannot be None')
+        if not isinstance(name, basestring):
+            raise TypeError('\'name\' must be of type basestring')
+        self.name = name
+        if parameter_dictionary is None:
+            parameter_dictionary = ParameterDictionary()
+        else:
+            from coverage_model import ParameterFunctionType
+            for pn, pc in parameter_dictionary.iteritems():
+                if not isinstance(pc[1].param_type, ParameterFunctionType):
+                    log.warn('Parameters stored in a ComplexCoverage must be ParameterFunctionType parameters: discarding \'%s\'', pn)
+                    parameter_dictionary._map.pop(pn)
+
+        # Must be in 'a' for a new coverage
+        self.mode = 'a'
+
+        self._reference_covs = collections.OrderedDict()
+
+        if not hasattr(reference_coverage_locs, '__iter__'):
+            reference_coverage_locs = [reference_coverage_locs]
+
+        self._persistence_layer = SimplePersistenceLayer(root_dir,
+                                                         persistence_guid,
+                                                         name=self.name,
+                                                         mode=self.mode,
+                                                         param_dict=parameter_dictionary,
+                                                         rcov_locs=reference_coverage_locs,
+                                                         complex_type=complex_type,
+                                                         coverage_type='complex',
+                                                         version=self.version)
+
 
     def _dobuild(self):
         complex_type = self._persistence_layer.complex_type
@@ -1166,7 +1160,8 @@ class ComplexCoverage(AbstractCoverage):
                 log.info('Closing reference coverage \'%s\'', cov.name if hasattr(cov,'name') else 'unnamed')
                 cov.close(force, timeout)
 
-        super(ComplexCoverage, self).close(force, timeout)
+
+        AbstractCoverage.close(self, force, timeout)
 
     def append_parameter(self, parameter_context):
         if not isinstance(parameter_context, ParameterContext):
@@ -1175,7 +1170,7 @@ class ComplexCoverage(AbstractCoverage):
         if not isinstance(parameter_context.param_type, ParameterFunctionType):
             raise ValueError('Parameters stored in a ComplexCoverage must be ParameterFunctionType parameters: cannot append parameter \'{0}\''.format(parameter_context.name))
 
-        super(ComplexCoverage, self).append_parameter(parameter_context)
+        AbstractCoverage.append_parameter(self, parameter_context)
 
     def append_reference_coverage(self, path):
         ncov = AbstractCoverage.load(path)
@@ -1668,7 +1663,7 @@ class SimplexCoverage(AbstractCoverage):
 
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
-        return super(SimplexCoverage, cls)._fromdict(cmdict, {'parameter_dictionary': '_range_dictionary'})
+        return AbstractCoverage._fromdict(cmdict, {'parameter_dictionary': '_range_dictionary'})
 
 
 #=========================
