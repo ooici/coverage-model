@@ -36,10 +36,11 @@
 from ooi.logging import log
 from pyon.util.async import spawn
 
-from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_DomainOfApplication, Dictable, InMemoryStorage, Span
+from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_doa, Dictable, InMemoryStorage, Span
 from coverage_model.parameter import Parameter, ParameterDictionary, ParameterContext
 from coverage_model.parameter_values import get_value_class, AbstractParameterValue
 from coverage_model.persistence import PersistenceLayer, InMemoryPersistenceLayer, SimplePersistenceLayer
+from persistence_helpers import get_coverage_type
 from coverage_model import utils
 from copy import deepcopy
 import numpy as np
@@ -89,6 +90,9 @@ class AbstractCoverage(AbstractIdentifiable):
 
     @classmethod
     def pickle_save(cls, cov_obj, file_path, use_ascii=False):
+        '''
+        Attempts to serialize an instance of an AbstractCoverage using pickle
+        '''
         if not isinstance(cov_obj, AbstractCoverage):
             raise StandardError('cov_obj must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(cov_obj)))
 
@@ -103,6 +107,9 @@ class AbstractCoverage(AbstractIdentifiable):
 
     @classmethod
     def pickle_load(cls, file_path):
+        '''
+        Attempts to load a serialized instance of an AbstractCoverage using pickle
+        '''
         with open(file_path, 'r') as f:
             obj = pickle.load(f)
 
@@ -115,6 +122,13 @@ class AbstractCoverage(AbstractIdentifiable):
 
     @classmethod
     def load(cls, root_dir, persistence_guid=None, mode=None):
+        '''
+        Loads a standard persisted instance of a Coverage Model
+        root_dir         - The root filesystem directory that hosts the coverage instances
+        persistence_guid - Unique identifier for this instance of the coverage
+        mode             - I/O mode
+        returns an instantiated coverage model instance
+        '''
         if not isinstance(root_dir, basestring):
             raise ValueError('\'root_dir\' must be a string')
 
@@ -126,7 +140,6 @@ class AbstractCoverage(AbstractIdentifiable):
             raise ValueError('\'persistence_guid\' must be a string')
 
         # Otherwise, determine which coverage type to use to open the file
-        from persistence_helpers import get_coverage_type
         ctype = get_coverage_type(os.path.join(root_dir, persistence_guid, '{0}_master.hdf5'.format(persistence_guid)))
 
         if ctype == 'simplex':
@@ -142,13 +155,18 @@ class AbstractCoverage(AbstractIdentifiable):
 
     @classmethod
     def save(cls, cov_obj, *args, **kwargs):
+        '''
+        Saves a coverage model instance
+        '''
         if not isinstance(cov_obj, AbstractCoverage):
             raise StandardError('cov_obj must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(cov_obj)))
-
         cov_obj.flush()
 
     def refresh(self):
-        if not hasattr(self, '_in_memory_storage') or not self._in_memory_storage:
+        '''
+        Refreshes the persistence layer
+        '''
+        if not getattr(self, '_in_memory_storage', None):
             self.close()
             self.__init__(os.path.split(self.persistence_dir)[0], self.persistence_guid, mode=self.mode)
 
@@ -158,10 +176,7 @@ class AbstractCoverage(AbstractIdentifiable):
 
     @property
     def coverage_type(self):
-        if hasattr(self._persistence_layer, 'coverage_type'):
-            return self._persistence_layer.coverage_type
-        else:
-            return 'simplex'
+        return getattr(self._persistence_layer, 'coverage_type', 'simplex')
 
     @property
     def temporal_parameter_name(self):
@@ -178,7 +193,7 @@ class AbstractCoverage(AbstractIdentifiable):
 
         return tuple(s)
 
-    def insert_timesteps(self, count, origin=None, oob=True):
+    def insert_timesteps(self, count, origin=None, oob=False):
         """
         Insert count # of timesteps beginning at the origin
 
@@ -365,13 +380,13 @@ class AbstractCoverage(AbstractIdentifiable):
         slice_ = []
 
         total_shape = self.temporal_domain.shape.extents
-        tdoa = get_valid_DomainOfApplication(tdoa, total_shape)
+        tdoa = get_valid_doa(tdoa, total_shape)
         log.debug('Temporal doa: %s', tdoa.slices)
         slice_.extend(tdoa.slices)
 
         if self.spatial_domain is not None:
             total_shape += self.spatial_domain.shape.extents
-            sdoa = get_valid_DomainOfApplication(sdoa, total_shape[1:])
+            sdoa = get_valid_doa(sdoa, total_shape[1:])
             log.debug('Spatial doa: %s', sdoa.slices)
             slice_.extend(sdoa.slices)
 
@@ -383,21 +398,26 @@ class AbstractCoverage(AbstractIdentifiable):
         log.debug('Getting slice: %s', slice_)
 
         if self.value_caching:
-            # Make slice_ fully expressed such that there are no "None" entries - this lets us ignore domain growth
-            slk = utils.express_slice(slice_, total_shape)
-            key = (param_name, utils.hash_any(slk))
-            try:
-                return_value = self._value_cache.pop(key)
-            except KeyError:
-                return_value = self._range_value[param_name][slice_]
-                if len(self._value_cache) >= self.VALUE_CACHE_LIMIT:
-                    k, v = self._value_cache.popitem(0)
-                    v = None
-                    del k, v
-            self._value_cache[key] = return_value
+            return_value = self._get_cached_values(param_name, slice_, total_shape)
         else:
             return_value = self._range_value[param_name][slice_]
 
+        return return_value
+
+    def _get_cached_values(self, param_name, slice_, total_shape):
+        '''
+        Gets a value from a properly managed LRU cache
+        '''
+        # Make slice_ fully expressed such that there are no "None" entries - this lets us ignore domain growth
+        slk = utils.express_slice(slice_, total_shape)
+        key = (param_name, utils.hash_any(slk))
+        try:
+            return_value = self._value_cache.pop(key)
+        except KeyError:
+            return_value = self._range_value[param_name][slice_]
+            if len(self._value_cache) >= self.VALUE_CACHE_LIMIT:
+                self._value_cache.popitem(0)
+        self._value_cache[key] = return_value
         return return_value
 
     def set_time_values(self, value, tdoa=None):
@@ -455,12 +475,12 @@ class AbstractCoverage(AbstractIdentifiable):
 
         slice_ = []
 
-        tdoa = get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
+        tdoa = get_valid_doa(tdoa, self.temporal_domain.shape.extents)
         log.debug('Temporal doa: %s', tdoa.slices)
         slice_.extend(tdoa.slices)
 
         if self.spatial_domain is not None:
-            sdoa = get_valid_DomainOfApplication(sdoa, self.spatial_domain.shape.extents)
+            sdoa = get_valid_doa(sdoa, self.spatial_domain.shape.extents)
             log.debug('Spatial doa: %s', sdoa.slices)
             slice_.extend(sdoa.slices)
 
@@ -964,7 +984,7 @@ class ViewCoverage(AbstractCoverage):
             log.info('Closing reference coverage \'%s\'', self.reference_coverage.name if hasattr(self.reference_coverage,'name') else 'unnamed')
             self.reference_coverage.close(force, timeout)
 
-        super(ViewCoverage, self).close(force, timeout)
+        AbstractCoverage.close(self, force, timeout)
 
     def replace_reference_coverage(self, path=None, use_current_param_dict=True, parameter_dictionary=None):
         if self.mode == 'r':
@@ -1067,71 +1087,65 @@ class ComplexCoverage(AbstractCoverage):
 
             root_dir = root_dir if not root_dir.endswith(persistence_guid) else os.path.split(root_dir)[0]
 
+
             pth = os.path.join(root_dir, persistence_guid)
-
-            def _doload(self):
-                if not os.path.exists(pth):
-                    raise SystemError('Cannot find specified coverage: {0}'.format(pth))
-
-                self._persistence_layer = SimplePersistenceLayer(root_dir, persistence_guid, mode=self.mode)
-                if self._persistence_layer.version != self.version:
-                    raise IOError('Coverage Model Version Mismatch: %s != %s' %(self.version, self._persistence_layer.version))
-
-                self.name = self._persistence_layer.name
-
-                self.mode = self.mode
-
-                self._reference_covs = collections.OrderedDict()
-
             if os.path.exists(pth):
-                _doload(self)
+                self._existing_coverage(root_dir, persistence_guid)
             else:
-                if reference_coverage_locs is None or name is None:
-                    raise SystemError('\'reference_coverages\' and \'name\' cannot be None')
-
-                # If the coverage directory exists, load it instead!!
-                if os.path.exists(pth):
-                    log.warn('The specified coverage already exists - performing load of \'{0}\''.format(pth))
-                    _doload(self)
-                    return
-
-                if not isinstance(name, basestring):
-                    raise TypeError('\'name\' must be of type basestring')
-                self.name = name
-
-                if parameter_dictionary is None:
-                    parameter_dictionary = ParameterDictionary()
-                else:
-                    from coverage_model import ParameterFunctionType
-                    for pn, pc in parameter_dictionary.iteritems():
-                        if not isinstance(pc[1].param_type, ParameterFunctionType):
-                            log.warn('Parameters stored in a ComplexCoverage must be ParameterFunctionType parameters: discarding \'%s\'', pn)
-                            parameter_dictionary._map.pop(pn)
-
-                # Must be in 'a' for a new coverage
-                self.mode = 'a'
-
-                self._reference_covs = collections.OrderedDict()
-
-                if not hasattr(reference_coverage_locs, '__iter__'):
-                    reference_coverage_locs = [reference_coverage_locs]
-
-                self._persistence_layer = SimplePersistenceLayer(root_dir,
-                                                                 persistence_guid,
-                                                                 name=self.name,
-                                                                 mode=self.mode,
-                                                                 param_dict=parameter_dictionary,
-                                                                 rcov_locs=reference_coverage_locs,
-                                                                 complex_type=complex_type,
-                                                                 coverage_type='complex',
-                                                                 version=self.version)
-
+                self._new_coverage(root_dir, persistence_guid, name, reference_coverage_locs, parameter_dictionary, complex_type)
 
             self._dobuild()
 
         except:
             self._closed = True
             raise
+
+    def _existing_coverage(self, root_dir, persistence_guid):
+        # If the path does exist, initialize the simple persistence layer
+        pth = os.path.join(root_dir, persistence_guid)
+        if not os.path.exists(pth):
+            raise SystemError('Cannot find specified coverage: {0}'.format(pth))
+        self._persistence_layer = SimplePersistenceLayer(root_dir, persistence_guid, mode=self.mode)
+        if self._persistence_layer.version != self.version:
+            raise IOError('Coverage Model Version Mismatch: %s != %s' %(self.version, self._persistence_layer.version))
+        self.name = self._persistence_layer.name
+        self.mode = self.mode
+        self._reference_covs = collections.OrderedDict()
+
+    def _new_coverage(self, root_dir, persistence_guid, name, reference_coverage_locs, parameter_dictionary, complex_type):
+        # Coverage doesn't exist, make a new one
+        if reference_coverage_locs is None or name is None:
+            raise SystemError('\'reference_coverages\' and \'name\' cannot be None')
+        if not isinstance(name, basestring):
+            raise TypeError('\'name\' must be of type basestring')
+        self.name = name
+        if parameter_dictionary is None:
+            parameter_dictionary = ParameterDictionary()
+        else:
+            from coverage_model import ParameterFunctionType
+            for pn, pc in parameter_dictionary.iteritems():
+                if not isinstance(pc[1].param_type, ParameterFunctionType):
+                    log.warn('Parameters stored in a ComplexCoverage must be ParameterFunctionType parameters: discarding \'%s\'', pn)
+                    parameter_dictionary._map.pop(pn)
+
+        # Must be in 'a' for a new coverage
+        self.mode = 'a'
+
+        self._reference_covs = collections.OrderedDict()
+
+        if not hasattr(reference_coverage_locs, '__iter__'):
+            reference_coverage_locs = [reference_coverage_locs]
+
+        self._persistence_layer = SimplePersistenceLayer(root_dir,
+                                                         persistence_guid,
+                                                         name=self.name,
+                                                         mode=self.mode,
+                                                         param_dict=parameter_dictionary,
+                                                         rcov_locs=reference_coverage_locs,
+                                                         complex_type=complex_type,
+                                                         coverage_type='complex',
+                                                         version=self.version)
+
 
     def _dobuild(self):
         complex_type = self._persistence_layer.complex_type
@@ -1166,7 +1180,8 @@ class ComplexCoverage(AbstractCoverage):
                 log.info('Closing reference coverage \'%s\'', cov.name if hasattr(cov,'name') else 'unnamed')
                 cov.close(force, timeout)
 
-        super(ComplexCoverage, self).close(force, timeout)
+
+        AbstractCoverage.close(self, force, timeout)
 
     def append_parameter(self, parameter_context):
         if not isinstance(parameter_context, ParameterContext):
@@ -1175,7 +1190,7 @@ class ComplexCoverage(AbstractCoverage):
         if not isinstance(parameter_context.param_type, ParameterFunctionType):
             raise ValueError('Parameters stored in a ComplexCoverage must be ParameterFunctionType parameters: cannot append parameter \'{0}\''.format(parameter_context.name))
 
-        super(ComplexCoverage, self).append_parameter(parameter_context)
+        AbstractCoverage.append_parameter(self, parameter_context)
 
     def append_reference_coverage(self, path):
         ncov = AbstractCoverage.load(path)
@@ -1668,7 +1683,7 @@ class SimplexCoverage(AbstractCoverage):
 
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
-        return super(SimplexCoverage, cls)._fromdict(cmdict, {'parameter_dictionary': '_range_dictionary'})
+        return AbstractCoverage._fromdict(cmdict, {'parameter_dictionary': '_range_dictionary'})
 
 
 #=========================
