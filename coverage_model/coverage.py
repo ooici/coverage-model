@@ -36,10 +36,11 @@
 from ooi.logging import log
 from pyon.util.async import spawn
 
-from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_DomainOfApplication, Dictable, InMemoryStorage, Span
+from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_doa, Dictable, InMemoryStorage, Span
 from coverage_model.parameter import Parameter, ParameterDictionary, ParameterContext
 from coverage_model.parameter_values import get_value_class, AbstractParameterValue
 from coverage_model.persistence import PersistenceLayer, InMemoryPersistenceLayer, SimplePersistenceLayer
+from persistence_helpers import get_coverage_type
 from coverage_model import utils
 from copy import deepcopy
 import numpy as np
@@ -89,6 +90,9 @@ class AbstractCoverage(AbstractIdentifiable):
 
     @classmethod
     def pickle_save(cls, cov_obj, file_path, use_ascii=False):
+        '''
+        Attempts to serialize an instance of an AbstractCoverage using pickle
+        '''
         if not isinstance(cov_obj, AbstractCoverage):
             raise StandardError('cov_obj must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(cov_obj)))
 
@@ -103,6 +107,9 @@ class AbstractCoverage(AbstractIdentifiable):
 
     @classmethod
     def pickle_load(cls, file_path):
+        '''
+        Attempts to load a serialized instance of an AbstractCoverage using pickle
+        '''
         with open(file_path, 'r') as f:
             obj = pickle.load(f)
 
@@ -115,6 +122,13 @@ class AbstractCoverage(AbstractIdentifiable):
 
     @classmethod
     def load(cls, root_dir, persistence_guid=None, mode=None):
+        '''
+        Loads a standard persisted instance of a Coverage Model
+        root_dir         - The root filesystem directory that hosts the coverage instances
+        persistence_guid - Unique identifier for this instance of the coverage
+        mode             - I/O mode
+        returns an instantiated coverage model instance
+        '''
         if not isinstance(root_dir, basestring):
             raise ValueError('\'root_dir\' must be a string')
 
@@ -126,7 +140,6 @@ class AbstractCoverage(AbstractIdentifiable):
             raise ValueError('\'persistence_guid\' must be a string')
 
         # Otherwise, determine which coverage type to use to open the file
-        from persistence_helpers import get_coverage_type
         ctype = get_coverage_type(os.path.join(root_dir, persistence_guid, '{0}_master.hdf5'.format(persistence_guid)))
 
         if ctype == 'simplex':
@@ -142,13 +155,18 @@ class AbstractCoverage(AbstractIdentifiable):
 
     @classmethod
     def save(cls, cov_obj, *args, **kwargs):
+        '''
+        Saves a coverage model instance
+        '''
         if not isinstance(cov_obj, AbstractCoverage):
             raise StandardError('cov_obj must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(cov_obj)))
-
         cov_obj.flush()
 
     def refresh(self):
-        if not hasattr(self, '_in_memory_storage') or not self._in_memory_storage:
+        '''
+        Refreshes the persistence layer
+        '''
+        if not getattr(self, '_in_memory_storage', None):
             self.close()
             self.__init__(os.path.split(self.persistence_dir)[0], self.persistence_guid, mode=self.mode)
 
@@ -158,10 +176,7 @@ class AbstractCoverage(AbstractIdentifiable):
 
     @property
     def coverage_type(self):
-        if hasattr(self._persistence_layer, 'coverage_type'):
-            return self._persistence_layer.coverage_type
-        else:
-            return 'simplex'
+        return getattr(self._persistence_layer, 'coverage_type', 'simplex')
 
     @property
     def temporal_parameter_name(self):
@@ -178,7 +193,7 @@ class AbstractCoverage(AbstractIdentifiable):
 
         return tuple(s)
 
-    def insert_timesteps(self, count, origin=None, oob=True):
+    def insert_timesteps(self, count, origin=None, oob=False):
         """
         Insert count # of timesteps beginning at the origin
 
@@ -365,13 +380,13 @@ class AbstractCoverage(AbstractIdentifiable):
         slice_ = []
 
         total_shape = self.temporal_domain.shape.extents
-        tdoa = get_valid_DomainOfApplication(tdoa, total_shape)
+        tdoa = get_valid_doa(tdoa, total_shape)
         log.debug('Temporal doa: %s', tdoa.slices)
         slice_.extend(tdoa.slices)
 
         if self.spatial_domain is not None:
             total_shape += self.spatial_domain.shape.extents
-            sdoa = get_valid_DomainOfApplication(sdoa, total_shape[1:])
+            sdoa = get_valid_doa(sdoa, total_shape[1:])
             log.debug('Spatial doa: %s', sdoa.slices)
             slice_.extend(sdoa.slices)
 
@@ -383,21 +398,26 @@ class AbstractCoverage(AbstractIdentifiable):
         log.debug('Getting slice: %s', slice_)
 
         if self.value_caching:
-            # Make slice_ fully expressed such that there are no "None" entries - this lets us ignore domain growth
-            slk = utils.express_slice(slice_, total_shape)
-            key = (param_name, utils.hash_any(slk))
-            try:
-                return_value = self._value_cache.pop(key)
-            except KeyError:
-                return_value = self._range_value[param_name][slice_]
-                if len(self._value_cache) >= self.VALUE_CACHE_LIMIT:
-                    k, v = self._value_cache.popitem(0)
-                    v = None
-                    del k, v
-            self._value_cache[key] = return_value
+            return_value = self._get_cached_values(param_name, slice_, total_shape)
         else:
             return_value = self._range_value[param_name][slice_]
 
+        return return_value
+
+    def _get_cached_values(self, param_name, slice_, total_shape):
+        '''
+        Gets a value from a properly managed LRU cache
+        '''
+        # Make slice_ fully expressed such that there are no "None" entries - this lets us ignore domain growth
+        slk = utils.express_slice(slice_, total_shape)
+        key = (param_name, utils.hash_any(slk))
+        try:
+            return_value = self._value_cache.pop(key)
+        except KeyError:
+            return_value = self._range_value[param_name][slice_]
+            if len(self._value_cache) >= self.VALUE_CACHE_LIMIT:
+                self._value_cache.popitem(0)
+        self._value_cache[key] = return_value
         return return_value
 
     def set_time_values(self, value, tdoa=None):
@@ -455,12 +475,12 @@ class AbstractCoverage(AbstractIdentifiable):
 
         slice_ = []
 
-        tdoa = get_valid_DomainOfApplication(tdoa, self.temporal_domain.shape.extents)
+        tdoa = get_valid_doa(tdoa, self.temporal_domain.shape.extents)
         log.debug('Temporal doa: %s', tdoa.slices)
         slice_.extend(tdoa.slices)
 
         if self.spatial_domain is not None:
-            sdoa = get_valid_DomainOfApplication(sdoa, self.spatial_domain.shape.extents)
+            sdoa = get_valid_doa(sdoa, self.spatial_domain.shape.extents)
             log.debug('Spatial doa: %s', sdoa.slices)
             slice_.extend(sdoa.slices)
 

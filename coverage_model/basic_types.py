@@ -313,7 +313,7 @@ class DomainOfApplication(object):
     def __len__(self):
         return len(self.slices)
 
-def get_valid_DomainOfApplication(v, valid_shape):
+def get_valid_doa(v, valid_shape):
     """
     Takes the value to validate and a tuple representing the valid_shape
     """

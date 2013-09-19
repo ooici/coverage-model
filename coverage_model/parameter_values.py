@@ -22,6 +22,11 @@ def get_value_class(param_type, domain_set, **kwargs):
 
 
 def _cleanse_value(val, slice_):
+    '''
+    Cleans up arrays in the following ways:
+    if a slice was specified, return an array
+    if a slice wasn't specified and the value is scalar, return a scalar
+    '''
     ret = np.atleast_1d(val)
 
     # If the array is size 1 AND a slice object was NOT part of the query
