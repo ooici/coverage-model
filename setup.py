@@ -12,10 +12,9 @@ import sys
 if sys.platform == 'darwin':
     os.environ['C_INCLUDE_PATH'] = '/usr/local/include'
 
-version = '0.1'
 
 setup(  name = 'coverage-model',
-    version = version,
+    version = '2.0.0',
     description = 'OOI ION Coverage Model',
     url = 'https://github.com/blazetopher/coverage-model',
     download_url = 'http://sddevrepo.oceanobservatories.org/releases/',
