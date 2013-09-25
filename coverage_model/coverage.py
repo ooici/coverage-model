@@ -709,10 +709,9 @@ class AbstractCoverage(AbstractIdentifiable):
         num_dups = len(ont) - len(nt)
         if num_dups == 0:  # No duplicates!!
             log.info('The coverage does not have duplicate timesteps')
-            print 'The coverage does not have duplicate timesteps'
-            return
+        else:
+            log.debug('Coverage contains %s duplicate timesteps', num_dups)
 
-        log.debug('Coverage contains %s duplicate timesteps', num_dups)
         # Overwrite all the values, padding num_dups at the end with fill_value
         for p in self.list_parameters():
             vc = self._range_dictionary[p].param_type._value_class
