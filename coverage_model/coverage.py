@@ -42,6 +42,7 @@ from coverage_model.parameter_values import get_value_class, AbstractParameterVa
 from coverage_model.persistence import PersistenceLayer, InMemoryPersistenceLayer, SimplePersistenceLayer
 from persistence_helpers import get_coverage_type
 from coverage_model import utils
+from coverage_model.utils import Interval
 from copy import deepcopy
 import numpy as np
 import os, collections, pickle
@@ -1068,6 +1069,9 @@ class ComplexCoverageType(BaseEnum):
     # Placeholder for spatial complex - not sure what this will look like yet...
     SPATIAL_JOIN = 'SPATIAL_JOIN'
 
+    # TODO: Catchy description
+    TIMESERIES = 'TIMESERIES'
+
 
 class ComplexCoverage(AbstractCoverage):
     """
@@ -1214,6 +1218,114 @@ class ComplexCoverage(AbstractCoverage):
 
         # Then, rebuild this badboy!
         self._dobuild()
+
+    def reference_map(self):
+        '''
+        Builds a reference structure and returns the bounds and the associated reference coverages
+        note: only works for 1-d right now
+        '''
+        interval_map = []
+        for scov in self._reference_covs.itervalues():
+            interval = scov.get_data_bounds(scov.temporal_parameter_name)
+            interval = Interval(interval[0], interval[1], None, None)
+            interval_map.append((interval, scov))
+        self._interval_qsort(interval_map)
+        return interval_map
+
+    @classmethod
+    def _interval_swap(cls, arr, x0, x1):
+        if x0 != x1:
+            t = arr[x0]
+            arr[x0] = arr[x1]
+            arr[x1] = t
+    @classmethod
+    def _interval_pivot(cls, arr, left, right, pivot):
+        val = arr[pivot][0]
+        cls._interval_swap(arr, pivot, right)
+        store_index = left
+        for i in xrange(left, right):
+            if arr[i][0] < val:
+                cls._interval_swap(arr, i, store_index)
+                store_index += 1
+        cls._interval_swap(arr, store_index, right)
+        return store_index
+
+    @classmethod
+    def _interval_qsort(cls, arr, left=None, right=None):
+        '''
+        Quicksort for the interval map
+        '''
+        if left is None:
+            left = 0
+        if right is None:
+            right = len(arr) - 1
+        if left < right:
+            pivot = (right - left) / 2 + left
+            pivot = cls._interval_pivot(arr, left, right, pivot)
+            cls._interval_qsort(arr, left, pivot-1)
+            cls._interval_qsort(arr, pivot+1, right)
+    
+    def get_parameter_values(self, param_name, tdoa=None, sdoa=None, return_value=None):
+        '''
+        Obtain the value set for a given parameter over a specified domain
+        '''
+        complex_type = self._persistence_layer.complex_type
+        if complex_type == ComplexCoverageType.TIMESERIES:
+            print 'TODO'
+            return tuple()
+        return AbstractCoverage.get_parameter_values(self, param_name, tdoa=None, sdoa=None, return_value=None)
+
+    def insert_value_set(self, value_dictionary):
+        complex_type = self._persistence_layer.complex_type
+        if complex_type != ComplexCoverageType.TIMESERIES:
+            raise TypeError("Complex Coverage must be a time series to use this method")
+
+        if self.temporal_parameter_name not in value_dictionary:
+            raise ValueError("Temporal domain must be specified in value set")
+
+        shape = value_dictionary[self.temporal_parameter_name].shape[0]
+        for k,v in value_dictionary.iteritems():
+            if v.shape[0] != shape:
+                raise ValueError("Improperly shaped value dictionary")
+
+        self._value_dict_qsort(value_dictionary, self.temporal_parameter_name)
+
+        print value_dictionary
+        return None
+
+    @classmethod
+    def _value_dict_swap(cls, value_dict, x0, x1):
+        if x0 != x1:
+            for name,arr in value_dict.iteritems():
+                t = arr[x0]
+                arr[x0] = arr[x1]
+                arr[x1] = t
+
+    @classmethod
+    def _value_dict_pivot(cls, value_dict, axis, left, right, pivot):
+        axis_arr = value_dict[axis]
+        val = axis_arr[pivot]
+        cls._value_dict_pivot(value_dict, pivot, right)
+        store_index = left
+        for i in xrange(left, right):
+            if axis_arr[i] < val:
+                cls._value_dict_swap(value_dict, i, store_index)
+                store_index += 1
+        cls._value_dict_swap(value_dict, store_index, right)
+        return store_index
+
+    @classmethod
+    def _value_dict_qsort(cls, value_dict, axis, left=None, right=None):
+        if left is None:
+            left = 0
+        if right is None:
+            right = len(value_dict[axis]) - 1
+        if left < right:
+            pivot = (right - left) / 2 + left
+            pivot = cls._value_dict_pivot(value_dict, axis, left, right, pivot)
+            cls._value_dict_qsort(value_dict, axis, left, pivot-1)
+            cls._value_dict_qsort(value_dict, axis, pivot+1, right)
+
 
     def _verify_rcovs(self, rcovs):
         for cpth in rcovs:
