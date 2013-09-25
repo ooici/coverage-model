@@ -78,36 +78,22 @@ class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
         # Each coverage represents a week
     
 
-        cova_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(0, 20, 2),'value_set' : np.arange(10)})
-        covb_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(10,30, 2), 'value_set': np.arange(10, 20)})
-        covc_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(5,15, 1), 'value_set': np.arange(20, 30)})
+        cova_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(0, 10),'value_set':np.arange(10)})
+        covb_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(10, 20),'value_set':np.arange(10)})
 
-        cov = SimplexCoverage.load(cova_pth, mode='r+')
-
-        cov_pths = [cova_pth, covb_pth, covc_pth]
+        cov_pths = [cova_pth, covb_pth]
 
 
-        ccov = ComplexCoverage(self.working_dir, create_guid(), 'complex coverage', 
-                reference_coverage_locs=cov_pths,
-                parameter_dictionary=ParameterDictionary(),
-                complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
-        
-        with self.assertRaises(TypeError):
-            ccov.insert_value_set({'time':np.arange(10)})
 
         ccov = ComplexCoverage(self.working_dir, create_guid(), 'complex coverage', 
                 reference_coverage_locs=cov_pths,
                 parameter_dictionary=ParameterDictionary(),
                 complex_type=ComplexCoverageType.TIMESERIES)
 
-        with self.assertRaises(ValueError):
-            # Raises error because there's no temporal domain
-            ccov.insert_value_set({'temp': np.arange(20)})
 
-        with self.assertRaises(ValueError):
-            # Raises error because of improper shape
-            ccov.insert_value_set({'time':np.arange(10), 'temp':np.arange(20)})
-
+        t = range(20,30)
+        t.reverse()
+        ccov.insert_value_set({'time' : np.array(t), 'temp':np.arange(10)})
 
         from pyon.util.breakpoint import breakpoint
         breakpoint(locals(), globals())
