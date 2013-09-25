@@ -327,3 +327,8 @@ class Interval:
             return True
         return False
 
+    def union(self, other):
+        x0 = min(self.x0, other.x0)
+        x1 = max(self.x1, other.x1)
+        return Interval(x0,x1)
+

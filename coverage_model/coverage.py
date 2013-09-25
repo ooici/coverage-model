@@ -1171,6 +1171,8 @@ class ComplexCoverage(AbstractCoverage):
         elif complex_type == ComplexCoverageType.SPATIAL_JOIN:
             # Complex spatial - combine coverages across a higher-order topology
             raise NotImplementedError('Not yet implemented')
+        elif complex_type == ComplexCoverageType.TIMESERIES:
+            self._build_timeseries(reference_coverages, parameter_dictionary)
 
     def close(self, force=False, timeout=None):
         if not hasattr(self, '_closed'):
@@ -1219,7 +1221,7 @@ class ComplexCoverage(AbstractCoverage):
         # Then, rebuild this badboy!
         self._dobuild()
 
-    def reference_map(self):
+    def interval_map(self):
         '''
         Builds a reference structure and returns the bounds and the associated reference coverages
         note: only works for 1-d right now
@@ -1290,8 +1292,60 @@ class ComplexCoverage(AbstractCoverage):
 
         self._value_dict_qsort(value_dictionary, self.temporal_parameter_name)
 
-        print value_dictionary
+
+        self.append_value_set(value_dictionary)
+
         return None
+
+    def append_value_set(self, value_dictionary):
+        # Get the time value set
+        time_array = value_dictionary[self.temporal_parameter_name]
+        t0, t1 = time_array[0], time_array[-1]
+        value_interval = Interval(t0, t1, None, None)
+        # Get the intervals
+        interval_map = self.interval_map()
+
+        full_interval = None
+        for interval, cov in interval_map:
+            if full_interval is None:
+                full_interval = interval
+            else:
+                full_interval = full_interval.union(interval)
+
+            if interval.intersects(value_interval):
+                raise ValueError("Intersecting intervals not supported yet, if"
+                " you actually see this error message contact luke immediately")
+        print full_interval
+        
+        # The last coverage in the interval map is the "probably" the greatest interval
+        # see http://bit.ly/15TNgiH for the math behind this
+        
+
+        interval, cov = interval_map[-1]
+        # If this value dictionary is disjoint and greater than the coverage
+        # interval, append the data
+
+        # keep a reference to refresh once we update the underlying coverage
+        cov_ptr = cov 
+        cov = AbstractCoverage.load(cov.persistence_dir, mode='r+')
+        param_list = cov.list_parameters()
+
+
+        if value_interval.x0 > full_interval.x1:
+            shape = len(time_array)
+            cov.insert_timesteps(shape)
+
+            for parameter, value_set in value_dictionary.iteritems():
+                if parameter in param_list:
+                    cov.set_parameter_values(parameter, value_set, 
+                            slice(cov.num_timesteps - shape,
+                                cov.num_timesteps))
+            cov.close()
+            cov_ptr.refresh()
+            return
+        else:
+            raise ValueError("Not supported yet")
+
 
     @classmethod
     def _value_dict_swap(cls, value_dict, x0, x1):
@@ -1305,7 +1359,7 @@ class ComplexCoverage(AbstractCoverage):
     def _value_dict_pivot(cls, value_dict, axis, left, right, pivot):
         axis_arr = value_dict[axis]
         val = axis_arr[pivot]
-        cls._value_dict_pivot(value_dict, pivot, right)
+        cls._value_dict_swap(value_dict, pivot, right)
         store_index = left
         for i in xrange(left, right):
             if axis_arr[i] < val:
@@ -1623,6 +1677,17 @@ class ComplexCoverage(AbstractCoverage):
             self.insert_timesteps(len(s))
 
         self._head_coverage_path = self._reference_covs[self.rcov_domain_spans[-1].value].head_coverage_path
+
+    def _build_timeseries(self, rcovs, parameter_dictionary):
+        for cpth, cov in self._verify_rcovs(rcovs):
+            self._reference_covs[cpth] = cov
+            pdict = cov.parameter_dictionary
+            for p, pc in pdict.iteritems():
+                if p not in parameter_dictionary:
+                    if p not in self._range_dictionary:
+                        pc = pc[1]
+                        # Timeseries coverage doesn't support instance domains just yet
+                        self._range_dictionary.add_context(pc)
 
 
 class SimplexCoverage(AbstractCoverage):
