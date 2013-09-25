@@ -70,6 +70,30 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 
     return os.path.realpath(scov.persistence_dir)
 
+@attr('UTIL', group='cov')
+class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
+    def test_something(self):
+
+        # Create a large dataset spanning a year
+        # Each coverage represents a week
+    
+
+        cova_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(0, 20, 2),'value_set' : np.arange(10)})
+        covb_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(10,30, 2), 'value_set': np.arange(10, 20)})
+
+        cov = SimplexCoverage.load(cova_pth, mode='r+')
+
+        cov_pths = [cova_pth, covb_pth]
+
+
+        ccov = ComplexCoverage(self.working_dir, create_guid(), 'complex coverage', 
+                reference_coverage_locs=cov_pths,
+                parameter_dictionary=ParameterDictionary(),
+                complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
+
+        from pyon.util.breakpoint import breakpoint
+        breakpoint(locals(), globals())
+
 
 @attr('INT',group='cov')
 class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
@@ -208,28 +232,6 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
     # Additional tests specific to Complex Coverage
     ######################
 
-    @unittest.skip('UTIL')
-    def test_something(self):
-
-        # Create a large dataset spanning a year
-        # Each coverage represents a week
-    
-
-        cova_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(10),'value_set' : np.arange(10)})
-        covb_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(20,30), 'value_set': np.arange(10)})
-
-        cov = SimplexCoverage.load(cova_pth, mode='r+')
-
-        cov_pths = [cova_pth, covb_pth]
-
-
-        ccov = ComplexCoverage(self.working_dir, create_guid(), 'complex coverage', 
-                reference_coverage_locs=cov_pths,
-                parameter_dictionary=ParameterDictionary(),
-                complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
-
-        from pyon.util.breakpoint import breakpoint
-        breakpoint(locals(), globals())
 
 
 
