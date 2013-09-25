@@ -283,3 +283,47 @@ def express_slice(slice_, total_shape):
 
 def get_random_sample(length, min, max):
     return np.random.random_sample(length) * (max - min) + min
+
+class Interval:
+    '''
+    A class that represents a 1-d interval
+    See: http://bit.ly/15TNgiH
+    '''
+    def __init__(self, x0, x1, left=None, right=None):
+        assert x0 <= x1
+        self.x0 = x0
+        self.x1 = x1
+        self.left = left
+        self.right = right
+
+    def __repr__(self):
+        retval =  '(%s,%s)' % (self.x0, self.x1)
+        if self.left or self.right:
+            retval += "'"
+        return retval
+
+
+    def __cmp__(self, other):
+        if self.x0 < other.x0:
+            return -1
+        elif self.x0 > other.x0:
+            return 1
+        else: # self.x0 == other.x0:
+            if self.x1 > other.x1:
+                return -1
+            elif self.x1 < other.x1:
+                return 1
+        return 0
+
+    def contains(self, other):
+        return self.x0 <= other.x0 and self.x1 >= other.x1
+
+    def intersects(self, other):
+        if other.x0 <= self.x0 and self.x0 <= other.x1:
+            return True
+        if other.x0 <= self.x1 and self.x1 <= other.x1:
+            return True
+        if self.x1 <= other.x0 and other.x1 <= self.x1:
+            return True
+        return False
+
