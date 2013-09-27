@@ -290,6 +290,10 @@ class Interval:
     See: http://bit.ly/15TNgiH
     '''
     def __init__(self, x0, x1, left=None, right=None):
+        if x0 is None:
+            x0 = -np.inf
+        if x1 is None:
+            x1 = np.inf
         assert x0 <= x1
         self.x0 = x0
         self.x1 = x1
@@ -318,14 +322,15 @@ class Interval:
     def contains(self, other):
         return self.x0 <= other.x0 and self.x1 >= other.x1
 
-    def intersects(self, other):
-        if other.x0 <= self.x0 and self.x0 <= other.x1:
+    def disjoint(self, other):
+        if self.x0 > other.x1:
             return True
-        if other.x0 <= self.x1 and self.x1 <= other.x1:
-            return True
-        if self.x1 <= other.x0 and other.x1 <= self.x1:
+        if self.x1 < other.x0:
             return True
         return False
+
+    def intersects(self, other):
+        return not self.disjoint(other)
 
     def union(self, other):
         x0 = min(self.x0, other.x0)
