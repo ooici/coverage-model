@@ -45,6 +45,7 @@ from coverage_model import utils
 from coverage_model.utils import Interval
 from copy import deepcopy
 import numpy as np
+import numexpr as ne
 import os, collections, pickle
 
 #=========================
@@ -1273,9 +1274,75 @@ class ComplexCoverage(AbstractCoverage):
         '''
         complex_type = self._persistence_layer.complex_type
         if complex_type == ComplexCoverageType.TIMESERIES:
-            print 'TODO'
-            return tuple()
+            raise TypeError("A Timeseries ComplexCoverage doesn't support "
+                            "get_parameter_values, please use "
+                            "get_timeseries_values")
         return AbstractCoverage.get_parameter_values(self, param_name, tdoa=None, sdoa=None, return_value=None)
+
+    def get_timeseries_values(self, tdoa=None, param_list=None):
+        '''
+        Retrieves a value_dictionary which is an aggregation of the child
+        coverage cross-sections of the temporal domain (tdoa)
+
+        tdoa - A slice or tuple of start and stop times
+        '''
+        # (None, None) is (-inf, inf)
+        if tdoa is None:
+            tdoa = (None, None)
+
+        param_list = param_list or []
+        complex_type = self._persistence_layer.complex_type
+        if complex_type != ComplexCoverageType.TIMESERIES:
+            raise TypeError("Only a Timeseries ComplexCoverage supports "
+                            "get_timeseries_values")
+
+        # Handle two simplistic input types, we may need better support here
+        if isinstance(tdoa, slice):
+            interval = Interval(tdoa.start, tdoa.stop)
+        else:
+            start, stop = tdoa
+            interval = Interval(start,stop)
+
+        # Make sure the axis is in the value dictionary
+        # But remember to remove it on the way out
+        no_time = param_list and self.temporal_parameter_name not in param_list
+        if no_time:
+            param_list.append(self.temporal_parameter_name)
+
+        interval_map = self.interval_map()
+        x0, x1 = interval.x0, interval.x1
+        value_dict = {}
+        for cov_interval, cov in interval_map:
+            if interval.intersects(cov_interval):
+                time_buffer = cov.get_parameter_values(cov.temporal_parameter_name)
+                truth_array = ne.evaluate('(x0 <= time_buffer) & (time_buffer < x1)')
+                if truth_array.any():
+                    self._aggregate_value_dict(value_dict, truth_array, cov,
+                            param_list)
+        self._value_dict_qsort(value_dict, self.temporal_parameter_name)
+        value_dict = self._value_dict_unique(value_dict, self.temporal_parameter_name)
+        # Remove the axis from the value_dict if it wasn't asked for
+        if no_time:
+            del value_dict[self.temporal_parameter_name]
+        return value_dict
+
+    def _aggregate_value_dict(self, value_dict, truth_array, cov, param_list=None):
+        '''
+        Appends the coverage's answer cross-section to the value dictionary
+        '''
+        param_list = param_list or self.list_parameters()
+        for p in param_list:
+            if p not in cov.list_parameters():
+                value_set = np.ones(np.sum(truth_array))
+                fv = self.get_parameter_context(p).fill_value
+                value_set *= fv
+            elif p not in value_dict:
+                value_set = cov._range_value[p][:][truth_array]
+            else:
+                value_set = cov._range_value[p][:][truth_array]
+                value_set = np.concatenate([value_dict[p], value_set])
+            value_dict[p] = value_set
+        
 
     def insert_value_set(self, value_dictionary):
         complex_type = self._persistence_layer.complex_type
@@ -1312,43 +1379,74 @@ class ComplexCoverage(AbstractCoverage):
             else:
                 full_interval = full_interval.union(interval)
 
+            # If any new value sets intersect an existing coverage's interval,
+            # create a new simplex coverage
             if interval.intersects(value_interval):
-                raise ValueError("Intersecting intervals not supported yet, if"
-                " you actually see this error message contact luke immediately")
-        print full_interval
-        
-        # The last coverage in the interval map is the "probably" the greatest interval
-        # see http://bit.ly/15TNgiH for the math behind this
-        
+                cov = self.new_simplex()
+                self._append_to_coverage(cov, value_dictionary)
+                return
 
-        interval, cov = interval_map[-1]
-        # If this value dictionary is disjoint and greater than the coverage
-        # interval, append the data
 
-        # keep a reference to refresh once we update the underlying coverage
-        cov_ptr = cov 
+
+        # In an ideal case and simple input the value sets arrive in a
+        # monotonically increasing order, the solution is to append the value
+        # set to the last coverage in the interval_map. 
+        if value_interval.x0 > full_interval.x1:
+            interval, cov = interval_map[-1]
+            self._append_to_coverage(cov, value_dictionary)
+        else:
+            raise ValueError("The value set is disjoint from an existing "
+                            "coverage and will require careful consideration "
+                            "when inputting.")
+            return
+
+    def _append_to_coverage(self, cov, value_dictionary):
+        time_array = value_dictionary[self.temporal_parameter_name]
+        t0, t1 = time_array[0], time_array[-1]
+        
         cov = AbstractCoverage.load(cov.persistence_dir, mode='r+')
         param_list = cov.list_parameters()
+        
+        shape = len(time_array)
+        cov.insert_timesteps(shape)
 
+        for parameter, value_set in value_dictionary.iteritems():
+            if parameter in param_list:
+                cov.set_parameter_values(parameter, value_set, slice(cov.num_timesteps - shape, cov.num_timesteps))
+        cov.close()
+        self.refresh()
 
-        if value_interval.x0 > full_interval.x1:
-            shape = len(time_array)
-            cov.insert_timesteps(shape)
+    def new_simplex(self):
+        '''
+        Creates a new child simplex coverage with the same CRS information
+        '''
+        root_dir, guid = os.path.split(self.persistence_dir)
+        name = 'generated simplex'
+        pdict = deepcopy(self._range_dictionary)
+        tcrs = CRS([AxisTypeEnum.TIME])
+        scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
 
-            for parameter, value_set in value_dictionary.iteritems():
-                if parameter in param_list:
-                    cov.set_parameter_values(parameter, value_set, 
-                            slice(cov.num_timesteps - shape,
-                                cov.num_timesteps))
-            cov.close()
-            cov_ptr.refresh()
-            return
-        else:
-            raise ValueError("Not supported yet")
+        # Construct temporal and spatial Domain objects
+        tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+        sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
+        scov = SimplexCoverage(root_dir, 
+                               utils.create_guid(), 
+                               name,
+                               parameter_dictionary=pdict, 
+                               temporal_domain=tdom,
+                               spatial_domain=sdom,
+                               mode='r+')
+        path = scov.persistence_dir
+        self.append_reference_coverage(path)
+        return scov
+        
 
 
     @classmethod
     def _value_dict_swap(cls, value_dict, x0, x1):
+        '''
+        Value dictionary array swap
+        '''
         if x0 != x1:
             for name,arr in value_dict.iteritems():
                 t = arr[x0]
@@ -1357,6 +1455,9 @@ class ComplexCoverage(AbstractCoverage):
 
     @classmethod
     def _value_dict_pivot(cls, value_dict, axis, left, right, pivot):
+        '''
+        Pivot algorithm, part of quicksort
+        '''
         axis_arr = value_dict[axis]
         val = axis_arr[pivot]
         cls._value_dict_swap(value_dict, pivot, right)
@@ -1370,6 +1471,9 @@ class ComplexCoverage(AbstractCoverage):
 
     @classmethod
     def _value_dict_qsort(cls, value_dict, axis, left=None, right=None):
+        '''
+        Quicksort, value dictionary edition
+        '''
         if left is None:
             left = 0
         if right is None:
@@ -1380,6 +1484,24 @@ class ComplexCoverage(AbstractCoverage):
             cls._value_dict_qsort(value_dict, axis, left, pivot-1)
             cls._value_dict_qsort(value_dict, axis, pivot+1, right)
 
+    @classmethod
+    def _value_dict_unique(cls, value_dict, axis):
+        '''
+        A naive unique copy algorithm
+
+        Notes:
+        - Last unique axis value has precedence
+        '''
+        tarray = value_dict[axis]
+        truth_array = np.ones(tarray.shape, dtype=np.bool)
+        for i in xrange(1, len(tarray)):
+            if tarray[i-1] == tarray[i]:
+                truth_array[i-1] = False
+
+        vd_copy = {}
+        for k,v in value_dict.iteritems():
+            vd_copy[k] = v[truth_array]
+        return vd_copy
 
     def _verify_rcovs(self, rcovs):
         for cpth in rcovs:

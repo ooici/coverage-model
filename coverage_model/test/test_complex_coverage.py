@@ -18,6 +18,7 @@ import unittest
 from copy import deepcopy
 
 from coverage_test_base import CoverageIntTestBase, get_props
+import time
 
 
 def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
@@ -85,15 +86,18 @@ class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
 
 
 
+
         ccov = ComplexCoverage(self.working_dir, create_guid(), 'complex coverage', 
                 reference_coverage_locs=cov_pths,
                 parameter_dictionary=ParameterDictionary(),
                 complex_type=ComplexCoverageType.TIMESERIES)
 
 
-        t = range(20,30)
+
+        t = range(15,25)
         t.reverse()
-        ccov.insert_value_set({'time' : np.array(t), 'temp':np.arange(10)})
+        ccov.insert_value_set({'time' : np.array(t), 'value_set':np.arange(10)})
+
 
         from pyon.util.breakpoint import breakpoint
         breakpoint(locals(), globals())
