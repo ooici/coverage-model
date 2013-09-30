@@ -1277,7 +1277,7 @@ class ComplexCoverage(AbstractCoverage):
             raise TypeError("A Timeseries ComplexCoverage doesn't support "
                             "get_parameter_values, please use "
                             "get_timeseries_values")
-        return AbstractCoverage.get_parameter_values(self, param_name, tdoa=None, sdoa=None, return_value=None)
+        return AbstractCoverage.get_parameter_values(self, param_name, tdoa=tdoa, sdoa=sdoa, return_value=return_value)
 
     def get_timeseries_values(self, tdoa=None, param_list=None, raw=False,
             unsorted=False):
