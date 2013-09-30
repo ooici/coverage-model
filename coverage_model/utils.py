@@ -337,3 +337,5 @@ class Interval:
         x1 = max(self.x1, other.x1)
         return Interval(x0,x1)
 
+    def to_tuple(self):
+        return (self.x0, self.x1)
