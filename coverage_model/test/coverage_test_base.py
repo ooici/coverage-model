@@ -672,6 +672,43 @@ class CoverageIntTestBase(object):
             results.append(np.array_equiv(mock_data, data))
         self.assertTrue(False not in results)
 
+    def test_get_value_dict(self):
+        brick_size = 10
+        time_steps = 30
+        cov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
+        vdict = cov.get_value_dictionary()
+        for p in cov.list_parameters():
+            self.assertIn(p, vdict)
+
+        if cov.num_timesteps:
+            self.assertEquals(len(vdict['time']), 30)
+            np.testing.assert_array_equal(vdict['time'], np.arange(30))
+        else:
+            self.assertEquals(len(vdict['time']), 0)
+            np.testing.assert_array_equal(vdict['time'], np.array([]))
+
+    def test_get_value_dict_tslice(self):
+        brick_size = 10
+        time_steps = 30
+        cov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
+        if cov.num_timesteps:
+            cov.set_parameter_values('time', np.arange(30) + 20)
+        vdict = cov.get_value_dictionary(temporal_slice=(25, 30))
+        for p in cov.list_parameters():
+            self.assertIn(p, vdict)
+            if cov.num_timesteps:
+                self.assertEquals(len(vdict[p]), 5)
+            else:
+                self.assertEquals(len(vdict[p]), 0)
+
+        if cov.num_timesteps:
+            np.testing.assert_array_equal(vdict['time'], np.arange(25,30))
+        else:
+            np.testing.assert_array_equal(vdict['time'], np.array([]))
+
+
+
+
     
     # ############################
     # SET
