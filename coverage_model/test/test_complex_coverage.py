@@ -105,8 +105,32 @@ class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
 
         ccov.insert_value_set({'time' : np.arange(25,30), 'value_set' : np.ones(5) * 6})
         ccov.insert_value_set({'time' : np.arange(5,20), 'value_set' : np.ones(15) * 7})
+
+        ccov.insert_value_set({'time' : np.arange(40,45), 'value_set' : np.ones(5) * 8})
         
 
+        from pyon.util.breakpoint import breakpoint
+        breakpoint(locals(), globals())
+
+    @attr('UTIL')
+    def test_aggregates(self):
+        cova_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(10),'value_set' : np.ones(10)})
+        covb_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(20,30), 'value_set': np.ones(10) * 2})
+        covc_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(15,25), 'value_set' : np.ones(10) * 3})
+
+        cov = SimplexCoverage.load(cova_pth, mode='r+')
+
+        cov_pths = [cova_pth, covb_pth]
+
+
+        ccov = ComplexCoverage(self.working_dir, create_guid(), 'complex coverage', 
+                reference_coverage_locs=[covb_pth],
+                parameter_dictionary=ParameterDictionary(),
+                complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
+
+        ccov.append_reference_coverage(cova_pth)
+        ccov.append_reference_coverage(covc_pth)
+        
         from pyon.util.breakpoint import breakpoint
         breakpoint(locals(), globals())
 
@@ -779,8 +803,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
             # Raises error because of improper shape
             ccov.insert_value_set({'time':np.arange(10), 'temp':np.arange(20)})
 
-    def test_timeseries_random_inserts(self):
-
+    def make_timeseries_cov(self):
         cova_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(10,20),'value_set':np.ones(10)})
         cov = AbstractCoverage.load(cova_pth)
         pdict = cov.parameter_dictionary
@@ -789,6 +812,11 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
                 reference_coverage_locs=[],
                 parameter_dictionary=pdict,
                 complex_type=ComplexCoverageType.TIMESERIES)
+        return ccov
+
+    def test_timeseries_random_inserts(self):
+
+        ccov = self.make_timeseries_cov()
 
 
         # Overlapping AND out of order
@@ -805,10 +833,28 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         intervals = [(0,29), (5,19), (15,34)]
         imap = [i[0].to_tuple() for i in ccov.interval_map()]
         self.assertEquals(intervals, imap)
-        vdict = ccov.get_timeseries_values()
+        vdict = ccov.get_value_dictionary()
         np.testing.assert_array_equal(vdict['time'], np.arange(35))
         np.testing.assert_array_equal(vdict['value_set'], 
                 np.array([ 4.,  4.,  4.,  4.,  4.,  7.,  7.,  7.,  7.,  7.,  7.,  7.,  7.,
                 7.,  7.,  3.,  3.,  3.,  3.,  3.,  3.,  3.,  3.,  3.,  3.,  6.,
                 6.,  6.,  6.,  6.,  5.,  5.,  5.,  5.,  5.]))
+
+    def test_timeseries_striding(self):
+        ccov = self.make_timeseries_cov()
+        ccov.insert_value_set({'time' : np.arange(15,25), 'value_set':np.ones(10) * 3})
+        ccov.insert_value_set({'time' : np.arange(10), 'value_set' : np.ones(10)* 4})
+        ccov.insert_value_set({'time' : np.arange(30,35), 'value_set':np.ones(5) * 5})
+        ccov.insert_value_set({'time' : np.arange(25,30), 'value_set' : np.ones(5) * 6})
+        ccov.insert_value_set({'time' : np.arange(5,20), 'value_set' : np.ones(15) * 7})
+
+        vd = ccov.get_value_dictionary(['time'], (None,None,2))
+        np.testing.assert_array_equal(vd['time'], np.arange(0,35,2))
+
+    def test_get_value_dict(self):
+        pass
+
+    def test_get_value_dict_tslice(self):
+        pass
+
 

@@ -406,6 +406,95 @@ class AbstractCoverage(AbstractIdentifiable):
 
         return return_value
 
+    def get_value_dictionary(self, param_list=None, temporal_slice=None, domain_slice=None):
+        '''
+        Retrieves a dictionary of parameters and value sets.
+        The value set is a cross-section result between the specified temporal_slice
+        '''
+        if self.closed:
+            raise IOError('I/O operation on closed file')
+        
+
+        param_list = param_list or []
+        
+        for p in param_list:
+            if p not in self._range_value:
+                raise KeyError('Parameter \'{0}\' not found in coverage'.format(p))
+        if self.num_timesteps == 0:
+            retval = {}
+            for p in param_list or self.list_parameters():
+                retval[p] = np.array([], dtype=self.get_parameter_context(p).param_type.value_encoding)
+            return retval
+
+
+        slice_ = self._get_me_a_slice(temporal_slice, domain_slice) 
+
+
+        value_dict = {}
+        self._aggregate_value_dict(value_dict, slice_, param_list)
+
+        return value_dict
+
+    def _get_me_a_slice(self, temporal_slice, domain_slice):
+        if temporal_slice is None and domain_slice is None:
+            slice_ = slice(None,None)
+            return slice_
+
+        elif temporal_slice is None and domain_slice:
+            if isinstance(domain_slice, slice):
+                return domain_slice
+            if len(domain_slice) == 2:
+                start, stop = domain_slice
+                return slice(start, stop)
+            elif len(domain_slice) == 3:
+                start, stop, stride = domain_slice
+                return slice(start, stop, stride)
+            else:
+                raise ValueError("Improper domain slice: %s" % domain_slice)
+
+
+
+        stride = None
+        if isinstance(temporal_slice, slice):
+            start, stop = temporal_slice.start, temporal_slice.stop
+        elif isinstance(temporal_slice, tuple):
+            if len(temporal_slice) == 2:
+                start, stop = temporal_slice
+            elif len(temporal_slice) == 3:
+                start, stop, stride = temporal_slice
+            else:
+                raise ValueError("Improper temporal slice: %s" % temporal_slice)
+        else:
+            raise ValueError("Improper temporal slice: %s" % temporal_slice)
+
+        if start is None:
+            start = -np.inf
+        if stop is None:
+            stop = np.inf
+
+        # Make sure the axis is in the value dictionary
+        # But remember to remove it on the way out
+        time_vector = self._range_value[self.temporal_parameter_name]
+
+        # Dramatically improve performance, no need to retrieve the entire
+        # time-array to find out where start and stop are, we just use a
+        # binary-search on an "array-like" HDF5 interface
+
+        start_idx = np.searchsorted(time_vector, start)
+        stop_idx = np.searchsorted(time_vector, stop)
+        slice_ = slice(start_idx, stop_idx, stride)
+        return slice_
+
+
+    def _aggregate_value_dict(self, value_dict, slice_, param_list=None):
+        param_list = param_list or self.list_parameters()
+        for p in param_list:
+            value_set = self._range_value[p][slice_]
+            if p in value_dict:
+                value_set = np.concatenate([value_dict[p], value_set])
+            value_dict[p] = value_set
+
+
     def _get_cached_values(self, param_name, slice_, total_shape):
         '''
         Gets a value from a properly managed LRU cache
@@ -1276,33 +1365,33 @@ class ComplexCoverage(AbstractCoverage):
         if complex_type == ComplexCoverageType.TIMESERIES:
             raise TypeError("A Timeseries ComplexCoverage doesn't support "
                             "get_parameter_values, please use "
-                            "get_timeseries_values")
-        return AbstractCoverage.get_parameter_values(self, param_name, tdoa=tdoa, sdoa=sdoa, return_value=return_value)
+                            "get_value_dictionary")
+        return AbstractCoverage.get_parameter_values(self, param_name, tdoa=tdoa, 
+                            sdoa=sdoa, return_value=return_value)
 
-    def get_timeseries_values(self, tdoa=None, param_list=None, raw=False,
-            unsorted=False):
-        '''
-        Retrieves a value_dictionary which is an aggregation of the child
-        coverage cross-sections of the temporal domain (tdoa)
 
-        tdoa - A slice or tuple of start and stop times
-        '''
-        # (None, None) is (-inf, inf)
-        if tdoa is None:
-            tdoa = (None, None)
+    def get_value_dictionary(self, param_list=None, temporal_slice=None, domain_slice=None):
+        if temporal_slice and domain_slice:
+            raise ValueError("Can not specify both a temporal_slice and domain_slice")
+        if temporal_slice:
+            return self._get_value_dictionary_temporal(param_list, temporal_slice)
 
-        param_list = param_list or []
-        complex_type = self._persistence_layer.complex_type
-        if complex_type != ComplexCoverageType.TIMESERIES:
-            raise TypeError("Only a Timeseries ComplexCoverage supports "
-                            "get_timeseries_values")
-
-        # Handle two simplistic input types, we may need better support here
-        if isinstance(tdoa, slice):
-            interval = Interval(tdoa.start, tdoa.stop)
         else:
-            start, stop = tdoa
-            interval = Interval(start,stop)
+            return self._get_value_dictionary_domain(param_list, domain_slice)
+
+
+    def _get_value_dictionary_domain(self, param_list=None, domain_slice=None, unsorted=False, raw=False):
+
+        if domain_slice is None:
+            slice_ = slice(None, None)
+
+        elif isinstance(domain_slice, slice):
+            slice_ = domain_slice
+
+        elif isinstance(domain_slice, (tuple,list)):
+            slice_ = slice(*domain_slice)
+        else:
+            raise ValueError("Unspported domain slice: %s" % domain_slice)
 
         # Make sure the axis is in the value dictionary
         # But remember to remove it on the way out
@@ -1310,17 +1399,36 @@ class ComplexCoverage(AbstractCoverage):
         if no_time:
             param_list.append(self.temporal_parameter_name)
 
+        value_interval = Interval(slice_.start, slice_.stop)
         interval_map = self.interval_map()
-        x0, x1 = interval.x0, interval.x1
+
         value_dict = {}
-        for cov_interval, cov in interval_map:
-            if interval.intersects(cov_interval):
-                time_buffer = cov.get_parameter_values(cov.temporal_parameter_name)
-                truth_array = ne.evaluate('(x0 <= time_buffer) & (time_buffer < x1)')
-                if truth_array.any():
-                    self._aggregate_value_dict(value_dict, truth_array, cov,
-                            param_list)
-        if not unsorted:
+        total_timesteps = 0
+        overlaps = False
+        for i in xrange(len(interval_map)):
+            
+            interval, cov = interval_map[i]
+            if i > 0 and interval_map[i-1][0].intersects(interval):
+                overlaps = True
+            
+            d = Interval(total_timesteps, total_timesteps+cov.num_timesteps-1)
+            if d.intersects(value_interval):
+                if slice_.start is None:
+                    start = 0
+                else:
+                    start = slice_.start - total_timesteps
+                if slice_.stop is None:
+                    stop = None
+                else:
+                    stop = slice_.stop - total_timesteps
+                s = slice(start, stop, slice_.step)
+
+                self._aggregate_value_dict(value_dict, cov, param_list, s)
+            total_timesteps += cov.num_timesteps
+        
+        if not value_dict:
+            return value_dict
+        if overlaps and not unsorted:
             self._value_dict_qsort(value_dict, self.temporal_parameter_name)
         if not raw:
             value_dict = self._value_dict_unique(value_dict, self.temporal_parameter_name)
@@ -1329,22 +1437,105 @@ class ComplexCoverage(AbstractCoverage):
             del value_dict[self.temporal_parameter_name]
         return value_dict
 
-    def _aggregate_value_dict(self, value_dict, truth_array, cov, param_list=None):
+
+
+
+    def _get_value_dictionary_temporal(self, param_list=None, temporal_slice=None, unsorted=False, raw=False):
+        '''
+        Retrieves a value_dictionary which is an aggregation of the child
+        coverage cross-sections of the temporal domain (temporal_slice)
+
+        temporal_slice - A slice or tuple of start and stop times
+        '''
+        # (None, None) is (-inf, inf)
+        if temporal_slice is None:
+            temporal_slice = (None, None)
+
+        param_list = param_list or []
+
+        # Handle two simplistic input types, we may need better support here
+        stride = None
+        if isinstance(temporal_slice, slice):
+            value_interval = Interval(temporal_slice.start, temporal_slice.stop)
+            stride = temporal_slice.step
+        elif isinstance(temporal_slice, tuple):
+            if len(temporal_slice) == 2:
+                start, stop = temporal_slice
+            elif len(temporal_slice) == 3:
+                start, stop, stride = temporal_slice
+            else:
+                raise ValueError("Improper domain value: %s" % temporal_slice)
+            value_interval = Interval(start, stop)
+        else:
+            raise ValueError("Improper domain value: %s" % temporal_slice)
+
+
+        # Make sure the axis is in the value dictionary
+        # But remember to remove it on the way out
+        no_time = param_list and self.temporal_parameter_name not in param_list
+        if no_time:
+            param_list.append(self.temporal_parameter_name)
+
+        interval_map = self.interval_map()
+        value_dict = {}
+        overlaps = False
+        for i in xrange(len(interval_map)):
+            interval, cov = interval_map[i]
+            if i > 0 and interval_map[i-1][0].intersects(interval):
+                overlaps = True
+            if interval.intersects(value_interval):
+                slice_ = cov._get_me_a_slice((value_interval.x0, value_interval.x1), None)
+                self._aggregate_value_dict(value_dict, cov, param_list, slice_)
+
+        if not value_dict:
+            return value_dict
+
+        if overlaps and not unsorted:
+            self._value_dict_qsort(value_dict, self.temporal_parameter_name)
+        if not raw:
+            value_dict = self._value_dict_unique(value_dict, self.temporal_parameter_name)
+        if stride:
+            self._stride_value_dict(value_dict, stride)
+        # Remove the axis from the value_dict if it wasn't asked for
+        if no_time:
+            del value_dict[self.temporal_parameter_name]
+        return value_dict
+
+    def _aggregate_value_dict(self, value_dict, cov, param_list, slice_):
         '''
         Appends the coverage's answer cross-section to the value dictionary
         '''
         param_list = param_list or self.list_parameters()
+        tname = self.temporal_parameter_name
+        # Potential issue here if the s-cov doesn't use the same temporal 
+        # parameter name
+        t_values = cov._range_value[tname][slice_]
+        if tname not in value_dict:
+            value_dict[tname] = t_values
+        else:
+            value_dict[tname] = np.concatenate([value_dict[tname], t_values])
         for p in param_list:
+            if p == tname:
+                continue
             if p not in cov.list_parameters():
-                value_set = np.ones(np.sum(truth_array))
+                value_set = np.ones(len(t_values))
                 fv = self.get_parameter_context(p).fill_value
                 value_set *= fv
             elif p not in value_dict:
-                value_set = cov._range_value[p][:][truth_array]
+                value_set = cov._range_value[p][slice_]
             else:
-                value_set = cov._range_value[p][:][truth_array]
+                value_set = cov._range_value[p][slice_]
                 value_set = np.concatenate([value_dict[p], value_set])
             value_dict[p] = value_set
+
+    @classmethod
+    def _stride_value_dict(self, value_dict, stride):
+        '''
+        Strides a value dictionary
+        '''
+        s = slice(None,None,stride)
+        for k,v in value_dict.iteritems():
+            value_dict[k] = v[s]
         
 
     def insert_value_set(self, value_dictionary):
