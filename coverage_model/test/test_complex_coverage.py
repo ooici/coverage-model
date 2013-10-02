@@ -18,6 +18,7 @@ import unittest
 from copy import deepcopy
 
 from coverage_test_base import CoverageIntTestBase, get_props
+import time
 
 
 def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
@@ -70,6 +71,7 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 
     return os.path.realpath(scov.persistence_dir)
 
+@unittest.skip("UTIL only")
 @attr('UTIL', group='cov')
 class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
     def test_something(self):
@@ -78,8 +80,45 @@ class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
         # Each coverage represents a week
     
 
-        cova_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(0, 20, 2),'value_set' : np.arange(10)})
-        covb_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(10,30, 2), 'value_set': np.arange(10, 20)})
+        cova_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(10,20),'value_set':np.ones(10)})
+        cov = AbstractCoverage.load(cova_pth)
+        pdict = cov.parameter_dictionary
+
+        print pdict.keys()
+
+        ccov = ComplexCoverage(self.working_dir, create_guid(), 'complex coverage', 
+                reference_coverage_locs=[],
+                parameter_dictionary=pdict,
+                complex_type=ComplexCoverageType.TIMESERIES)
+
+
+
+        # Overlapping AND out of order
+        t = range(15,25)
+        t.reverse()
+        a = range(10)
+        a.reverse()
+        ccov.insert_value_set({'time' : np.array(t), 'value_set':np.ones(10) * 3})
+
+        ccov.insert_value_set({'time' : np.arange(10), 'value_set' : np.ones(10)* 4})
+
+        ccov.insert_value_set({'time' : np.arange(30,35), 'value_set':np.ones(5) * 5})
+
+        ccov.insert_value_set({'time' : np.arange(25,30), 'value_set' : np.ones(5) * 6})
+        ccov.insert_value_set({'time' : np.arange(5,20), 'value_set' : np.ones(15) * 7})
+
+        ccov.insert_value_set({'time' : np.arange(40,45), 'value_set' : np.ones(5) * 8})
+        
+        from pyon.util.breakpoint import breakpoint
+        breakpoint(locals(), globals())
+        vcov = ViewCoverage(self.working_dir, create_guid(), 'view coverage', reference_coverage_location = ccov.persistence_dir)
+
+
+    @attr('UTIL')
+    def test_aggregates(self):
+        cova_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(10),'value_set' : np.ones(10)})
+        covb_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(20,30), 'value_set': np.ones(10) * 2})
+        covc_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(15,25), 'value_set' : np.ones(10) * 3})
 
         cov = SimplexCoverage.load(cova_pth, mode='r+')
 
@@ -87,10 +126,16 @@ class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
 
 
         ccov = ComplexCoverage(self.working_dir, create_guid(), 'complex coverage', 
-                reference_coverage_locs=cov_pths,
+                reference_coverage_locs=[covb_pth],
                 parameter_dictionary=ParameterDictionary(),
                 complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 
+        ccov.append_reference_coverage(cova_pth)
+        ccov.append_reference_coverage(covc_pth)
+
+        vcov = ViewCoverage(self.working_dir, create_guid(), 'view coverage', reference_coverage_location = ccov.persistence_dir)
+
+        
         from pyon.util.breakpoint import breakpoint
         breakpoint(locals(), globals())
 
@@ -729,3 +774,92 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
         # Ensure the correct path is returned from ComplexCoverage.head_coverage_path in CC --> [SC & CC --> [VC & SC]] scenario
         self.assertEqual(comp_cov3.head_coverage_path, covb_pth)
+
+    def test_timeseries_inserts(self):
+
+
+        cova_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(0, 20, 2),'value_set' : np.arange(10)})
+        covb_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(10,30, 2), 'value_set': np.arange(10, 20)})
+        covc_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(5,15, 1), 'value_set': np.arange(20, 30)})
+
+        #cov = SimplexCoverage.load(cova_pth, mode='r+')
+
+        cov_pths = [cova_pth, covb_pth, covc_pth]
+
+
+        ccov = ComplexCoverage(self.working_dir, create_guid(), 'complex coverage', 
+                reference_coverage_locs=cov_pths,
+                parameter_dictionary=ParameterDictionary(),
+                complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
+        
+        with self.assertRaises(TypeError):
+            ccov.insert_value_set({'time':np.arange(10)})
+
+        ccov = ComplexCoverage(self.working_dir, create_guid(), 'complex coverage', 
+                reference_coverage_locs=cov_pths,
+                parameter_dictionary=ParameterDictionary(),
+                complex_type=ComplexCoverageType.TIMESERIES)
+
+        with self.assertRaises(ValueError):
+            # Raises error because there's no temporal domain
+            ccov.insert_value_set({'temp': np.arange(20)})
+
+        with self.assertRaises(ValueError):
+            # Raises error because of improper shape
+            ccov.insert_value_set({'time':np.arange(10), 'temp':np.arange(20)})
+
+    def make_timeseries_cov(self):
+        cova_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(10,20),'value_set':np.ones(10)})
+        cov = AbstractCoverage.load(cova_pth)
+        pdict = cov.parameter_dictionary
+
+        ccov = ComplexCoverage(self.working_dir, create_guid(), 'complex coverage', 
+                reference_coverage_locs=[],
+                parameter_dictionary=pdict,
+                complex_type=ComplexCoverageType.TIMESERIES)
+        return ccov
+
+    def test_timeseries_random_inserts(self):
+
+        ccov = self.make_timeseries_cov()
+
+
+        # Overlapping AND out of order
+        t = range(15,25)
+        t.reverse()
+        a = range(10)
+        a.reverse()
+        ccov.insert_value_set({'time' : np.array(t), 'value_set':np.ones(10) * 3})
+        ccov.insert_value_set({'time' : np.arange(10), 'value_set' : np.ones(10)* 4})
+        ccov.insert_value_set({'time' : np.arange(30,35), 'value_set':np.ones(5) * 5})
+        ccov.insert_value_set({'time' : np.arange(25,30), 'value_set' : np.ones(5) * 6})
+        ccov.insert_value_set({'time' : np.arange(5,20), 'value_set' : np.ones(15) * 7})
+        
+        intervals = [(0,29), (5,19), (15,34)]
+        imap = [i[0].to_tuple() for i in ccov.interval_map()]
+        self.assertEquals(intervals, imap)
+        vdict = ccov.get_value_dictionary()
+        np.testing.assert_array_equal(vdict['time'], np.arange(35))
+        np.testing.assert_array_equal(vdict['value_set'], 
+                np.array([ 4.,  4.,  4.,  4.,  4.,  7.,  7.,  7.,  7.,  7.,  7.,  7.,  7.,
+                7.,  7.,  3.,  3.,  3.,  3.,  3.,  3.,  3.,  3.,  3.,  3.,  6.,
+                6.,  6.,  6.,  6.,  5.,  5.,  5.,  5.,  5.]))
+
+    def test_timeseries_striding(self):
+        ccov = self.make_timeseries_cov()
+        ccov.insert_value_set({'time' : np.arange(15,25), 'value_set':np.ones(10) * 3})
+        ccov.insert_value_set({'time' : np.arange(10), 'value_set' : np.ones(10)* 4})
+        ccov.insert_value_set({'time' : np.arange(30,35), 'value_set':np.ones(5) * 5})
+        ccov.insert_value_set({'time' : np.arange(25,30), 'value_set' : np.ones(5) * 6})
+        ccov.insert_value_set({'time' : np.arange(5,20), 'value_set' : np.ones(15) * 7})
+
+        vd = ccov.get_value_dictionary(['time'], (None,None,2))
+        np.testing.assert_array_equal(vd['time'], np.arange(0,35,2))
+
+    def test_get_value_dict(self):
+        pass
+
+    def test_get_value_dict_tslice(self):
+        pass
+
+

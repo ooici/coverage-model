@@ -269,3 +269,8 @@ class TestSampleCovViewInt(CoverageModelIntTestCase, CoverageIntTestBase):
     @unittest.skip('Does not apply to ViewCoverage.')
     def test_coverage_mode_set_value(self):
         pass
+
+    @unittest.skip('Does not apply to ViewCoverage.')
+    def test_get_value_dict_tslice(self):
+        pass
+
