@@ -456,7 +456,7 @@ class AbstractCoverage(AbstractIdentifiable):
 
         stride = None
         if isinstance(temporal_slice, slice):
-            start, stop = temporal_slice.start, temporal_slice.stop
+            start, stop, stride = temporal_slice.start, temporal_slice.stop, temporal_slice.step
         elif isinstance(temporal_slice, tuple):
             if len(temporal_slice) == 2:
                 start, stop = temporal_slice

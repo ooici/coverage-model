@@ -108,9 +108,10 @@ class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
 
         ccov.insert_value_set({'time' : np.arange(40,45), 'value_set' : np.ones(5) * 8})
         
-
         from pyon.util.breakpoint import breakpoint
         breakpoint(locals(), globals())
+        vcov = ViewCoverage(self.working_dir, create_guid(), 'view coverage', reference_coverage_location = ccov.persistence_dir)
+
 
     @attr('UTIL')
     def test_aggregates(self):
@@ -130,6 +131,9 @@ class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
 
         ccov.append_reference_coverage(cova_pth)
         ccov.append_reference_coverage(covc_pth)
+
+        vcov = ViewCoverage(self.working_dir, create_guid(), 'view coverage', reference_coverage_location = ccov.persistence_dir)
+
         
         from pyon.util.breakpoint import breakpoint
         breakpoint(locals(), globals())
