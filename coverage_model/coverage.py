@@ -42,8 +42,10 @@ from coverage_model.parameter_values import get_value_class, AbstractParameterVa
 from coverage_model.persistence import PersistenceLayer, InMemoryPersistenceLayer, SimplePersistenceLayer
 from persistence_helpers import get_coverage_type
 from coverage_model import utils
+from coverage_model.utils import Interval
 from copy import deepcopy
 import numpy as np
+import numexpr as ne
 import os, collections, pickle
 
 #=========================
@@ -403,6 +405,95 @@ class AbstractCoverage(AbstractIdentifiable):
             return_value = self._range_value[param_name][slice_]
 
         return return_value
+
+    def get_value_dictionary(self, param_list=None, temporal_slice=None, domain_slice=None):
+        '''
+        Retrieves a dictionary of parameters and value sets.
+        The value set is a cross-section result between the specified temporal_slice
+        '''
+        if self.closed:
+            raise IOError('I/O operation on closed file')
+        
+
+        param_list = param_list or []
+        
+        for p in param_list:
+            if p not in self._range_value:
+                raise KeyError('Parameter \'{0}\' not found in coverage'.format(p))
+        if self.num_timesteps == 0:
+            retval = {}
+            for p in param_list or self.list_parameters():
+                retval[p] = np.array([], dtype=self.get_parameter_context(p).param_type.value_encoding)
+            return retval
+
+
+        slice_ = self._get_me_a_slice(temporal_slice, domain_slice) 
+
+
+        value_dict = {}
+        self._aggregate_value_dict(value_dict, slice_, param_list)
+
+        return value_dict
+
+    def _get_me_a_slice(self, temporal_slice, domain_slice):
+        if temporal_slice is None and domain_slice is None:
+            slice_ = slice(None,None)
+            return slice_
+
+        elif temporal_slice is None and domain_slice:
+            if isinstance(domain_slice, slice):
+                return domain_slice
+            if len(domain_slice) == 2:
+                start, stop = domain_slice
+                return slice(start, stop)
+            elif len(domain_slice) == 3:
+                start, stop, stride = domain_slice
+                return slice(start, stop, stride)
+            else:
+                raise ValueError("Improper domain slice: %s" % domain_slice)
+
+
+
+        stride = None
+        if isinstance(temporal_slice, slice):
+            start, stop, stride = temporal_slice.start, temporal_slice.stop, temporal_slice.step
+        elif isinstance(temporal_slice, tuple):
+            if len(temporal_slice) == 2:
+                start, stop = temporal_slice
+            elif len(temporal_slice) == 3:
+                start, stop, stride = temporal_slice
+            else:
+                raise ValueError("Improper temporal slice: %s" % temporal_slice)
+        else:
+            raise ValueError("Improper temporal slice: %s" % temporal_slice)
+
+        if start is None:
+            start = -np.inf
+        if stop is None:
+            stop = np.inf
+
+        # Make sure the axis is in the value dictionary
+        # But remember to remove it on the way out
+        time_vector = self._range_value[self.temporal_parameter_name]
+
+        # Dramatically improve performance, no need to retrieve the entire
+        # time-array to find out where start and stop are, we just use a
+        # binary-search on an "array-like" HDF5 interface
+
+        start_idx = np.searchsorted(time_vector, start)
+        stop_idx = np.searchsorted(time_vector, stop)
+        slice_ = slice(start_idx, stop_idx, stride)
+        return slice_
+
+
+    def _aggregate_value_dict(self, value_dict, slice_, param_list=None):
+        param_list = param_list or self.list_parameters()
+        for p in param_list:
+            value_set = self._range_value[p][slice_]
+            if p in value_dict:
+                value_set = np.concatenate([value_dict[p], value_set])
+            value_dict[p] = value_set
+
 
     def _get_cached_values(self, param_name, slice_, total_shape):
         '''
@@ -1068,6 +1159,9 @@ class ComplexCoverageType(BaseEnum):
     # Placeholder for spatial complex - not sure what this will look like yet...
     SPATIAL_JOIN = 'SPATIAL_JOIN'
 
+    # TODO: Catchy description
+    TIMESERIES = 'TIMESERIES'
+
 
 class ComplexCoverage(AbstractCoverage):
     """
@@ -1120,7 +1214,7 @@ class ComplexCoverage(AbstractCoverage):
         self.name = name
         if parameter_dictionary is None:
             parameter_dictionary = ParameterDictionary()
-        else:
+        elif complex_type != ComplexCoverageType.TIMESERIES:
             from coverage_model import ParameterFunctionType
             for pn, pc in parameter_dictionary.iteritems():
                 if not isinstance(pc[1].param_type, ParameterFunctionType):
@@ -1167,6 +1261,8 @@ class ComplexCoverage(AbstractCoverage):
         elif complex_type == ComplexCoverageType.SPATIAL_JOIN:
             # Complex spatial - combine coverages across a higher-order topology
             raise NotImplementedError('Not yet implemented')
+        elif complex_type == ComplexCoverageType.TIMESERIES:
+            self._build_timeseries(reference_coverages, parameter_dictionary)
 
     def close(self, force=False, timeout=None):
         if not hasattr(self, '_closed'):
@@ -1214,6 +1310,441 @@ class ComplexCoverage(AbstractCoverage):
 
         # Then, rebuild this badboy!
         self._dobuild()
+
+    def interval_map(self):
+        '''
+        Builds a reference structure and returns the bounds and the associated reference coverages
+        note: only works for 1-d right now
+        '''
+        interval_map = []
+        for scov in self._reference_covs.itervalues():
+            interval = scov.get_data_bounds(scov.temporal_parameter_name)
+            interval = Interval(interval[0], interval[1], None, None)
+            interval_map.append((interval, scov))
+        self._interval_qsort(interval_map)
+        return interval_map
+
+    @classmethod
+    def _interval_swap(cls, arr, x0, x1):
+        if x0 != x1:
+            t = arr[x0]
+            arr[x0] = arr[x1]
+            arr[x1] = t
+    @classmethod
+    def _interval_pivot(cls, arr, left, right, pivot):
+        val = arr[pivot][0]
+        cls._interval_swap(arr, pivot, right)
+        store_index = left
+        for i in xrange(left, right):
+            if arr[i][0] < val:
+                cls._interval_swap(arr, i, store_index)
+                store_index += 1
+        cls._interval_swap(arr, store_index, right)
+        return store_index
+
+    @classmethod
+    def _interval_qsort(cls, arr, left=None, right=None):
+        '''
+        Quicksort for the interval map
+        '''
+        if left is None:
+            left = 0
+        if right is None:
+            right = len(arr) - 1
+        if left < right:
+            pivot = (right - left) / 2 + left
+            pivot = cls._interval_pivot(arr, left, right, pivot)
+            cls._interval_qsort(arr, left, pivot-1)
+            cls._interval_qsort(arr, pivot+1, right)
+    
+    def get_parameter_values(self, param_name, tdoa=None, sdoa=None, return_value=None):
+        '''
+        Obtain the value set for a given parameter over a specified domain
+        '''
+        complex_type = self._persistence_layer.complex_type
+        if complex_type == ComplexCoverageType.TIMESERIES:
+            raise TypeError("A Timeseries ComplexCoverage doesn't support "
+                            "get_parameter_values, please use "
+                            "get_value_dictionary")
+        return AbstractCoverage.get_parameter_values(self, param_name, tdoa=tdoa, 
+                            sdoa=sdoa, return_value=return_value)
+
+
+    def get_value_dictionary(self, param_list=None, temporal_slice=None, domain_slice=None):
+        if temporal_slice and domain_slice:
+            raise ValueError("Can not specify both a temporal_slice and domain_slice")
+        if temporal_slice:
+            return self._get_value_dictionary_temporal(param_list, temporal_slice)
+
+        else:
+            return self._get_value_dictionary_domain(param_list, domain_slice)
+
+
+    def _get_value_dictionary_domain(self, param_list=None, domain_slice=None, unsorted=False, raw=False):
+
+        if domain_slice is None:
+            slice_ = slice(None, None)
+
+        elif isinstance(domain_slice, slice):
+            slice_ = domain_slice
+
+        elif isinstance(domain_slice, (tuple,list)):
+            slice_ = slice(*domain_slice)
+        else:
+            raise ValueError("Unspported domain slice: %s" % domain_slice)
+
+        # Make sure the axis is in the value dictionary
+        # But remember to remove it on the way out
+        no_time = param_list and self.temporal_parameter_name not in param_list
+        if no_time:
+            param_list.append(self.temporal_parameter_name)
+
+        value_interval = Interval(slice_.start, slice_.stop)
+        interval_map = self.interval_map()
+
+        value_dict = {}
+        total_timesteps = 0
+        overlaps = False
+        for i in xrange(len(interval_map)):
+            
+            interval, cov = interval_map[i]
+            if i > 0 and interval_map[i-1][0].intersects(interval):
+                overlaps = True
+            
+            d = Interval(total_timesteps, total_timesteps+cov.num_timesteps-1)
+            if d.intersects(value_interval):
+                if slice_.start is None:
+                    start = 0
+                else:
+                    start = slice_.start - total_timesteps
+                if slice_.stop is None:
+                    stop = None
+                else:
+                    stop = slice_.stop - total_timesteps
+                s = slice(start, stop, slice_.step)
+
+                self._aggregate_value_dict(value_dict, cov, param_list, s)
+            total_timesteps += cov.num_timesteps
+        
+        if not value_dict:
+            return value_dict
+        if overlaps and not unsorted:
+            self._value_dict_qsort(value_dict, self.temporal_parameter_name)
+        if not raw:
+            value_dict = self._value_dict_unique(value_dict, self.temporal_parameter_name)
+        # Remove the axis from the value_dict if it wasn't asked for
+        if no_time:
+            del value_dict[self.temporal_parameter_name]
+        return value_dict
+
+
+
+
+    def _get_value_dictionary_temporal(self, param_list=None, temporal_slice=None, unsorted=False, raw=False):
+        '''
+        Retrieves a value_dictionary which is an aggregation of the child
+        coverage cross-sections of the temporal domain (temporal_slice)
+
+        temporal_slice - A slice or tuple of start and stop times
+        '''
+        # (None, None) is (-inf, inf)
+        if temporal_slice is None:
+            temporal_slice = (None, None)
+
+        param_list = param_list or []
+
+        # Handle two simplistic input types, we may need better support here
+        stride = None
+        if isinstance(temporal_slice, slice):
+            value_interval = Interval(temporal_slice.start, temporal_slice.stop)
+            stride = temporal_slice.step
+        elif isinstance(temporal_slice, tuple):
+            if len(temporal_slice) == 2:
+                start, stop = temporal_slice
+            elif len(temporal_slice) == 3:
+                start, stop, stride = temporal_slice
+            else:
+                raise ValueError("Improper domain value: %s" % temporal_slice)
+            value_interval = Interval(start, stop)
+        else:
+            raise ValueError("Improper domain value: %s" % temporal_slice)
+
+
+        # Make sure the axis is in the value dictionary
+        # But remember to remove it on the way out
+        no_time = param_list and self.temporal_parameter_name not in param_list
+        if no_time:
+            param_list.append(self.temporal_parameter_name)
+
+        interval_map = self.interval_map()
+        value_dict = {}
+        overlaps = False
+        for i in xrange(len(interval_map)):
+            interval, cov = interval_map[i]
+            if i > 0 and interval_map[i-1][0].intersects(interval):
+                overlaps = True
+            if interval.intersects(value_interval):
+                slice_ = cov._get_me_a_slice((value_interval.x0, value_interval.x1), None)
+                self._aggregate_value_dict(value_dict, cov, param_list, slice_)
+
+        if not value_dict:
+            return value_dict
+
+        if overlaps and not unsorted:
+            self._value_dict_qsort(value_dict, self.temporal_parameter_name)
+        if not raw:
+            value_dict = self._value_dict_unique(value_dict, self.temporal_parameter_name)
+        if stride:
+            self._stride_value_dict(value_dict, stride)
+        # Remove the axis from the value_dict if it wasn't asked for
+        if no_time:
+            del value_dict[self.temporal_parameter_name]
+        return value_dict
+
+    def _aggregate_value_dict(self, value_dict, cov, param_list, slice_):
+        '''
+        Appends the coverage's answer cross-section to the value dictionary
+        '''
+        param_list = param_list or self.list_parameters()
+        tname = self.temporal_parameter_name
+        # Potential issue here if the s-cov doesn't use the same temporal 
+        # parameter name
+        t_values = cov._range_value[tname][slice_]
+        if tname not in value_dict:
+            value_dict[tname] = t_values
+        else:
+            value_dict[tname] = np.concatenate([value_dict[tname], t_values])
+        for p in param_list:
+            if p == tname:
+                continue
+            if p not in cov.list_parameters():
+                value_set = np.ones(len(t_values))
+                fv = self.get_parameter_context(p).fill_value
+                value_set *= fv
+            elif p not in value_dict:
+                value_set = cov._range_value[p][slice_]
+            else:
+                value_set = cov._range_value[p][slice_]
+                value_set = np.concatenate([value_dict[p], value_set])
+            value_dict[p] = value_set
+
+    @classmethod
+    def _stride_value_dict(self, value_dict, stride):
+        '''
+        Strides a value dictionary
+        '''
+        s = slice(None,None,stride)
+        for k,v in value_dict.iteritems():
+            value_dict[k] = v[s]
+        
+
+    def insert_value_set(self, value_dictionary):
+        '''
+        Inserts a set of values from the value dictionary into the coverage
+        system
+        '''
+        complex_type = self._persistence_layer.complex_type
+        if complex_type != ComplexCoverageType.TIMESERIES:
+            raise TypeError("Complex Coverage must be a time series to use this method")
+
+        if self.temporal_parameter_name not in value_dictionary:
+            raise ValueError("Temporal domain must be specified in value set")
+
+        shape = value_dictionary[self.temporal_parameter_name].shape[0]
+        for k,v in value_dictionary.iteritems():
+            if v.shape[0] != shape:
+                raise ValueError("Improperly shaped value dictionary")
+
+        self._value_dict_qsort(value_dictionary, self.temporal_parameter_name)
+
+
+        self.append_value_set(value_dictionary)
+
+        return None
+
+    def append_value_set(self, value_dictionary):
+        # Get the time value set
+        time_array = value_dictionary[self.temporal_parameter_name]
+        t0, t1 = time_array[0], time_array[-1]
+        value_interval = Interval(t0, t1, None, None)
+        # Get the intervals
+        interval_map = self.interval_map()
+
+        full_interval = None
+        intersecting_insert = False
+        for interval, cov in interval_map:
+            if full_interval is None:
+                full_interval = interval
+            else:
+                full_interval = full_interval.union(interval)
+
+            # If any new value sets intersect an existing coverage's interval,
+            # create a new simplex coverage
+            if interval.intersects(value_interval):
+                intersecting_insert = True
+
+        if intersecting_insert:
+            # Find a disjoint coverage with the least union area
+            min_delta = None
+            min_interval = None
+            min_coverage = None
+            for interval,cov in interval_map:
+                delta = value_interval.x0 - interval.x1
+                if delta > 0:
+                    if min_delta is None or delta < min_delta:
+                        min_delta = delta
+                        min_interval = interval
+                        min_coverage = cov
+            if min_coverage is not None:
+                self._append_to_coverage(min_coverage, value_dictionary)
+            else:
+                cov = self.new_simplex()
+                self._append_to_coverage(cov, value_dictionary)
+                return
+
+
+        if full_interval is None:
+            # Empty coverage system
+            cov = self.new_simplex()
+            self._append_to_coverage(cov, value_dictionary)
+            return
+
+        # In an ideal case and simple input the value sets arrive in a
+        # monotonically increasing order, the solution is to append the value
+        # set to the last coverage in the interval_map. 
+        if value_interval.x0 > full_interval.x1:
+            interval, cov = interval_map[-1]
+            self._append_to_coverage(cov, value_dictionary)
+        # The value interval is less than the coverage system's interval
+        elif value_interval.x1 < full_interval.x0:
+            cov = self.new_simplex()
+            self._append_to_coverage(cov, value_dictionary)
+            return
+        else:
+            min_dx = 0
+            min_interval, min_cov = interval_map[0]
+            for interval, cov in interval_map:
+                dx = value_interval.x0 - interval.x1
+                if dx > 0 and dx < min_dx:
+                    min_dx = dx
+                    min_interval, min_cov = interval, cov
+
+
+
+    def _append_to_coverage(self, cov, value_dictionary):
+        time_array = value_dictionary[self.temporal_parameter_name]
+        t0, t1 = time_array[0], time_array[-1]
+        
+        cov = AbstractCoverage.load(cov.persistence_dir, mode='r+')
+        param_list = cov.list_parameters()
+        
+        shape = len(time_array)
+        cov.insert_timesteps(shape)
+
+        for parameter, value_set in value_dictionary.iteritems():
+            if parameter in param_list:
+                cov.set_parameter_values(parameter, value_set, slice(cov.num_timesteps - shape, cov.num_timesteps))
+        cov.close()
+        self.refresh()
+
+    def new_simplex(self):
+        '''
+        Creates a new child simplex coverage with the same CRS information
+        '''
+        root_dir, guid = os.path.split(self.persistence_dir)
+        name = 'generated simplex'
+        pdict = deepcopy(self._range_dictionary)
+        tcrs = CRS([AxisTypeEnum.TIME])
+        scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+        # Construct temporal and spatial Domain objects
+        tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+        sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
+        scov = SimplexCoverage(root_dir, 
+                               utils.create_guid(), 
+                               name,
+                               parameter_dictionary=pdict, 
+                               temporal_domain=tdom,
+                               spatial_domain=sdom,
+                               mode='r+')
+        path = scov.persistence_dir
+        self.append_reference_coverage(path)
+        return scov
+        
+
+
+    @classmethod
+    def _value_dict_swap(cls, value_dict, x0, x1):
+        '''
+        Value dictionary array swap
+        '''
+        if x0 != x1:
+            for name,arr in value_dict.iteritems():
+                t = arr[x0]
+                arr[x0] = arr[x1]
+                arr[x1] = t
+
+    @classmethod
+    def _value_dict_pivot(cls, value_dict, axis, left, right, pivot):
+        '''
+        Pivot algorithm, part of quicksort
+        '''
+        axis_arr = value_dict[axis]
+        idx_arr = value_dict['__idx__']
+        val = axis_arr[pivot]
+        cls._value_dict_swap(value_dict, pivot, right)
+        store_index = left
+        for i in xrange(left, right):
+            if axis_arr[i] < val:
+                cls._value_dict_swap(value_dict, i, store_index)
+                store_index += 1
+            # This part is critical to maintaining the precedence :)
+            if axis_arr[i] == val and idx_arr[i] < idx_arr[right]:
+                cls._value_dict_swap(value_dict, i, store_index)
+                store_index += 1
+                
+        cls._value_dict_swap(value_dict, store_index, right)
+        return store_index
+
+    @classmethod
+    def _value_dict_qsort(cls, value_dict, axis, left=None, right=None):
+        '''
+        Quicksort, value dictionary edition
+        modifications are in-place for a stable search
+        '''
+        top_call = left is None and right is None
+        if top_call:
+            value_dict['__idx__'] = np.arange(len(value_dict[axis]))
+        if left is None:
+            left = 0
+        if right is None:
+            right = len(value_dict[axis]) - 1
+        if left < right:
+            pivot = (right - left) / 2 + left
+            pivot = cls._value_dict_pivot(value_dict, axis, left, right, pivot)
+            cls._value_dict_qsort(value_dict, axis, left, pivot-1)
+            cls._value_dict_qsort(value_dict, axis, pivot+1, right)
+        if top_call:
+            del value_dict['__idx__']
+
+    @classmethod
+    def _value_dict_unique(cls, value_dict, axis):
+        '''
+        A naive unique copy algorithm
+
+        Notes:
+        - Last unique axis value has precedence
+        '''
+        tarray = value_dict[axis]
+        truth_array = np.ones(tarray.shape, dtype=np.bool)
+        for i in xrange(1, len(tarray)):
+            if tarray[i-1] == tarray[i]:
+                truth_array[i-1] = False
+
+        vd_copy = {}
+        for k,v in value_dict.iteritems():
+            vd_copy[k] = v[truth_array]
+        return vd_copy
 
     def _verify_rcovs(self, rcovs):
         for cpth in rcovs:
@@ -1511,6 +2042,25 @@ class ComplexCoverage(AbstractCoverage):
             self.insert_timesteps(len(s))
 
         self._head_coverage_path = self._reference_covs[self.rcov_domain_spans[-1].value].head_coverage_path
+
+    def _build_timeseries(self, rcovs, parameter_dictionary):
+        
+        for p, pc in parameter_dictionary.iteritems():
+            if p not in self._range_dictionary:
+                pc = pc[1]
+                self._range_dictionary.add_context(pc)
+        for cpth, cov in self._verify_rcovs(rcovs):
+            self._reference_covs[cpth] = cov
+            pdict = cov.parameter_dictionary
+            for p, pc in pdict.iteritems():
+                if p not in parameter_dictionary:
+                    if p not in self._range_dictionary:
+                        pc = pc[1]
+                        # Timeseries coverage doesn't support instance domains just yet
+                        self._range_dictionary.add_context(pc)
+
+    def get_complex_type(self):
+        return self._persistence_layer.complex_type
 
 
 class SimplexCoverage(AbstractCoverage):
