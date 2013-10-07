@@ -116,9 +116,13 @@ class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
 
     @attr('UTIL')
     def test_aggregates(self):
-        cova_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(10),'value_set' : np.ones(10)})
-        covb_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(20,30), 'value_set': np.ones(10) * 2})
-        covc_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(15,25), 'value_set' : np.ones(10) * 3})
+
+        array_stuff = ParameterContext('array_stuff', param_type=ArrayType(inner_encoding='float32'))
+        x, y = np.mgrid[0:10, 0:10]
+
+        cova_pth = _make_cov(self.working_dir, ['value_set', array_stuff], data_dict={'time': np.arange(10),'value_set' : np.ones(10), 'array_stuff' : x})
+        covb_pth = _make_cov(self.working_dir, ['value_set', array_stuff], data_dict={'time': np.arange(20,30), 'value_set': np.ones(10) * 2, 'array_stuff' : y})
+        covc_pth = _make_cov(self.working_dir, ['value_set', array_stuff], data_dict={'time': np.arange(15,25), 'value_set' : np.ones(10) * 3, 'array_stuff' : x})
 
         cov = SimplexCoverage.load(cova_pth, mode='r+')
 
