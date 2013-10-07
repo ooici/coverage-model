@@ -1138,6 +1138,10 @@ class ViewCoverage(AbstractCoverage):
     def set_parameter_values(self, param_name, value, tdoa=None, sdoa=None):
         raise TypeError('Cannot set parameter values against a ViewCoverage')
 
+    def get_value_dictionary(self, *args, **kwargs):
+
+        return self.reference_coverage.get_value_dictionary(*args, **kwargs)
+
 
 from coverage_model.basic_types import BaseEnum
 class ComplexCoverageType(BaseEnum):
