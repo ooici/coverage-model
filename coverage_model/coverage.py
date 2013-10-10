@@ -44,8 +44,10 @@ from persistence_helpers import get_coverage_type
 from coverage_model import utils
 from coverage_model.utils import Interval
 from copy import deepcopy
+from pyon.util.breakpoint import time_profile
 import numpy as np
 import numexpr as ne
+import time
 import os, collections, pickle
 
 #=========================
@@ -480,10 +482,13 @@ class AbstractCoverage(AbstractIdentifiable):
         # time-array to find out where start and stop are, we just use a
         # binary-search on an "array-like" HDF5 interface
 
-        start_idx = np.searchsorted(time_vector, start)
-        stop_idx = np.searchsorted(time_vector, stop)
+        start_idx = self._searchsorted(time_vector, start)
+        stop_idx = self._searchsorted(time_vector, stop)
         slice_ = slice(start_idx, stop_idx, stride)
         return slice_
+
+    def _searchsorted(self, time_vector, val):
+        return np.searchsorted(time_vector[:], val)
 
 
     def _aggregate_value_dict(self, value_dict, slice_, param_list=None):
