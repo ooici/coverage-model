@@ -44,10 +44,7 @@ from persistence_helpers import get_coverage_type
 from coverage_model import utils
 from coverage_model.utils import Interval
 from copy import deepcopy
-from pyon.util.breakpoint import time_profile
 import numpy as np
-import numexpr as ne
-import time
 import os, collections, pickle
 
 #=========================
