@@ -1422,12 +1422,14 @@ class ComplexCoverage(AbstractCoverage):
                 if slice_.start is None:
                     start = 0
                 else:
-                    start = slice_.start - total_timesteps
+                    start = max(0, slice_.start - total_timesteps)
                 if slice_.stop is None:
                     stop = None
                 else:
                     stop = slice_.stop - total_timesteps
                 s = slice(start, stop, slice_.step)
+                if start == stop:
+                    continue
 
                 self._aggregate_value_dict(value_dict, cov, param_list, s)
             total_timesteps += cov.num_timesteps
