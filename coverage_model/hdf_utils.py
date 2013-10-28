@@ -117,6 +117,13 @@ class HDFLockingFile(h5py.File):
                 fcntl.flock(fd, fcntl.LOCK_UN | fcntl.LOCK_NB)
                 del self.__locks[self.filename]
 
+    @classmethod
+    def force_unlock(cls, path):
+        with cls.__rlock:
+            fd = os.open(path, os.O_RDONLY)
+            fcntl.flock(fd, fcntl.LOCK_UN | fcntl.LOCK_NB)
+            del cls.__locks[path]
+
     def close(self):
         self.unlock()
 
