@@ -15,6 +15,7 @@ import StringIO
 import fcntl
 import h5py
 import gevent.coros
+from pyon.util.log import log
 
 
 def repack(infile_path, outfile_path=None):
@@ -101,14 +102,18 @@ class HDFLockingFile(h5py.File):
 
             if self.driver == 'sec2' and self.mode != 'r':
                 if self.filename in self.__locks:
-                    raise IOError('[Errno 11] Resource temporarily unavailable')
+                    raise IOError('[Errno 11] Resource temporarily unavailable, cached lock on %s' % self.filename)
 
                 self.__locks[self.filename] = 1 
 
                 # Using sec2 and not reading
                 fd = self.fid.get_vfd_handle()
                 # Lock the file
-                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except IOError:
+                    log.exception('Locking Error on %s', self.filename)
+                    raise
 
     def unlock(self):
         with self.__rlock:
