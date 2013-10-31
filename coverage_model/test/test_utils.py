@@ -309,7 +309,6 @@ class TestHDFLocking(CoverageModelIntTestCase):
     def test_locking_contention(self):
         guid = utils.create_guid()
         path = os.path.join(self.working_dir, '%s.h5' % guid)
-        print path
         f1 = HDFLockingFile(path, 'a')
         try:
             f2 = HDFLockingFile(path,'a')
@@ -318,6 +317,15 @@ class TestHDFLocking(CoverageModelIntTestCase):
             if 'Resource temporarily unavailable' not in e.message:
                 raise
         f1.close()
+
+    def test_force_unlock(self):
+        guid = utils.create_guid()
+        path = os.path.join(self.working_dir, '%s.h5' % guid)
+        f1 = HDFLockingFile(path, 'a')
+
+        HDFLockingFile.force_unlock(path)
+
+        f2 = HDFLockingFile(path, 'a')
 
 
 
