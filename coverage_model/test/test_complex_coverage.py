@@ -16,6 +16,7 @@ from nose.plugins.attrib import attr
 import mock
 import unittest
 from copy import deepcopy
+from coverage_model.hdf_utils import HDFLockingFile
 
 from coverage_test_base import CoverageIntTestBase, get_props
 import time
@@ -281,8 +282,80 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
     # Additional tests specific to Complex Coverage
     ######################
 
+    def test_file_mode(self):
+        # Construct temporal and spatial Coordinate Reference System objects
+        tcrs = CRS([AxisTypeEnum.TIME])
+        scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
 
+        # Construct temporal and spatial Domain objects
+        tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+        sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
 
+        rcov_locs = [_make_cov('test_data', ['first_param']),
+                     _make_cov('test_data', ['second_param']),
+                     _make_cov('test_data', ['third_param', 'fourth_param']),
+                     ]
+
+        # Instantiate a ParameterDictionary
+        pdict = ParameterDictionary()
+
+        # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+        func = NumexprFunction('a*b', 'a*b', ['a', 'b'], {'a': 'first_param', 'b': 'second_param'})
+        val_ctxt = ParameterContext('a*b', param_type=ParameterFunctionType(function=func, value_encoding=np.dtype('float32')))
+        pdict.add_context(val_ctxt)
+
+        # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
+        ccov = ComplexCoverage('test_data', create_guid(), 'sample complex coverage', parameter_dictionary=pdict,
+                               mode='w', reference_coverage_locs=rcov_locs)
+
+        ccov_pth = ccov.persistence_dir
+        ccov_masterfile_pth = ccov._persistence_layer.master_manager.file_path
+
+        # Close the CC
+        ccov.close()
+        del(ccov)
+
+        # Open ComplexCoverage in write mode
+        w_ccov = AbstractCoverage.load(ccov_pth)
+
+        # Loop over opening and reading data out of CC 10 times
+        rpt = 20
+        while rpt > 0:
+            read_ccov = AbstractCoverage.load(ccov_pth, mode='r')
+            self.assertIsInstance(read_ccov, AbstractCoverage)
+            time_value = read_ccov.get_parameter_values('time', [1])
+            self.assertEqual(time_value, 1.0)
+            read_ccov.close()
+            del(read_ccov)
+            rpt = rpt - 1
+
+        w_ccov.close()
+        del(w_ccov)
+
+        # Open ComplexCoverage's master file using locking
+        with HDFLockingFile(ccov_masterfile_pth, 'r+') as f:
+
+            # Test ability to read from ComplexCoverage in readonly mode
+            locked_ccov = AbstractCoverage.load(ccov_pth, mode='r')
+            self.assertIsInstance(locked_ccov, AbstractCoverage)
+            time_value = locked_ccov.get_parameter_values('time', [1])
+            self.assertEqual(time_value, 1.0)
+
+            # Test inability to open ComplexCoverage for writing
+            with self.assertRaises(IOError):
+                AbstractCoverage.load(ccov_pth)
+
+            with self.assertRaises(IOError):
+                AbstractCoverage.load(ccov_pth, mode='w')
+
+            with self.assertRaises(IOError):
+                AbstractCoverage.load(ccov_pth, mode='a')
+
+            with self.assertRaises(IOError):
+                AbstractCoverage.load(ccov_pth, mode='r+')
+
+            locked_ccov.close()
+            del(locked_ccov)
 
     def test_parametric_strict(self):
         num_times = 10
