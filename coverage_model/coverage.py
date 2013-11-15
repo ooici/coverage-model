@@ -208,8 +208,8 @@ class AbstractCoverage(AbstractIdentifiable):
         if self.closed:
             raise IOError('I/O operation on closed file')
 
-        if self.mode == 'r':
-            raise IOError('Coverage not open for writing: mode == \'{0}\''.format(self.mode))
+        #if self.mode == 'r':
+        #    raise IOError('Coverage not open for writing: mode == \'{0}\''.format(self.mode))
 
         # Get the current shape of the temporal_dimension
         shp = self.temporal_domain.shape
@@ -294,8 +294,8 @@ class AbstractCoverage(AbstractIdentifiable):
         if self.closed:
             raise IOError('I/O operation on closed file')
 
-        if self.mode == 'r':
-            raise IOError('Coverage not open for writing: mode == \'{0}\''.format(self.mode))
+        #if self.mode == 'r':
+        #    raise IOError('Coverage not open for writing: mode == \'{0}\''.format(self.mode))
 
         if not isinstance(parameter_context, ParameterContext):
             raise TypeError('\'parameter_context\' must be an instance of ParameterContext')
@@ -1079,8 +1079,8 @@ class ViewCoverage(AbstractCoverage):
         AbstractCoverage.close(self, force, timeout)
 
     def replace_reference_coverage(self, path=None, use_current_param_dict=True, parameter_dictionary=None):
-        if self.mode == 'r':
-            raise IOError('Coverage not open for writing: mode == \'{0}\''.format(self.mode))
+        #if self.mode == 'r':
+        #    raise IOError('Coverage not open for writing: mode == \'{0}\''.format(self.mode))
 
         if path is not None:
             ncov = AbstractCoverage.load(path)
@@ -1176,8 +1176,13 @@ class ComplexCoverage(AbstractCoverage):
     def __init__(self, root_dir, persistence_guid, name=None, reference_coverage_locs=None, parameter_dictionary=None,
                  mode=None, complex_type=ComplexCoverageType.PARAMETRIC_STRICT, temporal_domain=None, spatial_domain=None):
 
-        # Should always be in WRITE mode because we do domain work when setting up
-        AbstractCoverage.__init__(self, mode='w')
+        # Sets h5py file operation mode to 'w' if not specified
+        # 'w' = Create file, truncate if exists
+        if mode is None:
+            mode = 'w'
+
+        # Initializes base class with proper mode.
+        AbstractCoverage.__init__(self, mode=mode)
 
         try:
             # Make sure root_dir and persistence_guid are both not None and are strings
