@@ -727,7 +727,16 @@ class ArrayValue(AbstractComplexParameterValue):
 
             if param_type.inner_encoding is not None and np.dtype(param_type.inner_encoding).kind not in ['O', 'S']:
                 vals = np.atleast_1d(vals)
-                lens = [a.shape if hasattr(a, 'shape') else (len(a),) if hasattr(a, '__len__') else (1,) for a in vals]
+                lens = []
+                for a in vals:
+                    a = np.atleast_1d(a)
+                    if hasattr(a, 'shape') and hasattr(a, '__len__'):
+                        lens.append(a.shape)
+                    elif hasattr(a, '__len__'):
+                        lens.append((len(a),))
+                    else:
+                        lens.append((1,))
+                #lens = [a.shape if hasattr(a, 'shape') else (len(a),) if hasattr(a, '__len__') else (1,) for a in vals]
                 mx = [0 for i in lens[0]]
                 for l in lens:
                     for i, mi in enumerate(mx):
@@ -755,7 +764,7 @@ class ArrayValue(AbstractComplexParameterValue):
             slice_ = (slice(slice_[0], slice_[0] + 1),) + slice_[1:]
 
         vals = np.atleast_1d(self._storage[slice_])
-
+        
         vals = self._apply_inner_encoding(vals, self.parameter_type)
 
         ret = _cleanse_value(vals, oslice)
