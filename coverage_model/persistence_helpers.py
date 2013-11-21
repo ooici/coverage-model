@@ -11,6 +11,7 @@ from pyon.core.interceptor.encode import encode_ion, decode_ion
 from ooi.logging import log
 from coverage_model.basic_types import Dictable
 from coverage_model import utils
+from coverage_model.metadata import MetadataManager
 
 import os
 import h5py
@@ -94,12 +95,33 @@ class RTreeProxy(object):
         ub = float(self._spans[0].upper_bound) if len(self._spans) > 0 else 0.0
         return [lb, 0.0, ub, 0.0]
 
-class BaseManager(object):
+
+class BaseManager(MetadataManager):
+
+    @staticmethod
+    def dirExists(directory):
+        os.path.exists(directory)
+
+    @staticmethod
+    def isPersisted(directory, guid):
+        if os.path.exists(directory):
+            file_path = os.path.join(directory, guid)
+            if os.path.exists(file_path):
+                return True
+
+        return False
+
+    @staticmethod
+    def getCoverageType(directory, guid):
+        return get_coverage_type(os.path.join(directory, guid, '{0}_master.hdf5'.format(guid)))
 
     def __init__(self, root_dir, file_name, **kwargs):
+        MetadataManager.__init__(self,  **kwargs)
+        """
         super(BaseManager, self).__setattr__('_hmap',{})
         super(BaseManager, self).__setattr__('_dirty',set())
         super(BaseManager, self).__setattr__('_ignore',set())
+        """
         self.root_dir = root_dir
         self.file_path = os.path.join(root_dir, file_name)
 
@@ -120,6 +142,7 @@ class BaseManager(object):
         if self.is_dirty(True):
             try:
                 with HDFLockingFile(self.file_path, 'a') as f:
+                    self._filesWritten.add(self.file_path)
                     for k in list(self._dirty):
                         v = getattr(self, k)
     #                    log.debug('FLUSH: key=%s  v=%s', k, v)
@@ -129,6 +152,7 @@ class BaseManager(object):
                         else:
                             value = pack(v)
 
+                        self._stored.add(k)
                         f.attrs[k] = np.array([value])
 
                         # Update the hash_value in _hmap
@@ -212,6 +236,7 @@ class MasterManager(BaseManager):
 
         log.debug('self.file_path: {0}'.format(self.file_path))
         with HDFLockingFile(self.file_path, 'a') as f:
+            self._filesWritten.add(self.file_path)
             rtree_ds = f.require_dataset('rtree', shape=(count,), dtype=h5py.special_dtype(vlen=str), maxshape=(None,))
             rtree_ds.resize((count+1,))
             rtree_ds[count] = pack((extents, obj))
@@ -223,6 +248,7 @@ class MasterManager(BaseManager):
 
     def _load(self):
         with HDFLockingFile(self.file_path, 'r') as f:
+            self._filesWritten.add(self.file_path)
             self._base_load(f)
 
             self.param_groups = set()
@@ -250,10 +276,12 @@ class MasterManager(BaseManager):
 
     def add_external_link(self, link_path, rel_ext_path, link_name):
         with HDFLockingFile(self.file_path, 'r+') as f:
+            self._filesWritten.add(self.file_path)
             f[link_path] = h5py.ExternalLink(rel_ext_path, link_name)
 
     def create_group(self, group_path):
         with HDFLockingFile(self.file_path, 'r+') as f:
+            self._filesWritten.add(self.file_path)
             f.create_group(group_path)
 
 
