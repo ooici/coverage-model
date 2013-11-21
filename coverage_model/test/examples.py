@@ -209,7 +209,7 @@ def samplecov(save_coverage=False, in_memory=False, inline_data_writes=True):
     sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
 
     # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-    scov = SimplexCoverage('test_data', create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory)
+    scov = SimplexCoverage('test_data', '9C2210E9-118C-443C-80D6-711B7FE49A29', 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory, mode='a')
 
     # Insert some timesteps (automatically expands other arrays)
     nt = 30

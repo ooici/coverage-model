@@ -17,17 +17,33 @@ from coverage_model.hdf_utils import HDFLockingFile
 import os
 import itertools
 from copy import deepcopy
+from coverage_model.metadata_factory import MetadataManagerFactory
+
+
+def is_persisted(file_dir, guid):
+    return MetadataManagerFactory.isPersisted(file_dir,guid)
+
+
+def dir_exists(file_dir):
+    return MetadataManagerFactory.dirExists(file_dir)
+
+
+def get_coverage_type(file_dir, guid):
+    return MetadataManagerFactory.getCoverageType(file_dir,guid)
+
 
 # TODO: Make persistence-specific error classes
 class PersistenceError(Exception):
     pass
+
 
 class SimplePersistenceLayer(object):
 
     def __init__(self, root, guid, name=None, param_dict=None, mode=None, coverage_type=None, **kwargs):
         root = '.' if root is ('' or None) else root
 
-        self.master_manager = MasterManager(root_dir=root, guid=guid, name=name, param_dict=param_dict,
+#        self.master_manager = MasterManager(root_dir=root, guid=guid, name=name, param_dict=param_dict,
+        self.master_manager = MetadataManagerFactory.buildMetadataManager(root_dir=root, guid=guid, name=name, param_dict=param_dict,
                                             parameter_bounds=None, tree_rank=2, coverage_type=coverage_type, **kwargs)
 
         if not hasattr(self.master_manager, 'coverage_type'):
@@ -123,7 +139,8 @@ class PersistenceLayer(object):
         log.debug('Persistence GUID: %s', guid)
         root = '.' if root is ('' or None) else root
 
-        self.master_manager = MasterManager(root, guid, name=name, tdom=tdom, sdom=sdom, global_bricking_scheme=bricking_scheme, parameter_bounds=None, coverage_type=coverage_type, **kwargs)
+#        self.master_manager = MasterManager(root, guid, name=name, tdom=tdom, sdom=sdom, global_bricking_scheme=bricking_scheme, parameter_bounds=None, coverage_type=coverage_type, **kwargs)
+        self.master_manager = MetadataManagerFactory.buildMetadataManager(root, guid, name=name, tdom=tdom, sdom=sdom, global_bricking_scheme=bricking_scheme, parameter_bounds=None, coverage_type=coverage_type, **kwargs)
 
         self.mode = mode
         if not hasattr(self.master_manager, 'auto_flush_values'):
@@ -533,6 +550,7 @@ class PersistenceLayer(object):
                     self.brick_dispatcher.shutdown(force=force, timeout=timeout)
 
         self._closed = True
+
 
 class PersistedStorage(AbstractStorage):
     """
@@ -986,6 +1004,7 @@ class SparsePersistedStorage(AbstractStorage):
     def __iter__(self):
         # TODO: THIS IS NOT CORRECT
         return [1,1].__iter__()
+
 
 class InMemoryPersistenceLayer(object):
 
