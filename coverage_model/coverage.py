@@ -40,9 +40,7 @@ from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, Mutab
 from coverage_model.parameter import Parameter, ParameterDictionary, ParameterContext
 from coverage_model.parameter_values import get_value_class, AbstractParameterValue
 from coverage_model.persistence import PersistenceLayer, InMemoryPersistenceLayer, SimplePersistenceLayer, is_persisted
-from coverage_model.persistence_cassandra import CassandraPersistenceLayer
 from coverage_model.metadata_factory import MetadataManagerFactory
-from persistence_helpers import get_coverage_type
 from coverage_model import utils
 from coverage_model.utils import Interval
 from copy import deepcopy
@@ -155,10 +153,7 @@ class AbstractCoverage(AbstractIdentifiable):
         else:
             raise TypeError('Unknown Coverage type specified in master file : {0}', ctype)
 
-        try:
-            return ccls(root_dir, persistence_guid, mode=mode)
-        except Exception as e:
-            raise e
+        return ccls(root_dir, persistence_guid, mode=mode)
 
     @classmethod
     def save(cls, cov_obj, *args, **kwargs):
@@ -859,16 +854,14 @@ class AbstractCoverage(AbstractIdentifiable):
 
     @property
     def persistence_guid(self):
-        if isinstance(self._persistence_layer, InMemoryPersistenceLayer) or \
-                isinstance(self._persistence_layer, CassandraPersistenceLayer):
+        if isinstance(self._persistence_layer, InMemoryPersistenceLayer):
             return None
         else:
             return self._persistence_layer.guid
 
     @property
     def persistence_dir(self):
-        if isinstance(self._persistence_layer, InMemoryPersistenceLayer) or \
-                isinstance(self._persistence_layer, CassandraPersistenceLayer):
+        if isinstance(self._persistence_layer, InMemoryPersistenceLayer):
             return None
         else:
             return self._persistence_layer.master_manager.root_dir
@@ -1031,7 +1024,7 @@ class ViewCoverage(AbstractCoverage):
                     raise SystemError('\'reference_coverage_location\' and \'name\' cannot be None')
 
                 # If the coverage directory exists, load it instead!!
-                if not is_persisted(root_dir, persistence_guid):
+                if is_persisted(root_dir, persistence_guid):
 #cjb                if os.path.exists(pth):
                     log.warn('The specified coverage already exists - performing load of \'{0}\''.format(pth))
                     _doload(self)
@@ -2101,7 +2094,7 @@ class SimplexCoverage(AbstractCoverage):
 
     """
 
-    def __init__(self, root_dir, persistence_guid, name=None, parameter_dictionary=None, temporal_domain=None, spatial_domain=None, mode=None, in_memory_storage=False, bricking_scheme=None, inline_data_writes=True, auto_flush_values=True, value_caching=True, cassandra=False):
+    def __init__(self, root_dir, persistence_guid, name=None, parameter_dictionary=None, temporal_domain=None, spatial_domain=None, mode=None, in_memory_storage=False, bricking_scheme=None, inline_data_writes=True, auto_flush_values=True, value_caching=True):
         """
         Constructor for SimplexCoverage
 
@@ -2237,8 +2230,6 @@ class SimplexCoverage(AbstractCoverage):
                 self._in_memory_storage = in_memory_storage
                 if self._in_memory_storage:
                     self._persistence_layer = InMemoryPersistenceLayer()
-                elif cassandra:
-                    self._persistence_layer = CassandraPersistenceLayer()
                 else:
                     self._persistence_layer = PersistenceLayer(root_dir,
                                                                persistence_guid,

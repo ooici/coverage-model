@@ -2,7 +2,7 @@ from ooi.logging import log
 import os
 from coverage_model.metadata import MetadataManager
 from coverage_model import utils
-from coverage_model.persistence_helpers import RTreeProxy, pack, unpack, get_coverage_type, RTreeItem
+from coverage_model.persistence_helpers import RTreeProxy, pack, unpack
 from coverage_model.basic_types import Dictable
 from pycassa.cassandra.ttypes import NotFoundException
 from pycassa import ConnectionPool, ColumnFamily
@@ -38,11 +38,11 @@ class CassandraMetadataManager(MetadataManager):
     def __init__(self, filedir, guid, **kwargs):
         MetadataManager.__init__(self, **kwargs)
         self.guid = guid
-        self.groups = {}
         self._ignore.update(['param_groups', 'guid', 'file_path', 'root_dir', 'brick_tree', 'groups'])
         self.param_groups = set()
         self.root_dir = os.path.join(filedir,guid)
         self.file_path = os.path.join(filedir, guid)
+        self.brick_tree = RTreeProxy()
 
         self._load()
         for k, v in kwargs.iteritems():
@@ -84,6 +84,19 @@ class CassandraMetadataManager(MetadataManager):
                     self._hmap[k] = utils.hash_any(v)
                     # Remove the key from the _dirty set
                     self._dirty.remove(k)
+
+                if hasattr(self, 'brick_tree') and isinstance(self.brick_tree, RTreeProxy):
+                    val = self.brick_tree.serialize()
+                    if val != '':
+                        colFam.insert(self.guid, {'brick_tree': val})
+
+                if hasattr(self, 'param_groups') and isinstance(self.param_groups, set):
+                    if isinstance(self.param_groups, set):
+                        groups = ''
+                        for group in self.param_groups:
+                            groups = '%(groups)s::group::%(group)s' % {'groups': groups, 'group': group}
+                        colFam.insert(self.guid, {'param_groups': groups})
+
             except IOError, ex:
                 if "unable to create file (File accessability: Unable to open file)" in ex.message:
                     log.info('Issue writing to hdf file during master_manager.flush - this is not likely a huge problem: %s', ex.message)
@@ -107,6 +120,15 @@ class CassandraMetadataManager(MetadataManager):
                     value = classobj._fromdict(value)
                 elif key in ('root_dir', 'file_path'):
                     # No op - set in constructor
+                    continue
+                elif key == 'brick_tree':
+                    setattr(self, key, RTreeProxy.deserialize(val))
+                    continue
+                elif key == 'param_groups':
+                    self.param_groups.clear()
+                    for group in val.split('::group::'):
+                        if group != '':
+                            self.param_groups.add(group)
                     continue
                 else:
                     value = unpack(val)
@@ -147,16 +169,11 @@ class CassandraMetadataManager(MetadataManager):
         self.brick_tree.insert(count, extents, obj=obj)
 
     def _init_rtree(self, bD):
-            self.brick_tree = RTreeProxy()
+        self.brick_tree = RTreeProxy()
 
     def add_external_link(self, link_path, rel_ext_path, link_name):
-        group = link_path
-        while group != "" and group != os.sep:
-            group, tmp = os.path.split(group)
-
-        self.groups[tmp][link_name] = os.path.abspath(rel_ext_path)
-
+        pass
 
     def create_group(self, group_path):
-        if group_path not in self.groups:
-            self.groups[group_path] = {}
+        if group_path not in self.param_groups:
+            self.param_groups.add(group_path)

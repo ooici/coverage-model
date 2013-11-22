@@ -43,7 +43,7 @@ class SimplePersistenceLayer(object):
         root = '.' if root is ('' or None) else root
 
 #        self.master_manager = MasterManager(root_dir=root, guid=guid, name=name, param_dict=param_dict,
-        self.master_manager = MetadataManagerFactory.buildMetadataManager(root_dir=root, guid=guid, name=name, param_dict=param_dict,
+        self.master_manager = MetadataManagerFactory.buildMetadataManager(root, guid, name=name, param_dict=param_dict,
                                             parameter_bounds=None, tree_rank=2, coverage_type=coverage_type, **kwargs)
 
         if not hasattr(self.master_manager, 'coverage_type'):
