@@ -95,6 +95,33 @@ class RTreeProxy(object):
         ub = float(self._spans[0].upper_bound) if len(self._spans) > 0 else 0.0
         return [lb, 0.0, ub, 0.0]
 
+    def serialize(self):
+        out = ''
+        if len(self._spans) > 0:
+            out = self.__class__.__name__
+            for span in self._spans:
+                tup_str = ''
+                for i in span.tuplize(with_value=True):
+                    tup_str = '%(orig)s_%(val)s' % {'orig': tup_str, 'val': i}
+                out = '%(orig)s%(sep)s%(new)s' % {'orig': out, 'sep': '::span::', 'new': tup_str}
+        return out
+
+    @classmethod
+    def deserialize(cls, src_str):
+        if isinstance(src_str, basestring) and src_str.startswith(cls.__name__):
+            tmp = src_str.strip(cls.__name__)
+            rtp = RTreeProxy()
+            for span_tpl in tmp.split('::span::'):
+                if span_tpl == '':
+                    continue
+                a, b, c, d, e = span_tpl.split('_')
+                span_tpl = (int(b), int(c), int(d), e)
+                from coverage_model.basic_types import Span
+                span = Span.from_iterable(span_tpl)
+                rtp._spans.append(span)
+            return rtp
+        raise TypeError('Improper formatting for RTreeProxy deserialization: %s' % src_str)
+
 
 class BaseManager(MetadataManager):
 
@@ -116,12 +143,7 @@ class BaseManager(MetadataManager):
         return get_coverage_type(os.path.join(directory, guid, '{0}_master.hdf5'.format(guid)))
 
     def __init__(self, root_dir, file_name, **kwargs):
-        MetadataManager.__init__(self,  **kwargs)
-        """
-        super(BaseManager, self).__setattr__('_hmap',{})
-        super(BaseManager, self).__setattr__('_dirty',set())
-        super(BaseManager, self).__setattr__('_ignore',set())
-        """
+        MetadataManager.__init__(self, **kwargs)
         self.root_dir = root_dir
         self.file_path = os.path.join(root_dir, file_name)
 
@@ -142,7 +164,6 @@ class BaseManager(MetadataManager):
         if self.is_dirty(True):
             try:
                 with HDFLockingFile(self.file_path, 'a') as f:
-                    self._filesWritten.add(self.file_path)
                     for k in list(self._dirty):
                         v = getattr(self, k)
     #                    log.debug('FLUSH: key=%s  v=%s', k, v)
@@ -236,7 +257,6 @@ class MasterManager(BaseManager):
 
         log.debug('self.file_path: {0}'.format(self.file_path))
         with HDFLockingFile(self.file_path, 'a') as f:
-            self._filesWritten.add(self.file_path)
             rtree_ds = f.require_dataset('rtree', shape=(count,), dtype=h5py.special_dtype(vlen=str), maxshape=(None,))
             rtree_ds.resize((count+1,))
             rtree_ds[count] = pack((extents, obj))
@@ -248,7 +268,6 @@ class MasterManager(BaseManager):
 
     def _load(self):
         with HDFLockingFile(self.file_path, 'r') as f:
-            self._filesWritten.add(self.file_path)
             self._base_load(f)
 
             self.param_groups = set()
@@ -276,12 +295,10 @@ class MasterManager(BaseManager):
 
     def add_external_link(self, link_path, rel_ext_path, link_name):
         with HDFLockingFile(self.file_path, 'r+') as f:
-            self._filesWritten.add(self.file_path)
             f[link_path] = h5py.ExternalLink(rel_ext_path, link_name)
 
     def create_group(self, group_path):
         with HDFLockingFile(self.file_path, 'r+') as f:
-            self._filesWritten.add(self.file_path)
             f.create_group(group_path)
 
 
