@@ -602,6 +602,9 @@ class AbstractCoverage(AbstractIdentifiable):
         if not param_name in self._range_dictionary:
             raise KeyError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
+        if self.mode == 'r':
+            return self._range_dictionary.get_context(param_name)
+        
         return deepcopy(self._range_dictionary.get_context(param_name))
 
     def _axis_arg_to_params(self, axis=None):
