@@ -7,11 +7,17 @@
 @brief 
 """
 
+# Monkey patch needs this up here
+import multiprocessing as mp
+
 from nose.plugins.attrib import attr
 import coverage_model.utils as utils
 from coverage_model import CoverageModelUnitTestCase, CoverageModelIntTestCase
 from coverage_model.hdf_utils import HDFLockingFile
 import os
+
+from gevent.socket import wait_read, wait_write
+import time
 
 
 @attr('UNIT',group='cov')
@@ -303,6 +309,23 @@ class TestUtilsUnit(CoverageModelUnitTestCase):
         sl = utils.fix_slice(slice(-3, -22, -5), shp)
         self.assertEqual(sl, (slice(28, 47, 5),))
 
+def child_lock(path, read, write):
+    f1 = HDFLockingFile(path, 'a')
+    write.send('Locked')
+    print retry_timeout(read)
+
+
+def retry_timeout(socket, timeout=5):
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        try:
+            buf = socket.recv()
+            return buf
+        except IOError:
+            time.sleep(0.2)
+    raise Exception("Timeout")
+
+
         
 @attr('UNIT',group='cov')
 class TestHDFLocking(CoverageModelIntTestCase):
@@ -327,6 +350,29 @@ class TestHDFLocking(CoverageModelIntTestCase):
 
         f2 = HDFLockingFile(path, 'a')
 
+    def test_multiprocess_lock(self):
+        guid = utils.create_guid()
+        path = os.path.join(self.working_dir, '%s.h5' % guid)
+        main_read, child_write = mp.Pipe()
+        child_read, main_write = mp.Pipe()
+
+        p = mp.Process(target=child_lock, args=(path, child_read, child_write))
+        p.start()
+
+        wait_read(main_read.fileno())
+        print main_read.recv()
+        try:
+            f1 = HDFLockingFile(path, 'a')
+            raise AssertionError('Failed to raise IOError on locking')
+        except IOError:
+            pass
+
+        wait_write(main_write.fileno())
+        main_write.send('All done, thanks for the help')
+        p.join()
+
+        # if I lock it again even though the child is gone, it will fail on the cache
+        f1 = HDFLockingFile(path, 'a')
 
 
 
