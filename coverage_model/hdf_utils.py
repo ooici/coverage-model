@@ -101,6 +101,8 @@ class HDFLockingFile(h5py.File):
         with self.__rlock:
 
             if self.driver == 'sec2' and self.mode != 'r':
+                # Have to use a cache because the if the flock call comes from the same pid, it will be ignored instead 
+                # of setting errno
                 if self.filename in self.__locks:
                     raise IOError('[Errno 11] Resource temporarily unavailable, cached lock on %s' % self.filename)
 
