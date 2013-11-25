@@ -114,6 +114,7 @@ class HDFLockingFile(h5py.File):
                 try:
                     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 except IOError:
+                    del self.__locks[self.filename] # Eject it from the cache, the filesystem has it
                     log.exception('Locking Error on %s', self.filename)
                     raise
 
