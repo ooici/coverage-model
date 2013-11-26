@@ -492,7 +492,11 @@ class AbstractCoverage(AbstractIdentifiable):
     def _aggregate_value_dict(self, value_dict, slice_, param_list=None):
         param_list = param_list or self.list_parameters()
         for p in param_list:
-            value_set = self._range_value[p][slice_]
+            if slice_.start == slice_.stop and slice_.start is not None:
+                dtype = self._range_dictionary[p].param_type.value_encoding
+                value_set = np.array([], dtype=dtype)
+            else:
+                value_set = self._range_value[p][slice_]
             if p in value_dict:
                 value_set = np.concatenate([value_dict[p], value_set])
             value_dict[p] = value_set
@@ -1510,6 +1514,9 @@ class ComplexCoverage(AbstractCoverage):
                 self._aggregate_value_dict(value_dict, cov, param_list, slice_)
 
         if not value_dict:
+            for p in param_list or self.list_parameters():
+                dtype = self._range_dictionary[p].param_type.value_encoding
+                value_dict[p] = np.array([], dtype=dtype)
             return value_dict
 
         if overlaps and not unsorted:
@@ -1531,7 +1538,11 @@ class ComplexCoverage(AbstractCoverage):
         tname = self.temporal_parameter_name
         # Potential issue here if the s-cov doesn't use the same temporal 
         # parameter name
-        t_values = cov._range_value[tname][slice_]
+        if slice_.start == slice_.stop and slice_.start is not None:
+            dtype = self._range_dictionary[tname].param_type.value_encoding
+            t_values = np.array([], dtype=dtype)
+        else:
+            t_values = cov._range_value[tname][slice_]
         if tname not in value_dict:
             value_dict[tname] = t_values
         else:
@@ -1544,9 +1555,17 @@ class ComplexCoverage(AbstractCoverage):
                 fv = self.get_parameter_context(p).fill_value
                 value_set *= fv
             elif p not in value_dict:
-                value_set = cov._range_value[p][slice_]
+                if slice_.start == slice_.stop and slice_.start is not None:
+                    dtype = self._range_dictionary[p].param_type.value_encoding
+                    value_set = np.array([], dtype=dtype)
+                else:
+                    value_set = cov._range_value[p][slice_]
             else:
-                value_set = cov._range_value[p][slice_]
+                if slice_.start == slice_.stop and slice_.start is not None:
+                    dtype = self._range_dictionary[p].param_type.value_encoding
+                    value_set = np.array([], dtype=dtype)
+                else:
+                    value_set = cov._range_value[p][slice_]
                 value_set = np.concatenate([value_dict[p], value_set])
             value_dict[p] = value_set
 

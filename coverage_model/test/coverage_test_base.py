@@ -716,6 +716,11 @@ class CoverageIntTestBase(object):
         else:
             np.testing.assert_array_equal(vdict['time'], np.array([]))
 
+        vdict = cov.get_value_dictionary(temporal_slice=(30,30))
+        np.testing.assert_array_equal(vdict['time'], np.array([]))
+
+        vdict = cov.get_value_dictionary(temporal_slice=(80,90))
+        np.testing.assert_array_equal(vdict['time'], np.array([]))
 
 
 
