@@ -11,6 +11,7 @@
 from coverage_model import *
 from coverage_model.coverage import *
 from coverage_model.cassandra_backed_metadata import CassandraMetadataManager
+from coverage_model.postgres_backed_metadata import PostgresMetadataManager
 from nose.plugins.attrib import attr
 import unittest
 import numpy as np
@@ -412,7 +413,7 @@ class CoverageIntTestBase(object):
     def test_load_fails_bad_guid(self):
         # Tests load fails if coverage exists and path is correct but GUID is incorrect
         scov, cov_name = self.get_cov()
-        if isinstance(scov._persistence_layer.master_manager, CassandraMetadataManager):
+        if isinstance(scov._persistence_layer.master_manager, CassandraMetadataManager) or isinstance(scov._persistence_layer.master_manager, PostgresMetadataManager):
             # TODO: Check for something Cassandra related
             self.assertTrue(True)
         else:
@@ -428,7 +429,7 @@ class CoverageIntTestBase(object):
     def test_dot_load_fails_bad_guid(self):
         # Tests load fails if coverage exists and path is correct but GUID is incorrect
         scov, cov_name = self.get_cov()
-        if isinstance(scov._persistence_layer.master_manager, CassandraMetadataManager):
+        if isinstance(scov._persistence_layer.master_manager, CassandraMetadataManager) or isinstance(scov._persistence_layer.master_manager, PostgresMetadataManager):
             # TODO: Check for something Cassandra related
             self.assertTrue(True)
         else:

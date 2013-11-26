@@ -18,6 +18,7 @@ import unittest
 from copy import deepcopy
 from coverage_model.hdf_utils import HDFLockingFile
 from coverage_model.cassandra_backed_metadata import CassandraMetadataManager
+from coverage_model.postgres_backed_metadata import PostgresMetadataManager
 from coverage_test_base import CoverageIntTestBase, get_props
 import time
 
@@ -308,7 +309,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         ccov = ComplexCoverage('test_data', create_guid(), 'sample complex coverage', parameter_dictionary=pdict,
                                mode='w', reference_coverage_locs=rcov_locs)
 
-        if isinstance(ccov._persistence_layer.master_manager, CassandraMetadataManager):
+        if isinstance(ccov._persistence_layer.master_manager, CassandraMetadataManager) or isinstance(ccov._persistence_layer.master_manager, PostgresMetadataManager):
             # TODO: Check for something Cassandra related
             self.assertTrue(True)
         else:
@@ -837,7 +838,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
                                    reference_coverage_locs=[cova_pth, covb_pth],
                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 
-        if isinstance(comp_cov._persistence_layer.master_manager, CassandraMetadataManager):
+        if isinstance(comp_cov._persistence_layer.master_manager, CassandraMetadataManager) or isinstance(comp_cov._persistence_layer.master_manager, PostgresMetadataManager):
             # TODO: Check for something Cassandra related
             self.assertTrue(True)
         else:

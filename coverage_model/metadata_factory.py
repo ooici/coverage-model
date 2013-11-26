@@ -2,10 +2,12 @@
 
 from coverage_model.persistence_helpers import MasterManager
 from coverage_model.cassandra_backed_metadata import CassandraMetadataManager
+from coverage_model.postgres_backed_metadata import PostgresMetadataManager
 
 class MetadataManagerFactory(object):
 
-    mmm = CassandraMetadataManager
+#    mmm = CassandraMetadataManager
+    mmm = PostgresMetadataManager
 #    mmm = MasterManager
 
     @staticmethod

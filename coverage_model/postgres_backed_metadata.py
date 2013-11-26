@@ -4,9 +4,8 @@ from coverage_model.metadata import MetadataManager
 from coverage_model import utils
 from coverage_model.persistence_helpers import RTreeProxy, pack, unpack
 from coverage_model.basic_types import Dictable
-from pycassa.cassandra.ttypes import NotFoundException
-from pycassa import ConnectionPool, ColumnFamily
 import psycopg2
+import psycopg2.extras
 
 
 class PostgresMetadataManager(MetadataManager):
@@ -23,21 +22,34 @@ class PostgresMetadataManager(MetadataManager):
         con = None
         try:
             con = psycopg2.connect(database=PostgresMetadataManager.database, user=PostgresMetadataManager.user)
-            con.
-            cf.get(guid, column_count=1)
-            return True
-        except NotFoundException:
+            cur = con.cursor()
+            cur.execute("""SELECT 1 from Entity where id=%(guid)s""", {'guid': guid})
+            if 0 < cur.rowcount:
+                return True
+        except Exception as e:
+            print 'Caught exception %s', (e.message,)
             return False
+        finally:
+            if con is not None:
+                con.close()
+        return False
 
     @staticmethod
     def getCoverageType(directory, guid):
-        cf = ColumnFamily(CassandraMetadataManager.connectionPool, CassandraMetadataManager.columnFamilyName)
+        con = None
         try:
-            col = cf.get(guid, columns=['coverage_type'])
-            val = unpack(col['coverage_type'])
+            con = psycopg2.connect(database=PostgresMetadataManager.database, user=PostgresMetadataManager.user)
+            cur = con.cursor(cursor_factory=psycopg2.extras.DictCursor)
+            cur.execute("""SELECT coverage_type from Entity where id=%s""", (guid,))
+            row = cur.fetchone()
+            val = unpack(row['coverage_type'])
+            val = str.decode(val, 'hex')
             return val
-        except NotFoundException:
+        except Exception as e:
             return 'simplex'
+        finally:
+            if con is not None:
+                con.close()
 
     def __init__(self, filedir, guid, **kwargs):
         MetadataManager.__init__(self, **kwargs)
@@ -61,18 +73,22 @@ class PostgresMetadataManager(MetadataManager):
             self.parameter_bounds = {}
 
     def __setattr__(self, key, value):
-        super(CassandraMetadataManager, self).__setattr__(key, value)
+        super(PostgresMetadataManager, self).__setattr__(key, value)
         if not key in self._ignore and not key.startswith('_'):
             self._hmap[key] = utils.hash_any(value)
             self._dirty.add(key)
-            super(CassandraMetadataManager, self).__setattr__('_is_dirty',True)
+            super(PostgresMetadataManager, self).__setattr__('_is_dirty',True)
 
     def flush(self):
         MetadataManager.flush(self)
         if self.is_dirty(True):
+            con = None
             try:
-                colFam = ColumnFamily(CassandraMetadataManager.connectionPool, CassandraMetadataManager.columnFamilyName)
-                # put values in cassandra
+                con = psycopg2.connect(database=PostgresMetadataManager.database, user=PostgresMetadataManager.user)
+                cur = con.cursor()
+                exists = False
+                if self.isPersisted("", self.guid):
+                    exists = True
                 for k in list(self._dirty):
                     v = getattr(self, k)
 #                    log.debug('FLUSH: key=%s  v=%s', k, v)
@@ -82,7 +98,16 @@ class PostgresMetadataManager(MetadataManager):
                     else:
                         value = pack(v)
 
-                    colFam.insert(self.guid, {k:value})
+                    if exists:
+                        statement = """UPDATE """ + PostgresMetadataManager.tableName + """ SET """ + k + """=%(val)s WHERE id=%(guid)s"""
+                        cur.execute(statement, {'val': bytes.encode(value, 'hex'), 'guid': self.guid})
+                    else:
+                        encoded = value.encode('hex')
+                        statement = """INSERT into """ + PostgresMetadataManager.tableName + """ (id, """ + k + """) VALUES(%(guid)s, %(val)s)"""
+                        cur.execute(statement, {'guid': self.guid, 'val': encoded})
+                        con.commit()
+                        exists = self.isPersisted("", self.guid)
+                    #colFam.insert(self.guid, {k:value})
 
                     # Update the hash_value in _hmap
                     self._hmap[k] = utils.hash_any(v)
@@ -91,59 +116,92 @@ class PostgresMetadataManager(MetadataManager):
 
                 if hasattr(self, 'brick_tree') and isinstance(self.brick_tree, RTreeProxy):
                     val = self.brick_tree.serialize()
-                    if val != '':
-                        colFam.insert(self.guid, {'brick_tree': val})
+                    if val != '' and val is not None:
+                        if exists:
+                            statement = """UPDATE """ + PostgresMetadataManager.tableName + """ SET brick_tree=%(val)s WHERE id=%(guid)s"""
+                            cur.execute(statement, {'val': bytes.encode(val, 'hex'), 'guid': self.guid})
+                        else:
+                            statement = """INSERT into """ + PostgresMetadataManager.tableName + """ (id, brick_tree) VALUES(%(guid)s, %(val)s)"""
+                            cur.execute(statement, {'guid': self.guid, 'val': bytes.encode(val, 'hex')})
+                            exists = self.isPersisted("", self.guid)
 
                 if hasattr(self, 'param_groups') and isinstance(self.param_groups, set):
                     if isinstance(self.param_groups, set):
                         groups = ''
                         for group in self.param_groups:
                             groups = '%(groups)s::group::%(group)s' % {'groups': groups, 'group': group}
-                        colFam.insert(self.guid, {'param_groups': groups})
-
-            except IOError, ex:
+                        if exists:
+                            statement = """UPDATE """ + PostgresMetadataManager.tableName + """ SET param_groups=%(val)s WHERE id=%(guid)s"""
+                            cur.execute(statement, {'guid': self.guid, 'val': bytes.encode(groups, 'hex')})
+                        else:
+                            statement = """INSERT into """ + PostgresMetadataManager.tableName + """ (id, brick_tree) VALUES(%(guid)s, %(val)s)"""
+                            cur.execute(statement, {'guid': self.guid, 'val': bytes.encode(groups, 'hex')})
+                if con is not None:
+                    con.commit()
+            except Exception, ex:
                 if "unable to create file (File accessability: Unable to open file)" in ex.message:
                     log.info('Issue writing to hdf file during master_manager.flush - this is not likely a huge problem: %s', ex.message)
                 else:
+                    print 'Caught exception durint flush ', ex.message
                     raise
 
-            super(CassandraMetadataManager, self).__setattr__('_is_dirty',False)
+            finally:
+                if con is not None:
+                    con.close()
+
+            super(PostgresMetadataManager, self).__setattr__('_is_dirty',False)
 
     def _load(self):
-        colFam = ColumnFamily(CassandraMetadataManager.connectionPool, CassandraMetadataManager.columnFamilyName)
+        con = None
         try:
-            results = colFam.get(self.guid)
-            for key in results:
-                val = results[key]
-                if isinstance(val, basestring) and val.startswith('DICTABLE'):
-                    i = val.index('|', 9)
-                    smod, sclass = val[9:i].split(':')
-                    value = unpack(val[i+1:])
-                    module = __import__(smod, fromlist=[sclass])
-                    classobj = getattr(module, sclass)
-                    value = classobj._fromdict(value)
-                elif key in ('root_dir', 'file_path'):
-                    # No op - set in constructor
-                    continue
-                elif key == 'brick_tree':
-                    setattr(self, key, RTreeProxy.deserialize(val))
-                    continue
-                elif key == 'param_groups':
-                    self.param_groups.clear()
-                    for group in val.split('::group::'):
-                        if group != '':
-                            self.param_groups.add(group)
-                    continue
-                else:
-                    value = unpack(val)
+            con = psycopg2.connect(database=PostgresMetadataManager.database, user=PostgresMetadataManager.user)
+            cur = con.cursor(cursor_factory=psycopg2.extras.DictCursor)
+            cur.execute("""SELECT column_name from information_schema.columns where table_name='entity'""")
+            cols = cur.fetchall()
+            statement = """SELECT * from """ + PostgresMetadataManager.tableName + """ WHERE id=%(guid)s"""
+            cur.execute(statement, {'guid':self.guid})
+            row = cur.fetchone()
+            if row is not None:
+                for key in cols:
+                    key = key[0]
+                    if key == 'id':
+                        continue
+                    val = row[key]
+                    if val is not None:
+                        val = str.decode(val, 'hex')
+                        if isinstance(val, basestring) and val.startswith('DICTABLE'):
+                            i = val.index('|', 9)
+                            smod, sclass = val[9:i].split(':')
+                            value = unpack(val[i+1:])
+                            module = __import__(smod, fromlist=[sclass])
+                            classobj = getattr(module, sclass)
+                            value = classobj._fromdict(value)
+                        elif key in ('root_dir', 'file_path'):
+                            # No op - set in constructor
+                            continue
+                        elif key == 'brick_tree':
+                            setattr(self, key, RTreeProxy.deserialize(val))
+                            continue
+                        elif key == 'param_groups':
+                            self.param_groups.clear()
+                            for group in val.split('::group::'):
+                                if group != '':
+                                    self.param_groups.add(group)
+                            continue
+                        else:
+                            value = unpack(val)
 
-                if isinstance(value, tuple):
-                    value = list(value)
+                        if isinstance(value, tuple):
+                            value = list(value)
 
-                setattr(self, key, value)
+                        setattr(self, key, value)
 
-        except NotFoundException:
+        except Exception, e:
+            print 'Caught exception ', e.message
             pass
+        finally:
+            if con is not None:
+                con.close()
 
     def _base_load(self, f):
         raise NotImplementedError('Not implemented by base class')
@@ -169,7 +227,6 @@ class PostgresMetadataManager(MetadataManager):
     def update_rtree(self, count, extents, obj):
         if not hasattr(self, 'brick_tree'):
             raise AttributeError('Cannot update rtree; object does not have a \'brick_tree\' attribute!!')
-# update cassandra
         self.brick_tree.insert(count, extents, obj=obj)
 
     def _init_rtree(self, bD):
