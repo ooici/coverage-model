@@ -46,7 +46,7 @@ class TestRecoveryInt(CoverageModelIntTestCase):
     def test_coverage_recovery(self):
         # Create the coverage
         cov, dset = self.get_cov()
-        if isinstance(cov._persistence_layer.master_manager, CassandraMetadataManager):
+        if cov._persistence_layer.master_manager.storage_type() != 'hdf':
             # TODO: Check for something Cassandra related
             self.assertTrue(True)
         else:
@@ -109,7 +109,7 @@ class TestRecoveryInt(CoverageModelIntTestCase):
     def test_recovery_failed_backup(self):
         # Create the coverage
         cov, dset = self.get_cov()
-        if isinstance(cov._persistence_layer.master_manager, CassandraMetadataManager):
+        if cov._persistence_layer.master_manager.storage_type() != 'hdf':
             # TODO: Check for something Cassandra related
             self.assertTrue(True)
         else:
@@ -147,7 +147,7 @@ class TestRecoveryInt(CoverageModelIntTestCase):
     def test_recovery_failed_nobackup(self):
         # Create the coverage
         cov, dset = self.get_cov()
-        if isinstance(cov._persistence_layer.master_manager, CassandraMetadataManager):
+        if cov._persistence_layer.master_manager.storage_type() != 'hdf':
             # TODO: Check for something Cassandra related
             self.assertTrue(True)
         else:

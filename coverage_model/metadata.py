@@ -9,8 +9,6 @@ class MetadataManager(object):
         super(MetadataManager, self).__setattr__('_hmap',{})
         super(MetadataManager, self).__setattr__('_dirty',set())
         super(MetadataManager, self).__setattr__('_ignore',set())
-        super(MetadataManager, self).__setattr__('_stored',set())
-        super(MetadataManager, self).__setattr__('_filesWritten',set())
 
     def __setattr__(self, key, value):
         super(MetadataManager, self).__setattr__(key, value)
@@ -19,15 +17,11 @@ class MetadataManager(object):
     def isPersisted(directory, guid):
         raise NotImplementedError('Not implemented by base class')
 
-    def flush(self):
-        '''
-        if len(self._stored) > 0:
-            for k in self._stored:
-                print k, " = ", getattr(self, k)
+    def storage_type(self):
+        return 'db'
 
-            print self._stored
-        '''
-        pass
+    def flush(self):
+        raise NotImplementedError('Not implemeted by base class')
 
     def _load(self):
         raise NotImplementedError('Not implemented by base class')

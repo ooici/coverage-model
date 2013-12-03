@@ -138,6 +138,9 @@ class BaseManager(MetadataManager):
 
         return False
 
+    def storage_type(self):
+        return 'hdf'
+
     @staticmethod
     def getCoverageType(directory, guid):
         return get_coverage_type(os.path.join(directory, guid, '{0}_master.hdf5'.format(guid)))
@@ -173,7 +176,6 @@ class BaseManager(MetadataManager):
                         else:
                             value = pack(v)
 
-                        self._stored.add(k)
                         f.attrs[k] = np.array([value])
 
                         # Update the hash_value in _hmap

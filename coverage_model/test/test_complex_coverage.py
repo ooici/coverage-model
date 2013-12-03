@@ -309,7 +309,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         ccov = ComplexCoverage('test_data', create_guid(), 'sample complex coverage', parameter_dictionary=pdict,
                                mode='w', reference_coverage_locs=rcov_locs)
 
-        if isinstance(ccov._persistence_layer.master_manager, CassandraMetadataManager) or isinstance(ccov._persistence_layer.master_manager, PostgresMetadataManager):
+        if ccov._persistence_layer.master_manager.storage_type() != 'hdf':
             # TODO: Check for something Cassandra related
             self.assertTrue(True)
         else:
@@ -838,7 +838,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
                                    reference_coverage_locs=[cova_pth, covb_pth],
                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 
-        if isinstance(comp_cov._persistence_layer.master_manager, CassandraMetadataManager) or isinstance(comp_cov._persistence_layer.master_manager, PostgresMetadataManager):
+        if comp_cov._persistence_layer.master_manager.storage_type() != 'hdf':
             # TODO: Check for something Cassandra related
             self.assertTrue(True)
         else:

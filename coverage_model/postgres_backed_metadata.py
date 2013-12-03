@@ -13,15 +13,15 @@ class PostgresMetadataManager(MetadataManager):
     database = 'casey'
     user = 'casey'
 
+    con = psycopg2.connect(database='casey', user='casey')
     @staticmethod
     def dirExists(directory):
         return True
 
     @staticmethod
     def isPersisted(directory, guid):
-        con = None
+        con = PostgresMetadataManager.con
         try:
-            con = psycopg2.connect(database=PostgresMetadataManager.database, user=PostgresMetadataManager.user)
             cur = con.cursor()
             cur.execute("""SELECT 1 from Entity where id=%(guid)s""", {'guid': guid})
             if 0 < cur.rowcount:
@@ -29,27 +29,22 @@ class PostgresMetadataManager(MetadataManager):
         except Exception as e:
             print 'Caught exception %s', (e.message,)
             return False
-        finally:
-            if con is not None:
-                con.close()
         return False
 
     @staticmethod
     def getCoverageType(directory, guid):
-        con = None
+        con = PostgresMetadataManager.con
         try:
-            con = psycopg2.connect(database=PostgresMetadataManager.database, user=PostgresMetadataManager.user)
-            cur = con.cursor(cursor_factory=psycopg2.extras.DictCursor)
+            cur = PostgresMetadataManager.con.cursor(cursor_factory=psycopg2.extras.DictCursor)
             cur.execute("""SELECT coverage_type from Entity where id=%s""", (guid,))
             row = cur.fetchone()
-            val = unpack(row['coverage_type'])
+            val = row['coverage_type']
             val = str.decode(val, 'hex')
+            val = unpack(val)
             return val
         except Exception as e:
-            return 'simplex'
-        finally:
-            if con is not None:
-                con.close()
+            print 'Caught exception '; e.message
+            return ''
 
     def __init__(self, filedir, guid, **kwargs):
         MetadataManager.__init__(self, **kwargs)
@@ -80,17 +75,17 @@ class PostgresMetadataManager(MetadataManager):
             super(PostgresMetadataManager, self).__setattr__('_is_dirty',True)
 
     def flush(self):
-        MetadataManager.flush(self)
         if self.is_dirty(True):
-            con = None
+            con = PostgresMetadataManager.con
             try:
-                con = psycopg2.connect(database=PostgresMetadataManager.database, user=PostgresMetadataManager.user)
                 cur = con.cursor()
                 exists = False
                 if self.isPersisted("", self.guid):
                     exists = True
                 for k in list(self._dirty):
                     v = getattr(self, k)
+                    if v is None:
+                        continue
 #                    log.debug('FLUSH: key=%s  v=%s', k, v)
                     if isinstance(v, Dictable):
                         prefix='DICTABLE|{0}:{1}|'.format(v.__module__, v.__class__.__name__)
@@ -123,6 +118,7 @@ class PostgresMetadataManager(MetadataManager):
                         else:
                             statement = """INSERT into """ + PostgresMetadataManager.tableName + """ (id, brick_tree) VALUES(%(guid)s, %(val)s)"""
                             cur.execute(statement, {'guid': self.guid, 'val': bytes.encode(val, 'hex')})
+                            con.commit()
                             exists = self.isPersisted("", self.guid)
 
                 if hasattr(self, 'param_groups') and isinstance(self.param_groups, set):
@@ -134,8 +130,10 @@ class PostgresMetadataManager(MetadataManager):
                             statement = """UPDATE """ + PostgresMetadataManager.tableName + """ SET param_groups=%(val)s WHERE id=%(guid)s"""
                             cur.execute(statement, {'guid': self.guid, 'val': bytes.encode(groups, 'hex')})
                         else:
-                            statement = """INSERT into """ + PostgresMetadataManager.tableName + """ (id, brick_tree) VALUES(%(guid)s, %(val)s)"""
+                            statement = """INSERT into """ + PostgresMetadataManager.tableName + """ (id, param_groups) VALUES(%(guid)s, %(val)s)"""
                             cur.execute(statement, {'guid': self.guid, 'val': bytes.encode(groups, 'hex')})
+                            con.commit()
+                            exists = self.isPersisted("", self.guid)
                 if con is not None:
                     con.commit()
             except Exception, ex:
@@ -145,14 +143,10 @@ class PostgresMetadataManager(MetadataManager):
                     print 'Caught exception durint flush ', ex.message
                     raise
 
-            finally:
-                if con is not None:
-                    con.close()
-
             super(PostgresMetadataManager, self).__setattr__('_is_dirty',False)
 
     def _load(self):
-        con = None
+        con = PostgresMetadataManager.con
         try:
             con = psycopg2.connect(database=PostgresMetadataManager.database, user=PostgresMetadataManager.user)
             cur = con.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -169,6 +163,8 @@ class PostgresMetadataManager(MetadataManager):
                     val = row[key]
                     if val is not None:
                         val = str.decode(val, 'hex')
+                        if val is None:
+                            continue
                         if isinstance(val, basestring) and val.startswith('DICTABLE'):
                             i = val.index('|', 9)
                             smod, sclass = val[9:i].split(':')
@@ -199,9 +195,6 @@ class PostgresMetadataManager(MetadataManager):
         except Exception, e:
             print 'Caught exception ', e.message
             pass
-        finally:
-            if con is not None:
-                con.close()
 
     def _base_load(self, f):
         raise NotImplementedError('Not implemented by base class')

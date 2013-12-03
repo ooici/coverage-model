@@ -1,16 +1,22 @@
+#!/usr/bin/env python
+
+"""
+@package coverage_model.db_persistence
+@file coverage_model/db_persistence.py
+@author Casey Bryant
+@brief The core interface for packaging and persisting metadata to a database
+"""
+
 from ooi.logging import log
 import os
 from coverage_model.metadata import MetadataManager
 from coverage_model import utils
 from coverage_model.persistence_helpers import RTreeProxy, pack, unpack
 from coverage_model.basic_types import Dictable
-from pycassa.cassandra.ttypes import NotFoundException
-from pycassa import ConnectionPool, ColumnFamily
+from coverage_model.db_connectors import DBFactory
 
 
 class CassandraMetadataManager(MetadataManager):
-    columnFamilyName = "Entity"
-    connectionPool = ConnectionPool('OOICI')
 
     @staticmethod
     def dirExists(directory):
@@ -18,42 +24,39 @@ class CassandraMetadataManager(MetadataManager):
 
     @staticmethod
     def isPersisted(directory, guid):
-        cf = ColumnFamily(CassandraMetadataManager.connectionPool, CassandraMetadataManager.columnFamilyName)
-        try:
-            cf.get(guid, column_count=1)
-            return True
-        except NotFoundException:
-            return False
+        return DBFactory.getDB().is_persisted(guid)
 
     @staticmethod
     def getCoverageType(directory, guid):
-        cf = ColumnFamily(CassandraMetadataManager.connectionPool, CassandraMetadataManager.columnFamilyName)
-        try:
-            col = cf.get(guid, columns=['coverage_type'])
-            val = unpack(col['coverage_type'])
-            return val
-        except NotFoundException:
-            return 'simplex'
+        cov_type = DBFactory.getDB().get_coverage_type(guid)
+        if '' == cov_type:
+            return ''
+        else:
+            cov_type = unpack(cov_type)
+            return cov_type
 
     def __init__(self, filedir, guid, **kwargs):
         MetadataManager.__init__(self, **kwargs)
         self.guid = guid
-        self._ignore.update(['param_groups', 'guid', 'file_path', 'root_dir', 'brick_tree', 'groups'])
+        self._ignore.update(['guid', 'file_path', 'root_dir'])
         self.param_groups = set()
         self.root_dir = os.path.join(filedir,guid)
         self.file_path = os.path.join(filedir, guid)
         self.brick_tree = RTreeProxy()
 
         self._load()
+
+        '''
+            This is odd - You can load an object and override stored values on construction.
+            This might lead to unexpected behavior for users.
+        '''
         for k, v in kwargs.iteritems():
             if hasattr(self, k) and v is None:
                 continue
 
             setattr(self, k, v)
 
-        if hasattr(self, 'parameter_bounds') and self.parameter_bounds is None:
-            self.parameter_bounds = {}
-        if not hasattr(self, 'parameter_bounds'):
+        if (hasattr(self, 'parameter_bounds') and self.parameter_bounds is None) or not hasattr(self, 'parameter_bounds'):
             self.parameter_bounds = {}
 
     def __setattr__(self, key, value):
@@ -64,38 +67,33 @@ class CassandraMetadataManager(MetadataManager):
             super(CassandraMetadataManager, self).__setattr__('_is_dirty',True)
 
     def flush(self):
-        MetadataManager.flush(self)
         if self.is_dirty(True):
             try:
-                colFam = ColumnFamily(CassandraMetadataManager.connectionPool, CassandraMetadataManager.columnFamilyName)
-                # put values in cassandra
+                # package for storage
+                insert_dict = {}
                 for k in list(self._dirty):
                     v = getattr(self, k)
-#                    log.debug('FLUSH: key=%s  v=%s', k, v)
+                    log.debug('FLUSH: key=%s  v=%s', k, v)
                     if isinstance(v, Dictable):
                         prefix='DICTABLE|{0}:{1}|'.format(v.__module__, v.__class__.__name__)
                         value = prefix + pack(v.dump())
+                    elif k == 'brick_tree':
+                        if hasattr(self, 'brick_tree') and isinstance(self.brick_tree, RTreeProxy):
+                            val = self.brick_tree.serialize()
+                            if val != '':
+                                insert_dict['brick_tree'] = val
+                            continue
                     else:
                         value = pack(v)
 
-                    colFam.insert(self.guid, {k:value})
+                    insert_dict[k] = value
 
                     # Update the hash_value in _hmap
                     self._hmap[k] = utils.hash_any(v)
-                    # Remove the key from the _dirty set
-                    self._dirty.remove(k)
 
-                if hasattr(self, 'brick_tree') and isinstance(self.brick_tree, RTreeProxy):
-                    val = self.brick_tree.serialize()
-                    if val != '':
-                        colFam.insert(self.guid, {'brick_tree': val})
+                DBFactory.getDB().insert(self.guid, insert_dict)
 
-                if hasattr(self, 'param_groups') and isinstance(self.param_groups, set):
-                    if isinstance(self.param_groups, set):
-                        groups = ''
-                        for group in self.param_groups:
-                            groups = '%(groups)s::group::%(group)s' % {'groups': groups, 'group': group}
-                        colFam.insert(self.guid, {'param_groups': groups})
+                self._dirty.clear()
 
             except IOError, ex:
                 if "unable to create file (File accessability: Unable to open file)" in ex.message:
@@ -106,9 +104,8 @@ class CassandraMetadataManager(MetadataManager):
             super(CassandraMetadataManager, self).__setattr__('_is_dirty',False)
 
     def _load(self):
-        colFam = ColumnFamily(CassandraMetadataManager.connectionPool, CassandraMetadataManager.columnFamilyName)
         try:
-            results = colFam.get(self.guid)
+            results = DBFactory.getDB().get(self.guid)
             for key in results:
                 val = results[key]
                 if isinstance(val, basestring) and val.startswith('DICTABLE'):
@@ -124,12 +121,6 @@ class CassandraMetadataManager(MetadataManager):
                 elif key == 'brick_tree':
                     setattr(self, key, RTreeProxy.deserialize(val))
                     continue
-                elif key == 'param_groups':
-                    self.param_groups.clear()
-                    for group in val.split('::group::'):
-                        if group != '':
-                            self.param_groups.add(group)
-                    continue
                 else:
                     value = unpack(val)
 
@@ -138,7 +129,7 @@ class CassandraMetadataManager(MetadataManager):
 
                 setattr(self, key, value)
 
-        except NotFoundException:
+        except Exception:
             pass
 
     def _base_load(self, f):
@@ -165,11 +156,11 @@ class CassandraMetadataManager(MetadataManager):
     def update_rtree(self, count, extents, obj):
         if not hasattr(self, 'brick_tree'):
             raise AttributeError('Cannot update rtree; object does not have a \'brick_tree\' attribute!!')
-# update cassandra
         self.brick_tree.insert(count, extents, obj=obj)
+        self.brick_tree = self.brick_tree  # so the dirty bit gets set
 
     def _init_rtree(self, bD):
-        self.brick_tree = RTreeProxy()
+        pass
 
     def add_external_link(self, link_path, rel_ext_path, link_name):
         pass
@@ -177,3 +168,4 @@ class CassandraMetadataManager(MetadataManager):
     def create_group(self, group_path):
         if group_path not in self.param_groups:
             self.param_groups.add(group_path)
+            self.param_groups = self.param_groups  # so the dirty bit gets set

@@ -14,7 +14,6 @@ import unittest
 from pyon.public import log
 
 from test_simplex_coverage import TestSampleCovInt as sc
-from coverage_model.cassandra_backed_metadata import CassandraMetadataManager
 from coverage_test_base import *
 
 
@@ -144,7 +143,7 @@ class TestSampleCovViewInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
     def test_head_coverage_path(self):
         cov1, _ = sc.get_cov(only_time=True, nt=10)
-        if isinstance(cov1._persistence_layer.master_manager, CassandraMetadataManager):
+        if cov1._persistence_layer.master_manager.storage_type() != 'hdf':
             # TODO: Check for something Cassandra related
             self.assertTrue(True)
         else:
