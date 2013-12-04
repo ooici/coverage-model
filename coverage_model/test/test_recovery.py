@@ -9,7 +9,7 @@
 
 from coverage_model import *
 from coverage_model.recovery import CoverageDoctor
-from coverage_model.cassandra_backed_metadata import CassandraMetadataManager
+from coverage_model.db_backed_metadata import DbBackedMetadataManager
 from nose.plugins.attrib import attr
 import unittest
 import numpy as np

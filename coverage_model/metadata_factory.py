@@ -1,19 +1,17 @@
 #!/usr/bin/env python
 
 from coverage_model.persistence_helpers import MasterManager
-from coverage_model.cassandra_backed_metadata import CassandraMetadataManager
-from coverage_model.postgres_backed_metadata import PostgresMetadataManager
+from coverage_model.db_backed_metadata import DbBackedMetadataManager
+
 
 class MetadataManagerFactory(object):
 
-#    mmm = CassandraMetadataManager
-    mmm = PostgresMetadataManager
+    mmm = DbBackedMetadataManager
 #    mmm = MasterManager
 
     @staticmethod
     def buildMetadataManager(directory, guid, **kwargs):
-        manager = MetadataManagerFactory.mmm(directory,guid, **kwargs)
-#        manager = MasterManager(directory,guid, **kwargs)
+        manager = MetadataManagerFactory.mmm(directory, guid, **kwargs)
         return manager
 
     @staticmethod

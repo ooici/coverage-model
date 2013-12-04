@@ -43,7 +43,7 @@ class PostgresMetadataManager(MetadataManager):
             val = unpack(val)
             return val
         except Exception as e:
-            print 'Caught exception '; e.message
+            print 'Caught exception ', e.message
             return ''
 
     def __init__(self, filedir, guid, **kwargs):
@@ -150,14 +150,15 @@ class PostgresMetadataManager(MetadataManager):
         try:
             con = psycopg2.connect(database=PostgresMetadataManager.database, user=PostgresMetadataManager.user)
             cur = con.cursor(cursor_factory=psycopg2.extras.DictCursor)
-            cur.execute("""SELECT column_name from information_schema.columns where table_name='entity'""")
-            cols = cur.fetchall()
+#            cur.execute("""SELECT column_name from information_schema.columns where table_name='entity'""")
+#            cols = cur.fetchall()
             statement = """SELECT * from """ + PostgresMetadataManager.tableName + """ WHERE id=%(guid)s"""
             cur.execute(statement, {'guid':self.guid})
             row = cur.fetchone()
             if row is not None:
-                for key in cols:
-                    key = key[0]
+                for key in row.keys():
+#                for key in cols:
+#                    key = key[0]
                     if key == 'id':
                         continue
                     val = row[key]

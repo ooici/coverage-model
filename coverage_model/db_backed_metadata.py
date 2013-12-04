@@ -16,7 +16,7 @@ from coverage_model.basic_types import Dictable
 from coverage_model.db_connectors import DBFactory
 
 
-class CassandraMetadataManager(MetadataManager):
+class DbBackedMetadataManager(MetadataManager):
 
     @staticmethod
     def dirExists(directory):
@@ -38,11 +38,12 @@ class CassandraMetadataManager(MetadataManager):
     def __init__(self, filedir, guid, **kwargs):
         MetadataManager.__init__(self, **kwargs)
         self.guid = guid
-        self._ignore.update(['guid', 'file_path', 'root_dir'])
+        self._ignore.update(['guid', 'file_path', 'root_dir', 'type'])
         self.param_groups = set()
         self.root_dir = os.path.join(filedir,guid)
         self.file_path = os.path.join(filedir, guid)
         self.brick_tree = RTreeProxy()
+        self.type = ''
 
         self._load()
 
@@ -60,11 +61,11 @@ class CassandraMetadataManager(MetadataManager):
             self.parameter_bounds = {}
 
     def __setattr__(self, key, value):
-        super(CassandraMetadataManager, self).__setattr__(key, value)
+        super(DbBackedMetadataManager, self).__setattr__(key, value)
         if not key in self._ignore and not key.startswith('_'):
             self._hmap[key] = utils.hash_any(value)
             self._dirty.add(key)
-            super(CassandraMetadataManager, self).__setattr__('_is_dirty',True)
+            super(DbBackedMetadataManager, self).__setattr__('_is_dirty',True)
 
     def flush(self):
         if self.is_dirty(True):
@@ -101,7 +102,7 @@ class CassandraMetadataManager(MetadataManager):
                 else:
                     raise
 
-            super(CassandraMetadataManager, self).__setattr__('_is_dirty',False)
+            super(DbBackedMetadataManager, self).__setattr__('_is_dirty',False)
 
     def _load(self):
         try:

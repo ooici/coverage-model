@@ -17,8 +17,6 @@ import mock
 import unittest
 from copy import deepcopy
 from coverage_model.hdf_utils import HDFLockingFile
-from coverage_model.cassandra_backed_metadata import CassandraMetadataManager
-from coverage_model.postgres_backed_metadata import PostgresMetadataManager
 from coverage_test_base import CoverageIntTestBase, get_props
 import time
 
