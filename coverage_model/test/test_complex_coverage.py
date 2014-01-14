@@ -72,7 +72,7 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 
     return os.path.realpath(scov.persistence_dir)
 
-@unittest.skip("UTIL only")
+#@unittest.skip("UTIL only")
 @attr('UTIL', group='cov')
 class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
     def test_something(self):
@@ -144,6 +144,31 @@ class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
         from pyon.util.breakpoint import breakpoint
         breakpoint(locals(), globals())
 
+    @attr('UTIL')
+    def test_linear_map(self):
+        cova_pth = _make_cov(self.working_dir, ['value_set'], 20, data_dict={'time':np.arange(10,30), 'value_set': np.arange(20)})
+        covb_pth = _make_cov(self.working_dir, [], nt=20, data_dict={'time':np.arange(20)})
+
+        cova = SimplexCoverage.load(cova_pth, mode='r+')
+        covb = SimplexCoverage.load(covb_pth, mode='r+')
+
+        # Map cova onto covb
+        time_1 = cova.get_parameter_values('time')
+        time_2 = covb.get_parameter_values('time')
+        values = cova.get_parameter_values('value_set')
+
+        # Where along time_1 does time_2 fit in?
+        upper = np.searchsorted(time_1, time_2)
+        # Clip anything not in [1, N-1]
+        upper = upper.clip(1, len(time_1)-1).astype(int)
+        # The lower indexes are always upper - 1
+        lower = upper - 1
+        # w = (x - x_i) / (x_i1 - x_i)
+        w = (time_2 - time_1[lower]) / (time_1[upper] - time_1[lower])
+        # y = y_i * (1-w) + y_i1 * w
+        v  = values[lower] * ( 1 - w) + values[upper] * w
+        from pyon.util.breakpoint import breakpoint
+        breakpoint(locals(), globals())
 
 @attr('INT',group='cov')
 class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
