@@ -72,9 +72,29 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 
     return os.path.realpath(scov.persistence_dir)
 
+def exemplar_f(i):
+    a = np.ones(i.shape[0] * 2).reshape(i.shape[0],2)
+    return a
+
 @unittest.skip("UTIL only")
 @attr('UTIL', group='cov')
 class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
+    def test_funcs(self):
+
+        owner = 'coverage_model.test.test_complex_coverage'
+        func = 'exemplar_f'
+        arglist = ['i']
+        pmap = {'i' : 'value_set'}
+        expr = PythonFunction('exemplar_f', owner, func, arglist)
+        expr.param_map = pmap
+        ctxt = ParameterContext('exemplar_f', param_type=ParameterFunctionType(expr), variability=VariabilityEnum.TEMPORAL)
+
+        cova_pth = _make_cov(self.working_dir, ['value_set', ctxt], data_dict={'time' : np.arange(10), 'value_set' : np.ones(10)})
+        cova = AbstractCoverage.load(cova_pth)
+        from pyon.util.breakpoint import breakpoint
+        breakpoint(locals(), globals())
+
+
     def test_something(self):
 
         # Create a large dataset spanning a year
