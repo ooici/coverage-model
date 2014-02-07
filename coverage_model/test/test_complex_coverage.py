@@ -72,9 +72,40 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 
     return os.path.realpath(scov.persistence_dir)
 
-@unittest.skip("UTIL only")
-@attr('UTIL', group='cov')
 class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
+    @attr('INT', group='cov')
+    def test_cov_params(self):
+        contexts = create_all_params()
+        del contexts['time']
+        del contexts['density']
+        contexts = contexts.values()
+        cova_pth = _make_cov(self.working_dir, contexts, nt=2)
+        cov = SimplexCoverage.load(cova_pth, mode='r+')
+        cov._range_value['time'][:] = [1, 2]
+        cov._range_value['temperature'][:] = [205378, 289972]
+        cov._range_value['conductivity'][:] = [410913, 417588]
+        cov._range_value['pressure'][:] = [3939, 13616]
+        cov._range_value['p_range'][:] = 1000.
+        cov._range_value['lat'][:] = 40.
+        cov._range_value['lon'][:] = -70.
+
+
+        # Make a new function
+        owner = 'ion_functions.data.ctd_functions'
+        dens_func = 'ctd_density'
+        dens_arglist = ['SP', 't', 'p', 'lat', 'lon']
+        dens_pmap = {'SP':'pracsal', 't':'seawater_temperature', 'p':'seawater_pressure', 'lat':'lat', 'lon':'lon'}
+        dens_expr = PythonFunction('density', owner, dens_func, dens_arglist, None, dens_pmap)
+        dens_ctxt = ParameterContext('density', param_type=ParameterFunctionType(dens_expr), variability=VariabilityEnum.TEMPORAL)
+        dens_ctxt.uom = 'kg m-3'
+
+        cov.append_parameter(dens_ctxt)
+
+        # Make sure it worked
+        np.testing.assert_array_equal(cov._range_value['density'][:], 
+                np.array([ 1024.98205566,  1019.4932251 ], dtype=np.float32))
+
+    @attr('UTIL', group='cov')
     def test_something(self):
 
         # Create a large dataset spanning a year
@@ -110,12 +141,10 @@ class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
 
         ccov.insert_value_set({'time' : np.arange(40,45), 'value_set' : np.ones(5) * 8})
         
-        from pyon.util.breakpoint import breakpoint
-        breakpoint(locals(), globals())
         vcov = ViewCoverage(self.working_dir, create_guid(), 'view coverage', reference_coverage_location = ccov.persistence_dir)
 
 
-    @attr('UTIL')
+    @attr('UTIL', group='cov')
     def test_aggregates(self):
 
         array_stuff = ParameterContext('array_stuff', param_type=ArrayType(inner_encoding='float32'))
@@ -141,9 +170,6 @@ class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
         vcov = ViewCoverage(self.working_dir, create_guid(), 'view coverage', reference_coverage_location = ccov.persistence_dir)
 
         
-        from pyon.util.breakpoint import breakpoint
-        breakpoint(locals(), globals())
-
 
 @attr('INT',group='cov')
 class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
@@ -974,6 +1000,10 @@ def create_all_params():
     lon_ctxt.axis = AxisTypeEnum.LON
     lon_ctxt.uom = 'degree_east'
     contexts['lon'] = lon_ctxt
+    
+    p_range_ctxt = ParameterContext('p_range', param_type=ConstantType(QuantityType(value_encoding=np.dtype('float32'))), fill_value=-9999)
+    p_range_ctxt.uom = '1'
+    contexts['p_range'] = p_range_ctxt
 
     # Independent Parameters
 
@@ -1014,7 +1044,7 @@ def create_all_params():
     # Equation uses p_range, which is a calibration coefficient - Fixing to 679.34040721
     #   preswat_l1 = (preswat_l0 * p_range / (0.85 * 65536)) - (0.05 * p_range)
     pl1_func = '(P * p_range / (0.85 * 65536)) - (0.05 * p_range)'
-    pl1_pmap = {'P': 'pressure', 'p_range': 679.34040721}
+    pl1_pmap = {'P': 'pressure', 'p_range': 'p_range'}
     expr = NumexprFunction('seawter_pressure', pl1_func, ['P', 'p_range'], param_map=pl1_pmap)
     presL1_ctxt = ParameterContext('seawater_pressure', param_type=ParameterFunctionType(function=expr), variability=VariabilityEnum.TEMPORAL)
     presL1_ctxt.uom = 'S m-1'
