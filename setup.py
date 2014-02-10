@@ -44,6 +44,7 @@ setup(  name = 'coverage-model',
         'networkx==1.7',
         'pyparsing==1.5.6',
         'msgpack-python==0.1.13',
+        'requests', # It should be hardcoded to a version imho but it's not in pyon
 #        'scipy==0.10.1',
     ],
 )
