@@ -12,6 +12,8 @@ from ooi.logging import log
 from coverage_model.basic_types import Dictable
 from coverage_model import utils
 from coverage_model.metadata import MetadataManager
+from coverage_model.data_span import ParamSpan, SpanCollection
+from coverage_model.address import BrickAddress
 
 import os
 import h5py
@@ -121,6 +123,12 @@ class RTreeProxy(object):
                 rtp._spans.append(span)
             return rtp
         raise TypeError('Improper formatting for RTreeProxy deserialization: %s' % src_str)
+
+    def __eq__(self, other):
+        return self.serialize() == other.serialize()
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 
 class BaseManager(MetadataManager):
@@ -238,6 +246,7 @@ class BaseManager(MetadataManager):
             self._hmap[key] = utils.hash_any(value)
             self._dirty.add(key)
             super(BaseManager, self).__setattr__('_is_dirty',True)
+
 
 class MasterManager(BaseManager):
 

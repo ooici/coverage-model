@@ -1702,7 +1702,7 @@ class ComplexCoverage(AbstractCoverage):
         tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
         sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
         scov = SimplexCoverage(root_dir, 
-                               utils.create_guid(), 
+                               utils.create_guid(),
                                name,
                                parameter_dictionary=pdict, 
                                temporal_domain=tdom,
