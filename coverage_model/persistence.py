@@ -646,7 +646,7 @@ class PersistedStorage(AbstractStorage):
                     ret_vals = brick_file[bid][brick_slice]
 
                 # Check if object type
-                if self.dtype == '|O8':
+                if self.dtype in ('|O8', '|O4'):
                     if hasattr(ret_vals, '__iter__'):
                         ret_vals = [self._object_unpack_hook(x) for x in ret_vals]
                     else:
@@ -783,14 +783,14 @@ class PersistedStorage(AbstractStorage):
         fv = self.fill_value
 
         # Check for object type
-        if data_type == '|O8':
+        if data_type in ('|O8', '|O4'):
             if np.iterable(vals):
                 vals = [pack(x) for x in vals]
             else:
                 vals = pack(vals)
 
         if self.inline_data_writes:
-            if data_type == '|O8':
+            if data_type in ('|O8', '|O4'):
                 data_type = h5py.special_dtype(vlen=str)
             if 0 in cD or 1 in cD:
                 cD = True
@@ -808,7 +808,7 @@ class PersistedStorage(AbstractStorage):
 
             # If the brick file doesn't exist, 'touch' it to make sure it's immediately available
             if not os.path.exists(brick_file_path):
-                if data_type == '|O8':
+                if data_type in ('|O8', '|O4'):
                     data_type = h5py.special_dtype(vlen=str)
                 if 0 in cD or 1 in cD:
                     cD = True
@@ -1035,3 +1035,13 @@ class InMemoryPersistenceLayer(object):
         # No Op
         pass
 
+def system_type():
+    '''
+    returns 1 for 32, 2 for 64 and 0 for else
+    '''
+    a = np.array([0],dtype='O')
+    if a.dtype.str == '|O4':
+        return 1
+    elif a.dtype.str == '|O8':
+        return 2
+    return 0
