@@ -782,10 +782,8 @@ class PersistedStorage(AbstractStorage):
         data_type = self.dtype
         fv = self.fill_value
 
-        print '\n--------------------------------------------------------------------------------'
         # Check for object type
         if data_type in ('|O8', '|O4'):
-            print 'yup'
             if np.iterable(vals):
                 vals = [pack(x) for x in vals]
             else:
@@ -798,7 +796,6 @@ class PersistedStorage(AbstractStorage):
                 cD = True
             with HDFLockingFile(brick_file_path, 'a') as f:
                 # TODO: Due to usage concerns, currently locking chunking to "auto"
-                print 'data_type:', data_type
                 f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=None, fillvalue=fv)
                 f[brick_guid][brick_slice] = vals
         else:
