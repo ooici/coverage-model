@@ -23,13 +23,14 @@ from coverage_model.basic_types import AbstractIdentifiable
 from coverage_model.parameter_values import ConstantValue
 from coverage_model.parameter_functions import AbstractFunction
 from coverage_model.numexpr_utils import digit_match, is_well_formed_where, single_where_match
+from coverage_model.persistence import system_type
 import numpy as np
 import networkx as nx
 import re
 
 UNSUPPORTED_DTYPES = {np.dtype('float16'), np.dtype('complex'), np.dtype('complex64'), np.dtype('complex128')}
 import platform
-if platform.uname()[-2] != 'armv7l':
+if platform.uname()[-2] != 'armv7l' and system_type() > 1:
     UNSUPPORTED_DTYPES.add(np.dtype('complex256'))
 
 #==================
