@@ -71,9 +71,40 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 
     return os.path.realpath(scov.persistence_dir)
 
-@unittest.skip("UTIL only")
-@attr('UTIL', group='cov')
 class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
+    @attr('INT', group='cov')
+    def test_cov_params(self):
+        contexts = create_all_params()
+        del contexts['time']
+        del contexts['density']
+        contexts = contexts.values()
+        cova_pth = _make_cov(self.working_dir, contexts, nt=2)
+        cov = SimplexCoverage.load(cova_pth, mode='r+')
+        cov._range_value['time'][:] = [1, 2]
+        cov._range_value['temperature'][:] = [205378, 289972]
+        cov._range_value['conductivity'][:] = [410913, 417588]
+        cov._range_value['pressure'][:] = [3939, 13616]
+        cov._range_value['p_range'][:] = 1000.
+        cov._range_value['lat'][:] = 40.
+        cov._range_value['lon'][:] = -70.
+
+
+        # Make a new function
+        owner = 'ion_functions.data.ctd_functions'
+        dens_func = 'ctd_density'
+        dens_arglist = ['SP', 't', 'p', 'lat', 'lon']
+        dens_pmap = {'SP':'pracsal', 't':'seawater_temperature', 'p':'seawater_pressure', 'lat':'lat', 'lon':'lon'}
+        dens_expr = PythonFunction('density', owner, dens_func, dens_arglist, None, dens_pmap)
+        dens_ctxt = ParameterContext('density', param_type=ParameterFunctionType(dens_expr), variability=VariabilityEnum.TEMPORAL)
+        dens_ctxt.uom = 'kg m-3'
+
+        cov.append_parameter(dens_ctxt)
+
+        # Make sure it worked
+        np.testing.assert_array_equal(cov._range_value['density'][:], 
+                np.array([ 1024.98205566,  1019.4932251 ], dtype=np.float32))
+
+    @attr('UTIL', group='cov')
     def test_something(self):
 
         # Create a large dataset spanning a year
@@ -109,12 +140,10 @@ class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
 
         ccov.insert_value_set({'time' : np.arange(40,45), 'value_set' : np.ones(5) * 8})
         
-        from pyon.util.breakpoint import breakpoint
-        breakpoint(locals(), globals())
         vcov = ViewCoverage(self.working_dir, create_guid(), 'view coverage', reference_coverage_location = ccov.persistence_dir)
 
 
-    @attr('UTIL')
+    @attr('UTIL', group='cov')
     def test_aggregates(self):
 
         array_stuff = ParameterContext('array_stuff', param_type=ArrayType(inner_encoding='float32'))
@@ -140,9 +169,6 @@ class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
         vcov = ViewCoverage(self.working_dir, create_guid(), 'view coverage', reference_coverage_location = ccov.persistence_dir)
 
         
-        from pyon.util.breakpoint import breakpoint
-        breakpoint(locals(), globals())
-
 
 @attr('INT',group='cov')
 class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
@@ -947,3 +973,114 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         pass
 
 
+def create_all_params():
+    '''
+     [
+     'density',
+     'time',
+     'lon',
+     'tempwat_l1',
+     'tempwat_l0',
+     'condwat_l1',
+     'condwat_l0',
+     'preswat_l1',
+     'preswat_l0',
+     'lat',
+     'pracsal'
+     ]
+    @return:
+    '''
+
+    contexts = {}
+
+    t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('int64')))
+    t_ctxt.axis = AxisTypeEnum.TIME
+    t_ctxt.uom = 'seconds since 01-01-1900'
+    contexts['time'] = t_ctxt
+
+    lat_ctxt = ParameterContext('lat', param_type=ConstantType(QuantityType(value_encoding=np.dtype('float32'))), fill_value=-9999)
+    lat_ctxt.axis = AxisTypeEnum.LAT
+    lat_ctxt.uom = 'degree_north'
+    contexts['lat'] = lat_ctxt
+
+    lon_ctxt = ParameterContext('lon', param_type=ConstantType(QuantityType(value_encoding=np.dtype('float32'))), fill_value=-9999)
+    lon_ctxt.axis = AxisTypeEnum.LON
+    lon_ctxt.uom = 'degree_east'
+    contexts['lon'] = lon_ctxt
+    
+    p_range_ctxt = ParameterContext('p_range', param_type=ConstantType(QuantityType(value_encoding=np.dtype('float32'))), fill_value=-9999)
+    p_range_ctxt.uom = '1'
+    contexts['p_range'] = p_range_ctxt
+
+    # Independent Parameters
+
+    # Temperature - values expected to be the decimal results of conversion from hex
+    temp_ctxt = ParameterContext('temperature', param_type=QuantityType(value_encoding=np.dtype('float32')), fill_value=-9999)
+    temp_ctxt.uom = 'counts'
+    contexts['temperature'] = temp_ctxt
+
+    # Conductivity - values expected to be the decimal results of conversion from hex
+    cond_ctxt = ParameterContext('conductivity', param_type=QuantityType(value_encoding=np.dtype('float32')), fill_value=-9999)
+    cond_ctxt.uom = 'counts'
+    contexts['conductivity'] = cond_ctxt
+
+    # Pressure - values expected to be the decimal results of conversion from hex
+    press_ctxt = ParameterContext('pressure', param_type=QuantityType(value_encoding=np.dtype('float32')), fill_value=-9999)
+    press_ctxt.uom = 'counts'
+    contexts['pressure'] = press_ctxt
+
+
+    # Dependent Parameters
+
+    # tempwat_l1 = (tempwat_l0 / 10000) - 10
+    tl1_func = '(T / 10000) - 10'
+    tl1_pmap = {'T': 'temperature'}
+    expr = NumexprFunction('seawater_temperature', tl1_func, ['T'], param_map=tl1_pmap)
+    tempL1_ctxt = ParameterContext('seawater_temperature', param_type=ParameterFunctionType(function=expr), variability=VariabilityEnum.TEMPORAL)
+    tempL1_ctxt.uom = 'deg_C'
+    contexts['seawater_temperature'] = tempL1_ctxt
+
+    # condwat_l1 = (condwat_l0 / 100000) - 0.5
+    cl1_func = '(C / 100000) - 0.5'
+    cl1_pmap = {'C': 'conductivity'}
+    expr = NumexprFunction('seawater_conductivity', cl1_func, ['C'], param_map=cl1_pmap)
+    condL1_ctxt = ParameterContext('seawater_conductivity', param_type=ParameterFunctionType(function=expr), variability=VariabilityEnum.TEMPORAL)
+    condL1_ctxt.uom = 'S m-1'
+    contexts['seawater_conductivity'] = condL1_ctxt
+
+    # Equation uses p_range, which is a calibration coefficient - Fixing to 679.34040721
+    #   preswat_l1 = (preswat_l0 * p_range / (0.85 * 65536)) - (0.05 * p_range)
+    pl1_func = '(P * p_range / (0.85 * 65536)) - (0.05 * p_range)'
+    pl1_pmap = {'P': 'pressure', 'p_range': 'p_range'}
+    expr = NumexprFunction('seawter_pressure', pl1_func, ['P', 'p_range'], param_map=pl1_pmap)
+    presL1_ctxt = ParameterContext('seawater_pressure', param_type=ParameterFunctionType(function=expr), variability=VariabilityEnum.TEMPORAL)
+    presL1_ctxt.uom = 'S m-1'
+    contexts['seawater_pressure'] = presL1_ctxt
+
+    # Density & practical salinity calucluated using the Gibbs Seawater library - available via python-gsw project:
+    #       https://code.google.com/p/python-gsw/ & http://pypi.python.org/pypi/gsw/3.0.1
+
+    # pracsal = gsw.SP_from_C((condwat_l1 * 10), tempwat_l1, preswat_l1)
+    owner = 'ion_functions.data.ctd_functions'
+    sal_func = 'ctd_pracsal'
+    sal_arglist = ['C', 't', 'p']
+    sal_pmap = {'C': 'seawater_conductivity', 't': 'seawater_temperature', 'p': 'seawater_pressure'}
+    sal_kwargmap = None
+    expr = PythonFunction('pracsal', owner, sal_func, sal_arglist, sal_kwargmap, sal_pmap)
+    sal_ctxt = ParameterContext('pracsal', param_type=ParameterFunctionType(expr), variability=VariabilityEnum.TEMPORAL)
+    sal_ctxt.uom = 'g kg-1'
+    contexts['pracsal'] = sal_ctxt
+
+    # absolute_salinity = gsw.SA_from_SP(pracsal, preswat_l1, longitude, latitude)
+    # conservative_temperature = gsw.CT_from_t(absolute_salinity, tempwat_l1, preswat_l1)
+    # density = gsw.rho(absolute_salinity, conservative_temperature, preswat_l1)
+    owner = 'ion_functions.data.ctd_functions'
+    dens_func = 'ctd_density'
+    dens_arglist = ['SP', 't', 'p', 'lat', 'lon']
+    dens_pmap = {'SP':'pracsal', 't':'seawater_temperature', 'p':'seawater_pressure', 'lat':'lat', 'lon':'lon'}
+    dens_expr = PythonFunction('density', owner, dens_func, dens_arglist, None, dens_pmap)
+    dens_ctxt = ParameterContext('density', param_type=ParameterFunctionType(dens_expr), variability=VariabilityEnum.TEMPORAL)
+    dens_ctxt.uom = 'kg m-3'
+    contexts['density'] = dens_ctxt
+
+    return contexts

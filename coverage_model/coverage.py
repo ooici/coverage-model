@@ -904,7 +904,6 @@ class AbstractCoverage(AbstractIdentifiable):
             # nothing else exists and we can just return
             return
         if not self._closed:
-            log.info('Closing coverage \'%s\'', self.name if hasattr(self,'name') else 'unnamed')
 
             if self.mode != 'r':
                 log.debug('Ensuring dirty values have been flushed...')
@@ -1084,7 +1083,6 @@ class ViewCoverage(AbstractCoverage):
             # nothing else exists and we can just return
             return
         if not self._closed:
-            log.info('Closing reference coverage \'%s\'', self.reference_coverage.name if hasattr(self.reference_coverage,'name') else 'unnamed')
             self.reference_coverage.close(force, timeout)
 
         AbstractCoverage.close(self, force, timeout)

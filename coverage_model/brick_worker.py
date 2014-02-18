@@ -75,7 +75,8 @@ class BrickWriterWorker(object):
                     try:
                         log.debug('*%s*%s* got work for %s, metrics %s: %s', time.time(), guid, brick_key, brick_metrics, work)
                         brick_path, bD, cD, data_type, fill_value = brick_metrics
-                        if data_type == '|O8':
+
+                        if data_type in ('|O8', '|O4'):
                             data_type = h5py.special_dtype(vlen=str)
                         # TODO: Uncomment this to properly turn 0 & 1 chunking into True
 #                        if 0 in cD or 1 in cD:

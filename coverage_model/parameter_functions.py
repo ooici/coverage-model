@@ -143,17 +143,25 @@ class AbstractFunction(AbstractBase):
 
 
 class PythonFunction(AbstractFunction):
-    def __init__(self, name, owner, func_name, arg_list, kwarg_map=None, param_map=None):
+    def __init__(self, name, owner, func_name, arg_list, kwarg_map=None, param_map=None, egg_uri=''):
         AbstractFunction.__init__(self, name, arg_list, param_map)
         self.owner = owner
         self.func_name = func_name
         self.kwarg_map = kwarg_map
+        self.egg_uri = egg_uri
 
     def _import_func(self):
-        import importlib
+        try:
+            import importlib
 
-        module = importlib.import_module(self.owner)
-        self._callable = getattr(module, self.func_name)
+            module = importlib.import_module(self.owner)
+            self._callable = getattr(module, self.func_name)
+        except ImportError:
+            if self.egg_uri:
+                self.download_and_load_egg(self.egg_uri)
+                module = importlib.import_module(self.owner)
+                self._callable = getattr(module, self.func_name)
+
 
     def evaluate(self, pval_callback, slice_, fill_value=-9999):
         self._import_func()
@@ -197,6 +205,36 @@ class PythonFunction(AbstractFunction):
             ret = self.owner == other.owner and self.func_name == other.func_name
 
         return ret
+
+    @classmethod
+    def download_and_load_egg(cls, url):
+        '''
+        Downloads an egg from the URL specified into the cache directory
+        Returns the full path to the egg
+        '''
+        from tempfile import gettempdir
+        import os
+        import requests
+        import pkg_resources
+        # Get the filename based on the URL
+        filename = url.split('/')[-1]
+        # Store it in the $TMPDIR
+        egg_cache = gettempdir()
+        path = os.path.join(egg_cache, filename)
+        r = requests.get(url, stream=True)
+        if r.status_code == 200:
+            # Download the file using requests stream
+            with open(path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=1024):
+                    if chunk:
+                        f.write(chunk)
+                        f.flush()
+            # Add it to the working set of eggs
+            pkg_resources.working_set.add_entry(path)
+            return
+
+        raise IOError("Couldn't download the file at %s" % url)
+
 
 
 class NumexprFunction(AbstractFunction):
