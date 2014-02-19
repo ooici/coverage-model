@@ -161,6 +161,8 @@ class PythonFunction(AbstractFunction):
                 self.download_and_load_egg(self.egg_uri)
                 module = importlib.import_module(self.owner)
                 self._callable = getattr(module, self.func_name)
+            else:
+                raise
 
 
     def evaluate(self, pval_callback, slice_, fill_value=-9999):
