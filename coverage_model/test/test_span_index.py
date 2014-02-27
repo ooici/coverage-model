@@ -15,6 +15,7 @@ from coverage_model.data_span import *
 from coverage_model.db_connectors import DBFactory, DB
 from coverage_model.search.coverage_search import *
 from coverage_model.search.search_parameter import *
+from coverage_model.search.search_constants import *
 
 from coverage_test_base import CoverageIntTestBase, get_props, get_parameter_dict, EXEMPLAR_CATEGORIES
 
@@ -109,12 +110,10 @@ class TestSpanInt(CoverageModelUnitTestCase):
             raise RuntimeError("Unable to load datastore for coverage_spans")
         if coverage_store is None:
             raise RuntimeError("Unable to load datastore for coverages")
-        for guid in cls.coverages:
-            print "Deleted coverage: ", guid
-            with span_store.pool.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                print cur.mogrify("DELETE FROM %s WHERE coverage_id='%s'" % (span_store._get_datastore_name(), guid))
-                cur.execute("DELETE FROM %s WHERE coverage_id='%s'" % (span_store._get_datastore_name(), guid))
-                cur.execute("DELETE FROM %s WHERE id='%s'" % (coverage_store._get_datastore_name(), guid))
+        #for guid in cls.coverages:
+        #    with span_store.pool.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+        #        cur.execute("DELETE FROM %s WHERE coverage_id='%s'" % (span_store._get_datastore_name(), guid))
+        #        cur.execute("DELETE FROM %s WHERE id='%s'" % (coverage_store._get_datastore_name(), guid))
 
     def setUp(self):
         pass
@@ -150,7 +149,8 @@ class TestSpanInt(CoverageModelUnitTestCase):
                             'fixed_str',
                             'sparse',
                             'lat',
-                            'lon']
+                            'lon',
+                            'depth']
 
         if only_time:
             pname_filter = ['time']
@@ -172,7 +172,7 @@ class TestSpanInt(CoverageModelUnitTestCase):
             # Add data for each parameter
             if only_time:
                 scov.insert_timesteps(nt)
-                scov.set_parameter_values('time', value=np.arange(1, nt+1))
+                scov.set_parameter_values('time', value=np.arange(1000, 10000, nt+1))
             else:
                 scov.set_parameter_values('sparse', [[[2, 4, 6], [8, 10, 12]]])
                 scov.insert_timesteps(nt/2)
@@ -180,7 +180,9 @@ class TestSpanInt(CoverageModelUnitTestCase):
                 scov.set_parameter_values('sparse', [[[4, 8], [16, 20]]])
                 scov.insert_timesteps(nt/2)
 
-                scov.set_parameter_values('time', value=np.arange(nt))
+                scov.set_parameter_values('time', value=np.arange(1000, 1000+nt))
+                scov.append_parameter(ParameterContext('depth'))
+                scov.set_parameter_values('depth', value=1000 * np.random.random_sample(nt))
                 #scov.set_parameter_values('boolean', value=[True, True, True], tdoa=[[2,4,14]])
                 #scov.set_parameter_values('const_ft', value=-71.11) # Set a constant with correct data type
                 #scov.set_parameter_values('const_int', value=45.32) # Set a constant with incorrect data type (fixed under the hood)
@@ -210,11 +212,8 @@ class TestSpanInt(CoverageModelUnitTestCase):
                 #scov.set_parameter_values('category', value=catval)
                 #scov.set_parameter_values('fixed_str', value=fstrval)
 
-        if in_memory and save_coverage:
-            SimplexCoverage.pickle_save(scov, os.path.join(cls.working_dir, 'sample.cov'))
-
         cls.coverages.add(scov.persistence_guid)
-        return scov, 'TestTestSpanUnit'
+        return scov, 'TestSpanInt'
 
     def test_spans_in_coverage(self):
         #Coverage construction will write data to bricks, create spans, and write spans to the db.
@@ -288,13 +287,15 @@ class TestSpanInt(CoverageModelUnitTestCase):
                 if 'lat' in span.params:
                     lon_min, lon_max = span.params['lon']
 
+        param_names = SearchParameterNames()
         criteria = SearchCriteria()
-        param = Param('time', (time_min+1, time_max+1), ParamValueRange())
+        param = SearchParameter(param_names.TIME, (time_min+1, time_max+1), ParamValueRange())
         criteria.append(param)
-        param = Param('geo_box', ((lat_min-1, lat_max+1),(lon_min-1, lon_max+1)), Param2DValueRange())
+        param = SearchParameter(param_names.GEO_BOX, ((lat_min-1, lat_max+1),(lon_min-1, lon_max+1)), Param2DValueRange())
         criteria.append(param)
-        results = CoverageSearch.select(criteria, limit=-1)
-        self.assertTrue(mm.guid in results.keys())
+        search = CoverageSearch(criteria)
+        results = search.select()
+        self.assertTrue(mm.guid in results.get_found_coverage_ids())
 
     def test_search_for_span_time_fails(self):
         scov, cov_name = self.construct_cov(nt=10)
@@ -313,13 +314,15 @@ class TestSpanInt(CoverageModelUnitTestCase):
                 if 'lat' in span.params:
                     lon_min, lon_max = span.params['lon']
 
+        param_names = SearchParameterNames()
         criteria = SearchCriteria()
-        param = Param('time', (time_min+20, time_max+30), ParamValueRange())
+        param = SearchParameter(param_names.TIME, (time_min+20, time_max+30), ParamValueRange())
         criteria.append(param)
-        param = Param('geo_box', ((lat_min-1, lat_max+1),(lon_min-1, lon_max+1)), Param2DValueRange())
+        param = SearchParameter(param_names.GEO_BOX, ((lat_min-1, lat_max+1),(lon_min-1, lon_max+1)), Param2DValueRange())
         criteria.append(param)
-        results = CoverageSearch.select(criteria, limit=-1)
-        self.assertFalse(mm.guid in results.keys())
+        search = CoverageSearch(criteria)
+        results = search.select()
+        self.assertFalse(mm.guid in results.get_found_coverage_ids())
 
     def test_search_for_span_lat_fails(self):
         scov, cov_name = self.construct_cov(nt=10)
@@ -338,13 +341,15 @@ class TestSpanInt(CoverageModelUnitTestCase):
                 if 'lat' in span.params:
                     lon_min, lon_max = span.params['lon']
 
+        param_names = SearchParameterNames()
         criteria = SearchCriteria()
-        param = Param('time', (time_min+1, time_max+1), ParamValueRange())
+        param = SearchParameter(param_names.TIME, (time_min+1, time_max+1), ParamValueRange())
         criteria.append(param)
-        param = Param('geo_box', ((lat_max+1, lat_max+2),(lon_min-1, lon_max+1)), Param2DValueRange())
+        param = SearchParameter(param_names.GEO_BOX, ((lat_max+1, lat_max+2),(lon_min-1, lon_max+1)), Param2DValueRange())
         criteria.append(param)
-        results = CoverageSearch.select(criteria, limit=-1)
-        self.assertFalse(mm.guid in results.keys())
+        search = CoverageSearch(criteria)
+        results = search.select()
+        self.assertFalse(mm.guid in results.get_found_coverage_ids())
 
     def test_search_for_span_lon_fails(self):
         scov, cov_name = self.construct_cov(nt=10)
@@ -363,13 +368,15 @@ class TestSpanInt(CoverageModelUnitTestCase):
                 if 'lat' in span.params:
                     lon_min, lon_max = span.params['lon']
 
+        param_names = SearchParameterNames()
         criteria = SearchCriteria()
-        param = Param('time', (time_min+1, time_max+1), ParamValueRange())
+        param = SearchParameter(param_names.TIME, (time_min+1, time_max+1), ParamValueRange())
         criteria.append(param)
-        param = Param('geo_box', ((lat_min+1, lat_max+2),(lon_max+0.5, lon_max+1)), Param2DValueRange())
+        param = SearchParameter(param_names.GEO_BOX, ((lat_min+1, lat_max+2),(lon_max+0.5, lon_max+1)), Param2DValueRange())
         criteria.append(param)
-        results = CoverageSearch.select(criteria, limit=-1)
-        self.assertFalse(mm.guid in results.keys())
+        search = CoverageSearch(criteria)
+        results = search.select()
+        self.assertFalse(mm.guid in results.get_found_coverage_ids())
 
     def test_search_for_span_that_barely_overlaps_searched_box(self):
         scov, cov_name = self.construct_cov(nt=10)
@@ -388,13 +395,15 @@ class TestSpanInt(CoverageModelUnitTestCase):
                 if 'lat' in span.params:
                     lon_min, lon_max = span.params['lon']
 
+        param_names = SearchParameterNames()
         criteria = SearchCriteria()
-        param = Param('time', (time_min+1, time_max+1), ParamValueRange())
+        param = SearchParameter(param_names.TIME, (time_min+1, time_max+1), ParamValueRange())
         criteria.append(param)
-        param = Param('geo_box', ((lat_max-0.1, lat_max+20), (lon_min+0.5, lon_max-0.5)), Param2DValueRange())
+        param = SearchParameter(param_names.GEO_BOX, ((lat_max-0.1, lat_max+20), (lon_min+0.5, lon_max-0.5)), Param2DValueRange())
         criteria.append(param)
-        results = CoverageSearch.select(criteria, limit=-1)
-        self.assertTrue(mm.guid in results.keys())
+        search = CoverageSearch(criteria)
+        results = search.select()
+        self.assertTrue(mm.guid in results.get_found_coverage_ids())
 
     def test_search_for_span_that_contains_searched_box(self):
         scov, cov_name = self.construct_cov(nt=10)
@@ -413,13 +422,15 @@ class TestSpanInt(CoverageModelUnitTestCase):
                 if 'lat' in span.params:
                     lon_min, lon_max = span.params['lon']
 
+        param_names = SearchParameterNames()
         criteria = SearchCriteria()
-        param = Param('time', (time_min+1, time_max+1), ParamValueRange())
+        param = SearchParameter(param_names.TIME, (time_min+1, time_max+1), ParamValueRange())
         criteria.append(param)
-        param = Param('geo_box', ((lat_min+1, lat_max-1),(lon_min+0.5, lon_max-0.5)), Param2DValueRange())
+        param = SearchParameter(param_names.GEO_BOX, ((lat_min+1, lat_max-1),(lon_min+0.5, lon_max-0.5)), Param2DValueRange())
         criteria.append(param)
-        results = CoverageSearch.select(criteria, limit=-1)
-        self.assertTrue(mm.guid in results.keys())
+        search = CoverageSearch(criteria)
+        results = search.select()
+        self.assertTrue(mm.guid in results.get_found_coverage_ids())
 
     def test_search_for_span_contained_inside_large_box(self):
         scov, cov_name = self.construct_cov(nt=10)
@@ -438,13 +449,15 @@ class TestSpanInt(CoverageModelUnitTestCase):
                 if 'lat' in span.params:
                     lon_min, lon_max = span.params['lon']
 
+        param_names = SearchParameterNames()
         criteria = SearchCriteria()
-        param = Param('time', (time_min+1, time_max+1), ParamValueRange())
+        param = SearchParameter(param_names.TIME, (time_min+1, time_max+1), ParamValueRange())
         criteria.append(param)
-        param = Param('geo_box', ((-15.5, 85.5), (0.5, 170.5)), Param2DValueRange())
+        param = SearchParameter(param_names.GEO_BOX, ((-15.5, 85.5), (0.5, 170.5)), Param2DValueRange())
         criteria.append(param)
-        results = CoverageSearch.select(criteria, limit=-1)
-        self.assertTrue(mm.guid in results.keys())
+        search = CoverageSearch(criteria)
+        results = search.select()
+        self.assertTrue(mm.guid in results.get_found_coverage_ids())
 
     def test_for_searched_time_range_smaller_than_span_time_range(self):
         scov, cov_name = self.construct_cov(nt=10)
@@ -463,13 +476,15 @@ class TestSpanInt(CoverageModelUnitTestCase):
                 if 'lat' in span.params:
                     lon_min, lon_max = span.params['lon']
 
+        param_names = SearchParameterNames()
         criteria = SearchCriteria()
-        param = Param('time', (time_min+1, time_max-1), ParamValueRange())
+        param = SearchParameter(param_names.TIME, (time_min+1, time_max-1), ParamValueRange())
         criteria.append(param)
-        param = Param('geo_box', ((lat_min+1, lat_max-1),(lon_min+0.5, lon_max-0.5)), Param2DValueRange())
+        param = SearchParameter(param_names.GEO_BOX, ((lat_min+1, lat_max-1),(lon_min+0.5, lon_max-0.5)), Param2DValueRange())
         criteria.append(param)
-        results = CoverageSearch.select(criteria, limit=-1)
-        self.assertTrue(mm.guid in results.keys())
+        search = CoverageSearch(criteria)
+        results = search.select()
+        self.assertTrue(mm.guid in results.get_found_coverage_ids())
 
     def test_for_searched_time_range_larger_than_span_time_range(self):
         scov, cov_name = self.construct_cov(nt=10)
@@ -488,10 +503,55 @@ class TestSpanInt(CoverageModelUnitTestCase):
                 if 'lat' in span.params:
                     lon_min, lon_max = span.params['lon']
 
+        param_names = SearchParameterNames()
         criteria = SearchCriteria()
-        param = Param('time', (time_min-1, time_max+1), ParamValueRange())
+        param = SearchParameter(param_names.TIME, (time_min-1, time_max+1), ParamValueRange())
         criteria.append(param)
-        param = Param('geo_box', ((lat_min+1, lat_max-1),(lon_min+0.5, lon_max-0.5)), Param2DValueRange())
+        param = SearchParameter(param_names.GEO_BOX, ((lat_min+1, lat_max-1),(lon_min+0.5, lon_max-0.5)), Param2DValueRange())
         criteria.append(param)
-        results = CoverageSearch.select(criteria, limit=-1)
-        self.assertTrue(mm.guid in results.keys())
+        search = CoverageSearch(criteria)
+        results = search.select()
+        self.assertTrue(mm.guid in results.get_found_coverage_ids())
+
+    def test_for_searched_vertical_range(self):
+        scov, cov_name = self.construct_cov(nt=10)
+        self.assertIsNotNone(scov)
+
+        depth_min, depth_max = (-1.0,-1.0)
+        mm = scov._persistence_layer.master_manager
+        if hasattr(mm, 'span_collection'):
+            for k, span in mm.span_collection.span_dict.iteritems():
+                if 'depth' in span.params:
+                    depth_min, depth_max = span.params['depth']
+
+        param_names = SearchParameterNames()
+        criteria = SearchCriteria()
+        param = SearchParameter(param_names.VERTICAL, (depth_min-1, depth_max-1), ParamValueRange())
+        criteria.append(param)
+        search = CoverageSearch(criteria)
+        results = search.select()
+        self.assertTrue(mm.guid in results.get_found_coverage_ids())
+
+        del criteria
+        criteria = SearchCriteria()
+        param = SearchParameter(param_names.VERTICAL, (depth_max+0.00000001, depth_max+10.1), ParamValueRange())
+        criteria.append(param)
+        search = CoverageSearch(criteria)
+        results = search.select()
+        self.assertFalse(mm.guid in results.get_found_coverage_ids())
+
+        del criteria
+        criteria = SearchCriteria()
+        param = SearchParameter(param_names.VERTICAL, (depth_max-0.00000001, depth_max-0.000000001), ParamValueRange())
+        criteria.append(param)
+        search = CoverageSearch(criteria)
+        results = search.select()
+        self.assertTrue(mm.guid in results.get_found_coverage_ids())
+
+        del criteria
+        criteria = SearchCriteria()
+        param = SearchParameter(param_names.VERTICAL, (depth_min-1, depth_max+1), ParamValueRange())
+        criteria.append(param)
+        search = CoverageSearch(criteria)
+        results = search.select()
+        self.assertTrue(mm.guid in results.get_found_coverage_ids())

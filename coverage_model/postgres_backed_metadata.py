@@ -27,7 +27,7 @@ class PostgresMetadataManager(MetadataManager):
             if 0 < cur.rowcount:
                 return True
         except Exception as e:
-            print 'Caught exception %s', (e.message,)
+            log.warn('Caught exception %s', e.message)
             return False
         return False
 
@@ -43,7 +43,7 @@ class PostgresMetadataManager(MetadataManager):
             val = unpack(val)
             return val
         except Exception as e:
-            print 'Caught exception ', e.message
+            log.warn('Caught exception %s', e.message)
             return ''
 
     def __init__(self, filedir, guid, **kwargs):
@@ -140,7 +140,7 @@ class PostgresMetadataManager(MetadataManager):
                 if "unable to create file (File accessability: Unable to open file)" in ex.message:
                     log.info('Issue writing to hdf file during master_manager.flush - this is not likely a huge problem: %s', ex.message)
                 else:
-                    print 'Caught exception durint flush ', ex.message
+                    log.warn('Caught exception during flush %s', ex.message)
                     raise
 
             super(PostgresMetadataManager, self).__setattr__('_is_dirty',False)
@@ -194,7 +194,7 @@ class PostgresMetadataManager(MetadataManager):
                         setattr(self, key, value)
 
         except Exception, e:
-            print 'Caught exception ', e.message
+            log.warn('Caught exception %s', e.message)
             pass
 
     def _base_load(self, f):

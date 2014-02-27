@@ -5,6 +5,8 @@ from ooi.logging import log
 from pyon.core.bootstrap import bootstrap_pyon, CFG
 from pyon.datastore.datastore_common import DatastoreFactory
 from pyon.datastore.postgresql.base_store import PostgresDataStore
+from pyon.util.ion_time import *
+import struct
 import datetime
 import psycopg2
 import psycopg2.extras
@@ -28,8 +30,8 @@ class DB(object):
     def search(self, search_criteria):
         raise NotImplementedError('Not implemented by base class')
 
-    def list(self, limit=100):
-        raise NotImplementedError('Not implemented by base class')
+    #def list(self, limit=100):
+    #    raise NotImplementedError('Not implemented by base class')
 
     def _get_collection_time(self, params):
         pass
@@ -85,7 +87,7 @@ class PostgresDB(DB):
             raise RuntimeError("Unable to load datastore for coverage")
         else:
             self.entity_table_name = self.datastore._get_datastore_name()
-            log.trace("Got datastore: %s type %s" % (self.datastore._get_datastore_name(), type(self.datastore)))
+            log.trace("Got datastore: %s type %s" % (self.datastore._get_datastore_name(), str(type(self.datastore))))
         self.span_store = DatastoreFactory.get_datastore(datastore_name='coverage_spans', config=CFG)
         if self.span_store is None:
             raise RuntimeError("Unable to load datastore for coverage_spans")
@@ -103,24 +105,24 @@ class PostgresDB(DB):
                     log.trace("Record exists: %s", uuid)
                     return True
         except Exception as e:
-            log.warn('Caught exception checking Postgres existence: ', e)
+            log.warn('Caught exception checking Postgres existence: %s', e.message)
             return False
         return False
 
     def get_coverage_type(self, uuid):
         try:
-            #with self.datastore.pool.cursor(**self.datastore.cursor_args) as cur:
-            with self.datastore.pool.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-            #cur = self.con.cursor(cursor_factory=psycopg2.extras.DictCursor)
-                log.trace(cur.mogrify("""SELECT coverage_type from """ + self.entity_table_name +
-                                      """ where id=%s""", (uuid,)))
-                cur.execute("""SELECT coverage_type from """ + self.entity_table_name + """ where id=%s""", (uuid,))
+            with self.datastore.pool.cursor(**self.datastore.cursor_args) as cur:
+                statement = ''.join(['SELECT coverage_type from ', self.entity_table_name, " WHERE id='",
+                                     uuid, "'"])
+                log.trace(cur.mogrify(statement))
+                cur.execute(statement)
+                #cur.execute("""SELECT coverage_type from """ + self.entity_table_name + """ where id=%s""", (uuid,))
                 row = cur.fetchone()
-                val = row['coverage_type']
+                val = row[0]
                 val = str.decode(val, self.encoding)
                 return val
         except Exception as e:
-            log.warn('Caught exception extracting coverage type from Postgres: ', e)
+            log.warn('Caught exception extracting coverage type from Postgres: %s', e)
             return ''
 
     def insert(self, uuid, data, spans=[], exists=False):
@@ -134,19 +136,27 @@ class PostgresDB(DB):
         try:
             self.insert_spans(uuid, spans, None)
             with self.datastore.pool.cursor(**self.datastore.cursor_args) as cur:
-                for key in data:
-                    val = bytes.encode(data[key], self.encoding)
-                    if not exists:
-                        statement = """INSERT into """ + self.entity_table_name + """ (id, """ + key + \
-                            """) VALUES(%(guid)s, %(val)s)"""
-                        log.trace(cur.mogrify(statement, {'guid': uuid, 'val': val}))
-                        cur.execute(statement, {'guid': uuid, 'val': val})
-                        exists = True
-                    else:
-                        statement = """UPDATE """ + self.entity_table_name + " SET " + key + \
-                            """=%(val)s WHERE id=%(guid)s"""
-                        log.trace(cur.mogrify(statement, {'val': val, 'guid': uuid}))
-                        cur.execute(statement, {'val': val, 'guid': uuid})
+                statement = ''
+                if not exists:
+                    statement = ''.join(["INSERT into ", self.entity_table_name, ' (id, '])
+                    for key in data.keys():
+                        statement = ''.join([statement, key, ', '])
+                    statement = statement.rstrip(', ')
+                    statement = ''.join([statement, ") VALUES ('", str(uuid), "', "])
+                    for val in data.values():
+                        val = bytes.encode(val, self.encoding)
+                        statement = ''.join([statement, """'""", val, """', """])
+                    statement = statement.rstrip(', ')
+                    statement = ''.join([statement, ')'])
+                else:
+                    statement = ''.join(['UPDATE ', self.entity_table_name, ' SET '])
+                    for k, v in data.iteritems():
+                        v = bytes.encode(v, self.encoding)
+                        statement = ''.join([statement, k, """='""", v, """', """])
+                    statement = statement.rstrip(', ')
+                    statement = ''.join([statement, " WHERE id = '", uuid, "'"])
+                log.trace(cur.mogrify(statement))
+                cur.execute(statement)
 
             rv = True
         except Exception, ex:
@@ -155,7 +165,7 @@ class PostgresDB(DB):
         return rv
 
     def _span_exists(self, span_address):
-        with self.span_store.pool.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+        with self.span_store.pool.cursor(**self.datastore.cursor_args) as cur:
             cur.execute("SELECT 1 FROM %s WHERE span_address='%s'" % (self.span_table_name, span_address))
             if cur.rowcount > 0:
                 return True
@@ -166,7 +176,7 @@ class PostgresDB(DB):
         try:
             for span in spans:
                 cols, values = self.span_values(uuid, span)
-                dic = dict(zip(cols,values))
+                dic = dict(zip(cols, values))
                 if len(cols) > 0:
                     span_addr = span.address.get_db_str()
                     statement = ''
@@ -195,6 +205,9 @@ class PostgresDB(DB):
 
     @staticmethod
     def span_values(coverage_id, span):
+        from coverage_model.search.search_constants import IndexParameterNames
+        from coverage_model.config import CoverageConfig
+        config = CoverageConfig()
         r_cols = ()
         r_vals = ()
         cols = ['coverage_id']
@@ -202,10 +215,22 @@ class PostgresDB(DB):
         cols.append('span_address')
         values.append(''.join(["'", span.address.get_db_str(), "'"]))
         insert = False
-        if 'lat' in span.params and 'lon' in span.params:
+
+        lat_key = None
+        for key in config.ordered_lat_key_preferences:
+            if key in span.params:
+                lat_key = key
+                break
+        lon_key = None
+        for key in config.ordered_lon_key_preferences:
+            if key in span.params:
+                lon_key = key
+                break
+
+        if lat_key is not None and lon_key is not None:
             tmp = []
-            lats = span.params['lat']
-            lons = span.params['lon']
+            lats = span.params[lat_key]
+            lons = span.params[lon_key]
             lat_min = str(lats[0])
             lat_max = str(lats[1])
             lon_min = str(lons[0])
@@ -216,13 +241,27 @@ class PostgresDB(DB):
                 values.append(tmp)
                 insert = True
 
-        if 'time' in span.params:
-            # Just taking the raw time as utc for now.  This may work or it may not.
-            # Talked with Matthew Arrott about this.  He's thinking about it/looking into things
-            time_min_str = datetime.datetime.utcfromtimestamp(span.params['time'][0]).strftime('%Y-%m-%d %H:%M:%S.%f z')
-            time_max_str = datetime.datetime.utcfromtimestamp(span.params['time'][1]).strftime('%Y-%m-%d %H:%M:%S.%f z')
+        time_key = None
+        for key in config.ordered_time_key_preferences:
+            if key in span.params:
+                time_key = key
+                break
+        if time_key is not None:
+            time_min_str = PostgresDB._get_time_string(span.params[time_key][0])
+            time_max_str = PostgresDB._get_time_string(span.params[time_key][1])
             value = "'[", str(time_min_str), ', ', str(time_max_str), ")'"
             cols.append('time_range')
+            values.append(''.join(value))
+            insert = True
+
+        vertical_key = None
+        for key in config.ordered_vertical_key_preferences:
+            if key in span.params:
+                vertical_key = key
+                break
+        if vertical_key is not None:
+            value = "'[", str(span.params[vertical_key][0]), ', ', str(span.params[vertical_key][1]), ")'"
+            cols.append('vertical_range')
             values.append(''.join(value))
             insert = True
 
@@ -230,6 +269,14 @@ class PostgresDB(DB):
             r_cols = tuple(cols)
             r_vals = tuple(values)
         return r_cols, r_vals
+
+    @classmethod
+    def _get_time_string(cls, f64_time):
+        # Get the time string from IonTime.  Assumes the supplied time is 64 bit float in ntp time format
+        i, d = divmod(f64_time, 1)
+        ntp_time = struct.pack(IonTime.ntpv4_timestamp, i, d)
+        ion_time = IonTime.from_ntp64(ntp_time)
+        return str(ion_time)
 
     @staticmethod
     def get_geo_shape(lon_min, lon_max, lat_min, lat_max):
@@ -246,43 +293,48 @@ class PostgresDB(DB):
     def get(self, uuid):
         results = {}
         try:
-            with self.datastore.pool.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+            with self.datastore.pool.cursor(**self.datastore.cursor_args) as cur:
                 statement = """SELECT * from """ + self.entity_table_name + """ WHERE id=%(uuid)s"""
                 cur.execute(statement, {'uuid': uuid})
                 row = cur.fetchone()
+                names = [name[0] for name in cur.description]
                 if row is not None:
-                    for key in row.keys():
+                    row_dict = dict(zip(names, row))
+                    for key, value in row_dict.iteritems():
                         if key == 'id':
                             continue
-                        val = row[key]
-                        if val is not None:
-                            val = str.decode(val, self.encoding)
-                            if val is not None:
-                                results[key] = val
-        except Exception as e:
-            log.warn('Caught exception loading id %s from Postgres table %s' % (uuid,  self.entity_table_name) )
+                        if value is not None:
+                            value = str.decode(value, self.encoding)
+                            if value is not None:
+                                results[key] = value
+        except Exception as ex:
+            log.warn('Caught exception loading id %s from Postgres table %s' % (uuid,  self.entity_table_name))
             raise
         return results
 
     def search(self, search_criteria, limit=None):
-        from coverage_model.search.coverage_search import SearchCriteria
+        from coverage_model.search.coverage_search import SearchCriteria, ResultsCursor
+        from coverage_model.search.search_constants import SearchParameterNames, IndexParameterNames
         if not isinstance(search_criteria, SearchCriteria):
             raise ValueError("".join(["search_criteria must be of type SearchCriteria. Found: ",
                                       str(type(search_criteria))]))
         statement = ''.join(["SELECT coverage_id, span_address FROM ", self.span_table_name, ' WHERE'])
         and_str = ' and'
+        search_constants = SearchParameterNames()
         for param in search_criteria.criteria:
-            if param.param_name == 'time':
+            if param.param_name == search_constants.TIME:
                 if isinstance(param.param_type, ParamValue):
                     time_min = param.value
                     time_max = param.value
                 if isinstance(param.param_type, ParamValueRange):
                     time_min = param.value[0]
                     time_max = param.value[1]
-                time_min_str = datetime.datetime.utcfromtimestamp(time_min).strftime('%Y-%m-%d %H:%M:%S.%f z')
-                time_max_str = datetime.datetime.utcfromtimestamp(time_max).strftime('%Y-%m-%d %H:%M:%S.%f z')
+                time_min_str = PostgresDB._get_time_string(time_min)
+                time_max_str = PostgresDB._get_time_string(time_max)
+                #time_min_str = datetime.datetime.utcfromtimestamp(time_min).strftime('%Y-%m-%d %H:%M:%S.%f z')
+                #time_max_str = datetime.datetime.utcfromtimestamp(time_max).strftime('%Y-%m-%d %H:%M:%S.%f z')
                 statement += ''.join([' time_range && ', "'[", time_min_str, ", ", time_max_str, ")'::tsrange", and_str])
-            if param.param_name == 'geo_box':
+            if param.param_name == search_constants.GEO_BOX:
                 if isinstance(param.param_type, Param2DValueRange):
                     lat_min = param.value[0][0]
                     lat_max = param.value[0][1]
@@ -290,27 +342,40 @@ class PostgresDB(DB):
                     lon_max = param.value[1][1]
                     statement += ''.join([" ST_intersects(spatial_geography, ",
                                  self.get_geo_shape(lon_min, lon_max, lat_min, lat_max), "::geometry)", and_str])
+            if param.param_name == search_constants.VERTICAL:
+                if isinstance(param.param_type, ParamValueRange):
+                    vertical_min = str(param.value[0])
+                    vertical_max = str(param.value[1])
+                statement += ''.join([' vertical_range && ', "'[", vertical_min, ", ", vertical_max, ")'::numrange", and_str])
 
         statement = statement.rstrip(and_str)
         if len(statement) > 0:
-            rows = {}
+            found_rows = {}
             results = {}
-            with self.datastore.pool.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+            with self.datastore.pool.cursor(**self.datastore.cursor_args) as cur:
+                log.trace(cur.mogrify(statement))
                 cur.execute(statement)
-                if limit is None:
-                    rows = cur.fetchmany()
-                elif limit == -1:
-                    rows = cur.fetchall()
-                else:
-                    rows = cur.fetchmany(limit)
-            for row in rows:
-                if row['coverage_id'] not in results.keys():
-                    results[row['coverage_id']] = []
-                results[row['coverage_id']].append(row['span_address'])
+                #results_cursor = ResultsCursor(cur)
+                #if limit is None:
+                #    found_rows = cur.fetchmany()
+                #elif limit == -1:
+                #    log.trace("Fetching all")
+                #    found_rows = cur.fetchall()
+                #else:
+                #    found_rows = cur.fetchmany(limit)
+                found_rows = cur.fetchall()
+
+            log.trace('%s rows match', len(found_rows))
+            for row in found_rows:
+                coverage_id, span_address = row
+                if coverage_id not in results.keys():
+                    results[coverage_id] = []
+                log.trace("Adding row to results")
+                results[coverage_id].append(span_address)
             return results
 
-    def list(self, limit=100):
-        raise NotImplementedError('Not implemented by base class')
+    #def list(self, limit=100):
+    #    raise NotImplementedError('Not implemented by base class')
 
 
 class DBFactory(object):

@@ -43,14 +43,14 @@ class Param2DValueRange(object):
         pass
 
 
-class Param(object):
+class SearchParameter(object):
     @classmethod
     def from_range(cls, param_name, start, stop):
         return Param(param_name, (start, stop), ParamValueRange)
 
     @classmethod
     def from_value(cls, param_name, value):
-        return Param(param_name, value, ParamValue())
+        return SearchParameter(param_name, value, ParamValue())
 
     def __init__(self, param_name, value, param_type=ParamValue()):
         if not isinstance(param_name, basestring):
@@ -103,11 +103,11 @@ class Param(object):
 #            setattr(self, id, value_range)
 
 
-class SearchCriteria:
+class SearchCriteria():
     @classmethod
     def _evaluate_type_(cls, something):
-        if not isinstance(something, Param):
-            raise ValueError("".join(["Search criteria parameters must be of type ", Param.__name__, " found ",
+        if not isinstance(something, SearchParameter):
+            raise ValueError("".join(["Search criteria parameters must be of type ", SearchParameter.__name__, " found ",
                                       something.__class__.__name__]))
 
     def __init__(self, with_params=None):
@@ -119,4 +119,3 @@ class SearchCriteria:
     def append(self, param):
         self._evaluate_type_(param)
         self.criteria.append(param)
-

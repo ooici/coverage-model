@@ -611,6 +611,25 @@ class PersistedStorage(AbstractStorage):
 
         self._pending_values[wk].append(work)
 
+    def get_brick_slice(self, bid, slice_=None):
+        brick_file_path = '{0}/{1}.hdf5'.format(self.brick_path, bid)
+        if not os.path.exists(brick_file_path):
+            log.trace('Found virtual brick file: %s', brick_file_path)
+        else:
+            log.trace('Found real brick file: %s', brick_file_path)
+
+        with HDFLockingFile(brick_file_path) as brick_file:
+            ret_vals = brick_file[bid].value
+
+        # Check if object type
+        if self.dtype in ('|O8', '|O4'):
+            if hasattr(ret_vals, '__iter__'):
+                ret_vals = [self._object_unpack_hook(x) for x in ret_vals]
+            else:
+                ret_vals = self._object_unpack_hook(ret_vals)
+
+        return ret_vals
+
     def __getitem__(self, slice_):
         """
         Called to implement evaluation of self[slice_].
