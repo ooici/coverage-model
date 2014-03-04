@@ -10,6 +10,7 @@
 __author__ = 'casey'
 
 from ooi.logging import log
+import numpy as np
 from search_parameter import SearchCriteria
 from coverage_model.db_connectors import DBFactory
 from coverage_model.metadata_factory import MetadataManagerFactory
@@ -17,35 +18,30 @@ from coverage_model.search.search_constants import *
 from coverage_model.search.search_parameter import *
 from coverage_model.coverage import AbstractCoverage
 from coverage_model.data_span import *
-import numpy as np
 
 
 class CoverageSearch(object):
 
-    def __init__(self, search_criteria, order_by=None, coverage_id=None):
+    def __init__(self, search_criteria, order_by=None, coverage_id=None, viewable_parameters=None):
         if not isinstance(search_criteria, SearchCriteria):
             raise ValueError('Search parameters must be of type ', SearchCriteria.__class__.__name__)
         self.coverage_id = None
         if coverage_id is not None:
-            search_criteria.append(SearchParameter('coverage_id', coverage_id, ParamValue()))
+            search_criteria.append(ParamValue('coverage_id', coverage_id))
             self.coverage_id = coverage_id
         self.search_criteria = search_criteria
-        self.order_by=order_by
-
-    #@staticmethod
-    #def list(db_name=None, limit=None):
-    #    db = DBFactory.get_db(db_name)
-    #    ids = db.list(limit)
-    #    return CoverageSearch._build_managers(ids)
+        self.order_by = order_by
+        self.viewable_parameters = viewable_parameters
 
     def select(self, db_name=None, limit=-1):
         db = DBFactory.get_db(db_name)
         span_dict = db.search(self.search_criteria, limit)
         log.trace("Span length: %s", str(len(span_dict)))
-        return CoverageSearchResults(span_dict, self.search_criteria, order_by=self.order_by)
+        return CoverageSearchResults(span_dict, self.search_criteria, viewable_parameters=self.viewable_parameters,
+                                     order_by=self.order_by)
 
     @staticmethod
-    def find(uid, persistence_dir, db_name='postgres', limit=100):
+    def find(uid, persistence_dir, db_name=None, limit=-1):
         db = DBFactory.get_db(db_name)
         rows = db.get(uid)
         if len(rows) > 1:
@@ -76,37 +72,11 @@ class ResultsCursor(object):
 
 class CoverageSearchResults(object):
 
-    def __init__(self, coverage_dict, search_criteria, order_by=None):
-        for id, spans in coverage_dict.iteritems():
-            pass
+    def __init__(self, coverage_dict, search_criteria, order_by=None, viewable_parameters=None):
         self.span_dict = coverage_dict
         self.search_criteria = search_criteria
         self.order_by = order_by
-
-    #@staticmethod
-    #def search(search_criteria):
-    #    if not isinstance(search_criteria, SearchCriteria):
-    #        raise TypeError("Expected %s, found %s", SearchCriteria.__name__, str(type(search_criteria)))
-    #
-    #    consts = SearchParameterNames()
-    #    met_requirement = False
-    #    for srch_param in search_criteria.criteria:
-    #        if srch_param.param_name in consts.AT_LEAST_ONE_REQUIRED:
-    #            met_requirement = True
-    #            break
-    #    if not met_requirement:
-    #        raise ValueError("At least one search parameter must be in the set %s", consts.AT_LEAST_ONE_REQUIRED)
-    #    span_dict = {}
-    #    span_dict = DBFactory.get_db().search(search_criteria)
-    #
-    #    return CoverageSearchResults(span_dict, search_criteria)
-    #
-    #@staticmethod
-    #def search_within_one_coverage(coverage_id, search_criteria):
-    #    if not isinstance(search_criteria, SearchCriteria):
-    #        raise TypeError("Expected %s, found %s", SearchCriteria.__name__, str(type(search_criteria)))
-    #    search_criteria.append(SearchParameter('coverage_id', coverage_id, ParamValue()))
-    #    return CoverageSearchResults.search(search_criteria)
+        self.viewable_parameters = viewable_parameters
 
     def get_view_coverage(self, coverage_id, working_dir):
         if coverage_id in self.span_dict:
@@ -120,22 +90,48 @@ class CoverageSearchResults(object):
             coverages[cov_id] = self._build_view_coverage(cov_id, spans)
 
     def _build_view_coverage(self, coverage_id, spans, working_dir):
-        return ViewCoverage(coverage_id, base_dir=working_dir, spans=spans, view_criteria=self.search_criteria, order_by=self.order_by)
+        return SearchCoverage(coverage_id, base_dir=working_dir, spans=spans, view_criteria=self.search_criteria,
+                            order_by=self.order_by, viewable_parameters=self.viewable_parameters)
 
     def get_found_coverage_ids(self):
         return self.span_dict.keys()
 
 
-class ViewCoverage(object):
+class SearchCoverage(object):
 
-    def __init__(self, coverage_id, base_dir, spans=None, view_criteria=None, order_by=None):
+    def __init__(self, coverage_id, base_dir, spans=None, view_criteria=None, viewable_parameters=None, order_by=None):
         from coverage_model.coverage import AbstractCoverage
+        from coverage_model.search.search_parameter import *
         # wrap a read only abstract coverage so we can access values in a common method
         self._cov = AbstractCoverage.load(base_dir, persistence_guid=coverage_id, mode='r')
         self.spans = spans
         self.view_criteria = view_criteria
-        self.order_by = order_by
+        self.viewable_parameters = []
+        self.order_by = []
         self.np_array_dict = {}
+        if viewable_parameters is not None:
+            if isinstance(viewable_parameters, basestring):
+                viewable_parameters = [viewable_parameters]
+            if not isinstance(viewable_parameters, collections.Iterable):
+                raise TypeError(''.join(['Unable to create view for view_parameter type: ', str(type(viewable_parameters))]))
+            for val in viewable_parameters:
+                if isinstance(val, basestring):
+                    self.viewable_parameters.append(val)
+                else:
+                    raise TypeError(''.join(['Unable to create view for view_parameter member type: ', str(type(val)),
+                                             ' from view_parameters: ', str(viewable_parameters)]))
+        if order_by is not None:
+            if isinstance(order_by, basestring):
+                order_by = [order_by]
+            if not isinstance(order_by, collections.Iterable):
+                raise TypeError(''.join(['Unable to order by type: ', str(type(order_by))]))
+            for val in order_by:
+                if isinstance(val, basestring):
+                    self.order_by.append(val)
+                else:
+                    raise TypeError(''.join(['Unable to order by order_by member type: ', str(type(val)),
+                                    ' from order_by: ', str(order_by)]))
+
         self._extract_parameter_data()
 
     def _extract_parameter_data(self):
@@ -151,7 +147,7 @@ class ViewCoverage(object):
                 val = self._cov._range_value[param_name]._storage
                 span_np_dict[param_name] = val.get_brick_slice(span_address.brick_id)
 
-                for param in self.view_criteria.criteria:
+                for param in self.view_criteria.criteria.values():
                     if param.param_name in span.params and param.param_name == param_name:
                         indexes = np.argwhere( (span_np_dict[param_name]>=param.value[0]) &
                                                (span_np_dict[param_name]<=param.value[1]) )

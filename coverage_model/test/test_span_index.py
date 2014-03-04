@@ -87,6 +87,7 @@ class TestSpanUnit(CoverageModelUnitTestCase):
 
         self.assertNotEqual(spans_collection, bad_col)
 
+
 @attr('INT',group='cov')
 class TestSpanInt(CoverageModelUnitTestCase):
     working_dir = os.path.join(tempfile.gettempdir(), 'cov_mdl_tests')
@@ -190,8 +191,11 @@ class TestSpanInt(CoverageModelUnitTestCase):
                 #scov.set_parameter_values('const_rng_flt', value=(12.8, 55.2)) # Set with a tuple
                 #scov.set_parameter_values('const_rng_int', value=[-10, 10]) # Set with a list
 
-                scov.set_parameter_values('lon', value=160 * np.random.random_sample())
-                scov.set_parameter_values('lat', value=70 * np.random.random_sample())
+                value = 160 * np.random.random_sample(nt)
+                scov.append_parameter(ParameterContext('m_lon'))
+                scov.append_parameter(ParameterContext('m_lat'))
+                scov.set_parameter_values('m_lon', value=value)
+                scov.set_parameter_values('m_lat', value=70 * np.random.random_sample(nt))
 
                 #arrval = []
                 #recval = []
@@ -223,8 +227,8 @@ class TestSpanInt(CoverageModelUnitTestCase):
         self.assertIsNotNone(scov)
 
         time_npa = scov.get_parameter_values('time')
-        lat_npa = scov.get_parameter_values('lat')
-        lon_npa = scov.get_parameter_values('lon')
+        lat_npa = scov.get_parameter_values('m_lat')
+        lon_npa = scov.get_parameter_values('m_lon')
         mm = scov._persistence_layer.master_manager
         if hasattr(mm, 'span_collection'):
             for k, span in mm.span_collection.span_dict.iteritems():
@@ -232,14 +236,14 @@ class TestSpanInt(CoverageModelUnitTestCase):
                     pmin, pmax = span.params['time']
                     self.assertEqual(np.float32(pmin), time_npa.min())
                     self.assertEqual(np.float32(pmax), time_npa.max())
-                if 'lat' in span.params:
-                    pmin, pmax = span.params['lat']
-                    self.assertEqual(np.float32(pmin), lat_npa.min())
-                    self.assertEqual(np.float32(pmax), lat_npa.max())
-                if 'lon' in span.params:
-                    pmin, pmax = span.params['lon']
-                    self.assertEqual(np.float32(pmin), lon_npa.min())
-                    self.assertEqual(np.float32(pmax), lon_npa.max())
+                if 'm_lat' in span.params:
+                    pmin, pmax = span.params['m_lat']
+                    self.assertEqual(np.float32(pmin), np.float32(lat_npa.min()))
+                    self.assertEqual(np.float32(pmax), np.float32(lat_npa.max()))
+                if 'm_lon' in span.params:
+                    pmin, pmax = span.params['m_lon']
+                    self.assertEqual(np.float32(pmin), np.float32(lon_npa.min()))
+                    self.assertEqual(np.float32(pmax), np.float32(lon_npa.max()))
 
     def test_span_insert(self):
         scov, cov_name = self.construct_cov(nt=10)
@@ -282,16 +286,15 @@ class TestSpanInt(CoverageModelUnitTestCase):
             for k, span in mm.span_collection.span_dict.iteritems():
                 if 'time' in span.params:
                     time_min, time_max = span.params['time']
-                if 'lat' in span.params:
-                    lat_min, lat_max = span.params['lat']
-                if 'lat' in span.params:
-                    lon_min, lon_max = span.params['lon']
+                if 'm_lat' in span.params:
+                    lat_min, lat_max = span.params['m_lat']
+                if 'm_lon' in span.params:
+                    lon_min, lon_max = span.params['m_lon']
 
-        param_names = SearchParameterNames()
         criteria = SearchCriteria()
-        param = SearchParameter(param_names.TIME, (time_min+1, time_max+1), ParamValueRange())
+        param = ParamValueRange(IndexedParameters.Time, (time_min+1, time_max+1))
         criteria.append(param)
-        param = SearchParameter(param_names.GEO_BOX, ((lat_min-1, lat_max+1),(lon_min-1, lon_max+1)), Param2DValueRange())
+        param = Param2DValueRange(IndexedParameters.GeoBox, ((lat_min-1, lat_max+1),(lon_min-1, lon_max+1)))
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
@@ -309,16 +312,15 @@ class TestSpanInt(CoverageModelUnitTestCase):
             for k, span in mm.span_collection.span_dict.iteritems():
                 if 'time' in span.params:
                     time_min, time_max = span.params['time']
-                if 'lat' in span.params:
-                    lat_min, lat_max = span.params['lat']
-                if 'lat' in span.params:
-                    lon_min, lon_max = span.params['lon']
+                if 'm_lat' in span.params:
+                    lat_min, lat_max = span.params['m_lat']
+                if 'm_lon' in span.params:
+                    lon_min, lon_max = span.params['m_lon']
 
-        param_names = SearchParameterNames()
         criteria = SearchCriteria()
-        param = SearchParameter(param_names.TIME, (time_min+20, time_max+30), ParamValueRange())
+        param = ParamValueRange(IndexedParameters.Time, (time_min+20, time_max+30))
         criteria.append(param)
-        param = SearchParameter(param_names.GEO_BOX, ((lat_min-1, lat_max+1),(lon_min-1, lon_max+1)), Param2DValueRange())
+        param = Param2DValueRange(IndexedParameters.GeoBox, ((lat_min-1, lat_max+1),(lon_min-1, lon_max+1)))
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
@@ -336,16 +338,15 @@ class TestSpanInt(CoverageModelUnitTestCase):
             for k, span in mm.span_collection.span_dict.iteritems():
                 if 'time' in span.params:
                     time_min, time_max = span.params['time']
-                if 'lat' in span.params:
-                    lat_min, lat_max = span.params['lat']
-                if 'lat' in span.params:
-                    lon_min, lon_max = span.params['lon']
+                if 'm_lat' in span.params:
+                    lat_min, lat_max = span.params['m_lat']
+                if 'm_lon' in span.params:
+                    lon_min, lon_max = span.params['m_lon']
 
-        param_names = SearchParameterNames()
         criteria = SearchCriteria()
-        param = SearchParameter(param_names.TIME, (time_min+1, time_max+1), ParamValueRange())
+        param = ParamValueRange(IndexedParameters.Time, (time_min+1, time_max+1))
         criteria.append(param)
-        param = SearchParameter(param_names.GEO_BOX, ((lat_max+1, lat_max+2),(lon_min-1, lon_max+1)), Param2DValueRange())
+        param = Param2DValueRange(IndexedParameters.GeoBox, ((lat_max+1, lat_max+2),(lon_min-1, lon_max+1)))
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
@@ -363,16 +364,15 @@ class TestSpanInt(CoverageModelUnitTestCase):
             for k, span in mm.span_collection.span_dict.iteritems():
                 if 'time' in span.params:
                     time_min, time_max = span.params['time']
-                if 'lat' in span.params:
-                    lat_min, lat_max = span.params['lat']
-                if 'lat' in span.params:
-                    lon_min, lon_max = span.params['lon']
+                if 'm_lat' in span.params:
+                    lat_min, lat_max = span.params['m_lat']
+                if 'm_lon' in span.params:
+                    lon_min, lon_max = span.params['m_lon']
 
-        param_names = SearchParameterNames()
         criteria = SearchCriteria()
-        param = SearchParameter(param_names.TIME, (time_min+1, time_max+1), ParamValueRange())
+        param = ParamValueRange(IndexedParameters.Time, (time_min+1, time_max+1))
         criteria.append(param)
-        param = SearchParameter(param_names.GEO_BOX, ((lat_min+1, lat_max+2),(lon_max+0.5, lon_max+1)), Param2DValueRange())
+        param = Param2DValueRange(IndexedParameters.GeoBox, ((lat_min+1, lat_max+2),(lon_max+0.5, lon_max+1)))
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
@@ -390,20 +390,68 @@ class TestSpanInt(CoverageModelUnitTestCase):
             for k, span in mm.span_collection.span_dict.iteritems():
                 if 'time' in span.params:
                     time_min, time_max = span.params['time']
-                if 'lat' in span.params:
-                    lat_min, lat_max = span.params['lat']
-                if 'lat' in span.params:
-                    lon_min, lon_max = span.params['lon']
+                if 'm_lat' in span.params:
+                    lat_min, lat_max = span.params['m_lat']
+                if 'm_lon' in span.params:
+                    lon_min, lon_max = span.params['m_lon']
 
-        param_names = SearchParameterNames()
         criteria = SearchCriteria()
-        param = SearchParameter(param_names.TIME, (time_min+1, time_max+1), ParamValueRange())
+        param = ParamValueRange(IndexedParameters.Time, (time_min+1, time_max+1))
         criteria.append(param)
-        param = SearchParameter(param_names.GEO_BOX, ((lat_max-0.1, lat_max+20), (lon_min+0.5, lon_max-0.5)), Param2DValueRange())
+        param = Param2DValueRange(IndexedParameters.GeoBox, ((lat_max, lat_max+20), (lon_min-0.1, lon_max+20)))
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
         self.assertTrue(mm.guid in results.get_found_coverage_ids())
+
+    def test_search_for_span_using_lat_and_lon(self):
+        scov, cov_name = self.construct_cov(nt=10)
+        self.assertIsNotNone(scov)
+
+        lat_min, lat_max = (1000.0, 1000.0)
+        lon_min, lon_max = (1000.0, 1000.0)
+        mm = scov._persistence_layer.master_manager
+        if hasattr(mm, 'span_collection'):
+            for k, span in mm.span_collection.span_dict.iteritems():
+                if 'm_lat' in span.params:
+                    lat_min, lat_max = span.params['m_lat']
+                if 'm_lon' in span.params:
+                    lon_min, lon_max = span.params['m_lon']
+
+        criteria = SearchCriteria()
+        param = ParamValueRange(IndexedParameters.Latitude, (lat_min-1, lat_max+20))
+        criteria.append(param)
+        param = ParamValueRange(IndexedParameters.Longitude, (lon_min-1, lon_max+20))
+        criteria.append(param)
+        search = CoverageSearch(criteria)
+        results = search.select()
+        self.assertTrue(mm.guid in results.get_found_coverage_ids())
+
+        lat = ParamValueRange(IndexedParameters.Latitude, (lat_min-1, lat_min-0.5))
+        lon = ParamValueRange(IndexedParameters.Longitude, (lon_min-1, lon_min-0.5))
+        criteria = SearchCriteria([lat, lon])
+        search = CoverageSearch(criteria)
+        results = search.select()
+        self.assertFalse(mm.guid in results.get_found_coverage_ids())
+
+        lat = ParamValue(IndexedParameters.Latitude, (lat_min+lat_max)/2)
+        lon = ParamValue(IndexedParameters.Longitude, (lon_min+lon_max)/2)
+        criteria = SearchCriteria([lat, lon])
+        search = CoverageSearch(criteria)
+        results = search.select()
+        self.assertTrue(mm.guid in results.get_found_coverage_ids())
+
+        lat = ParamValueRange(IndexedParameters.Latitude, (lat_min-1, lat_max+1))
+        lon = ParamValueRange(IndexedParameters.Longitude, (lon_min-150, lon_max+10))
+        criteria = SearchCriteria([lat, lon])
+        search = CoverageSearch(criteria)
+        results = search.select()
+        self.assertTrue(mm.guid in results.get_found_coverage_ids())
+
+        lat = ParamValueRange(IndexedParameters.Latitude, (lat_min-1, lat_max+1))
+        criteria = SearchCriteria(lat)
+        search = CoverageSearch(criteria)
+        self.assertRaises(ValueError, search.select)
 
     def test_search_for_span_that_contains_searched_box(self):
         scov, cov_name = self.construct_cov(nt=10)
@@ -417,16 +465,15 @@ class TestSpanInt(CoverageModelUnitTestCase):
             for k, span in mm.span_collection.span_dict.iteritems():
                 if 'time' in span.params:
                     time_min, time_max = span.params['time']
-                if 'lat' in span.params:
-                    lat_min, lat_max = span.params['lat']
-                if 'lat' in span.params:
-                    lon_min, lon_max = span.params['lon']
+                if 'm_lat' in span.params:
+                    lat_min, lat_max = span.params['m_lat']
+                if 'm_lon' in span.params:
+                    lon_min, lon_max = span.params['m_lon']
 
-        param_names = SearchParameterNames()
         criteria = SearchCriteria()
-        param = SearchParameter(param_names.TIME, (time_min+1, time_max+1), ParamValueRange())
+        param = ParamValueRange(IndexedParameters.Time, (time_min-1, time_max+1))
         criteria.append(param)
-        param = SearchParameter(param_names.GEO_BOX, ((lat_min+1, lat_max-1),(lon_min+0.5, lon_max-0.5)), Param2DValueRange())
+        param = Param2DValueRange(IndexedParameters.GeoBox, ((lat_min-0.01, lat_max+0.01),(lon_min-0.5, lon_max+0.5)))
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
@@ -444,16 +491,15 @@ class TestSpanInt(CoverageModelUnitTestCase):
             for k, span in mm.span_collection.span_dict.iteritems():
                 if 'time' in span.params:
                     time_min, time_max = span.params['time']
-                if 'lat' in span.params:
-                    lat_min, lat_max = span.params['lat']
-                if 'lat' in span.params:
-                    lon_min, lon_max = span.params['lon']
+                if 'm_lat' in span.params:
+                    lat_min, lat_max = span.params['m_lat']
+                if 'm_lon' in span.params:
+                    lon_min, lon_max = span.params['m_lon']
 
-        param_names = SearchParameterNames()
         criteria = SearchCriteria()
-        param = SearchParameter(param_names.TIME, (time_min+1, time_max+1), ParamValueRange())
+        param = ParamValueRange(IndexedParameters.Time, (time_min+1, time_max+1))
         criteria.append(param)
-        param = SearchParameter(param_names.GEO_BOX, ((-15.5, 85.5), (0.5, 170.5)), Param2DValueRange())
+        param = Param2DValueRange(IndexedParameters.GeoBox, ((-15.5, 85.5), (0.5, 170.5)))
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
@@ -471,16 +517,13 @@ class TestSpanInt(CoverageModelUnitTestCase):
             for k, span in mm.span_collection.span_dict.iteritems():
                 if 'time' in span.params:
                     time_min, time_max = span.params['time']
-                if 'lat' in span.params:
-                    lat_min, lat_max = span.params['lat']
-                if 'lat' in span.params:
-                    lon_min, lon_max = span.params['lon']
+                if 'm_lat' in span.params:
+                    lat_min, lat_max = span.params['m_lat']
+                if 'm_lon' in span.params:
+                    lon_min, lon_max = span.params['m_lon']
 
-        param_names = SearchParameterNames()
         criteria = SearchCriteria()
-        param = SearchParameter(param_names.TIME, (time_min+1, time_max-1), ParamValueRange())
-        criteria.append(param)
-        param = SearchParameter(param_names.GEO_BOX, ((lat_min+1, lat_max-1),(lon_min+0.5, lon_max-0.5)), Param2DValueRange())
+        param = ParamValueRange(IndexedParameters.Time, (time_min+1, time_max-1))
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
@@ -498,16 +541,13 @@ class TestSpanInt(CoverageModelUnitTestCase):
             for k, span in mm.span_collection.span_dict.iteritems():
                 if 'time' in span.params:
                     time_min, time_max = span.params['time']
-                if 'lat' in span.params:
-                    lat_min, lat_max = span.params['lat']
-                if 'lat' in span.params:
-                    lon_min, lon_max = span.params['lon']
+                if 'm_lat' in span.params:
+                    lat_min, lat_max = span.params['m_lat']
+                if 'm_lon' in span.params:
+                    lon_min, lon_max = span.params['m_lon']
 
-        param_names = SearchParameterNames()
         criteria = SearchCriteria()
-        param = SearchParameter(param_names.TIME, (time_min-1, time_max+1), ParamValueRange())
-        criteria.append(param)
-        param = SearchParameter(param_names.GEO_BOX, ((lat_min+1, lat_max-1),(lon_min+0.5, lon_max-0.5)), Param2DValueRange())
+        param = ParamValueRange(IndexedParameters.Time, (time_min-1, time_max+1))
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
@@ -524,9 +564,8 @@ class TestSpanInt(CoverageModelUnitTestCase):
                 if 'depth' in span.params:
                     depth_min, depth_max = span.params['depth']
 
-        param_names = SearchParameterNames()
         criteria = SearchCriteria()
-        param = SearchParameter(param_names.VERTICAL, (depth_min-1, depth_max-1), ParamValueRange())
+        param = ParamValueRange(IndexedParameters.Vertical, (depth_min-1, depth_max-1))
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
@@ -534,7 +573,7 @@ class TestSpanInt(CoverageModelUnitTestCase):
 
         del criteria
         criteria = SearchCriteria()
-        param = SearchParameter(param_names.VERTICAL, (depth_max+0.00000001, depth_max+10.1), ParamValueRange())
+        param = ParamValueRange(IndexedParameters.Vertical, (depth_max+0.00000001, depth_max+10.1))
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
@@ -542,7 +581,7 @@ class TestSpanInt(CoverageModelUnitTestCase):
 
         del criteria
         criteria = SearchCriteria()
-        param = SearchParameter(param_names.VERTICAL, (depth_max-0.00000001, depth_max-0.000000001), ParamValueRange())
+        param = ParamValueRange(IndexedParameters.Vertical, (depth_max-0.00000001, depth_max-0.000000001))
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
@@ -550,8 +589,17 @@ class TestSpanInt(CoverageModelUnitTestCase):
 
         del criteria
         criteria = SearchCriteria()
-        param = SearchParameter(param_names.VERTICAL, (depth_min-1, depth_max+1), ParamValueRange())
+        param = ParamValueRange(IndexedParameters.Vertical, (depth_min-1, depth_max+1))
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
         self.assertTrue(mm.guid in results.get_found_coverage_ids())
+
+    def test_minimum_search_criteria(self):
+        param = ParamValue('dummy', 10)
+        criteria = SearchCriteria(search_params=[param])
+        search = CoverageSearch(criteria)
+        self.assertRaises(ValueError, search.select)
+        criteria.append(ParamValue(IndexedParameters.Time, 5))
+        search = CoverageSearch(criteria)
+        self.assertRaises(ValueError, search.select)

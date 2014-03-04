@@ -19,41 +19,6 @@ from coverage_model.search.search_constants import *
 
 from coverage_test_base import CoverageIntTestBase, get_props, get_parameter_dict, EXEMPLAR_CATEGORIES
 
-@attr('UNIT',group='cov')
-#class TestCoverageSearchUnit(CoverageModelUnitTestCase):
-
-    #def test_coverage_search_initialization(self):
-    #    time_min, time_max = (-1.0,-1.0)
-    #    lat_min, lat_max = (1000.0, 1000.0)
-    #    lon_min, lon_max = (1000.0, 1000.0)
-    #
-    #    search_constants = SearchParameterNames()
-    #    criteria = SearchCriteria()
-    #    param = SearchParameter(search_constants.TIME, (time_min, time_max), ParamValueRange())
-    #    criteria.append(param)
-    #    param = SearchParameter(search_constants.GEO_BOX, ((lat_min, lat_max),(lon_min, lon_max)), Param2DValueRange())
-    #    criteria.append(param)
-    #    results = None
-    #    results = CoverageSearchResults(criteria)
-    #    self.assertIsNotNone(results)
-    #
-    #def test_coverage_search_initialization_fails_for_invalid_parameters(self):
-    #    time_min, time_max = (-1.0,-1.0)
-    #    lat_min, lat_max = (1000.0, 1000.0)
-    #    lon_min, lon_max = (1000.0, 1000.0)
-    #
-    #    search_constants = SearchParameterNames()
-    #    criteria = SearchCriteria()
-    #    param = SearchParameter(search_constants.INTERNAL_TIME_KEY, (time_min, time_max), ParamValueRange())
-    #    criteria.append(param)
-    #    param = SearchParameter(search_constants.GPS_LAT_KEY, (lat_min, lat_max), ParamValueRange())
-    #    criteria.append(param)
-    #    results = None
-    #    try:
-    #        results = CoverageSearchResults(criteria)
-    #    except ValueError:
-    #        pass
-    #    self.assertIsNone(results)
 
 @attr('INT',group='cov')
 class TestCoverageSearchInt(CoverageModelUnitTestCase):
@@ -78,10 +43,10 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
             raise RuntimeError("Unable to load datastore for coverage_spans")
         if coverage_store is None:
             raise RuntimeError("Unable to load datastore for coverages")
-        for guid in cls.coverages:
-            with span_store.pool.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                cur.execute("DELETE FROM %s WHERE coverage_id='%s'" % (span_store._get_datastore_name(), guid))
-                cur.execute("DELETE FROM %s WHERE id='%s'" % (coverage_store._get_datastore_name(), guid))
+        #for guid in cls.coverages:
+        #    with span_store.pool.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+        #        cur.execute("DELETE FROM %s WHERE coverage_id='%s'" % (span_store._get_datastore_name(), guid))
+        #        cur.execute("DELETE FROM %s WHERE id='%s'" % (coverage_store._get_datastore_name(), guid))
 
     def setUp(self):
         pass
@@ -161,8 +126,10 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
                 #scov.set_parameter_values('const_rng_flt', value=(12.8, 55.2)) # Set with a tuple
                 #scov.set_parameter_values('const_rng_int', value=[-10, 10]) # Set with a list
 
-                scov.set_parameter_values('lon', value=160 * np.random.random_sample(nt))
-                scov.set_parameter_values('lat', value=70 * np.random.random_sample(nt))
+                scov.append_parameter(ParameterContext('m_lon'))
+                scov.append_parameter(ParameterContext('m_lat'))
+                scov.set_parameter_values('m_lon', value=160 * np.random.random_sample(nt))
+                scov.set_parameter_values('m_lat', value=70 * np.random.random_sample(nt))
 
                 #arrval = []
                 #recval = []
@@ -190,7 +157,7 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
         return scov, 'TestCoverageInt'
 
     def test_coverage_creation(self):
-        scov, cov_name = self.construct_cov(nt=16777216)
+        scov, cov_name = self.construct_cov(nt=100)
         self.assertIsNotNone(scov)
 
         time_min, time_max = (-1.0,-1.0)
@@ -201,21 +168,18 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
             for k, span in mm.span_collection.span_dict.iteritems():
                 if 'time' in span.params:
                     time_min, time_max = span.params['time']
-                if 'lat' in span.params:
-                    lat_min, lat_max = span.params['lat']
-                if 'lat' in span.params:
-                    lon_min, lon_max = span.params['lon']
+                if 'm_lat' in span.params:
+                    lat_min, lat_max = span.params['m_lat']
+                if 'm_lon' in span.params:
+                    lon_min, lon_max = span.params['m_lon']
 
-        search_constants = SearchParameterNames()
         criteria = SearchCriteria()
-        param = SearchParameter(search_constants.TIME, (1, 100), ParamValueRange())
+        param = ParamValueRange(IndexedParameters.Time, (1, 100))
         criteria.append(param)
-        #param = SearchParameter(search_constants.GEO_BOX, ((lat_min, lat_max),(lon_min, lon_max)), Param2DValueRange())
-        #criteria.append(param)
         search = CoverageSearch(criteria, order_by=['time'])
         results = search.select()
         self.assertIsNotNone(results)
-        self.assertIsNotNone( mm.guid, results.get_found_coverage_ids())
+        self.assertIn( mm.guid, results.get_found_coverage_ids())
         cov = results.get_view_coverage(mm.guid, self.working_dir)
         self.assertIsNotNone(cov)
         npa = cov.get_observations(start_index=10, end_index=25, order_by=['time'])
@@ -230,3 +194,55 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
             current = tup[index]
             self.assertGreaterEqual(current, last)
             last = current
+
+    def test_search_by_id(self):
+        scov, cov_name = self.construct_cov(nt=100)
+        self.assertIsNotNone(scov)
+
+        mm = scov._persistence_layer.master_manager
+        criteria = SearchCriteria((ParamValueRange(IndexedParameters.Time, (1, 100))))
+        criteria.append(ParamValue(IndexedParameters.CoverageId, mm.guid))
+        search = CoverageSearch(criteria, order_by=['time'])
+        results = search.select()
+        self.assertIsNotNone(results)
+        self.assertIn( mm.guid, results.get_found_coverage_ids())
+
+        criteria = SearchCriteria((ParamValueRange(IndexedParameters.Time, (1, 100))))
+        criteria.append(ParamValueRange(IndexedParameters.CoverageId, (mm.guid, "hello")))
+        search = CoverageSearch(criteria, order_by=['time'])
+        self.assertRaises(TypeError, search.select)
+
+        criteria = SearchCriteria((ParamValueRange(IndexedParameters.Time, (1, 100))))
+        criteria.append(ParamValue(IndexedParameters.CoverageId, 10))
+        search = CoverageSearch(criteria, order_by=['time'])
+        self.assertRaises(TypeError, search.select)
+
+    def test_search_by_depth(self):
+        scov, cov_name = self.construct_cov(nt=100)
+        self.assertIsNotNone(scov)
+
+        mm = scov._persistence_layer.master_manager
+        if hasattr(mm, 'span_collection'):
+            for k, span in mm.span_collection.span_dict.iteritems():
+                if 'time' in span.params:
+                    time_min, time_max = span.params['time']
+                if 'depth' in span.params:
+                    lat_min, lat_max = span.params['depth']
+
+        criteria = SearchCriteria((ParamValueRange(IndexedParameters.Time, (1, 100))))
+        criteria.append(ParamValueRange(IndexedParameters.Vertical, (time_min, time_max)))
+        search = CoverageSearch(criteria, order_by=['time'])
+        results = search.select()
+        self.assertIsNotNone(results)
+        self.assertIn( mm.guid, results.get_found_coverage_ids())
+
+        criteria = SearchCriteria((ParamValueRange(IndexedParameters.Time, (1, 100))))
+        criteria.append(ParamValue(IndexedParameters.CoverageId, (time_min+time_max)/2))
+        search = CoverageSearch(criteria, order_by=['time'])
+        self.assertIsNotNone(results)
+        self.assertIn( mm.guid, results.get_found_coverage_ids())
+
+        criteria = SearchCriteria((ParamValueRange(IndexedParameters.Time, (1, 100))))
+        criteria.append(Param2DValueRange(IndexedParameters.CoverageId, ((10,15), (time_min, time_max))))
+        search = CoverageSearch(criteria, order_by=['time'])
+        self.assertRaises(TypeError, search.select)

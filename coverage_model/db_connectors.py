@@ -30,51 +30,8 @@ class DB(object):
     def search(self, search_criteria):
         raise NotImplementedError('Not implemented by base class')
 
-    #def list(self, limit=100):
-    #    raise NotImplementedError('Not implemented by base class')
-
     def _get_collection_time(self, params):
         pass
-
-
-class CassandraDB(DB):
-
-    def __init__(self):
-#        self.pool = ConnectionPool('OOICI')
-#        self.col_fam = ColumnFamily(self.pool, 'Entity')
-        pass
-
-    def is_persisted(self, guid):
-#        try:
-#            self.col_fam.get(guid, column_count=1)
-#            return True
-#        except NotFoundException:
-#            pass
-        return False
-
-    def get_coverage_type(self, guid):
-#        try:
-#            col = self.col_fam.get(guid, columns=['coverage_type'])
-#            return col['coverage_type']
-#        except NotFoundException:
-            return ''
-
-#    def insert(self, uuid, data):
-#        try:
-#            if type(data) is dict:
-#                self.col_fam.insert(uuid, data)
-#                return True
-#        except Exception as e:
-#            log.warning('Exception writing to cassandra db:', e)
-#            pass
-#        return False
-
-#    def get(self, uuid):
-#        try:
-#            results = self.col_fam.get(uuid)
-#            return results
-#        except NotFoundException:
-#            return {}
 
 
 class PostgresDB(DB):
@@ -165,8 +122,10 @@ class PostgresDB(DB):
         return rv
 
     def _span_exists(self, span_address):
+        from coverage_model.config import CoverageConfig
+        config = CoverageConfig()
         with self.span_store.pool.cursor(**self.datastore.cursor_args) as cur:
-            cur.execute("SELECT 1 FROM %s WHERE span_address='%s'" % (self.span_table_name, span_address))
+            cur.execute("SELECT 1 FROM %s WHERE %s='%s'" % (self.span_table_name, config.span_id_db_key, span_address))
             if cur.rowcount > 0:
                 return True
         return False
@@ -205,14 +164,14 @@ class PostgresDB(DB):
 
     @staticmethod
     def span_values(coverage_id, span):
-        from coverage_model.search.search_constants import IndexParameterNames
+        from coverage_model.search.search_constants import IndexedParameters
         from coverage_model.config import CoverageConfig
         config = CoverageConfig()
         r_cols = ()
         r_vals = ()
-        cols = ['coverage_id']
+        cols = [config.span_coverage_id_db_key]
         values = [''.join(["'", str(coverage_id), "'"])]
-        cols.append('span_address')
+        cols.append(config.span_id_db_key)
         values.append(''.join(["'", span.address.get_db_str(), "'"]))
         insert = False
 
@@ -237,7 +196,7 @@ class PostgresDB(DB):
             lon_max = str(lons[1])
             tmp = PostgresDB.get_geo_shape(lon_min, lon_max, lat_min, lat_max)
             if len(tmp) > 0:
-                cols.append('spatial_geography')
+                cols.append(config.geo_db_key)
                 values.append(tmp)
                 insert = True
 
@@ -250,7 +209,7 @@ class PostgresDB(DB):
             time_min_str = PostgresDB._get_time_string(span.params[time_key][0])
             time_max_str = PostgresDB._get_time_string(span.params[time_key][1])
             value = "'[", str(time_min_str), ', ', str(time_max_str), ")'"
-            cols.append('time_range')
+            cols.append(config.time_db_key)
             values.append(''.join(value))
             insert = True
 
@@ -261,7 +220,7 @@ class PostgresDB(DB):
                 break
         if vertical_key is not None:
             value = "'[", str(span.params[vertical_key][0]), ', ', str(span.params[vertical_key][1]), ")'"
-            cols.append('vertical_range')
+            cols.append(config.vertical_db_key)
             values.append(''.join(value))
             insert = True
 
@@ -282,12 +241,12 @@ class PostgresDB(DB):
     def get_geo_shape(lon_min, lon_max, lat_min, lat_max):
         if lat_min == lat_max or lon_min == lon_max:
             if lat_min == lat_max and lon_min == lon_max:
-                tmp = ["ST_GeographyFromText('POINT(", str(lon_min), ' ', str(lat_min), ")')"]
+                tmp = ["ST_GeomFromText('POINT(", str(lon_min), ' ', str(lat_min), ")',4326)"]
             else:
-                tmp = ["ST_GeographyFromText('LINESTRING(", str(lon_min), ' ', str(lat_min), ',', str(lon_max), ' ', str(lat_max), ")')"]
+                tmp = ["ST_GeomFromText('LINESTRING(", str(lon_min), ' ', str(lat_min), ',', str(lon_max), ' ', str(lat_max), ")',4326)"]
         else:
-            tmp = ["ST_GeographyFromText('POLYGON((", str(lon_min), ' ', str(lat_min), ',', str(lon_min), ' ', str(lat_max), ',', str(lon_max),
-                   ' ', str(lat_max), ',', str(lon_max), ' ', str(lat_min), ',', str(lon_min), ' ', str(lat_min), "))')"]
+            tmp = ["ST_GeomFromText('POLYGON((", str(lon_min), ' ', str(lat_min), ',', str(lon_min), ' ', str(lat_max), ',', str(lon_max),
+                   ' ', str(lat_max), ',', str(lon_max), ' ', str(lat_min), ',', str(lon_min), ' ', str(lat_min), "))',4326)"]
         return ''.join(tmp)
 
     def get(self, uuid):
@@ -312,41 +271,116 @@ class PostgresDB(DB):
             raise
         return results
 
+    def _get_lat_long_extents(self, criteria):
+        from coverage_model.search.search_constants import IndexedParameters, AllowedSearchParameters, MinimumOneParameterFrom
+        lat_min = None
+        lat_max = None
+        lon_min = None
+        lon_max = None
+
+        if IndexedParameters.Latitude in criteria:
+            param = criteria[IndexedParameters.Latitude]
+            if isinstance(param, ParamValue):
+                lat_min = param.value
+                lat_max = param.value
+            elif isinstance(param, ParamValueRange):
+                lat_min = param.value[0]
+                lat_max = param.value[1]
+            else:
+                raise TypeError(''.join(['Parameter type, ', str(type(param)),
+                                         " doesn't make sense for parameter name - ", param.param_name]))
+        if IndexedParameters.Longitude in criteria:
+            param = criteria[IndexedParameters.Longitude]
+            if isinstance(param, ParamValue):
+                lon_min = param.value
+                lon_max = param.value
+            elif isinstance(param, ParamValueRange):
+                lon_min = param.value[0]
+                lon_max = param.value[1]
+            else:
+                raise TypeError(''.join(['Parameter type, ', str(type(param)),
+                                         " doesn't make sense for parameter name - ", param.param_name]))
+
+        if lat_min is None or lat_max is None or lon_min is None or lon_max is None:
+            raise ValueError('Latitude and longitude ranges must both be supplied')
+        return lat_max, lat_min, lon_max, lon_min
+
     def search(self, search_criteria, limit=None):
         from coverage_model.search.coverage_search import SearchCriteria, ResultsCursor
-        from coverage_model.search.search_constants import SearchParameterNames, IndexParameterNames
+        from coverage_model.search.search_constants import IndexedParameters, AllowedSearchParameters, MinimumOneParameterFrom
+        from coverage_model.config import CoverageConfig
+        config = CoverageConfig()
         if not isinstance(search_criteria, SearchCriteria):
             raise ValueError("".join(["search_criteria must be of type SearchCriteria. Found: ",
                                       str(type(search_criteria))]))
-        statement = ''.join(["SELECT coverage_id, span_address FROM ", self.span_table_name, ' WHERE'])
+        if len(MinimumOneParameterFrom.intersection(search_criteria.criteria)) < 1:
+            raise ValueError(''.join(['Search criteria must include a parameter from the minimum set: ',
+                                      str(MinimumOneParameterFrom)]))
+
+        if not set(search_criteria.criteria.keys()).issubset(AllowedSearchParameters):
+            raise ValueError(''.join(['Search criteria can only include values from the allowed parameter set: ',
+                                      str(AllowedSearchParameters)]))
+
+
+        statement = ''.join(['SELECT ', config.span_coverage_id_db_key, ', ', config.span_id_db_key, ' FROM ', self.span_table_name, ' WHERE'])
         and_str = ' and'
-        search_constants = SearchParameterNames()
-        for param in search_criteria.criteria:
-            if param.param_name == search_constants.TIME:
-                if isinstance(param.param_type, ParamValue):
+        lat_lon_handled = False
+        for param in search_criteria.criteria.values():
+            if param.param_name == IndexedParameters.Time:
+                if isinstance(param, ParamValue):
                     time_min = param.value
                     time_max = param.value
-                if isinstance(param.param_type, ParamValueRange):
+                elif isinstance(param, ParamValueRange):
                     time_min = param.value[0]
                     time_max = param.value[1]
+                else:
+                    raise TypeError(''.join(['Parameter type, ', str(type(param)),
+                                             " doesn't make sense for parameter name - ", param.param_name]))
+
                 time_min_str = PostgresDB._get_time_string(time_min)
                 time_max_str = PostgresDB._get_time_string(time_max)
-                #time_min_str = datetime.datetime.utcfromtimestamp(time_min).strftime('%Y-%m-%d %H:%M:%S.%f z')
-                #time_max_str = datetime.datetime.utcfromtimestamp(time_max).strftime('%Y-%m-%d %H:%M:%S.%f z')
-                statement += ''.join([' time_range && ', "'[", time_min_str, ", ", time_max_str, ")'::tsrange", and_str])
-            if param.param_name == search_constants.GEO_BOX:
-                if isinstance(param.param_type, Param2DValueRange):
-                    lat_min = param.value[0][0]
-                    lat_max = param.value[0][1]
-                    lon_min = param.value[1][0]
-                    lon_max = param.value[1][1]
-                    statement += ''.join([" ST_intersects(spatial_geography, ",
-                                 self.get_geo_shape(lon_min, lon_max, lat_min, lat_max), "::geometry)", and_str])
-            if param.param_name == search_constants.VERTICAL:
-                if isinstance(param.param_type, ParamValueRange):
+                statement += ''.join([' ', config.time_db_key, ' && ', "'[", time_min_str, ", ", time_max_str, ")'::tsrange", and_str])
+
+            if param.param_name == IndexedParameters.Latitude \
+                or param.param_name == IndexedParameters.Longitude \
+                or param.param_name == IndexedParameters.GeoBox:
+                if param.param_name != IndexedParameters.GeoBox:
+                    if lat_lon_handled is True:
+                        continue
+                    lat_min, lat_max, lon_min, lon_max = self._get_lat_long_extents(search_criteria.criteria)
+                    lat_lon_handled = True
+                else:
+                    if isinstance(param, Param2DValueRange):
+                        lat_min = param.value[0][0]
+                        lat_max = param.value[0][1]
+                        lon_min = param.value[1][0]
+                        lon_max = param.value[1][1]
+                    else:
+                        raise TypeError(''.join(['Parameter type, ', str(type(param)),
+                                                 " doesn't make sense for parameter name - ", param.param_name]))
+
+                statement += ''.join([' ST_intersects(', config.geo_db_key, ', ',
+                                      self.get_geo_shape(lon_min, lon_max, lat_min, lat_max), '::geometry)', and_str])
+
+            if param.param_name == IndexedParameters.Vertical:
+                if isinstance(param, ParamValue):
+                    vertical_min = str(param.value)
+                    vertical_max = str(param.value)
+                elif isinstance(param, ParamValueRange):
                     vertical_min = str(param.value[0])
                     vertical_max = str(param.value[1])
-                statement += ''.join([' vertical_range && ', "'[", vertical_min, ", ", vertical_max, ")'::numrange", and_str])
+                else:
+                    raise TypeError(''.join(['Parameter type, ', str(type(param)),
+                                             " doesn't make sense for parameter - ", param.param_name]))
+                statement += ''.join([' ', config.vertical_db_key, ' && ', "'[", vertical_min, ", ", vertical_max, ")'::numrange", and_str])
+
+            if param.param_name == IndexedParameters.CoverageId:
+                if isinstance(param, ParamValue) and isinstance(param.value, basestring):
+                    statement += ''.join([' ', config.span_coverage_id_db_key, " = '", param.value, "'", and_str])
+                else:
+                    raise TypeError(''.join(['Parameter type, ', str(type(param)), ', or value type, ',
+                                             str(type(param.value)), ', is invalid for parameter ',
+                                             param.param_name]))
 
         statement = statement.rstrip(and_str)
         if len(statement) > 0:
@@ -373,9 +407,6 @@ class PostgresDB(DB):
                 log.trace("Adding row to results")
                 results[coverage_id].append(span_address)
             return results
-
-    #def list(self, limit=100):
-    #    raise NotImplementedError('Not implemented by base class')
 
 
 class DBFactory(object):
