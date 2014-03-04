@@ -72,7 +72,7 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
     return os.path.realpath(scov.persistence_dir)
 
 class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
-    @attr('INT', group='cov')
+    @attr('UTIL', group='cov')
     def test_cov_params(self):
         contexts = create_all_params()
         del contexts['time']
