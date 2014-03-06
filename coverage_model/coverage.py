@@ -499,7 +499,7 @@ class AbstractCoverage(AbstractIdentifiable):
                 try:
                     value_set = self._range_value[p][slice_]
                 except ParameterFunctionException:
-                    log.exception("Parameter Function Exception", exc_info=True)
+                    log.exception("Parameter Function Exception")
                     dtype = self._range_dictionary[p].param_type.value_encoding
                     t_range_value = self._range_value[self.temporal_parameter_name]
                     if t_range_value:
