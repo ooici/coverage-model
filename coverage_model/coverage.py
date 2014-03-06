@@ -39,6 +39,7 @@ from pyon.util.async import spawn
 from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_doa, Dictable, InMemoryStorage, Span
 from coverage_model.parameter import Parameter, ParameterDictionary, ParameterContext
 from coverage_model.parameter_values import get_value_class, AbstractParameterValue
+from coverage_model.parameter_functions import ParameterFunctionException
 from coverage_model.persistence import PersistenceLayer, InMemoryPersistenceLayer, SimplePersistenceLayer
 from persistence_helpers import get_coverage_type
 from coverage_model import utils
@@ -495,7 +496,18 @@ class AbstractCoverage(AbstractIdentifiable):
                 dtype = self._range_dictionary[p].param_type.value_encoding
                 value_set = np.array([], dtype=dtype)
             else:
-                value_set = self._range_value[p][slice_]
+                try:
+                    value_set = self._range_value[p][slice_]
+                except ParameterFunctionException:
+                    log.exception("Parameter Function Exception", exc_info=True)
+                    dtype = self._range_dictionary[p].param_type.value_encoding
+                    t_range_value = self._range_value[self.temporal_parameter_name]
+                    if t_range_value:
+                        shape = t_range_value[slice_].shape
+                        value_set = np.ones(shape, dtype=dtype) * self._range_dictionary[p].param_type.fill_value
+                    else:
+                        value_set = None
+
             if p in value_dict:
                 value_set = np.concatenate([value_dict[p], value_set])
             value_dict[p] = value_set
