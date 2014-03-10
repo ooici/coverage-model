@@ -111,10 +111,10 @@ class TestSpanInt(CoverageModelUnitTestCase):
             raise RuntimeError("Unable to load datastore for coverage_spans")
         if coverage_store is None:
             raise RuntimeError("Unable to load datastore for coverages")
-        #for guid in cls.coverages:
-        #    with span_store.pool.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-        #        cur.execute("DELETE FROM %s WHERE coverage_id='%s'" % (span_store._get_datastore_name(), guid))
-        #        cur.execute("DELETE FROM %s WHERE id='%s'" % (coverage_store._get_datastore_name(), guid))
+        for guid in cls.coverages:
+           with span_store.pool.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+               cur.execute("DELETE FROM %s WHERE coverage_id='%s'" % (span_store._get_datastore_name(), guid))
+               cur.execute("DELETE FROM %s WHERE id='%s'" % (coverage_store._get_datastore_name(), guid))
 
     def setUp(self):
         pass
