@@ -41,6 +41,7 @@ from coverage_model.parameter import Parameter, ParameterDictionary, ParameterCo
 from coverage_model.parameter_values import get_value_class, AbstractParameterValue
 from coverage_model.persistence import PersistenceLayer, InMemoryPersistenceLayer, SimplePersistenceLayer, is_persisted
 from coverage_model.metadata_factory import MetadataManagerFactory
+from coverage_model.parameter_functions import ParameterFunctionException
 from coverage_model import utils
 from coverage_model.utils import Interval
 from copy import deepcopy
@@ -496,7 +497,18 @@ class AbstractCoverage(AbstractIdentifiable):
                 dtype = self._range_dictionary[p].param_type.value_encoding
                 value_set = np.array([], dtype=dtype)
             else:
-                value_set = self._range_value[p][slice_]
+                try:
+                    value_set = self._range_value[p][slice_]
+                except ParameterFunctionException:
+                    log.exception("Parameter Function Exception")
+                    dtype = self._range_dictionary[p].param_type.value_encoding
+                    t_range_value = self._range_value[self.temporal_parameter_name]
+                    if t_range_value:
+                        shape = t_range_value[slice_].shape
+                        value_set = np.ones(shape, dtype=dtype) * self._range_dictionary[p].param_type.fill_value
+                    else:
+                        value_set = None
+
             if p in value_dict:
                 value_set = np.concatenate([value_dict[p], value_set])
             value_dict[p] = value_set
