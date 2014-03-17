@@ -17,6 +17,7 @@ import shutil
 from coverage_model import create_guid
 from coverage_model.persistence_helpers import RTreeProxy
 
+from coverage_model.metadata_factory import MetadataManagerFactory
 import numpy as np
 import h5py
 from coverage_model.hdf_utils import HDFLockingFile
@@ -39,7 +40,8 @@ class BrickingAssessor(object):
             if os.path.exists(os.path.join(self.root_dir, name)):
                 shutil.rmtree(os.path.join(self.root_dir, name))
 
-            self.master_manager = MasterManager(self.root_dir, name, name='md_test_{0}'.format(name))
+#            self.master_manager = MasterManager(self.root_dir, name, name='md_test_{0}'.format(name))
+            self.master_manager = MetadataManagerFactory.buildMetadataManager(self.root_dir, name, name='md_test_{0}'.format(name))
 
             self.master_manager.flush()
 

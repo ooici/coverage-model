@@ -39,9 +39,9 @@ from pyon.util.async import spawn
 from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_doa, Dictable, InMemoryStorage, Span
 from coverage_model.parameter import Parameter, ParameterDictionary, ParameterContext
 from coverage_model.parameter_values import get_value_class, AbstractParameterValue
+from coverage_model.persistence import PersistenceLayer, InMemoryPersistenceLayer, SimplePersistenceLayer, is_persisted
+from coverage_model.metadata_factory import MetadataManagerFactory
 from coverage_model.parameter_functions import ParameterFunctionException
-from coverage_model.persistence import PersistenceLayer, InMemoryPersistenceLayer, SimplePersistenceLayer
-from persistence_helpers import get_coverage_type
 from coverage_model import utils
 from coverage_model.utils import Interval
 from copy import deepcopy
@@ -142,7 +142,8 @@ class AbstractCoverage(AbstractIdentifiable):
             raise ValueError('\'persistence_guid\' must be a string')
 
         # Otherwise, determine which coverage type to use to open the file
-        ctype = get_coverage_type(os.path.join(root_dir, persistence_guid, '{0}_master.hdf5'.format(persistence_guid)))
+#        ctype = get_coverage_type(os.path.join(root_dir, persistence_guid, '{0}_master.hdf5'.format(persistence_guid)))
+        ctype = MetadataManagerFactory.getCoverageType(root_dir, persistence_guid)
 
         if ctype == 'simplex':
             ccls = SimplexCoverage
@@ -1005,7 +1006,8 @@ class ViewCoverage(AbstractCoverage):
 
             def _doload(self):
                 # Make sure the coverage directory exists
-                if not os.path.exists(pth):
+#cjb              if not os.path.exists(pth):
+                if not is_persisted(root_dir, persistence_guid):
                     raise SystemError('Cannot find specified coverage: {0}'.format(pth))
 
                 self._persistence_layer = SimplePersistenceLayer(root_dir, persistence_guid, mode=self.mode)
@@ -1025,7 +1027,8 @@ class ViewCoverage(AbstractCoverage):
 
                 self.__setup(self._persistence_layer.param_dict)
 
-            if os.path.exists(pth):
+#cjb            if os.path.exists(pth):
+            if is_persisted(root_dir, persistence_guid):
             # if reference_coverage_location is None or name is None or parameter_dictionary is None:
                 # This appears to be a load
                 _doload(self)
@@ -1036,7 +1039,8 @@ class ViewCoverage(AbstractCoverage):
                     raise SystemError('\'reference_coverage_location\' and \'name\' cannot be None')
 
                 # If the coverage directory exists, load it instead!!
-                if os.path.exists(pth):
+                if is_persisted(root_dir, persistence_guid):
+#cjb                if os.path.exists(pth):
                     log.warn('The specified coverage already exists - performing load of \'{0}\''.format(pth))
                     _doload(self)
                     return
@@ -1210,7 +1214,8 @@ class ComplexCoverage(AbstractCoverage):
 
 
             pth = os.path.join(root_dir, persistence_guid)
-            if os.path.exists(pth):
+            if is_persisted(root_dir, persistence_guid):
+#cjb            if os.path.exists(pth):
                 self._existing_coverage(root_dir, persistence_guid)
             else:
                 self._new_coverage(root_dir, persistence_guid, name, reference_coverage_locs, parameter_dictionary, complex_type)
@@ -1224,7 +1229,8 @@ class ComplexCoverage(AbstractCoverage):
     def _existing_coverage(self, root_dir, persistence_guid):
         # If the path does exist, initialize the simple persistence layer
         pth = os.path.join(root_dir, persistence_guid)
-        if not os.path.exists(pth):
+        if not is_persisted(root_dir, persistence_guid):
+#cjb        if not os.path.exists(pth):
             raise SystemError('Cannot find specified coverage: {0}'.format(pth))
         self._persistence_layer = SimplePersistenceLayer(root_dir, persistence_guid, mode=self.mode)
         if self._persistence_layer.version != self.version:
@@ -1706,7 +1712,7 @@ class ComplexCoverage(AbstractCoverage):
         tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
         sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
         scov = SimplexCoverage(root_dir, 
-                               utils.create_guid(), 
+                               utils.create_guid(),
                                name,
                                parameter_dictionary=pdict, 
                                temporal_domain=tdom,
@@ -2146,7 +2152,8 @@ class SimplexCoverage(AbstractCoverage):
 
             def _doload(self):
                 # Make sure the coverage directory exists
-                if not os.path.exists(pth):
+                if not is_persisted(root_dir, persistence_guid):
+#cjb                if not os.path.exists(pth):
                     raise SystemError('Cannot find specified coverage: {0}'.format(pth))
 
                 # All appears well - load it up!
@@ -2192,7 +2199,8 @@ class SimplexCoverage(AbstractCoverage):
 
             # TODO: Why do this, just see if the directory is there no?
             # if name is None or parameter_dictionary is None:
-            if os.path.exists(pth):
+            if is_persisted(root_dir, persistence_guid):
+#cjb            if os.path.exists(pth):
                 # This appears to be a load
                 _doload(self)
 
@@ -2207,7 +2215,8 @@ class SimplexCoverage(AbstractCoverage):
                     raise SystemError('Cannot find specified \'root_dir\': {0}'.format(root_dir))
 
                 # If the coverage directory exists, load it instead!!
-                if os.path.exists(pth):
+                if is_persisted(root_dir, persistence_guid):
+#cjb                if os.path.exists(pth):
                     log.warn('The specified coverage already exists - performing load of \'{0}\''.format(pth))
                     _doload(self)
                     return

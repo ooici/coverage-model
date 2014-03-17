@@ -9,7 +9,7 @@
 
 from coverage_model.brick_dispatch import BrickWriterDispatcher
 from ooi.logging import log
-from coverage_model.basic_types import create_guid, AbstractStorage, InMemoryStorage
+from coverage_model.basic_types import create_guid, AbstractStorage, InMemoryStorage, Span
 from coverage_model.persistence_helpers import MasterManager, ParameterManager, pack, unpack
 import numpy as np
 import h5py
@@ -17,17 +17,34 @@ from coverage_model.hdf_utils import HDFLockingFile
 import os
 import itertools
 from copy import deepcopy
+from coverage_model.metadata_factory import MetadataManagerFactory
+import numbers
+
+
+def is_persisted(file_dir, guid):
+    return MetadataManagerFactory.isPersisted(file_dir,guid)
+
+
+def dir_exists(file_dir):
+    return MetadataManagerFactory.dirExists(file_dir)
+
+
+def get_coverage_type(file_dir, guid):
+    return MetadataManagerFactory.getCoverageType(file_dir,guid)
+
 
 # TODO: Make persistence-specific error classes
 class PersistenceError(Exception):
     pass
+
 
 class SimplePersistenceLayer(object):
 
     def __init__(self, root, guid, name=None, param_dict=None, mode=None, coverage_type=None, **kwargs):
         root = '.' if root is ('' or None) else root
 
-        self.master_manager = MasterManager(root_dir=root, guid=guid, name=name, param_dict=param_dict,
+#        self.master_manager = MasterManager(root_dir=root, guid=guid, name=name, param_dict=param_dict,
+        self.master_manager = MetadataManagerFactory.buildMetadataManager(root, guid, name=name, param_dict=param_dict,
                                             parameter_bounds=None, tree_rank=2, coverage_type=coverage_type, **kwargs)
 
         if not hasattr(self.master_manager, 'coverage_type'):
@@ -123,7 +140,8 @@ class PersistenceLayer(object):
         log.debug('Persistence GUID: %s', guid)
         root = '.' if root is ('' or None) else root
 
-        self.master_manager = MasterManager(root, guid, name=name, tdom=tdom, sdom=sdom, global_bricking_scheme=bricking_scheme, parameter_bounds=None, coverage_type=coverage_type, **kwargs)
+#        self.master_manager = MasterManager(root, guid, name=name, tdom=tdom, sdom=sdom, global_bricking_scheme=bricking_scheme, parameter_bounds=None, coverage_type=coverage_type, **kwargs)
+        self.master_manager = MetadataManagerFactory.buildMetadataManager(root, guid, name=name, tdom=tdom, sdom=sdom, global_bricking_scheme=bricking_scheme, parameter_bounds=None, coverage_type=coverage_type, **kwargs)
 
         self.mode = mode
         if not hasattr(self.master_manager, 'auto_flush_values'):
@@ -534,6 +552,7 @@ class PersistenceLayer(object):
 
         self._closed = True
 
+
 class PersistedStorage(AbstractStorage):
     """
     A concrete implementation of AbstractStorage utilizing the ParameterManager and brick dispatcher
@@ -570,6 +589,8 @@ class PersistedStorage(AbstractStorage):
         self.mode = mode
         self.inline_data_writes = inline_data_writes
         self.auto_flush = auto_flush
+        self.master_manager = master_manager
+        self.parameter_manager = parameter_manager
 
     def has_dirty_values(self):
         return len(self._pending_values) > 0
@@ -589,6 +610,25 @@ class PersistedStorage(AbstractStorage):
             self._pending_values[wk] = []
 
         self._pending_values[wk].append(work)
+
+    def get_brick_slice(self, bid, slice_=None):
+        brick_file_path = '{0}/{1}.hdf5'.format(self.brick_path, bid)
+        if not os.path.exists(brick_file_path):
+            log.trace('Found virtual brick file: %s', brick_file_path)
+        else:
+            log.trace('Found real brick file: %s', brick_file_path)
+
+        with HDFLockingFile(brick_file_path) as brick_file:
+            ret_vals = brick_file[bid].value
+
+        # Check if object type
+        if self.dtype in ('|O8', '|O4'):
+            if hasattr(ret_vals, '__iter__'):
+                ret_vals = [self._object_unpack_hook(x) for x in ret_vals]
+            else:
+                ret_vals = self._object_unpack_hook(ret_vals)
+
+        return ret_vals
 
     def __getitem__(self, slice_):
         """
@@ -652,6 +692,8 @@ class PersistedStorage(AbstractStorage):
                     else:
                         ret_vals = self._object_unpack_hook(ret_vals)
 
+                if self.parameter_manager.parameter_name == 'lat':
+                    log.trace("values from brick %s %s", str(ret_vals), type(ret_vals))
                 ret_arr[ret_slice] = ret_vals
 
         # ret_arr = np.atleast_1d(ret_arr.squeeze())
@@ -762,6 +804,41 @@ class PersistedStorage(AbstractStorage):
 
             self._set_values_to_brick(bid, brick_slice, v)
 
+            import datetime
+            if self.parameter_manager.parameter_name in self.master_manager.param_groups and v.dtype.type is not np.string_:
+                valid_types = [np.bool_, np.int_, np.intc, np.intp, np.int8, np.int16, np.int32, np.int64, np.uint8,
+                               np.uint16, np.uint32, np.uint64, np.float_, np.float16, np.float32, np.float64,
+                               np.complex_, np.complex64, np.complex128]
+                invalid_fill_values = [None, np.NaN, self.fill_value]
+                try:
+                    min_val = None
+                    max_val = None
+                    # First try to do it fast
+                    try:
+                        if issubclass(v.dtype.type, numbers.Number) or v.dtype.type in valid_types:
+                            tried_it = True
+                            min_val = v.min()
+                            max_val = v.max()
+                    except:
+                        min_val = None
+                        max_val = None
+                    # if fast didn't return valid values, do it slow, but right
+                    if min_val in invalid_fill_values or max_val in invalid_fill_values:
+                        ts = datetime.datetime.now()
+                        mx = [x for x in v if x not in invalid_fill_values and (type(x) in valid_types or issubclass(type(x), numbers.Number))]
+                        if len(mx) > 0:
+                            min_val = min(mx)
+                            max_val = max(mx)
+                        time_loss = datetime.datetime.now() - ts
+                        log.debug("Repaired numpy statistics inconsistency for parameter/type %s/%s.  Time loss of %s seconds ", self.parameter_manager.parameter_name, str(v.dtype.type), str(time_loss))
+                    if min_val is not None and max_val is not None:
+                        log.trace("%s min/max %s/%s type %s", self.parameter_manager.parameter_name, min_val, max_val, type(min_val))
+                        self.master_manager.track_data_written_to_brick(bid, brick_slice, self.parameter_manager.parameter_name, min_val, max_val)
+                except Exception as e:
+                    log.warn("Could not store Span extents for %s.  Unexpected error %s",
+                                str( (bid, brick_slice, self.parameter_manager.parameter_name)), e.message )
+                    raise
+
     def _set_values_to_brick(self, brick_guid, brick_slice, values, value_slice=None):
         brick_file_path = os.path.join(self.brick_path, '{0}.hdf5'.format(brick_guid))
         log.trace('Brick slice to fill: %s', brick_slice)
@@ -797,6 +874,8 @@ class PersistedStorage(AbstractStorage):
             with HDFLockingFile(brick_file_path, 'a') as f:
                 # TODO: Due to usage concerns, currently locking chunking to "auto"
                 f.require_dataset(brick_guid, shape=bD, dtype=data_type, chunks=None, fillvalue=fv)
+                if self.parameter_manager.parameter_name == 'lat':
+                    log.trace("Values to brick %s %s", vals, type(vals))
                 f[brick_guid][brick_slice] = vals
         else:
             work_key = brick_guid
@@ -871,6 +950,8 @@ class SparsePersistedStorage(AbstractStorage):
         self.mode = mode
         self.inline_data_writes = inline_data_writes
         self.auto_flush = auto_flush
+        self.master_manager = master_manager
+        self.parameter_manager = parameter_manager
 
     def has_dirty_values(self):
         return len(self._pending_values) > 0
@@ -954,6 +1035,44 @@ class SparsePersistedStorage(AbstractStorage):
                 # Queue the work for later flushing
                 self._queue_work(work_key, work_metrics, work)
 
+        if self.parameter_manager.parameter_name in self.master_manager.param_groups:
+            try:
+                log.trace("Parameter: %s , Values: %s , Fill: %s", self.parameter_manager.parameter_name, value, self.fill_value)
+                min_val = min(value)
+                max_val = max(value)
+                log.trace("Value type: %s %s", type(value[0]), len(value))
+                if len(value) > 0 and isinstance(value[0], Span):
+                    min_val = self.fill_value
+                    max_val = self.fill_value
+                    mins = []
+                    maxes = []
+                    for span in value:
+                        log.trace("Span min/max %s", span)
+                        if isinstance(span, Span):
+                            tup = span.tuplize()
+                            tup = [x for x in tup if x is not None and x is not self.fill_value and isinstance(x, numbers.Number)]
+                            if len(tup) > 0:
+                                mins.append(min(tup))
+                                maxes.append(max(tup))
+                    if len(mins) > 0:
+                        min_val = min(mins)
+                    if len(maxes) > 0:
+                        max_val = max(maxes)
+                if max_val is not None and min_val is not None:
+                    log.trace("SparsePersistedStorage saving %s min/max %s/%s", self.parameter_manager.parameter_name, min_val, max_val)
+                    self.master_manager.track_data_written_to_brick(bid, 0, self.parameter_manager.parameter_name, min_val, max_val)
+            except TypeError as e:
+                log.debug("Don't store extents for types for which extents are meaningless: %s", type(v))
+                raise
+            except ValueError as e:
+                log.warning("Values stored for extents were invalid for brick=%s, slice=%s, param=%s min/max=%s",
+                            bid, 0, self.parameter_manager.parameter_name, str( (min(value), max(value)) ))
+                raise
+            except Exception as e:
+                log.warning("Could not store Span extents for %s.  Unexpected error %s",
+                            str( (bid, 0, self.parameter_manager.parameter_name)), e.message )
+                raise
+
     def __deserialize(self, payload):
         if isinstance(payload, basestring) and payload.startswith('DICTABLE'):
             i = payload.index('|', 9)
@@ -986,6 +1105,7 @@ class SparsePersistedStorage(AbstractStorage):
     def __iter__(self):
         # TODO: THIS IS NOT CORRECT
         return [1,1].__iter__()
+
 
 class InMemoryPersistenceLayer(object):
 

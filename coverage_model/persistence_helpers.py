@@ -11,6 +11,9 @@ from pyon.core.interceptor.encode import encode_ion, decode_ion
 from ooi.logging import log
 from coverage_model.basic_types import Dictable
 from coverage_model import utils
+from coverage_model.metadata import MetadataManager
+from coverage_model.data_span import ParamSpan, SpanCollection
+from coverage_model.address import BrickAddress
 
 import os
 import h5py
@@ -94,12 +97,64 @@ class RTreeProxy(object):
         ub = float(self._spans[0].upper_bound) if len(self._spans) > 0 else 0.0
         return [lb, 0.0, ub, 0.0]
 
-class BaseManager(object):
+    def serialize(self):
+        out = ''
+        if len(self._spans) > 0:
+            out = self.__class__.__name__
+            for span in self._spans:
+                tup_str = ''
+                for i in span.tuplize(with_value=True):
+                    tup_str = '%(orig)s_%(val)s' % {'orig': tup_str, 'val': i}
+                out = '%(orig)s%(sep)s%(new)s' % {'orig': out, 'sep': '::span::', 'new': tup_str}
+        return out
+
+    @classmethod
+    def deserialize(cls, src_str):
+        if isinstance(src_str, basestring) and src_str.startswith(cls.__name__):
+            tmp = src_str.strip(cls.__name__)
+            rtp = RTreeProxy()
+            for span_tpl in tmp.split('::span::'):
+                if span_tpl == '':
+                    continue
+                a, b, c, d, e = span_tpl.split('_')
+                span_tpl = (int(b), int(c), int(d), e)
+                from coverage_model.basic_types import Span
+                span = Span.from_iterable(span_tpl)
+                rtp._spans.append(span)
+            return rtp
+        raise TypeError('Improper formatting for RTreeProxy deserialization: %s' % src_str)
+
+    def __eq__(self, other):
+        return self.serialize() == other.serialize()
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+
+class BaseManager(MetadataManager):
+
+    @staticmethod
+    def dirExists(directory):
+        os.path.exists(directory)
+
+    @staticmethod
+    def isPersisted(directory, guid):
+        if os.path.exists(directory):
+            file_path = os.path.join(directory, guid)
+            if os.path.exists(file_path):
+                return True
+
+        return False
+
+    def storage_type(self):
+        return 'hdf'
+
+    @staticmethod
+    def getCoverageType(directory, guid):
+        return get_coverage_type(os.path.join(directory, guid, '{0}_master.hdf5'.format(guid)))
 
     def __init__(self, root_dir, file_name, **kwargs):
-        super(BaseManager, self).__setattr__('_hmap',{})
-        super(BaseManager, self).__setattr__('_dirty',set())
-        super(BaseManager, self).__setattr__('_ignore',set())
+        MetadataManager.__init__(self, **kwargs)
         self.root_dir = root_dir
         self.file_path = os.path.join(root_dir, file_name)
 
@@ -191,6 +246,7 @@ class BaseManager(object):
             self._hmap[key] = utils.hash_any(value)
             self._dirty.add(key)
             super(BaseManager, self).__setattr__('_is_dirty',True)
+
 
 class MasterManager(BaseManager):
 

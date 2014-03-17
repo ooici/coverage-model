@@ -106,6 +106,7 @@ class AbstractParameterValue(AbstractBase):
         elif domain == VariabilityEnum.SPATIAL: # Spatial
             raise NotImplementedError('Expansion of the Spatial Domain is not yet supported')
 
+
     def __getitem__(self, slice_):
         slice_ = utils.fix_slice(slice_, self.shape)
 
