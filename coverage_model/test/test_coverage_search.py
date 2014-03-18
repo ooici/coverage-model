@@ -5,14 +5,13 @@ from nose.plugins.attrib import attr
 import numpy as np
 import os, shutil, tempfile
 import unittest
+import shutil, tempfile
 from pyon.core.bootstrap import CFG
 from pyon.datastore.datastore_common import DatastoreFactory
 import psycopg2
 import psycopg2.extras
 from coverage_model import *
 from coverage_model.address import *
-from coverage_model.data_span import *
-from coverage_model.db_connectors import DBFactory, DB
 from coverage_model.search.coverage_search import *
 from coverage_model.search.search_parameter import *
 from coverage_model.search.search_constants import *
@@ -37,16 +36,20 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
         # Removes temporary files
         # Comment this out if you need to inspect the HDF5 files.
         shutil.rmtree(cls.working_dir)
-        span_store = DatastoreFactory.get_datastore(datastore_name='coverage_spans', config=CFG)
-        coverage_store = DatastoreFactory.get_datastore(datastore_name='coverage', config=CFG)
-        if span_store is None:
-            raise RuntimeError("Unable to load datastore for coverage_spans")
-        if coverage_store is None:
-            raise RuntimeError("Unable to load datastore for coverages")
-        for guid in cls.coverages:
-           with span_store.pool.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-               cur.execute("DELETE FROM %s WHERE coverage_id='%s'" % (span_store._get_datastore_name(), guid))
-               cur.execute("DELETE FROM %s WHERE id='%s'" % (coverage_store._get_datastore_name(), guid))
+        if len(cls.coverages) > 0:
+            try:
+                span_store = DatastoreFactory.get_datastore(datastore_name='coverage_spans', config=CFG)
+                coverage_store = DatastoreFactory.get_datastore(datastore_name='coverage', config=CFG)
+                if span_store is None:
+                    raise RuntimeError("Unable to load datastore for coverage_spans")
+                if coverage_store is None:
+                    raise RuntimeError("Unable to load datastore for coverages")
+                for guid in cls.coverages:
+                    with span_store.pool.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                        cur.execute("DELETE FROM %s WHERE coverage_id='%s'" % (span_store._get_datastore_name(), guid))
+                        cur.execute("DELETE FROM %s WHERE id='%s'" % (coverage_store._get_datastore_name(), guid))
+            except:
+                pass
 
     def setUp(self):
         pass
@@ -128,26 +131,37 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
 
         return scov, 'TestCoverageInt'
 
+    @unittest.skipIf(False, 'Not Automated. Requires setup.')
+    def test_coverage_conversion(self):
+        cov_id = '1fd8b69e63744f9e9705fbfd003102fa'
+        cov_dir = '/Users/casey/Desktop/datasets'
+        cov = AbstractCoverage.load(cov_dir, cov_id)
+        self.assertIsNotNone(cov)
+        mm = cov._persistence_layer.master_manager
+        self.assertIsNotNone(mm)
+
+        search = CoverageSearch(SearchCriteria([ParamValue(IndexedParameters.CoverageId, cov_id)]))
+        retrieved_cov = search.find(cov_id, cov_dir)
+        self.assertIsNotNone(retrieved_cov)
+
+        new_mm = retrieved_cov._persistence_layer.master_manager
+        self.assertNotEqual(id(mm), id(new_mm))
+        self.assertEqual(0, len(mm.hdf_conversion_key_diffs(new_mm)))
+
+    def test_calculate_statistics(self):
+        scov, cov_name = self.construct_cov(nt=100)
+        self.assertIsNotNone(scov)
+
+        stats, not_calculated = scov.calculate_statistics()
+
     def test_coverage_creation(self):
         scov, cov_name = self.construct_cov(nt=100)
         self.assertIsNotNone(scov)
 
-        time_min, time_max = (-1.0,-1.0)
-        lat_min, lat_max = (1000.0, 1000.0)
-        lon_min, lon_max = (1000.0, 1000.0)
         mm = scov._persistence_layer.master_manager
-        if hasattr(mm, 'span_collection'):
-            for k, span in mm.span_collection.span_dict.iteritems():
-                if 'time' in span.params:
-                    time_min, time_max = span.params['time']
-                if 'm_lat' in span.params:
-                    lat_min, lat_max = span.params['m_lat']
-                if 'm_lon' in span.params:
-                    lon_min, lon_max = span.params['m_lon']
-
-        criteria = SearchCriteria()
-        param = ParamValueRange(IndexedParameters.Time, (1, 100))
-        criteria.append(param)
+        time_param = ParamValueRange(IndexedParameters.Time, (1, 100))
+        coverage_id_param = ParamValue(IndexedParameters.CoverageId, mm.guid)
+        criteria = SearchCriteria([time_param, coverage_id_param])
         search = CoverageSearch(criteria, order_by=['time'])
         results = search.select()
         self.assertIsNotNone(results)
@@ -307,7 +321,6 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
             check_equal_param_dicts(cov_tup[0], cov_tup[1].get_value_dictionary())
 
         from multiprocessing import Process, Queue, queues
-        from time import sleep
 
         def read_cov_and_evaluate_values(dir_, id_, value_dict, q, slp):
             cov_ = None

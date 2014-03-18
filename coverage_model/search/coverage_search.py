@@ -40,33 +40,33 @@ class CoverageSearch(object):
                                      order_by=self.order_by)
 
     @staticmethod
-    def find(uid, persistence_dir, db_name=None, limit=-1):
+    def find(coverage_id, persistence_dir, db_name=None, limit=-1):
         db = DBFactory.get_db(db_name)
-        rows = db.get(uid)
+        rows = db.get(coverage_id)
         if len(rows) > 1:
             return AbstractCoverage.load(persistence_dir, persistence_guid=coverage_id, mode='r')
         return None
 
 
-class ResultsCursor(object):
-    def __init__(self, cursor):
-        self.cursor = cursor
-
-    def get_results(self, number=None):
-        found_rows = {}
-        if number is None:
-            found_rows = self.cursor.fetchall()
-        elif number == 1:
-            found_rows = self.cursor.fetchone()
-        else:
-            found_rows = self.cursor.fetchmany(number)
-
-        for row in found_rows:
-            coverage_id, span_address = row
-            if coverage_id not in results.keys():
-                results[coverage_id] = []
-            results[coverage_id].append(span_address)
-        return results
+# class ResultsCursor(object):
+#     def __init__(self, cursor):
+#         self.cursor = cursor
+#
+#     def get_results(self, number=None):
+#         found_rows = {}
+#         if number is None:
+#             found_rows = self.cursor.fetchall()
+#         elif number == 1:
+#             found_rows = self.cursor.fetchone()
+#         else:
+#             found_rows = self.cursor.fetchmany(number)
+#
+#         for row in found_rows:
+#             coverage_id, span_address = row
+#             if coverage_id not in results.keys():
+#                 results[coverage_id] = []
+#             results[coverage_id].append(span_address)
+#         return results
 
 
 class CoverageSearchResults(object):

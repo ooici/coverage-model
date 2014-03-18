@@ -7,7 +7,6 @@ from coverage_model.address import BrickFileAddress
 import numpy
 
 
-
 class MetadataManager(object):
 
     def __init__(self, **kwargs):
@@ -77,3 +76,25 @@ class MetadataManager(object):
             for k2 in self.span_collection.span_dict[key]:
                 span = self.span_collection.span_dict[key][k2]
                 log.trace("Span: %s", span.as_tuple_str())
+
+    def __eq__(self, other):
+        return 0 == len(self.hdf_conversion_key_diffs(other))
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def hdf_conversion_key_diffs(self, other):
+        key_diffs = set(self.__dict__.keys()) - set(other.__dict__.keys())
+        for key in self.__dict__:
+            if key in key_diffs:
+                continue # know it isn't in other.__dict__
+            if key is '_hmap':
+                continue # calculated value by object these will never be equal for different objects
+            if key is '_ignore':
+                continue  # This is an HDF artifact.  Ignored flush values are different between versions
+            if key in ['sdom', 'tdom', 'brick_domains', 'brick_list', '_dirty', '_is_dirty']:
+                continue # Tuple/List conversion by Postgres prevents comparison
+            elif self.__dict__[key] != other.__dict__[key]:
+                key_diffs.add(key)
+
+        return key_diffs

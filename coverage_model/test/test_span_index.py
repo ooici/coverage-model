@@ -273,6 +273,7 @@ class TestSpanInt(CoverageModelUnitTestCase):
         new_mm = retrieved_cov._persistence_layer.master_manager
 
         self.assertEqual(new_mm, orig_mm)
+        self.assertNotEqual(id(new_mm), id(orig_mm))
 
     def test_search_for_span(self):
         scov, cov_name = self.construct_cov(nt=10)

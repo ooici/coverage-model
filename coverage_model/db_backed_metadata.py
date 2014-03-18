@@ -15,7 +15,7 @@ from coverage_model.persistence_helpers import RTreeProxy, pack, unpack
 from coverage_model.basic_types import Dictable
 from coverage_model.db_connectors import DBFactory
 from coverage_model.data_span import SpanCollection, SpanCollectionByFile, ParamSpan
-import msgpack
+from coverage_model.persistence_helpers import MasterManager, BaseManager
 
 
 class DbBackedMetadataManager(MetadataManager):
@@ -26,28 +26,44 @@ class DbBackedMetadataManager(MetadataManager):
 
     @staticmethod
     def isPersisted(directory, guid):
+        if DbBackedMetadataManager.is_persisted_in_db(guid) is False:
+            return MasterManager.isPersisted(directory, guid)
+        return True
+
+    @staticmethod
+    def is_persisted_in_db(guid):
         return DBFactory.get_db().is_persisted(guid)
 
     @staticmethod
     def getCoverageType(directory, guid):
-        cov_type = DBFactory.get_db().get_coverage_type(guid)
-        if '' == cov_type:
-            return ''
+        if DbBackedMetadataManager.is_persisted_in_db(guid) is True:
+            cov_type = DBFactory.get_db().get_coverage_type(guid)
+            if '' == cov_type:
+                return ''
+            else:
+                cov_type = unpack(cov_type)
+                return cov_type
         else:
-            cov_type = unpack(cov_type)
-            return cov_type
+            return BaseManager.getCoverageType(directory, guid)
 
     def __init__(self, filedir, guid, **kwargs):
         MetadataManager.__init__(self, **kwargs)
+        self._ignore.update(['guid', 'file_path', 'root_dir'])
         self.guid = guid
-        self._ignore.update(['guid', 'file_path', 'root_dir', 'type'])
         self.param_groups = set()
         self.root_dir = os.path.join(filedir,guid)
-        self.file_path = os.path.join(filedir, guid)
+        fname = ''.join([guid, '_master.hdf5'])
+        self.file_path = os.path.join(self.root_dir, fname)
         self.brick_tree = RTreeProxy()
-        self.type = ''
 
-        self._load()
+        if self.is_persisted_in_db(guid):
+            self._load()
+        elif self.isPersisted(filedir, guid):
+            mm = MasterManager(filedir, guid, **kwargs)
+            for key, value in mm.__dict__.iteritems():
+                if not key == "_dirty":
+                    self.__setattr__(key, value)
+            self.flush(deep=False)
 
         #    This is odd - You can load an object and override stored values on construction.
         #    This might lead to unexpected behavior for users.
@@ -67,8 +83,8 @@ class DbBackedMetadataManager(MetadataManager):
             self._dirty.add(key)
             super(DbBackedMetadataManager, self).__setattr__('_is_dirty',True)
 
-    def flush(self):
-        if self.is_dirty(True):
+    def flush(self, deep=True):
+        if self.is_dirty(deep):
             try:
                 # package for storage
                 insert_dict = {}
@@ -143,6 +159,8 @@ class DbBackedMetadataManager(MetadataManager):
                     value = list(value)
 
                 setattr(self, key, value)
+                self._dirty.clear()
+                super(DbBackedMetadataManager, self).__setattr__('_is_dirty',False)
 
         except Exception as e:
             log.error("Caught exception reconstructing metadata for guid %s : %s", self.guid, e.message)
@@ -190,13 +208,13 @@ class DbBackedMetadataManager(MetadataManager):
         self.span_collection.add_span(span)
         self._dirty.add('span_collection')
 
-    def __eq__(self, other):
-        if self.param_groups == other.param_groups and self.guid == other.guid and \
-            self.file_path == other.file_path and self.parameter_bounds == other.parameter_bounds and \
-            self.type == other.type and self.root_dir == other.root_dir and \
-            self.span_collection == other.span_collection and self.brick_tree == other.brick_tree:
-            return True
-        return False
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
+    #def __eq__(self, other):
+    #    if self.param_groups == other.param_groups and self.guid == other.guid and \
+    #        self.file_path == other.file_path and self.parameter_bounds == other.parameter_bounds and \
+    #        self.type == other.type and self.root_dir == other.root_dir and \
+    #        self.span_collection == other.span_collection and self.brick_tree == other.brick_tree:
+    #        return True
+    #    return False
+    #
+    #def __ne__(self, other):
+    #    return not self.__eq__(other)

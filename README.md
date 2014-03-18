@@ -56,7 +56,7 @@ Setup a virtualenv to run coverage-model (use any name you like):
 
     mkvirtualenv --python=python2.7 coverage_model
     workon coverage_model
-    pip install numpy==1.6.2
+    pip install numpy==1.7.1
 
 **Optional:** *To run any of the example functions that result in graphical output, you must also install matplotlib*
 

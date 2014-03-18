@@ -2284,6 +2284,32 @@ class SimplexCoverage(AbstractCoverage):
             self._closed = True
             raise
 
+    def calculate_statistics(self, params=None, time_range=None):
+        """time_range is currently not implemented"""
+        from coverage_model.parameter_values import NumericValue
+        if isinstance(params, basestring):
+            tmp = set()
+            tmp.add(params)
+            params = tmp
+        stats = {}
+        params_to_calculate = []
+        for key in self._range_dictionary.keys():
+            if isinstance(self._range_value[key], NumericValue):
+                if params is not None:
+                    if key in params:
+                        params_to_calculate.append(key)
+                else:
+                    params_to_calculate.append(key)
+        pv = self.get_value_dictionary(params_to_calculate)
+        for key, values in pv.iteritems():
+            ma = np.ma.masked_array(values, np.isnan(values))
+            stats[key] = (np.min(ma), np.max(ma), np.mean(ma), np.median(ma))
+        not_evaluated = []
+        if params is not None:
+            not_evaluated = [i for i in params if i not in params_to_calculate]
+
+        return stats, not_evaluated
+
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
         return AbstractCoverage._fromdict(cmdict, {'parameter_dictionary': '_range_dictionary'})

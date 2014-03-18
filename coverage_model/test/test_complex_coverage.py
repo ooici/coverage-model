@@ -115,9 +115,7 @@ class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
         cov = AbstractCoverage.load(cova_pth)
         pdict = cov.parameter_dictionary
 
-        print pdict.keys()
-
-        ccov = ComplexCoverage(self.working_dir, create_guid(), 'complex coverage', 
+        ccov = ComplexCoverage(self.working_dir, create_guid(), 'complex coverage',
                 reference_coverage_locs=[],
                 parameter_dictionary=pdict,
                 complex_type=ComplexCoverageType.TIMESERIES)
@@ -139,8 +137,10 @@ class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
         ccov.insert_value_set({'time' : np.arange(5,20), 'value_set' : np.ones(15) * 7})
 
         ccov.insert_value_set({'time' : np.arange(40,45), 'value_set' : np.ones(5) * 8})
-        
-        vcov = ViewCoverage(self.working_dir, create_guid(), 'view coverage', reference_coverage_location = ccov.persistence_dir)
+
+        # TODO: correct this once ViewCoverage is worked out
+        # View coverage construction doesn't work for DB-based metadata.  View Coverage will be modified in the future
+        # vcov = ViewCoverage(self.working_dir, create_guid(), 'view coverage', reference_coverage_location = ccov.persistence_dir)
 
 
     @attr('UTIL', group='cov')
@@ -166,7 +166,9 @@ class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
         ccov.append_reference_coverage(cova_pth)
         ccov.append_reference_coverage(covc_pth)
 
-        vcov = ViewCoverage(self.working_dir, create_guid(), 'view coverage', reference_coverage_location = ccov.persistence_dir)
+        # TODO: correct this once ViewCoverage is worked out
+        # View coverage construction doesn't work for DB-based metadata.  View Coverage will be modified in the future
+        # vcov = ViewCoverage(self.working_dir, create_guid(), 'view coverage', reference_coverage_location = ccov.persistence_dir)
 
         
 
@@ -333,58 +335,57 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         ccov = ComplexCoverage('test_data', create_guid(), 'sample complex coverage', parameter_dictionary=pdict,
                                mode='w', reference_coverage_locs=rcov_locs)
 
-        if ccov._persistence_layer.master_manager.storage_type() != 'hdf':
-            # TODO: Check for something Cassandra related
-            self.assertTrue(True)
-        else:
-            ccov_pth = ccov.persistence_dir
-            ccov_masterfile_pth = ccov._persistence_layer.master_manager.file_path
+        ccov_pth = ccov.persistence_dir
+        ccov_masterfile_pth = ccov._persistence_layer.master_manager.file_path
 
-            # Close the CC
-            ccov.close()
-            del(ccov)
+        storage_type = ccov._persistence_layer.master_manager.storage_type()
+        # Close the CC
+        ccov.close()
+        del(ccov)
 
-            # Open ComplexCoverage in write mode
-            w_ccov = AbstractCoverage.load(ccov_pth)
+        # Open ComplexCoverage in write mode
+        w_ccov = AbstractCoverage.load(ccov_pth)
 
-            # Loop over opening and reading data out of CC 10 times
-            rpt = 20
-            while rpt > 0:
-                read_ccov = AbstractCoverage.load(ccov_pth, mode='r')
-                self.assertIsInstance(read_ccov, AbstractCoverage)
-                time_value = read_ccov.get_parameter_values('time', [1])
-                self.assertEqual(time_value, 1.0)
-                read_ccov.close()
-                del(read_ccov)
-                rpt = rpt - 1
+        # Loop over opening and reading data out of CC 10 times
+        rpt = 20
+        while rpt > 0:
+            read_ccov = AbstractCoverage.load(ccov_pth, mode='r')
+            self.assertIsInstance(read_ccov, AbstractCoverage)
+            time_value = read_ccov.get_parameter_values('time', [1])
+            self.assertEqual(time_value, 1.0)
+            read_ccov.close()
+            del(read_ccov)
+            rpt = rpt - 1
 
-            w_ccov.close()
-            del(w_ccov)
+        w_ccov.close()
+        del(w_ccov)
 
+        if storage_type == 'hdf':
+            # Only for file-based metadata
             # Open ComplexCoverage's master file using locking
-            with HDFLockingFile(ccov_masterfile_pth, 'r+') as f:
+            # with HDFLockingFile(ccov_masterfile_pth, 'r+') as f:
 
-                # Test ability to read from ComplexCoverage in readonly mode
-                locked_ccov = AbstractCoverage.load(ccov_pth, mode='r')
-                self.assertIsInstance(locked_ccov, AbstractCoverage)
-                time_value = locked_ccov.get_parameter_values('time', [1])
-                self.assertEqual(time_value, 1.0)
+            # Test ability to read from ComplexCoverage in readonly mode
+            locked_ccov = AbstractCoverage.load(ccov_pth, mode='r')
+            self.assertIsInstance(locked_ccov, AbstractCoverage)
+            time_value = locked_ccov.get_parameter_values('time', [1])
+            self.assertEqual(time_value, 1.0)
 
-                # Test inability to open ComplexCoverage for writing
-                with self.assertRaises(IOError):
-                    AbstractCoverage.load(ccov_pth)
+            # Test inability to open ComplexCoverage for writing
+            with self.assertRaises(IOError):
+                AbstractCoverage.load(ccov_pth)
 
-                with self.assertRaises(IOError):
-                    AbstractCoverage.load(ccov_pth, mode='w')
+            with self.assertRaises(IOError):
+                AbstractCoverage.load(ccov_pth, mode='w')
 
-                with self.assertRaises(IOError):
-                    AbstractCoverage.load(ccov_pth, mode='a')
+            with self.assertRaises(IOError):
+                AbstractCoverage.load(ccov_pth, mode='a')
 
-                with self.assertRaises(IOError):
-                    AbstractCoverage.load(ccov_pth, mode='r+')
+            with self.assertRaises(IOError):
+                AbstractCoverage.load(ccov_pth, mode='r+')
 
-                locked_ccov.close()
-                del(locked_ccov)
+            locked_ccov.close()
+            del(locked_ccov)
 
     def test_parametric_strict(self):
         num_times = 10
@@ -863,7 +864,8 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 
         if comp_cov._persistence_layer.master_manager.storage_type() != 'hdf':
-            # TODO: Check for something Cassandra related
+            # TODO: correct this once ViewCoverage is worked out
+            # View coverage construction doesn't work for DB-based metadata.  View Coverage will be modified in the future
             self.assertTrue(True)
         else:
             vcov = ViewCoverage(self.working_dir, create_guid(), 'test', covb_pth)

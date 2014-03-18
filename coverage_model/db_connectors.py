@@ -232,6 +232,8 @@ class PostgresDB(DB):
 
     @classmethod
     def _get_time_string(cls, f64_time):
+        if isinstance(f64_time, basestring):
+            return f64_time
         # Get the time string from IonTime.  Assumes the supplied time is 64 bit float in ntp time format
         i, d = divmod(f64_time, 1)
         ntp_time = struct.pack(IonTime.ntpv4_timestamp, i, d)
@@ -307,7 +309,7 @@ class PostgresDB(DB):
         return lat_max, lat_min, lon_max, lon_min
 
     def search(self, search_criteria, limit=None):
-        from coverage_model.search.coverage_search import SearchCriteria, ResultsCursor
+        from coverage_model.search.coverage_search import SearchCriteria
         from coverage_model.search.search_constants import IndexedParameters, AllowedSearchParameters, MinimumOneParameterFrom
         from coverage_model.config import CoverageConfig
         config = CoverageConfig()
