@@ -3,7 +3,7 @@ __author__ = 'casey'
 from ooi.logging import log
 
 from pyon.core.bootstrap import bootstrap_pyon, CFG
-from pyon.datastore.datastore_common import DatastoreFactory
+from pyon.datastore.datastore import DatastoreManager
 from pyon.datastore.postgresql.base_store import PostgresDataStore
 from pyon.util.ion_time import *
 import struct
@@ -39,13 +39,14 @@ class PostgresDB(DB):
 
     def __init__(self):
         bootstrap_pyon()
-        self.datastore = DatastoreFactory.get_datastore(datastore_name='coverage', config=CFG)
+        dsm = DatastoreManager()
+        self.datastore = dsm.get_datastore(ds_name='coverage')
         if self.datastore is None:
             raise RuntimeError("Unable to load datastore for coverage")
         else:
             self.entity_table_name = self.datastore._get_datastore_name()
             log.trace("Got datastore: %s type %s" % (self.datastore._get_datastore_name(), str(type(self.datastore))))
-        self.span_store = DatastoreFactory.get_datastore(datastore_name='coverage_spans', config=CFG)
+        self.span_store = dsm.get_datastore(ds_name='coverage_spans')
         if self.span_store is None:
             raise RuntimeError("Unable to load datastore for coverage_spans")
         else:
