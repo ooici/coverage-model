@@ -55,10 +55,7 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
         pass
 
     @classmethod
-    def construct_cov(cls, only_time=False, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=True):
-        """
-        Construct coverage
-        """
+    def create_cov(cls, only_time=False, in_memory=False, inline_data_writes=True, brick_size=None, auto_flush_values=True):
         # Construct temporal and spatial Coordinate Reference System objects
         tcrs = CRS([AxisTypeEnum.TIME])
         scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
@@ -69,17 +66,12 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
 
         pname_filter = ['time',
                             'boolean',
-                            'const_float',
                             'const_int',
-                            'const_str',
                             'const_rng_flt',
                             'const_rng_int',
                             'numexpr_func',
                             'category',
-                            'quantity',
-                            'array',
                             'record',
-                            'fixed_str',
                             'sparse',
                             'lat',
                             'lon',
@@ -97,7 +89,13 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
             bricking_scheme = None
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-        scov = SimplexCoverage(cls.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory, bricking_scheme=bricking_scheme, auto_flush_values=auto_flush_values)
+        cov = SimplexCoverage(cls.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory, bricking_scheme=bricking_scheme, auto_flush_values=auto_flush_values)
+        cls.coverages.add(cov.persistence_guid)
+        return cov
+
+    @classmethod
+    def construct_cov(cls, only_time=False, save_coverage=False, in_memory=False, inline_data_writes=True, brick_size=None, make_empty=False, nt=None, auto_flush_values=True):
+        scov = cls.create_cov(only_time=only_time, in_memory=in_memory, inline_data_writes=inline_data_writes, brick_size=brick_size, auto_flush_values=auto_flush_values)
 
         # Insert some timesteps (automatically expands other arrays)
         if (nt is None) or (nt == 0) or (make_empty is True):
@@ -119,41 +117,15 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
                 scov.set_parameter_values('depth', value=1000 * np.random.random_sample(nt))
                 scov.append_parameter(ParameterContext('salinity'))
                 scov.set_parameter_values('salinity', value=1000 * np.random.random_sample(nt))
-                #scov.set_parameter_values('boolean', value=[True, True, True], tdoa=[[2,4,14]])
-                #scov.set_parameter_values('const_ft', value=-71.11) # Set a constant with correct data type
-                #scov.set_parameter_values('const_int', value=45.32) # Set a constant with incorrect data type (fixed under the hood)
-                #scov.set_parameter_values('const_str', value='constant string value') # Set with a string
-                #scov.set_parameter_values('const_rng_flt', value=(12.8, 55.2)) # Set with a tuple
-                #scov.set_parameter_values('const_rng_int', value=[-10, 10]) # Set with a list
 
                 scov.append_parameter(ParameterContext('m_lon'))
                 scov.append_parameter(ParameterContext('m_lat'))
                 scov.set_parameter_values('m_lon', value=160 * np.random.random_sample(nt))
                 scov.set_parameter_values('m_lat', value=70 * np.random.random_sample(nt))
 
-                #arrval = []
-                #recval = []
-                #catval = []
-                #fstrval = []
-                #catkeys = EXEMPLAR_CATEGORIES.keys()
-                #letts='abcdefghijklmnopqrstuvwxyz'
-                #while len(letts) < nt:
-                #    letts += 'abcdefghijklmnopqrstuvwxyz'
-                #for x in xrange(nt):
-                #    arrval.append(np.random.bytes(np.random.randint(1,20))) # One value (which is a byte string) for each member of the domain
-                #    d = {letts[x]: letts[x:]}
-                #    recval.append(d) # One value (which is a dict) for each member of the domain
-                #    catval.append(random.choice(catkeys))
-                #    fstrval.append(''.join([random.choice(letts) for x in xrange(8)])) # A random string of length 8
-                #scov.set_parameter_values('array', value=arrval)
-                #scov.set_parameter_values('record', value=recval)
-                #scov.set_parameter_values('category', value=catval)
-                #scov.set_parameter_values('fixed_str', value=fstrval)
-
         if in_memory and save_coverage:
             SimplexCoverage.pickle_save(scov, os.path.join(cls.working_dir, 'sample.cov'))
 
-        cls.coverages.add(scov.persistence_guid)
         return scov, 'TestCoverageInt'
 
     def test_coverage_creation(self):
@@ -246,3 +218,136 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
         criteria.append(Param2DValueRange(IndexedParameters.CoverageId, ((10,15), (time_min, time_max))))
         search = CoverageSearch(criteria, order_by=['time'])
         self.assertRaises(TypeError, search.select)
+
+    def test_data_arrives_out_of_order(self):
+        cov = self.create_cov()
+
+        nt = 10
+        cov.insert_timesteps(nt)
+        cov.set_parameter_values('time', value=np.arange(21, 31))
+        cov.append_parameter(ParameterContext('depth'))
+        cov.set_parameter_values('depth', value=200 * np.random.random_sample(nt))
+        id_ = cov.persistence_guid
+        cov.close()
+
+        cov2 = AbstractCoverage.load(self.working_dir, id_, mode='w')
+        self.assertIsNotNone(cov2)
+
+        cov2.insert_timesteps(10)
+        cov2.set_parameter_values('time', value=np.arange(11, 21), tdoa=slice(10,None))
+        cov2.set_parameter_values('depth', value=200 * np.random.random_sample(nt), tdoa=slice(10,None))
+
+        cov2.insert_timesteps(10)
+        cov2.set_parameter_values('time', value=np.arange(1, 11), tdoa=slice(20,30))
+        cov2.set_parameter_values('depth', value=200 * np.random.random_sample(nt), tdoa=slice(20,30))
+
+        time_param = ParamValueRange(IndexedParameters.Time, (1, 100))
+        coverage_id_param = ParamValue(IndexedParameters.CoverageId, id_)
+        criteria = SearchCriteria([time_param, coverage_id_param])
+        search = CoverageSearch(criteria, order_by=['time'])
+        results = search.select()
+        self.assertIsNotNone(results)
+        self.assertIn(id_, results.get_found_coverage_ids())
+        cov = results.get_view_coverage(id_, self.working_dir)
+        self.assertIsNotNone(cov)
+        npa = cov.get_observations()
+        self.assertEqual(len(npa), 30)
+
+        index = 0
+        for field in npa.dtype.names:
+            if field == 'time':
+                break;
+            index = index + 1
+        last = -1000
+        for tup in npa:
+            current = tup[index]
+            self.assertGreaterEqual(current, last)
+            last = current
+
+    def test_concurrent_read_and_write(self):
+        cov1, cov_name = self.construct_cov(nt=100)
+        self.assertIsNotNone(cov1)
+        id1 = cov1.persistence_guid
+        cov1_dict = cov1.get_value_dictionary()
+
+        cov2, cov_name = self.construct_cov(nt=50)
+        self.assertIsNotNone(cov2)
+        id2 = cov2.persistence_guid
+        cov2_dict = cov2.get_value_dictionary()
+
+        cov3, cov_name = self.construct_cov(nt=20)
+        self.assertIsNotNone(cov3)
+        id3 = cov3.persistence_guid
+        cov3_dict = cov3.get_value_dictionary()
+
+        for cov in [cov1, cov2, cov3]:
+            cov.close()
+
+        def check_equal_param_dicts(p_dict_1, p_dict_2):
+            self.assertEqual(p_dict_1.keys(), p_dict_2.keys())
+            for key in p_dict_1.keys():
+                self.assertTrue(np.array_equal(p_dict_1[key], p_dict_2[key]))
+
+        cov1r = AbstractCoverage.load(self.working_dir, id1)
+        cov2r = AbstractCoverage.load(self.working_dir, id2)
+        cov3r = AbstractCoverage.load(self.working_dir, id3)
+        self.assertIsNotNone(cov1r)
+        self.assertIsNotNone(cov2r)
+        self.assertIsNotNone(cov3r)
+        for cov_tup in [(cov1_dict, cov1r), (cov2_dict, cov2r), (cov3_dict, cov3r)]:
+            check_equal_param_dicts(cov_tup[0], cov_tup[1].get_value_dictionary())
+
+        cov1a = AbstractCoverage.load(self.working_dir, id1)
+        cov2a = AbstractCoverage.load(self.working_dir, id2)
+        cov3a = AbstractCoverage.load(self.working_dir, id3)
+        self.assertIsNotNone(cov1a)
+        self.assertIsNotNone(cov2a)
+        self.assertIsNotNone(cov3a)
+        for cov_tup in [(cov1_dict, cov1a), (cov2_dict, cov2a), (cov3_dict, cov3a)]:
+            check_equal_param_dicts(cov_tup[0], cov_tup[1].get_value_dictionary())
+
+        from multiprocessing import Process, Queue, queues
+        from time import sleep
+
+        def read_cov_and_evaluate_values(dir_, id_, value_dict, q, slp):
+            cov_ = None
+            message = id_
+            try:
+                cov_ = AbstractCoverage.load(dir_, id_)
+            except:
+                message = 'Caught exception'
+            if cov_ is None and message == id_:
+                message = 'Construction failed'
+            elif cov_ is not None:
+                try:
+                    check_equal_param_dicts(value_dict, cov_.get_value_dictionary())
+                except:
+                    message = 'Values inconsistent'
+            q.put(message)
+            import time
+            time.sleep(slp)
+
+
+        threads = []
+        q = Queue()
+        threads.append(Process(target=read_cov_and_evaluate_values, args=(self.working_dir, id1, cov1_dict, q, 5)))
+        threads.append(Process(target=read_cov_and_evaluate_values, args=(self.working_dir, id1, cov1_dict, q, 4)))
+        threads.append(Process(target=read_cov_and_evaluate_values, args=(self.working_dir, id2, cov2_dict, q, 3)))
+        threads.append(Process(target=read_cov_and_evaluate_values, args=(self.working_dir, id2, cov2_dict, q, 2)))
+        threads.append(Process(target=read_cov_and_evaluate_values, args=(self.working_dir, id3, cov3_dict, q, 1)))
+        threads.append(Process(target=read_cov_and_evaluate_values, args=(self.working_dir, id3, cov3_dict, q, 0)))
+        import time
+        for thread in threads:
+            thread.start()
+            time.sleep(1)
+        for thread in threads:
+            thread.join()
+        message_count = 0
+        while True:
+            try:
+                message = q.get_nowait()
+                self.assertIn(message, [id1, id2, id3])
+                message_count += 1
+            except queues.Empty:
+                break
+        self.assertEqual(message_count, len(threads))

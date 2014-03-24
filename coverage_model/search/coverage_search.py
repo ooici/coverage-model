@@ -36,7 +36,6 @@ class CoverageSearch(object):
     def select(self, db_name=None, limit=-1):
         db = DBFactory.get_db(db_name)
         span_dict = db.search(self.search_criteria, limit)
-        log.trace("Span length: %s", str(len(span_dict)))
         return CoverageSearchResults(span_dict, self.search_criteria, viewable_parameters=self.viewable_parameters,
                                      order_by=self.order_by)
 
@@ -45,7 +44,7 @@ class CoverageSearch(object):
         db = DBFactory.get_db(db_name)
         rows = db.get(uid)
         if len(rows) > 1:
-            return AbstractCoverage.load(uid, persistence_dir, 'r')
+            return AbstractCoverage.load(persistence_dir, persistence_guid=coverage_id, mode='r')
         return None
 
 
@@ -80,7 +79,6 @@ class CoverageSearchResults(object):
 
     def get_view_coverage(self, coverage_id, working_dir):
         if coverage_id in self.span_dict:
-            log.warn("Number of spans to build: %s ", len(self.span_dict[coverage_id]))
             return self._build_view_coverage(coverage_id, self.span_dict[coverage_id], working_dir)
         return None
 
@@ -101,7 +99,6 @@ class SearchCoverage(object):
 
     def __init__(self, coverage_id, base_dir, spans=None, view_criteria=None, viewable_parameters=None, order_by=None):
         from coverage_model.coverage import AbstractCoverage
-        from coverage_model.search.search_parameter import *
         # wrap a read only abstract coverage so we can access values in a common method
         self._cov = AbstractCoverage.load(base_dir, persistence_guid=coverage_id, mode='r')
         self.spans = spans
@@ -137,13 +134,11 @@ class SearchCoverage(object):
     def _extract_parameter_data(self):
         observation_list = []
         for span_address in self.spans:
-            log.trace("Processing span: %s", span_address)
             span_address = AddressFactory.from_db_str(span_address)
             span = self._cov._persistence_layer.master_manager.span_collection.get_span(span_address)
             intersection = None
             span_np_dict = {}
             for param_name in span.params.keys():
-                log.trace("Extents for %s: %s", param_name, span.params[param_name])
                 val = self._cov._range_value[param_name]._storage
                 span_np_dict[param_name] = val.get_brick_slice(span_address.brick_id)
 
@@ -159,9 +154,7 @@ class SearchCoverage(object):
                             intersection = np.intersect1d(intersection, indexes)
             for param_name, np_array in span_np_dict.iteritems():
                 if param_name in self.np_array_dict:
-                    log.warn("Appending numpy array.  Current size: %i", len(self.np_array_dict[param_name]))
                     self.np_array_dict[param_name] = np.append(self.np_array_dict[param_name], np_array[intersection])
-                    log.warn("New size: %i", len(self.np_array_dict[param_name]))
                 else:
                     self.np_array_dict[param_name] = np_array[intersection]
 
@@ -170,14 +163,11 @@ class SearchCoverage(object):
         self.data_size = None
         for key, val in self.np_array_dict.iteritems():
             if self.data_size is None:
-                log.trace("Setting data size to %i.  Parameter, %s, is limiting", len(val), key)
                 self.data_size = len(val)
             elif len(val) != self.data_size:
-                log.trace("Parameter, %s, has %i values", key, len(val))
                 log.warn("Parameter arrays aren't consistent size results may be meaningless")
             if len(val) < self.data_size:
                 self.data_size = len(val)
-                log.trace("Resetting data size to %i.  Parameter, %s, is limiting", len(val), key)
 
     #This is a convenience method to allow a view coverage to be built for a known coverage id
     #It creates a bi-directional weird dependency with CoverageSearchResults since it uses
@@ -213,7 +203,7 @@ class SearchCoverage(object):
         else:
             if start_index is None:
                 start_index = 0
-            if end_index is None or start_index + end_index > self.data_size:
+            if end_index is None or end_index > self.data_size:
                 end_index = self.data_size
             return result[start_index:end_index]
 
