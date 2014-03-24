@@ -14,6 +14,7 @@ import numexpr as ne
 from numbers import Number
 from collections import OrderedDict
 from coverage_model.basic_types import AbstractBase
+import os
 
 
 class ParameterFunctionException(Exception):
@@ -269,3 +270,20 @@ class NumexprFunction(AbstractFunction):
             ret = self.expression == other.expression
 
         return ret
+
+class ExternalFunction(AbstractFunction):
+    def __init__(self, name, external_guid, external_name):
+        self.external_name = external_name
+        param_map = {external_name : external_guid}
+        AbstractFunction.__init__(self, name, [], param_map)
+
+
+    def evaluate(self, pval_callback, pdir, slice_, fill_value=-9999):
+        from coverage_model.coverage import AbstractCoverage
+        root_path, guid = os.path.split(pdir)
+        external_guid = self.param_map[self.external_name]
+        path = os.path.join(root_path, external_guid)
+        cov = AbstractCoverage.load(path)
+        return cov.get_parameter_values(self.external_name, slice_)
+
+

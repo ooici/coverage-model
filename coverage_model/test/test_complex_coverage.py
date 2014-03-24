@@ -18,6 +18,7 @@ import unittest
 from copy import deepcopy
 from coverage_model.hdf_utils import HDFLockingFile
 from coverage_test_base import CoverageIntTestBase, get_props
+from coverage_model.parameter_functions import ExternalFunction
 import time
 
 
@@ -167,6 +168,23 @@ class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
         ccov.append_reference_coverage(covc_pth)
 
         vcov = ViewCoverage(self.working_dir, create_guid(), 'view coverage', reference_coverage_location = ccov.persistence_dir)
+
+    @attr('UTIL', group='cov')
+    def test_external_refs(self):
+
+        offset = NumexprFunction('offset', arg_list=['x'], expression='x + 1')
+        offset.param_map = {'x':'value_set'}
+        ctx = ParameterContext('offset', param_type=ParameterFunctionType(offset, value_encoding='<f4'))
+
+        cova_pth = _make_cov(self.working_dir, ['value_set', ctx], data_dict={'time':np.arange(10), 'value_set':np.arange(20,30)})
+        cova = SimplexCoverage.load(cova_pth, mode='r')
+        pfunc = ExternalFunction('example', cova.persistence_guid, 'offset')
+        ctx = ParameterContext('example', param_type=ParameterFunctionType(pfunc, value_encoding='<f4'))
+        covb_pth = _make_cov(self.working_dir, [ctx], data_dict={'time':np.arange(10)})
+        cov = SimplexCoverage.load(covb_pth, mode='r')
+        from pyon.util.breakpoint import breakpoint
+        breakpoint(locals(), globals())
+        
 
         
 

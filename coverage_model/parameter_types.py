@@ -591,6 +591,7 @@ class ParameterFunctionType(AbstractSimplexParameterType):
 
         self._template_attrs['_pval_callback'] = None
         self._template_attrs['_pctxt_callback'] = None
+        self._template_attrs['_pdir'] = None
 
         self._gen_template_attrs()
 
@@ -607,13 +608,14 @@ class ParameterFunctionType(AbstractSimplexParameterType):
 
     def _todict(self, exclude=None):
         # Must exclude _cov_range_value from persistence
-        return super(ParameterFunctionType, self)._todict(exclude=['_pval_callback', '_pctxt_callback', '_fmap', '_iparams', '_dparams'])
+        return super(ParameterFunctionType, self)._todict(exclude=['_pdir', '_pval_callback', '_pctxt_callback', '_fmap', '_iparams', '_dparams'])
 
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
         ret = super(ParameterFunctionType, cls)._fromdict(cmdict, arg_masks=arg_masks)
         # Add the _pval_callback attribute, initialized to None
         ret._pval_callback = None
+        ret._pdir = None
         return ret
 
     def __eq__(self, other):
