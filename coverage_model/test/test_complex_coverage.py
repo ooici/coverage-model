@@ -169,22 +169,26 @@ class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
 
         vcov = ViewCoverage(self.working_dir, create_guid(), 'view coverage', reference_coverage_location = ccov.persistence_dir)
 
-    @attr('UTIL', group='cov')
+    @attr('INT', group='cov')
     def test_external_refs(self):
 
+        # Create a three param coverage
         offset = NumexprFunction('offset', arg_list=['x'], expression='x + 1')
         offset.param_map = {'x':'value_set'}
         ctx = ParameterContext('offset', param_type=ParameterFunctionType(offset, value_encoding='<f4'))
 
         cova_pth = _make_cov(self.working_dir, ['value_set', ctx], data_dict={'time':np.arange(10), 'value_set':np.arange(20,30)})
         cova = SimplexCoverage.load(cova_pth, mode='r')
+
+
+        # Create another coverage that references the above
         pfunc = ExternalFunction('example', cova.persistence_guid, 'offset')
         ctx = ParameterContext('example', param_type=ParameterFunctionType(pfunc, value_encoding='<f4'))
-        covb_pth = _make_cov(self.working_dir, [ctx], data_dict={'time':np.arange(10)})
+        covb_pth = _make_cov(self.working_dir, [ctx], data_dict={'time':np.arange(0.5, 10.5, 1)})
         cov = SimplexCoverage.load(covb_pth, mode='r')
-        from pyon.util.breakpoint import breakpoint
-        breakpoint(locals(), globals())
-        
+        # Assert that the values are correctly interpolated 
+        np.testing.assert_array_equal(cov.get_parameter_values('example'), np.arange(21.5, 31.5, 1))
+
 
         
 
