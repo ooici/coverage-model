@@ -81,9 +81,9 @@ class TestThreads(coverage_model.CoverageModelUnitTestCase):
             os.close(w)
 
     def load_clib(self):
-        from ctypes import cdll
+        from ctypes import cdll, util
         try:
-            clib = cdll.LoadLibrary('libc.so')
+            clib = cdll.LoadLibrary(util.find_library('c'))
         except OSError as e:
             if 'image not found' in e.message:
                 clib = cdll.LoadLibrary('libc.dylib')
