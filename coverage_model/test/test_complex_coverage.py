@@ -111,37 +111,28 @@ class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
         # Each coverage represents a week
     
 
-        cova_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(10,20),'value_set':np.ones(10)})
+        cova_pth = _make_cov(self.working_dir, ['value_set'], nt=1000, data_dict={'time': np.arange(1000,2000),'value_set':np.arange(1000)})
         cov = AbstractCoverage.load(cova_pth)
-        pdict = cov.parameter_dictionary
 
-        ccov = ComplexCoverage(self.working_dir, create_guid(), 'complex coverage',
-                reference_coverage_locs=[],
-                parameter_dictionary=pdict,
-                complex_type=ComplexCoverageType.TIMESERIES)
+        results = self.simple_search(cov, 1212, 1390)
+        np.testing.assert_array_equal(results['time'], np.arange(1212, 1391))
+        np.testing.assert_array_equal(results['value_set'], np.arange(212, 391))
 
+        from pyon.util.breakpoint import breakpoint
+        breakpoint(locals(), globals())
 
-
-        # Overlapping AND out of order
-        t = range(15,25)
-        t.reverse()
-        a = range(10)
-        a.reverse()
-        ccov.insert_value_set({'time' : np.array(t), 'value_set':np.ones(10) * 3})
-
-        ccov.insert_value_set({'time' : np.arange(10), 'value_set' : np.ones(10)* 4})
-
-        ccov.insert_value_set({'time' : np.arange(30,35), 'value_set':np.ones(5) * 5})
-
-        ccov.insert_value_set({'time' : np.arange(25,30), 'value_set' : np.ones(5) * 6})
-        ccov.insert_value_set({'time' : np.arange(5,20), 'value_set' : np.ones(15) * 7})
-
-        ccov.insert_value_set({'time' : np.arange(40,45), 'value_set' : np.ones(5) * 8})
-
-        # TODO: correct this once ViewCoverage is worked out
-        # View coverage construction doesn't work for DB-based metadata.  View Coverage will be modified in the future
-        # vcov = ViewCoverage(self.working_dir, create_guid(), 'view coverage', reference_coverage_location = ccov.persistence_dir)
-
+    def simple_search(self, coverage, start, stop):
+        from coverage_model.search.search_parameter import ParamValueRange, ParamValue, SearchCriteria
+        from coverage_model.search.coverage_search import CoverageSearch
+        from coverage_model.search.search_constants import IndexedParameters
+        pdir, guid = os.path.split(coverage.persistence_dir)
+        time_param = ParamValueRange(IndexedParameters.Time, (start, stop))
+        criteria = SearchCriteria(time_param)
+        search = CoverageSearch(criteria, order_by=['time'])
+        results = search.select()
+        cov = results.get_view_coverage(guid, pdir)
+        retval = cov.get_observations()
+        return retval
 
     @attr('UTIL', group='cov')
     def test_aggregates(self):

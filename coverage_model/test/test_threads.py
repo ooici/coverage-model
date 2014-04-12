@@ -19,7 +19,7 @@ import numpy as np
 import time
 import gevent
 import coverage_model
-
+import unittest
 
 
 
@@ -43,6 +43,7 @@ class TestThreads(coverage_model.CoverageModelUnitTestCase):
         if os.path.exists(self.filepath):
             os.remove(self.filepath)
 
+    @unittest.skip("Deprecated and it uses HDF5, bad example")
     def test_gevent_friendly(self):
 
         # Used to verify that file descriptors aren't consumed
@@ -79,4 +80,43 @@ class TestThreads(coverage_model.CoverageModelUnitTestCase):
             os.close(r)
             os.close(w)
 
+    def load_clib(self):
+        from ctypes import cdll, util
+        try:
+            clib = cdll.LoadLibrary(util.find_library('c'))
+        except OSError as e:
+            if 'image not found' in e.message:
+                clib = cdll.LoadLibrary('libc.dylib')
+            else:
+                raise
+        return clib
+
+    def clib_timeout(self):
+        clib = self.load_clib()
+        clib.sleep(5)
+
+
+    def test_true_block(self):
+        t0 = time.time()
+        self.clib_timeout()
+        t1 = time.time()
+        self.assertTrue((t1 - t0) >= 5)
+
+        t0 = time.time()
+        g = gevent.spawn(self.clib_timeout)
+        gevent.sleep(5)
+        g.join()
+        t1 = time.time()
+        # If it was concurrent delta-t will be less than 10
+        self.assertTrue((t1 - t0) >= 10)
+
+        # Syncing with gevent
+        t0 = time.time()
+        with AsyncDispatcher(self.clib_timeout) as dispatcher:
+            gevent.sleep(5)
+            dispatcher.wait(10)
+        t1 = time.time()
+
+        # Proof that they run concurrently and the clib call doesn't block gevent
+        self.assertTrue((t1 - t0) < 6)
 
