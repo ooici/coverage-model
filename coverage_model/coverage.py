@@ -43,10 +43,11 @@ from coverage_model.persistence import PersistenceLayer, InMemoryPersistenceLaye
 from coverage_model.metadata_factory import MetadataManagerFactory
 from coverage_model.parameter_functions import ParameterFunctionException
 from coverage_model import utils
-from coverage_model.utils import Interval
+from coverage_model.utils import Interval, create_guid
 from copy import deepcopy
 import numpy as np
 import os, collections, pickle
+from collections import Iterable
 
 #=========================
 # Coverage Objects
@@ -358,7 +359,7 @@ class AbstractCoverage(AbstractIdentifiable):
         lst.sort()
         return lst
 
-    def get_parameter_values(self, param_name, tdoa=None, sdoa=None, return_value=None):
+    def get_parameter_values(self, param_names, time_segment=None, time=None, sort_parameter=None, return_value=None):
         """
         Retrieve the value for a parameter
 
@@ -374,24 +375,18 @@ class AbstractCoverage(AbstractIdentifiable):
         if self.closed:
             raise IOError('I/O operation on closed file')
 
-        if not param_name in self._range_value:
-            raise KeyError('Parameter \'{0}\' not found in coverage'.format(param_name))
+        if not isinstance(param_names, Iterable) or isinstance(param_names, basestring):
+            param_names = [param_names]
+        for param_name in param_names:
+            if not param_name in self._range_value:
+                raise KeyError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
         if return_value is not None:
             log.warn('Provided \'return_value\' will be OVERWRITTEN')
 
+        return self._persistence_layer.read_parameters(param_names, time_segment, time, sort_parameter)
+
         slice_ = []
-
-        total_shape = self.temporal_domain.shape.extents
-        tdoa = get_valid_doa(tdoa, total_shape)
-        log.debug('Temporal doa: %s', tdoa.slices)
-        slice_.extend(tdoa.slices)
-
-        if self.spatial_domain is not None:
-            total_shape += self.spatial_domain.shape.extents
-            sdoa = get_valid_doa(sdoa, total_shape[1:])
-            log.debug('Spatial doa: %s', sdoa.slices)
-            slice_.extend(sdoa.slices)
 
         # If this coverage is empty - return an empty array
         if np.atleast_1d(np.atleast_1d(total_shape) == 0).all():
@@ -537,7 +532,7 @@ class AbstractCoverage(AbstractIdentifiable):
         @param value    The value to set
         @param tdoa The temporal DomainOfApplication; default to full Domain
         """
-        return self.set_parameter_values(self.temporal_parameter_name, value, tdoa, None)
+        return self._persistence_layer.write_parameters(self.get_write_id(), value)
 
     def get_time_values(self, tdoa=None, return_value=None):
         """
@@ -561,47 +556,11 @@ class AbstractCoverage(AbstractIdentifiable):
             if k[0] == param_name:
                 self._value_cache.pop(k)
 
-    def set_parameter_values(self, param_name, value, tdoa=None, sdoa=None):
-        """
-        Assign value to the specified parameter
+    def set_parameter_values(self, values):
+        self._persistence_layer.write_parameters(self.get_write_id(), values)
 
-        Assigns the value to param_name within the coverage.  Temporal and spatial DomainOfApplication objects can be
-        applied to constrain the assignment.  See DomainOfApplication for details
-
-        @param param_name   The name of the parameter
-        @param value    The value to set
-        @param tdoa The temporal DomainOfApplication
-        @param sdoa The spatial DomainOfApplication
-        @throws KeyError    The coverage does not contain a parameter with name 'param_name'
-        """
-        if self.closed:
-            raise IOError('I/O operation on closed file')
-
-        if self.mode == 'r':
-            raise IOError('Coverage not open for writing: mode == \'{0}\''.format(self.mode))
-
-        if not param_name in self._range_value:
-            raise KeyError('Parameter \'{0}\' not found in coverage_model'.format(param_name))
-
-        slice_ = []
-
-        tdoa = get_valid_doa(tdoa, self.temporal_domain.shape.extents)
-        log.debug('Temporal doa: %s', tdoa.slices)
-        slice_.extend(tdoa.slices)
-
-        if self.spatial_domain is not None:
-            sdoa = get_valid_doa(sdoa, self.spatial_domain.shape.extents)
-            log.debug('Spatial doa: %s', sdoa.slices)
-            slice_.extend(sdoa.slices)
-
-        log.debug('Setting slice: %s', slice_)
-
-        self._range_value[param_name][slice_] = value
-        # Update parameter bounds in the persistence layer
-        self._persistence_layer.update_parameter_bounds(param_name, self._range_value[param_name].bounds)
-
-        # Clear any cached values for this parameter
-        self._clear_value_cache_for_parameter(param_name)
+    def get_write_id(self):
+        return ''.join([self.persistence_guid, "_", create_guid()])
 
     def clear_value_cache(self):
         if self.value_caching:
@@ -1391,7 +1350,7 @@ class ComplexCoverage(AbstractCoverage):
             cls._interval_qsort(arr, left, pivot-1)
             cls._interval_qsort(arr, pivot+1, right)
     
-    def get_parameter_values(self, param_name, tdoa=None, sdoa=None, return_value=None):
+    def get_parameter_values(self, param_names, time_segment=None, time=None, sort_parameter=None, return_value=None):
         '''
         Obtain the value set for a given parameter over a specified domain
         '''
@@ -1400,9 +1359,7 @@ class ComplexCoverage(AbstractCoverage):
             raise TypeError("A Timeseries ComplexCoverage doesn't support "
                             "get_parameter_values, please use "
                             "get_value_dictionary")
-        return AbstractCoverage.get_parameter_values(self, param_name, tdoa=tdoa, 
-                            sdoa=sdoa, return_value=return_value)
-
+        return AbstractCoverage.get_parameter_values(self, param_names, time_segment, time, sort_parameter, return_value)
 
     def get_value_dictionary(self, param_list=None, temporal_slice=None, domain_slice=None):
         if temporal_slice and domain_slice:
@@ -1683,18 +1640,8 @@ class ComplexCoverage(AbstractCoverage):
 
 
     def _append_to_coverage(self, cov, value_dictionary):
-        time_array = value_dictionary[self.temporal_parameter_name]
-        t0, t1 = time_array[0], time_array[-1]
-        
         cov = AbstractCoverage.load(cov.persistence_dir, mode='r+')
-        param_list = cov.list_parameters()
-        
-        shape = len(time_array)
-        cov.insert_timesteps(shape)
-
-        for parameter, value_set in value_dictionary.iteritems():
-            if parameter in param_list:
-                cov.set_parameter_values(parameter, value_set, slice(cov.num_timesteps - shape, cov.num_timesteps))
+        cov.set_parameter_values(value_dictionary, slice(cov.num_timesteps - shape, cov.num_timesteps))
         cov.close()
         self.refresh()
 
@@ -2140,6 +2087,7 @@ class SimplexCoverage(AbstractCoverage):
         @param auto_flush_values    if True (default), brick data is flushed immediately; otherwise it is buffered until SimplexCoverage.flush_values() is called
         @param value_caching  if True (default), up to 30 value requests are cached for rapid duplicate retrieval
         """
+        from coverage_model.postgres_persisted_storage import PostgresPersistenceLayer
         AbstractCoverage.__init__(self, mode=mode)
         try:
             # Make sure root_dir and persistence_guid are both not None and are strings
@@ -2157,7 +2105,7 @@ class SimplexCoverage(AbstractCoverage):
                     raise SystemError('Cannot find specified coverage: {0}'.format(pth))
 
                 # All appears well - load it up!
-                self._persistence_layer = PersistenceLayer(root_dir, persistence_guid, mode=self.mode)
+                self._persistence_layer = PostgresPersistenceLayer(root_dir, persistence_guid, mode=self.mode)
                 if self._persistence_layer.version != self.version:
                     raise IOError('Coverage Model Version Mismatch: %s != %s' %(self.version, self._persistence_layer.version))
 
@@ -2260,7 +2208,7 @@ class SimplexCoverage(AbstractCoverage):
                 if self._in_memory_storage:
                     self._persistence_layer = InMemoryPersistenceLayer()
                 else:
-                    self._persistence_layer = PersistenceLayer(root_dir,
+                    self._persistence_layer = PostgresPersistenceLayer(root_dir,
                                                                persistence_guid,
                                                                name=name,
                                                                tdom=self.temporal_domain,
