@@ -366,11 +366,11 @@ class AbstractCoverage(AbstractIdentifiable):
         Returns the value from param_name.  Temporal and spatial DomainOfApplication objects can be used to
         constrain the response.  See DomainOfApplication for details.
 
-        @param param_name   The name of the parameter
-        @param tdoa The temporal DomainOfApplication
-        @param sdoa The spatial DomainOfApplication
-        @param return_value If supplied, filled with response value - currently via OVERWRITE
-        @throws KeyError    The coverage does not contain a parameter with name 'param_name'
+        @param param_names   A collection of names of parameters to retrieve
+        @param time_segment  A tuple of observation start and end time for data to retrieve
+        @param time          Retrieve data points with observation time closest to time
+        @param return_value  Not valid since we can no longer guarantee the size of the returned data
+        @throws KeyError    The coverage does not contain a parameter with name provided in 'param_names'
         """
         if self.closed:
             raise IOError('I/O operation on closed file')
@@ -381,26 +381,7 @@ class AbstractCoverage(AbstractIdentifiable):
             if not param_name in self._range_value:
                 raise KeyError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
-        if return_value is not None:
-            log.warn('Provided \'return_value\' will be OVERWRITTEN')
-
         return self._persistence_layer.read_parameters(param_names, time_segment, time, sort_parameter)
-
-        slice_ = []
-
-        # If this coverage is empty - return an empty array
-        if np.atleast_1d(np.atleast_1d(total_shape) == 0).all():
-            return np.empty(0, dtype=self._range_value[param_name].value_encoding)
-
-        slice_ = utils.fix_slice(slice_, total_shape)
-        log.debug('Getting slice: %s', slice_)
-
-        if self.value_caching:
-            return_value = self._get_cached_values(param_name, slice_, total_shape)
-        else:
-            return_value = self._range_value[param_name][slice_]
-
-        return return_value
 
     def get_value_dictionary(self, param_list=None, temporal_slice=None, domain_slice=None):
         '''
@@ -560,7 +541,7 @@ class AbstractCoverage(AbstractIdentifiable):
         self._persistence_layer.write_parameters(self.get_write_id(), values)
 
     def get_write_id(self):
-        return ''.join([self.persistence_guid, "_", create_guid()])
+        return create_guid()
 
     def clear_value_cache(self):
         if self.value_caching:

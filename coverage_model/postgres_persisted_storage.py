@@ -14,18 +14,21 @@ import json
 import base64
 import numbers
 from coverage_model.metadata_factory import MetadataManagerFactory
-from coverage_model.basic_types import AbstractStorage
+from coverage_model.basic_types import AbstractStorage, AxisTypeEnum
 from coverage_model.persistence_helpers import ParameterManager
-from coverage_model.storage.parameter_data import ParameterData, NumpyParameterData, ConstantOverRange
+from coverage_model.storage.parameter_data import ParameterData, NumpyParameterData, ConstantOverTime, NumpyDictParameterData
+from coverage_model.data_span import Span
+from coverage_model.storage.postgres_span_tables import SpanTablesFactory, SpanTables
+from coverage_model.persistence import SimplePersistenceLayer
 
-
-class PostgresPersistenceLayer(object):
+class PostgresPersistenceLayer(SimplePersistenceLayer):
     """
     The PersistenceLayer class manages the disk-level storage (and retrieval) of the Coverage Model using HDF5 files.
     """
 
     def __init__(self, root, guid, name=None, mode=None, inline_data_writes=True, auto_flush_values=True,
-                 bricking_scheme=None, brick_dispatcher=None, value_caching=True, coverage_type=None, **kwargs):
+                 bricking_scheme=None, brick_dispatcher=None, value_caching=True, coverage_type=None,
+                 alignment_parameter=AxisTypeEnum.TIME.lower(), **kwargs):
         """
         Constructor for PersistenceLayer
 
@@ -59,6 +62,7 @@ class PostgresPersistenceLayer(object):
 
         self.parameter_metadata = {} # {parameter_name: [brick_list, parameter_domains, rtree]}
         self.spans = {}
+        self.span_list = []
 
         for pname in self.param_groups:
             log.debug('parameter group: %s', pname)
@@ -69,6 +73,11 @@ class PostgresPersistenceLayer(object):
                 self.master_manager.flush()
 
         self._closed = False
+        if isinstance(alignment_parameter, basestring):
+            self.alignment_parameter = alignment_parameter
+        else:
+            raise TypeError("alignment_parameter arg must implement %s.  Found %s", (basestring.__name__, type(alignment_parameter).__name__))
+
 
         log.debug('Persistence Layer Successfully Initialized')
 
@@ -217,81 +226,313 @@ class PostgresPersistenceLayer(object):
 
     def write_parameters(self, write_id, values):
         if not isinstance(values, dict):
-            raise TypeError("values must be dict type")
+            raise TypeError("values must be dict type.  Found %s" % type(values))
         arr_len = -1
         converted_dict = {}
+        all_values_constant_over_time = True
+        import time
+        write_time = time.time()
         for key, arr in values.iteritems():
             if key not in self.value_list:
                 raise LookupError("Parameter, %s, has not been initialized" % (key))
+            if isinstance(arr, np.ndarray):
+                arr = NumpyParameterData(key, arr)
+                values[key] = arr
             if not isinstance(arr, ParameterData):
                 raise TypeError("Value for %s must implement <%s>, found <%s>" % (key, ParameterData.__name__, arr.__class__.__name__))
+            if type(arr) not in (ConstantOverTime,):
+                all_values_constant_over_time = False
             if arr_len == -1 and isinstance(arr, NumpyParameterData):
                 arr_len = arr.get_data().size
             elif isinstance(arr, NumpyParameterData) and arr.get_data().size != arr_len:
                 raise ValueError("Array size for %s is inconsistent.  Expected %s elements, found %s." % (key, str(arr_len), str(arr.get_data().size)))
             compressed_value = self.value_list[key].compress(arr)
             min_val, max_val = self.value_list[key].get_statistics(arr)
-            converted_dict[key] = (compressed_value, min_val, max_val)
+            converted_dict[key] = (compressed_value, min_val, max_val, write_time)
 
-        if 'time' not in converted_dict:
-            raise LookupError("Array must be supplied for parameter, %s, to ensure alignment" % ('time'))
+        if not all_values_constant_over_time and self.alignment_parameter not in converted_dict:
+            raise LookupError("Array must be supplied for parameter, %s, to ensure alignment" % self.alignment_parameter)
 
-        # print "WRITE ID: ", write_id
-        # for param_name, data in converted_dict.iteritems():
-        #     print '    ', param_name, ": min/max ", data[1], '/', data[2]
-        #     print '        ', data[0]
-        self.spans[write_id] = converted_dict
+        span = Span(write_id, self.master_manager.guid, values, compressors=self.value_list)
+        span_table = SpanTablesFactory.get_span_table_obj()
+        span_table.write_span(span)
+        # js_str = span.as_json(compressors=self.value_list)
+        # ret_span = Span.from_json(js_str, decompressors=self.value_list)
+        # spans = span_table.get_spans(coverage_ids=self.master_manager.guid, decompressors=self.value_list)
+        # for span in spans:
+        #     print span.as_json()
+        #
+        #
+        # self.span_list.append(span)
+        # self.spans[write_id] = converted_dict
+
+    def _get_span_dict(self, params, time_range=None, time=None):
+        return SpanTablesFactory.get_span_table_obj().get_spans(coverage_ids=self.master_manager.guid, decompressors=self.value_list)
 
     def read_parameters(self, params, time_range=None, time=None, sort_parameter=None):
+        np_dict, function_params, rec_arr = self.get_data_products(params, time_range, time, sort_parameter, create_record_array=True)
+        return rec_arr
+
+    def get_data_products(self, params, time_range=None, time=None, sort_parameter=None, create_record_array=False):
+        if self.alignment_parameter not in params:
+            params.append(self.alignment_parameter)
+
+        associated_spans = self._get_span_dict(params, time_range, time)
+        numpy_params, function_params = self._create_param_dict_from_spans_dict(params, associated_spans)
+        np_dict = self._create_parameter_dictionary_of_numpy_arrays(numpy_params, function_params)
+        np_dict = self._sort_flat_arrays(np_dict, sort_parameter=sort_parameter)
+        np_dict = self._trim_values_to_range(np_dict, time_range=time_range, time=time)
+        rec_arr = None
+        if create_record_array is True:
+            rec_arr = self._convert_to_numpy_dict_parameter(np_dict)
+
+        return np_dict, function_params, rec_arr
+
+    def _create_param_dict_from_spans_dict(self, params, span_dict):
+        numpy_params = {}
+        function_params = {}
+        if isinstance(span_dict, list):
+            for span in span_dict:
+                for param_name, data in span.param_dict.iteritems():
+                    if param_name in params or params is None:
+                        if type(data) in (ConstantOverTime,):
+                            if param_name not in function_params:
+                                function_params[param_name] = {}
+                            function_params[param_name][span.ingest_time] = data
+                        elif type(data) in (NumpyParameterData, NumpyDictParameterData):
+                            if param_name not in numpy_params:
+                                numpy_params[param_name] = {}
+                            numpy_params[param_name][span.ingest_time] = data
+
+        elif isinstance(span_dict, dict):
+            for span_id, span in span_dict.iteritems():
+                for param_name, data in span.iteritems():
+                    if param_name in params or params is None:
+                        obj = self.value_list[param_name].decompress(data[0])
+                        if type(obj) in (ConstantOverTime,):
+                            if param_name not in function_params:
+                                function_params[param_name] = {}
+                            function_params[param_name][data[3]] = obj
+                        elif type(obj) in (NumpyParameterData, NumpyDictParameterData):
+                            if param_name not in numpy_params:
+                                numpy_params[param_name] = {}
+                            numpy_params[param_name][data[3]] = obj
+        return numpy_params, function_params
+
+    @classmethod
+    def _sort_flat_arrays(cls, np_dict, sort_parameter=None):
+        sorted_array_dict = {}
+        if sort_parameter is None or sort_parameter not in np_dict.keys():
+            # sort_parameter = self.alignment_parameter
+            sort_parameter = 'time'
+        sort_array = np_dict[sort_parameter]
+        sorted_indexes = np.argsort(sort_array)
+        for key, value in np_dict.iteritems():
+            sorted_array_dict[key] = value[sorted_indexes]
+        return sorted_array_dict
+
+    def _convert_to_numpy_dict_parameter(self, np_dict, sort_parameter=None):
+        param_context_dict = {}
+        for key in np_dict.keys():
+            param_context_dict[key] = self.value_list[key]
+
+        ndpd = NumpyDictParameterData(np_dict, alignment_key=self.alignment_parameter, param_context_dict=param_context_dict)
+        # if sort_parameter is None or sort_parameter not in ndpd.get_data().names:
+        #     sort_parameter = self.alignment_parameter
+        # ndpd.get_data().sort(order=sort_parameter)
+
+        return ndpd
+
+    def _trim_values_to_range(self, np_dict, time_range=None, time=None):
+        return_dict = {}
+        time_array = np_dict[self.alignment_parameter]
+        if time_range is None and time is None:
+            return_dict = np_dict
+        elif time_range is not None:
+            for key, val in np_dict.iteritems():
+                return_dict[key] = val[np.where(np.logical_and(time_range[0] <= time_array, time_range[1] >= time_array))]
+            return return_dict
+        else:
+            idx = (np.abs(time_array-time)).argmin()
+            for key, val in np.dict.iteritems:
+                return_dict[key] = np.array([val[idx]])
+        return return_dict
+
+
+
+    def _create_parameter_dictionary_of_numpy_arrays(self, numpy_params, function_params=None):
+        return_dict = {}
+        arr_size = -1
+        if self.alignment_parameter not in numpy_params:
+            raise RuntimeError("Cannot create dense array without alignment parameter, %s", self.alignment_parameter)
+        total_size = 0
+        span_order = []
+        for id, span_data in numpy_params[self.alignment_parameter].iteritems():
+            total_size += span_data.get_data().size
+            span_order.append(id)
+        span_order.sort()
+        arr = np.empty(total_size)
+        insert_index = 0
+        t_dict = numpy_params[self.alignment_parameter]
+        for span_id in span_order:
+            np_data = t_dict[span_id].get_data()
+            end_idx = insert_index+np_data.size
+            arr[insert_index:end_idx] = np_data
+            insert_index += np_data.size
+        return_dict[self.alignment_parameter] = arr
+
+        for id, span_data in numpy_params.iteritems():
+            if id == self.alignment_parameter:
+                continue
+            npa = np.empty(total_size)
+            insert_index = 0
+            for span_name in span_order:
+                np_data = span_data[span_name].get_data()
+                end_idx = insert_index + np_data.size
+                npa[insert_index:end_idx] = np_data
+                insert_index += np_data.size
+            return_dict[id] = npa
+                # span_order.append((id, np_data.size))
+                # arr[insert_index:np_data.size+insert_index] = np_data
+
+        for param_name, param_dict in function_params.iteritems():
+            for write_id, param_data in param_dict.iteritems():
+                arr = param_data.get_data_as_numpy_array(return_dict[self.alignment_parameter], fill_value=self.value_list[param_name].fill_value)
+                return_dict[param_name] = arr
+
+        return return_dict
+        for key, d in numpy_params.iteritems():
+            alignment_array = self.value_list[self.alignment_parameter].decompress(d[self.alignment_parameter][0]).get_data()
+            new_size = alignment_array.size
+            for param_dict, vals in d.iteritems():
+                if isinstance(vals[0], np.ndarray) and  new_size != vals[0].size:
+                    raise Exception("Span, %s, array is not aligned %s" % (key, param_dict))
+                if param_dict not in return_dict.keys():
+                    dtype = self.value_list[param_dict].fill_value
+                    if isinstance(dtype, basestring):
+                        dtype = object
+                    else:
+                        dtype = type(dtype)
+                    if arr_size > 0:
+                        arr = np.empty(arr_size, dtype)
+                        arr.fill(self.value_list[param_dict].fill_value)
+                        return_dict[param_dict] = arr
+                    else:
+                        return_dict[param_dict] = np.empty(0, dtype)
+                    param_data = self.value_list[param_dict].decompress(vals[0])
+                    if isinstance(param_data, NumpyParameterData):
+                        return_dict[param_dict] = np.append(return_dict[param_dict], param_data.get_data())
+                    elif isinstance(param_data, ConstantOverTime):
+                        return_dict[param_dict] = np.append(return_dict[param_dict], param_data.get_data_as_numpy_array(alignment_array, fill_value=self.value_list[param_dict].fill_value))
+                    else:
+                        arr = np.empty(arr_size)
+                        arr.fill(self.value_list[param_dict].fill_value)
+                        return_dict[param_dict] = np.append(return_dict[param_dict], arr)
+            if new_size is not None:
+                for key in return_dict:
+                    if key not in d.keys() and key in self.value_list:
+                        dtype = self.value_list[key].fill_value
+                        if isinstance(dtype, basestring):
+                            dtype = object
+                        else:
+                            dtype = type(dtype)
+                        arr = np.empty(new_size, dtype)
+                        arr.fill(self.value_list[key].fill_value)
+                        return_dict[key] = np.append(return_dict[key], arr)
+                arr_size += new_size
+
+        pass
+
+    def read_parameters_as_dense_array(self, params, time_range=None, time=None, sort_parameter=None):
         return_dict = {}
         arr_size = 0
-        if time_range is None and time is None:
-            for key, d in self.spans.iteritems():
-                alignment_array = self.value_list['time'].decompress(d['time'][0]).get_data()
-                new_size = alignment_array.size
-                for param, vals in d.iteritems():
-                    if isinstance(vals[0], np.ndarray) and  new_size != vals[0].size:
-                        raise Exception("Span, %s, array is not aligned %s" % (key, param))
-                    if param in params:
-                        if param not in return_dict.keys():
-                            dtype = self.value_list[param].fill_value
-                            if isinstance(dtype, basestring):
-                                dtype = object
-                            else:
-                                dtype = type(dtype)
-                            if arr_size > 0:
-                                arr = np.empty(arr_size, dtype)
-                                arr.fill(self.value_list[param].fill_value)
-                                return_dict[param] = arr
-                            else:
-                                return_dict[param] = np.empty(0, dtype)
-                        param_data = self.value_list[param].decompress(vals[0])
-                        if isinstance(param_data, NumpyParameterData):
-                            return_dict[param] = np.append(return_dict[param], param_data.get_data())
-                        elif isinstance(param_data, ConstantOverRange):
-                            return_dict[param] = np.append(return_dict[param], param_data.get_data_as_numpy_array(alignment_array, fill_value=self.value_list[param].fill_value))
+        function_data = {}
+        time_exists = False
+        for id, span in self.spans.iteritems():
+            for key, data in span.iteritems():
+                if key == self.alignment_parameter:
+                    time_exists = True
+                if key in params:
+                    d = self.value_list[key].decompress(data[0])
+                    if type(d) in (ConstantOverTime,):
+                        if key not in function_data:
+                            function_data[key] = list()
+                        function_data[key].append(d)
+
+        if not time_exists:
+            return None
+
+        for key, d in self.spans.iteritems():
+        #     if self.alignment_parameter not in d.keys():
+        #         for param, vals in d.iteritems():
+        #             if param not in params:
+        #                 continue
+        #             if
+
+            if self.alignment_parameter not in d:
+                continue
+            alignment_array = self.value_list[self.alignment_parameter].decompress(d[self.alignment_parameter][0]).get_data()
+            new_size = alignment_array.size
+            for param, vals in d.iteritems():
+                if isinstance(vals[0], np.ndarray) and  new_size != vals[0].size:
+                    raise Exception("Span, %s, array is not aligned %s" % (key, param))
+                if param in params or param == self.alignment_parameter:
+                    if param not in return_dict.keys():
+                        dtype = self.value_list[param].fill_value
+                        if isinstance(dtype, basestring):
+                            dtype = object
                         else:
-                            arr = np.empty(arr_size)
+                            dtype = type(dtype)
+                        if arr_size > 0:
+                            arr = np.empty(arr_size, dtype)
                             arr.fill(self.value_list[param].fill_value)
-                            return_dict[param] = np.append(return_dict[param], arr)
-                if new_size is not None:
-                    for key in return_dict:
-                        if key not in d.keys() and key in self.value_list:
-                            dtype = self.value_list[key].fill_value
-                            if isinstance(dtype, basestring):
-                                dtype = object
-                            else:
-                                dtype = type(dtype)
-                            arr = np.empty(new_size, dtype)
-                            arr.fill(self.value_list[key].fill_value)
-                            return_dict[key] = np.append(return_dict[key], arr)
-                    arr_size += new_size
-        if sort_parameter is not None:
-            # sort_parameter = 'time'
-            idx_arr = np.argsort(return_dict[sort_parameter])
-            for param, arr in return_dict.iteritems():
-                return_dict[param] = arr[idx_arr]
-        return return_dict
+                            return_dict[param] = arr
+                        else:
+                            return_dict[param] = np.empty(0, dtype)
+                    param_data = self.value_list[param].decompress(vals[0])
+                    if isinstance(param_data, NumpyParameterData):
+                        return_dict[param] = np.append(return_dict[param], param_data.get_data())
+                    elif isinstance(param_data, ConstantOverTime):
+                        return_dict[param] = np.append(return_dict[param], param_data.get_data_as_numpy_array(alignment_array, fill_value=self.value_list[param].fill_value))
+                    else:
+                        arr = np.empty(arr_size)
+                        arr.fill(self.value_list[param].fill_value)
+                        return_dict[param] = np.append(return_dict[param], arr)
+            if new_size is not None:
+                for key in return_dict:
+                    if key not in d.keys() and key in self.value_list:
+                        dtype = self.value_list[key].fill_value
+                        if isinstance(dtype, basestring):
+                            dtype = object
+                        else:
+                            dtype = type(dtype)
+                        arr = np.empty(new_size, dtype)
+                        arr.fill(self.value_list[key].fill_value)
+                        return_dict[key] = np.append(return_dict[key], arr)
+                arr_size += new_size
+
+        keys = return_dict.keys()
+        vals = [return_dict[key] for key in keys]
+        for param, func in function_data.iteritems():
+            arr = None
+            func.sort()
+            for data_obj in func:
+                if param in return_dict:
+                    arr = return_dict[param]
+                arr = data_obj.get_data_as_numpy_array(return_dict[self.alignment_parameter], fill_value=self.value_list[param].fill_value, arr=arr)
+            if arr is not None:
+                return_dict[param] = arr
+        data = NumpyDictParameterData(return_dict)
+        if sort_parameter is None or sort_parameter not in return_dict.keys():
+            sort_parameter = self.alignment_parameter
+        data.get_data().sort(order=sort_parameter)
+        return data
+        # if sort_parameter is not None:
+        #     # sort_parameter = self.alignment_parameter
+        #     idx_arr = np.argsort(return_dict[sort_parameter])
+        #     for param, arr in return_dict.iteritems():
+        #         return_dict[param] = arr[idx_arr]
+        # return return_dict
 
     def flush_values(self):
         if self.mode == 'r':
@@ -329,10 +570,11 @@ def base64encode(np_arr, start=None, stop=None):
     if isinstance(np_arr, np.ndarray):
         return json.dumps([str(np_arr.dtype), base64.b64encode(np_arr), np_arr.shape])
     else:
-        if start is not None and stop is not None:
-            return json.dumps([str(type(np_arr)), np_arr, start, stop])
-        else:
-            raise ValueError("start and stop parameters must be supplied for non-%s types", np.ndarray.__name__)
+        return json.dumps([str(type(np_arr)), np_arr, start, stop])
+        # if start is not None and stop is not None:
+        #     return json.dumps([str(type(np_arr)), np_arr, start, stop])
+        # else:
+        #     raise ValueError("start and stop parameters must be supplied for non-%s types", np.ndarray.__name__)
 
 
 def base64decode(json_str):
@@ -372,17 +614,17 @@ class PostgresPersistedStorage(AbstractStorage):
     def compress(self, values):
         if isinstance(values, NumpyParameterData):
             return base64encode(values.get_data())
-        elif isinstance(values, ConstantOverRange):
+        elif isinstance(values, ConstantOverTime):
             return base64encode(values.get_data(), start=values.start, stop=values.stop)
         else:
-            raise TypeError("values must implement %s or %s, found %s" % (NumpyParameterData.__name__, ConstantOverRange.__name__, type(values)))
+            raise TypeError("values must implement %s or %s, found %s" % (NumpyParameterData.__name__, ConstantOverTime.__name__, type(values)))
 
     def decompress(self, obj):
         vals = base64decode(obj)
         if isinstance(vals, np.ndarray):
             return NumpyParameterData(self.parameter_manager.parameter_name, vals)
         elif isinstance(vals, tuple):
-            return ConstantOverRange(self.parameter_manager.parameter_name, vals[0], range_start=vals[1], range_end=vals[2])
+            return ConstantOverTime(self.parameter_manager.parameter_name, vals[0], time_start=vals[1], time_end=vals[2])
         else:
             raise Exception("Could not handle decompressed value %s" % vals)
 
@@ -416,7 +658,7 @@ class PostgresPersistedStorage(AbstractStorage):
                     time_loss = datetime.datetime.now() - ts
                     log.debug("Repaired numpy statistics inconsistency for parameter/type %s/%s.  Time loss of %s seconds ",
                               self.parameter_manager.parameter_name, str(v.dtype.type), str(time_loss))
-            elif isinstance(v, ConstantOverRange) and not isinstance(v.get_data(), basestring):
+            elif isinstance(v, ConstantOverTime) and not isinstance(v.get_data(), basestring):
                 data = v.get_data()
                 if data in valid_types or isinstance(data, numbers.Number):
                     min_val = data
@@ -424,5 +666,8 @@ class PostgresPersistedStorage(AbstractStorage):
         return min_val, max_val
 
     def expand(self, arrshp, origin, expansion, fill_value=None):
+        pass # No op
+
+    def flush_values(self):
         pass # No op
 

@@ -1,12 +1,71 @@
-__author__ = 'casey'
+"""
+@package coverage_model
+@file coverage_model.data_span.py
+@author Casey Bryant
+@brief Span Classes to wrap parameter data
+"""
 
 from ooi.logging import log
-
-from address import Address, AddressFactory
+import time
+import json
 from ast import literal_eval
+from coverage_model.address import Address, AddressFactory
+import hashlib
+
+class Span():
+
+    def __init__(self, span_uuid, coverage_id, param_dict, ingest_time=None, compressors=None):
+        self.param_dict = param_dict
+        self.ingest_time = ingest_time
+        if ingest_time is None:
+            self.ingest_time = time.time()
+        self.id = span_uuid
+        self.coverage_id = coverage_id
+        self.compressors = compressors
+
+    def get_span_stats(self, params=None):
+        param_stat_dict = {}
+        if params is None:
+            params = self.param_dict.keys()
+        for param in params:
+            if param in self.param_dict:
+                param_stat_dict[param] = (self.param_dict[param].min(), self.param_dict[param].max())
+        # for key, data in self.param_dict.iteritems():
+        #     param_stat_dict[key] = (data.min(), data.max())
+        stats = SpanStats(Address(self.id), param_stat_dict)
+        return stats
+
+    def as_json(self, compressors=None, indent=None):
+        data_dict = {}
+        json_dict = {'id': self.id, 'ingest_time': self.ingest_time, 'coverage_id': self.coverage_id}
+        if compressors is None:
+            compressors = self.compressors
+        if compressors is not None:
+            for param, data in self.param_dict.iteritems():
+                data_dict[param] = compressors[param].compress(data)
+            json_dict['params'] = data_dict
+        js = json.dumps(json_dict, default=lambda o: o.__dict__, sort_keys=True, indent=indent)
+        return js
+
+    @classmethod
+    def from_json(cls, js_str, decompressors=None):
+        json_dict = json.loads(js_str)
+        uncompressed_params = {}
+        for param, data in json_dict['params'].iteritems():
+            uncompressed_params[str(param)] = decompressors[param].decompress(data)
+        return Span(str(json_dict['id']), str(json_dict['coverage_id']), uncompressed_params, ingest_time=json_dict['ingest_time'])
+
+    def get_hash(self):
+        m = hashlib.md5(self.as_json())
+        return m.hexdigest()
+
+    def __eq__(self, other):
+        if self.__dict__ == other.__dict__:
+            return True
+        return False
 
 
-class ParamSpan(object):
+class SpanStats(object):
 
     @staticmethod
     def validate_param_value(key, val):
@@ -26,11 +85,11 @@ class ParamSpan(object):
         for key in params.keys():
             self.add_param(key, params[key])
         self.is_dirty = False
-        super(ParamSpan, self).__setattr__('is_dirty', False)
+        super(SpanStats, self).__setattr__('is_dirty', False)
 
     def __setattr__(self, key, value):
-        super(ParamSpan, self).__setattr__(key, value)
-        super(ParamSpan, self).__setattr__('is_dirty', True)
+        super(SpanStats, self).__setattr__(key, value)
+        super(SpanStats, self).__setattr__('is_dirty', True)
 
     def add_param(self, key, val):
         self.validate_param_value(key, val)
@@ -80,23 +139,23 @@ class ParamSpan(object):
         return str(self.as_dict())
 
     def as_dict(self):
-        rs = {'type': ParamSpan.__name__, 'address': str(self.address)}
+        rs = {'type': SpanStats.__name__, 'address': str(self.address)}
         rs.update(self.params)
         return rs
 
     @staticmethod
     def from_dict(dic):
-        if 'type' in dic and dic['type'] == ParamSpan.__name__:
+        if 'type' in dic and dic['type'] == SpanStats.__name__:
             del dic['type']
             if 'address' in dic:
                 address = AddressFactory.from_str(dic['address'])
                 del dic['address']
-                return ParamSpan(address, dic)
+                return SpanStats(address, dic)
         raise ValueError("Do not know how to build ParamSpan from %s ", str(dic))
 
     @staticmethod
     def from_str(span_str):
-        return ParamSpan.from_dict(literal_eval(span_str))
+        return SpanStats.from_dict(literal_eval(span_str))
 
     @staticmethod
     def from_tuple(tup):
@@ -117,7 +176,7 @@ class ParamSpan(object):
         if address is "":
             return None
         else:
-            return ParamSpan(address, params)
+            return SpanStats(address, params)
 
     # Spans represent a set of parameter ranges for data at an address.
     # Sort them by address so we can identify and merge overlapping spans
@@ -136,7 +195,7 @@ class ParamSpan(object):
         #return self.address == other.address
 
 
-class SpanCollection(object):
+class SpanStatsCollection(object):
 
     def __init__(self):
         # spans are stored as a dict of Span lists.
@@ -173,7 +232,7 @@ class SpanCollection(object):
         return dirty_spans
 
     def as_dict(self):
-        rs = {'type': SpanCollection.__name__}
+        rs = {'type': SpanStatsCollection.__name__}
         sp_d = {}
         for k, v in self.span_dict.iteritems():
             sp_d[k] = v.as_dict()
@@ -182,20 +241,20 @@ class SpanCollection(object):
 
     @staticmethod
     def from_dict(dic):
-        if 'type' in dic and dic['type'] == SpanCollection.__name__:
+        if 'type' in dic and dic['type'] == SpanStatsCollection.__name__:
             del dic['type']
             if 'spans' in dic and isinstance(dic['spans'], dict):
                 span_dict = {}
                 for k, v in dic['spans']:
                     if isinstance(v, dict):
-                        span = ParamSpan.from_dict(v)
+                        span = SpanStats.from_dict(v)
                         span_dict[k] = span
-                return SpanCollection(span_dict=span_dict)
+                return SpanStatsCollection(span_dict=span_dict)
         raise ValueError("Do not know how to build SpanCollection from %s ", str(dic))
 
     @staticmethod
     def from_str(col_str):
-        return SpanCollection(literal_eval(col_str))
+        return SpanStatsCollection(literal_eval(col_str))
 
     def __eq__(self, other):
         return self.as_dict() == other.as_dict()
@@ -253,7 +312,7 @@ class SpanCollectionByFile(object):
                 skip = False
                 continue
             if isinstance(i, tuple):
-                span = ParamSpan.from_tuple(i)
+                span = SpanStats.from_tuple(i)
                 collection.add_span(span)
             else:
                 raise ValueError("".join(
@@ -282,7 +341,7 @@ class SpanCollectionByFile(object):
                     if isinstance(v, str):
                         v = literal_eval(v)
                     if isinstance(v, dict):
-                        span = ParamSpan.from_dict(v)
+                        span = SpanStats.from_dict(v)
                         span_dict[k] = span
                         sc.add_span(span)
                 return sc

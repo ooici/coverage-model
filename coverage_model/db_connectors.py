@@ -10,7 +10,7 @@ import struct
 import datetime
 import psycopg2
 import psycopg2.extras
-from coverage_model.data_span import ParamSpan
+from coverage_model.data_span import SpanStats
 from coverage_model.search.search_parameter import ParamValueRange, ParamValue, Param2DValueRange
 
 

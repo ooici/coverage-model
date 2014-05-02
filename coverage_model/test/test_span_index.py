@@ -44,25 +44,25 @@ class TestSpanUnit(CoverageModelUnitTestCase):
     def test_span_equality_and_serialization(self):
         addr = BrickFileAddress('id4', 'brick2')
         other_addr = BrickFileAddress('bad', 'brick')
-        base_span = ParamSpan(addr, {'time': (1,2), 'lat': (0.0, 0.1), 'lon': (0.0, 179.9)})
+        base_span = SpanStats(addr, {'time': (1,2), 'lat': (0.0, 0.1), 'lon': (0.0, 179.9)})
         s = str(base_span)
-        new_span = ParamSpan.from_str(s)
+        new_span = SpanStats.from_str(s)
         self.assertEqual(base_span, new_span)
         d = base_span.as_dict()
-        new_span = ParamSpan.from_dict(d)
+        new_span = SpanStats.from_dict(d)
         self.assertEqual(base_span, new_span)
 
-        bad_spans = [ParamSpan(other_addr, {'time': (1,2), 'lat': (0.0, 0.1), 'lon': (0.0, 179.9)}),
-                     ParamSpan(addr, {'time': (1,2), 'lat': (0.0, 0.1), 'lon': (0.0, 179.9), 'dummy': (1,1)}),
-                     ParamSpan(addr, {'time': (1,1), 'lat': (0.0, 0.1), 'lon': (0.0, 179.9)}) ]
+        bad_spans = [SpanStats(other_addr, {'time': (1,2), 'lat': (0.0, 0.1), 'lon': (0.0, 179.9)}),
+                     SpanStats(addr, {'time': (1,2), 'lat': (0.0, 0.1), 'lon': (0.0, 179.9), 'dummy': (1,1)}),
+                     SpanStats(addr, {'time': (1,1), 'lat': (0.0, 0.1), 'lon': (0.0, 179.9)}) ]
 
         for span in bad_spans:
             self.assertNotEqual(span, base_span)
 
     def test_span_collection_equality_and_serialization(self):
-        spans = [ParamSpan(BrickFileAddress('id2', 'Brick1'), {'time': (1,2), 'lat': (0.0, 0.1), 'lon': (0.0, 179.9)}),
-                 ParamSpan(BrickFileAddress('id2', 'Brick2'), {'time': (1,2), 'lat': (0.0, 0.1), 'lon': (0.0, 179.9), 'dummy': (1,1)}),
-                 ParamSpan(BrickFileAddress('id2', 'Brick3'), {'time': (1,1), 'lat': (0.0, 0.1), 'lon': (0.0, 179.9)}) ]
+        spans = [SpanStats(BrickFileAddress('id2', 'Brick1'), {'time': (1,2), 'lat': (0.0, 0.1), 'lon': (0.0, 179.9)}),
+                 SpanStats(BrickFileAddress('id2', 'Brick2'), {'time': (1,2), 'lat': (0.0, 0.1), 'lon': (0.0, 179.9), 'dummy': (1,1)}),
+                 SpanStats(BrickFileAddress('id2', 'Brick3'), {'time': (1,1), 'lat': (0.0, 0.1), 'lon': (0.0, 179.9)}) ]
 
         #spans = [ParamSpan(BrickFileAddress('id2', 'Brink1'), {})]
         spans_collection = SpanCollectionByFile()
@@ -76,9 +76,9 @@ class TestSpanUnit(CoverageModelUnitTestCase):
         new_col = SpanCollectionByFile.from_dict(d)
         self.assertEqual(spans_collection, new_col)
 
-        spans = [ParamSpan(BrickFileAddress('id2', 'Brick'), {'time': (1,2), 'lat': (0.0, 0.1), 'lon': (0.0, 179.9)}),
-                 ParamSpan(BrickFileAddress('id2', 'Brick2'), {'time': (1,2), 'lat': (0.0, 0.1), 'lon': (0.0, 179.9), 'dummy': (1,1)}),
-                 ParamSpan(BrickFileAddress('id2', 'Brick3'), {'time': (1,1), 'lat': (0.0, 0.1), 'lon': (0.0, 179.9)}) ]
+        spans = [SpanStats(BrickFileAddress('id2', 'Brick'), {'time': (1,2), 'lat': (0.0, 0.1), 'lon': (0.0, 179.9)}),
+                 SpanStats(BrickFileAddress('id2', 'Brick2'), {'time': (1,2), 'lat': (0.0, 0.1), 'lon': (0.0, 179.9), 'dummy': (1,1)}),
+                 SpanStats(BrickFileAddress('id2', 'Brick3'), {'time': (1,1), 'lat': (0.0, 0.1), 'lon': (0.0, 179.9)}) ]
 
         bad_col = SpanCollectionByFile()
         self.assertNotEqual(spans_collection, bad_col)

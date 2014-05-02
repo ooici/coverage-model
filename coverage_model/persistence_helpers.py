@@ -12,7 +12,7 @@ from ooi.logging import log
 from coverage_model.basic_types import Dictable
 from coverage_model import utils
 from coverage_model.metadata import MetadataManager
-from coverage_model.data_span import ParamSpan, SpanCollection
+from coverage_model.data_span import SpanStats, SpanStatsCollection
 from coverage_model.address import BrickAddress
 
 import os

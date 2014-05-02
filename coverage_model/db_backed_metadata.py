@@ -14,7 +14,7 @@ from coverage_model.utils import hash_any
 from coverage_model.persistence_helpers import RTreeProxy, pack, unpack
 from coverage_model.basic_types import Dictable
 from coverage_model.db_connectors import DBFactory
-from coverage_model.data_span import SpanCollection, SpanCollectionByFile, ParamSpan
+from coverage_model.data_span import SpanStatsCollection, SpanCollectionByFile, SpanStats
 from coverage_model.persistence_helpers import MasterManager, BaseManager
 
 

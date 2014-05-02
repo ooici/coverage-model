@@ -45,13 +45,13 @@ class AddressFactory(object):
     def from_tuple(tup):
         if len(tup) > 1:
             address_type = tup[0]
-            if address_type == 'Address':
+            if address_type == Address.__name__:
                 return Address.from_tuple(tup)
-            if address_type == 'FileAddress':
+            elif address_type == FileAddress.__name__:
                 return FileAddress.from_tuple(tup)
-            if address_type == 'BrickAddress':
+            elif address_type == BrickAddress.__name__:
                 return BrickAddress.from_tuple(tup)
-            if address_type == 'BrickFileAddress':
+            elif address_type == BrickFileAddress.__name__:
                 return BrickFileAddress.from_tuple(tup)
             else:
                 raise ValueError("".join(["Do not know how to build address type: ", tup[0]]))
@@ -115,6 +115,43 @@ class Address(object):
     def __str__(self):
         return str(self.__key__())
 import os
+
+
+class IDAddress(Address):
+    def __init__(self, id):
+        Address.__init__(self, id)
+        self.id
+
+    def as_dict(self):
+        return {'type': IDAddress.__name__,
+                'id': self.id}
+
+    @staticmethod
+    def from_dict(dic):
+        if 'type' in dic and dic['type'] == IDAddress.__name__:
+            if 'id' in dic:
+                return IDAddress(dic['id'])
+        raise ValueError("Do not now how to build %s from %s" % (IDAddress.__name__, str(dic)))
+
+    def as_tuple(self):
+        tup = IDAddress.__name__, self.id
+        return tup
+
+    @staticmethod
+    def from_tuple(tup):
+        if len(tup) != 2:
+            raise ValueError("".join(["Expected tuple of size 2.  Found ", str(tup)]))
+        if tup[0] == IDAddress.__name__:
+            return IDAddress(tup[1])
+        else:
+            raise ValueError("".join(["Do not know how to build address type: ", tup[0]]))
+
+    @staticmethod
+    def from_str(st):
+        return IDAddress.from_dict(ast.literal_eval(st))
+
+    def get_top_level_key(self):
+        return self.id
 
 
 class FileAddress(Address):
@@ -206,7 +243,7 @@ class BrickAddress(Address):
     @staticmethod
     def from_tuple(tup):
         if len(tup) != 4:
-            raise ValueError("".join(["Expected tuple of size 5.  Found ", src_str(tup)]))
+            raise ValueError("".join(["Expected tuple of size 5.  Found ", str(len(tup))]))
         if tup[0] == "BrickAddress":
             return BrickAddress(tup[1], tup[2], tup[3])
         else:

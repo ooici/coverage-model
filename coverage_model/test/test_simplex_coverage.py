@@ -71,17 +71,27 @@ class TestSampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         else:
             scov.insert_timesteps(nt)
 
-            # Add data for each parameter
-            scov.set_parameter_values('time', value=np.arange(nt))
+            params = {}
+            params['time'] = np.arange(nt)
             if not only_time:
-                scov.set_parameter_values('lat', value=45)
-                scov.set_parameter_values('lon', value=-71)
-                # make a random sample of 10 values between 23 and 26
-                # Ref: http://docs.scipy.org/doc/numpy/reference/generated/numpy.random.random_sample.html#numpy.random.random_sample
-                # --> To sample  multiply the output of random_sample by (b-a) and add a
-                tvals = utils.get_random_sample(nt, 23, 26)
-                scov.set_parameter_values('temp', value=tvals)
-                scov.set_parameter_values('conductivity', value=utils.get_random_sample(nt, 90, 110))
+                params['lat'] = np.empty(nt)
+                params['lat'].fill(45)
+                params['lon'] = np.empty(nt)
+                params['lon'].fill(-71)
+                params['temp'] = utils.get_random_sample(nt, 23, 26)
+                params['conductivity'] = utils.get_random_sample(nt, 90, 110)
+            scov.set_parameter_values(params)
+            # Add data for each parameter
+            # scov.set_parameter_values({'time': np.arange(nt)})
+            # if not only_time:
+            #     scov.set_parameter_values('lat', value=45)
+            #     scov.set_parameter_values('lon', value=-71)
+            #     # make a random sample of 10 values between 23 and 26
+            #     # Ref: http://docs.scipy.org/doc/numpy/reference/generated/numpy.random.random_sample.html#numpy.random.random_sample
+            #     # --> To sample  multiply the output of random_sample by (b-a) and add a
+            #     tvals = utils.get_random_sample(nt, 23, 26)
+            #     scov.set_parameter_values('temp', value=tvals)
+            #     scov.set_parameter_values('conductivity', value=utils.get_random_sample(nt, 90, 110))
 
         if in_memory and save_coverage:
             SimplexCoverage.pickle_save(scov, os.path.join(cls.working_dir, 'sample.cov'))

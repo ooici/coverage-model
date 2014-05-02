@@ -746,8 +746,9 @@ class CoverageIntTestBase(object):
         try:
             scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
             _slice = slice(4000, 5020, 5)
-            ret = scov.get_parameter_values('time', _slice)
-            self.assertTrue(np.array_equal(ret, np.arange(4000, 5000, 5, dtype=scov.get_parameter_context('time').param_type.value_encoding)))
+            ret = scov.get_parameter_values('time', time_segment=(4000, 5020))
+            print ret.get_data()['time']
+            self.assertTrue(np.array_equal(ret.get_data()['time'], np.arange(4000, 5000, 1, dtype=scov.get_parameter_context('time').param_type.value_encoding)))
         except NotImplementedError:
             pass
         except:

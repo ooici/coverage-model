@@ -111,14 +111,14 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
             np_dict[scov.temporal_parameter_name] = NumpyParameterData(scov.temporal_parameter_name, time_array, time_array)
             if not only_time:
                 scov.append_parameter(ParameterContext('depth', fill_value=9999.0))
-                scov.append_parameter(ParameterContext('m_lon'))
-                scov.append_parameter(ParameterContext('m_lat'))
+                # scov.append_parameter(ParameterContext('lon'))
+                # scov.append_parameter(ParameterContext('lat'))
                 scov.append_parameter(ParameterContext('const_str', fill_value='Nope'))
                 np_dict['depth'] = NumpyParameterData('depth', np.random.uniform(0,200,[nt]), time_array)
-                np_dict['m_lon'] = NumpyParameterData('m_lon', np.random.uniform(-180,180,[nt]), time_array)
-                np_dict['m_lat'] = NumpyParameterData('m_lat', np.random.uniform(-90,90,[nt]), time_array)
-                np_dict['const_float'] = ConstantOverRange('const_float', 88.8, range_start=10000, range_end=10000+nt)
-                np_dict['const_str'] = ConstantOverRange('const_str', 'Jello', range_start=10000, range_end=10000+nt)
+                np_dict['lon'] = NumpyParameterData('lon', np.random.uniform(-180,180,[nt]), time_array)
+                np_dict['lat'] = NumpyParameterData('lat', np.random.uniform(-90,90,[nt]), time_array)
+                np_dict['const_float'] = ConstantOverTime('const_float', 88.8, time_start=10000, time_end=10000+nt)
+                np_dict['const_str'] = ConstantOverTime('const_str', 'Jello', time_start=10000, time_end=10000+nt)
 
                 #scov.set_parameter_values('boolean', value=[True, True, True], tdoa=[[2,4,14]])
                 #scov.set_parameter_values('const_ft', value=-71.11) # Set a constant with correct data type
@@ -159,13 +159,14 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         scov, cov_name = self.construct_cov(nt=ts)
         self.assertIsNotNone(scov)
         np_dict={}
-        initial_depth_array = scov.get_parameter_values('depth')['depth']
-        initial_time_array = scov.get_parameter_values(scov.temporal_parameter_name)[scov.temporal_parameter_name]
+        initial_depth_array = scov.get_parameter_values('depth').get_data()['depth']
+        initial_time_array = scov.get_parameter_values(scov.temporal_parameter_name).get_data()[scov.temporal_parameter_name]
         time_array = np.array([9050, 10051, 10052, 10053, 10054, 10055])
         depth_array = np.array([1.0, np.NaN, 0.2, np.NaN, 1.01, 9.0])
 
-        total_time_array = np.concatenate((initial_time_array, time_array))
-        total_depth_array = np.concatenate((initial_depth_array, depth_array))
+        total_time_array = np.append(initial_time_array, time_array)
+        total_depth_array = np.append(initial_depth_array, depth_array)
+
         sort_order = np.argsort(total_time_array)
         total_time_array = total_time_array[sort_order]
         total_depth_array = total_depth_array[sort_order]
@@ -174,19 +175,28 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         np_dict[scov.temporal_parameter_name] = NumpyParameterData(scov.temporal_parameter_name, time_array, time_array)
         np_dict['depth'] = NumpyParameterData('depth', depth_array, time_array)
         scov.set_parameter_values(np_dict)
-        param_dict = scov.get_parameter_values(scov.temporal_parameter_name, sort_parameter=scov.temporal_parameter_name)
-        self.assertEqual(1, len(param_dict))
-        self.assertTrue(scov.temporal_parameter_name in param_dict)
-        np.testing.assert_array_equal(total_time_array, param_dict[scov.temporal_parameter_name])
+
+
+        param_data = scov.get_parameter_values(scov.temporal_parameter_name, sort_parameter=scov.temporal_parameter_name)
+        rec_arr = param_data.get_data()
+        self.assertEqual(1, len(rec_arr.shape))
+        self.assertTrue(scov.temporal_parameter_name in rec_arr.dtype.names)
+        np.testing.assert_array_equal(total_time_array, rec_arr[scov.temporal_parameter_name])
+
 
         params_to_get = [scov.temporal_parameter_name, 'depth', 'const_float', 'const_str']
-        param_dict = scov.get_parameter_values(params_to_get, sort_parameter=scov.temporal_parameter_name)
-        self.assertEqual(len(params_to_get), len(param_dict))
-        self.assertTrue(scov.temporal_parameter_name in param_dict)
-        np.testing.assert_array_equal(total_time_array, param_dict[scov.temporal_parameter_name])
+        param_data = scov.get_parameter_values(params_to_get, sort_parameter=scov.temporal_parameter_name)
+        rec_arr = param_data.get_data()
 
-        self.assertTrue('depth' in param_dict)
-        np.testing.assert_array_equal(total_depth_array, param_dict['depth'])
+        self.assertEqual(len(params_to_get), len(rec_arr.dtype.names))
+
+        for param_name in params_to_get:
+            self.assertTrue(param_name in rec_arr.dtype.names)
+
+        self.assertTrue(scov.temporal_parameter_name in rec_arr.dtype.names)
+
+        np.testing.assert_array_equal(total_time_array, rec_arr[scov.temporal_parameter_name])
+        np.testing.assert_array_equal(total_depth_array, rec_arr['depth'])
 
         def f(x, t_a, val, fill_val):
             if t_a >= 10000 and t_a <= 10000+ts:
@@ -194,13 +204,28 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
             else:
                 self.assertEqual(x, fill_val)
 
-        self.assertTrue('const_float' in param_dict)
         f = np.vectorize(f)
-        f(param_dict['const_float'], param_dict['time'], 88.8, scov._persistence_layer.value_list['const_float'].fill_value)
 
-        self.assertTrue('const_float' in param_dict)
-        f(param_dict['const_str'], param_dict['time'], 'Jello', scov._persistence_layer.value_list['const_str'].fill_value)
+        f(rec_arr['const_float'], rec_arr[scov.temporal_parameter_name], 88.8, scov._persistence_layer.value_list['const_float'].fill_value)
+        f(rec_arr['const_str'], rec_arr[scov.temporal_parameter_name], 'Jello', scov._persistence_layer.value_list['const_str'].fill_value)
 
-        # for param, vals in param_dict.iteritems():
+        # for param, vals in param_data.iteritems():
         #     print param, vals.dtype, vals
         # self.assertTrue(False)
+
+    def test_add_constant(self):
+        ts = 10
+        scov, cov_name = self.construct_cov(nt=ts)
+        self.assertIsNotNone(scov)
+        time_array = np.array([9050, 10010, 10011, 10012, 10013, 10014])
+        np_dict = {}
+        np_dict[scov.temporal_parameter_name] = NumpyParameterData(scov.temporal_parameter_name, time_array, time_array)
+        scov.set_parameter_values(np_dict)
+
+        initial_floats = scov.get_parameter_values('const_float').get_data()['const_float']
+        scov.set_parameter_values({'const_float': ConstantOverTime('const_float', 99.9, time_start=10009.0)})
+        scov.set_parameter_values({'const_float': ConstantOverTime('const_float', 1.0, time_start=10008.0)})
+        scov.set_parameter_values({'const_float': ConstantOverTime('const_float', 17.0)})
+        new_float_arr = scov.get_parameter_values((scov.temporal_parameter_name, 'const_float')).get_data()
+        # self.assertTrue(False)
+

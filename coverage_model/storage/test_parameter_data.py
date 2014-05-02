@@ -12,7 +12,7 @@ import numpy as np
 import unittest
 from coverage_model import *
 
-from coverage_model.storage.parameter_data import NumpyParameterData, ConstantOverRange
+from coverage_model.storage.parameter_data import NumpyParameterData, ConstantOverTime
 
 @attr('UNIT',group='cov')
 class TestSpanUnit(CoverageModelUnitTestCase):
@@ -48,7 +48,7 @@ class TestSpanUnit(CoverageModelUnitTestCase):
         fill_val = np.NaN
         arr = np.array([0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5])
 
-        pd = ConstantOverRange(name, data, range_start=start)
+        pd = ConstantOverTime(name, data, time_start=start)
 
         alignment_array = arr[10:14]
         got = pd.get_data_as_numpy_array(alignment_array)
@@ -77,7 +77,7 @@ class TestSpanUnit(CoverageModelUnitTestCase):
         np.testing.assert_array_equal(got, expected)
 
 
-        pd = ConstantOverRange(name, data, range_start=start, range_end=stop)
+        pd = ConstantOverTime(name, data, time_start=start, time_end=stop)
 
         alignment_array = arr[10:14]
         got = pd.get_data_as_numpy_array(alignment_array)
@@ -107,7 +107,7 @@ class TestSpanUnit(CoverageModelUnitTestCase):
         expected = np.array([fill_val, fill_val, fill_val, fill_val, fill_val, data, data, data, data, data, data])
         np.testing.assert_array_equal(got, expected)
 
-        pd = ConstantOverRange(name, data, range_end=stop)
+        pd = ConstantOverTime(name, data, time_end=stop)
 
         alignment_array = arr[10:14]
         got = pd.get_data_as_numpy_array(alignment_array)
@@ -135,7 +135,7 @@ class TestSpanUnit(CoverageModelUnitTestCase):
         expected.fill(data)
         np.testing.assert_array_equal(got, expected)
 
-        pd = ConstantOverRange(name, data)
+        pd = ConstantOverTime(name, data)
 
         alignment_array = arr[10:14]
         got = pd.get_data_as_numpy_array(alignment_array)
@@ -160,3 +160,10 @@ class TestSpanUnit(CoverageModelUnitTestCase):
         expected = np.empty(alignment_array.size)
         expected.fill(data)
         np.testing.assert_array_equal(got, expected)
+
+    def test_constant_parameter_failures(self):
+        cot = ConstantOverTime('dummy', 10, 1.1, 1.10001)
+        with self.assertRaises(RuntimeError):
+            cot = ConstantOverTime('dummy', 10, 1.1, 1.1)
+        with self.assertRaises(RuntimeError):
+            cot = ConstantOverTime('dummy', 10, 1.1, 1.099999)

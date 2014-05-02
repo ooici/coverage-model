@@ -2,7 +2,7 @@
 
 from ooi.logging import log
 
-from coverage_model.data_span import SpanCollectionByFile, ParamSpan
+from coverage_model.data_span import SpanCollectionByFile, SpanStats
 from coverage_model.address import BrickFileAddress
 import numpy
 
@@ -63,7 +63,7 @@ class MetadataManager(object):
         if span is None:
             params = dict()
             params[param_name] = min_max
-            span = ParamSpan(address, params)
+            span = SpanStats(address, params)
             self.span_collection.add_span(span)
         else:
             span.extend_param(param_name, min_max)
