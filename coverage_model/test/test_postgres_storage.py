@@ -209,9 +209,6 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         f(rec_arr['const_float'], rec_arr[scov.temporal_parameter_name], 88.8, scov._persistence_layer.value_list['const_float'].fill_value)
         f(rec_arr['const_str'], rec_arr[scov.temporal_parameter_name], 'Jello', scov._persistence_layer.value_list['const_str'].fill_value)
 
-        # for param, vals in param_data.iteritems():
-        #     print param, vals.dtype, vals
-        # self.assertTrue(False)
 
     def test_add_constant(self):
         ts = 10
@@ -227,5 +224,18 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         scov.set_parameter_values({'const_float': ConstantOverTime('const_float', 1.0, time_start=10008.0)})
         scov.set_parameter_values({'const_float': ConstantOverTime('const_float', 17.0)})
         new_float_arr = scov.get_parameter_values((scov.temporal_parameter_name, 'const_float')).get_data()
-        # self.assertTrue(False)
+        self.assertTrue(False)
 
+    def test_reconstruct_coverage(self):
+        ts = 10
+        scov, cov_name = self.construct_cov(nt=ts)
+        self.assertIsNotNone(scov)
+
+        val_names = ['depth', 'lat', 'lon']
+        id = scov.persistence_guid
+        vals = scov.get_parameter_values(val_names).get_data()
+
+        rcov = AbstractCoverage.load(self.working_dir, id, mode='r')
+        rvals = rcov.get_parameter_values(val_names).get_data()
+
+        np.testing.assert_array_equal(vals, rvals)

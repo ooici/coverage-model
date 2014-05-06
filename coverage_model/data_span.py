@@ -52,6 +52,7 @@ class Span():
         json_dict = json.loads(js_str)
         uncompressed_params = {}
         for param, data in json_dict['params'].iteritems():
+
             uncompressed_params[str(param)] = decompressors[param].decompress(data)
         return Span(str(json_dict['id']), str(json_dict['coverage_id']), uncompressed_params, ingest_time=json_dict['ingest_time'])
 
