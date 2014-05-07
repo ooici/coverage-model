@@ -101,20 +101,29 @@ class TestSampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
     def _insert_set_get(self, scov=None, timesteps=None, data=None, _slice=None, param='all'):
         # Function to test variable occurances of getting and setting values across parameter(s)
         data = data[_slice]
+        data = np.copy(data)
         ret = []
 
-        scov.insert_timesteps(timesteps)
+
+        # scov.insert_timesteps(timesteps)
         param_list = []
         if param == 'all':
             param_list = scov.list_parameters()
         else:
             param_list.append(param)
 
+        if 'time' not in param_list:
+            time_arr = np.arange(0, len(data))
+        else:
+            time_arr = data
         for param in param_list:
-            scov.set_parameter_values(param, data, _slice)
+            param_dict = {param: data}
+            if param is not 'time':
+                param_dict['time'] = time_arr
+            scov.set_parameter_values(param_dict)
             scov.get_dirty_values_async_result().get(timeout=60)
             # TODO: Is the res = assignment below correct?
-            ret = scov.get_parameter_values(param, _slice)
+            ret = scov.get_parameter_values(param).get_data()[param]
         return (ret == data).all()
 
     def test_list_parameters_coords_only(self):
@@ -407,7 +416,6 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
             return scov, 'TestPtypesCovInt'
         else:
             # Add data for each parameter
-            print nt
             if only_time:
                 scov.insert_timesteps(nt)
                 scov.set_parameter_values('time', value=np.arange(nt))

@@ -224,7 +224,7 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         scov.set_parameter_values({'const_float': ConstantOverTime('const_float', 1.0, time_start=10008.0)})
         scov.set_parameter_values({'const_float': ConstantOverTime('const_float', 17.0)})
         new_float_arr = scov.get_parameter_values((scov.temporal_parameter_name, 'const_float')).get_data()
-        self.assertTrue(False)
+        # self.assertTrue(False)
 
     def test_reconstruct_coverage(self):
         ts = 10

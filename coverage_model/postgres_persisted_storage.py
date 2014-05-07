@@ -138,7 +138,8 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         # else:
         v = PostgresPersistedStorage(pm, metadata_manager=self.master_manager,
                                          dtype=parameter_context.param_type.storage_encoding,
-                                         fill_value=parameter_context.param_type.fill_value)
+                                         fill_value=parameter_context.param_type.fill_value,
+                                         mode=self.mode)
         self.value_list[parameter_name] = v
 
         # CBM TODO: Consider making this optional and bulk-flushing from the coverage after all parameters have been initialized
@@ -234,7 +235,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         write_time = time.time()
         for key, arr in values.iteritems():
             if key not in self.value_list:
-                raise LookupError("Parameter, %s, has not been initialized" % (key))
+                raise KeyError("Parameter, %s, has not been initialized" % (key))
             if isinstance(arr, np.ndarray):
                 arr = NumpyParameterData(key, arr)
                 values[key] = arr
@@ -248,6 +249,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                 raise ValueError("Array size for %s is inconsistent.  Expected %s elements, found %s." % (key, str(arr_len), str(arr.get_data().size)))
             compressed_value = self.value_list[key].compress(arr)
             min_val, max_val = self.value_list[key].get_statistics(arr)
+            self.update_parameter_bounds(key, (min_val, max_val))
             converted_dict[key] = (compressed_value, min_val, max_val, write_time)
 
         if not all_values_constant_over_time and self.alignment_parameter not in converted_dict:
@@ -354,11 +356,9 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             return return_dict
         else:
             idx = (np.abs(time_array-time)).argmin()
-            for key, val in np.dict.iteritems:
+            for key, val in np_dict.iteritems():
                 return_dict[key] = np.array([val[idx]])
         return return_dict
-
-
 
     def _create_parameter_dictionary_of_numpy_arrays(self, numpy_params, function_params=None):
         return_dict = {}
@@ -381,12 +381,14 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             insert_index += np_data.size
         return_dict[self.alignment_parameter] = arr
 
+        print 'ids:', span_order
         for id, span_data in numpy_params.iteritems():
             if id == self.alignment_parameter:
                 continue
             npa = np.empty(total_size)
             insert_index = 0
             for span_name in span_order:
+                print 'span_name: %f' % span_name
                 np_data = span_data[span_name].get_data()
                 end_idx = insert_index + np_data.size
                 npa[insert_index:end_idx] = np_data
@@ -568,7 +570,8 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
 
 def base64encode(np_arr, start=None, stop=None):
     if isinstance(np_arr, np.ndarray):
-        return json.dumps([str(np_arr.dtype), base64.b64encode(np_arr), np_arr.shape])
+        st = json.dumps([str(np_arr.dtype), base64.b64encode(np_arr), np_arr.shape])
+        return st
     else:
         return json.dumps([str(type(np_arr)), np_arr, start, stop])
         # if start is not None and stop is not None:
@@ -601,11 +604,12 @@ def simple_decode(json_str):
 
 class PostgresPersistedStorage(AbstractStorage):
 
-    def __init__(self, parameter_manager, metadata_manager, dtype, fill_value):
+    def __init__(self, parameter_manager, metadata_manager, dtype, fill_value, mode=None):
         self.parameter_manager = parameter_manager
         self.metadata_manager = metadata_manager
         self.dtype = dtype
         self.fill_value = fill_value
+        self.mode = mode
 
     def __setitem__(self, slice_, value):
         if self.mode == 'r':
@@ -613,6 +617,7 @@ class PostgresPersistedStorage(AbstractStorage):
 
     def compress(self, values):
         if isinstance(values, NumpyParameterData):
+            # return base64.b64encode(values.get_data())
             return base64encode(values.get_data())
         elif isinstance(values, ConstantOverTime):
             return base64encode(values.get_data(), start=values.start, stop=values.stop)

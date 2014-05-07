@@ -145,7 +145,7 @@ class CoverageIntTestBase(object):
             check_vals = {}
             for p in scov.list_parameters():
                 fv = scov.get_parameter_context(p).fill_value
-                vals = scov.get_parameter_values(p)
+                vals = scov.get_parameter_values(p).get_data()[p]
                 vals = np.atleast_1d(np.ma.masked_equal(vals, fv, copy=False))
                 check_vals[p] = vals
 
@@ -233,13 +233,13 @@ class CoverageIntTestBase(object):
             with self.get_cov(nt=nt)[0] as cov:
                 self.assertEqual(cov.num_timesteps, nt)
                 for p in cov.list_parameters():
-                    self.assertEqual(len(cov.get_parameter_values(p)), nt)
+                    self.assertEqual(len(cov.get_parameter_values(p).get_data()[p]), nt)
                 pdir = cov.persistence_dir
 
             with AbstractCoverage.load(pdir) as cov:
                 self.assertEqual(cov.num_timesteps, nt)
                 for p in cov.list_parameters():
-                    self.assertEqual(len(cov.get_parameter_values(p)), nt)
+                    self.assertEqual(len(cov.get_parameter_values(p).get_data()[p]), nt)
         except NotImplementedError:
             pass
         except:
@@ -387,7 +387,9 @@ class CoverageIntTestBase(object):
             # Add some data to the writable copy & ensure a flush
             write_cov.insert_timesteps(100)
             tdat = range(write_cov.num_timesteps - 100, write_cov.num_timesteps)
-            write_cov.set_time_values(tdat, slice(-100, None))
+            times = {}
+            times[write_cov.temporal_parameter_name] = np.arange(10000, 10020)
+            write_cov.set_parameter_values(times)
 
             # Refresh the read coverage
             read_cov.refresh()
@@ -453,7 +455,7 @@ class CoverageIntTestBase(object):
             base_path = root_path.replace(guid,'')
             scov.close()
             lcov = SimplexCoverage.load(base_path, guid)
-            ret_data = lcov.get_parameter_values('time', slice(0,50))
+            ret_data = lcov.get_parameter_values('time', time_segment=(0,50)).get_data()['time']
             results.append(np.arange(50).any() == ret_data.any())
             self.assertTrue(False not in results)
             lcov.close()
@@ -621,18 +623,18 @@ class CoverageIntTestBase(object):
 
         # Collect values to use as duplicates
         dups = {}
-        for p in cov.list_parameters():
-            if not isinstance(cov.get_parameter_context(p).param_type, (ParameterFunctionType, ConstantType, ConstantRangeType, SparseConstantType)):
-                dups[p] = cov.get_parameter_values(p, slice(None, None, 3))
 
-        # Expand the temporal domain accordingly and set the new values
-        cov.insert_timesteps(len(dups[cov.temporal_parameter_name]))
-        for p in dups:
-            cov.set_parameter_values(p, dups[p], slice(-len(dups[p]), None))
+        rec_arr = cov.get_parameter_values(cov.list_parameters()).get_data()
+        for name in rec_arr.dtype.names:
+            dups[name] = rec_arr[name]
+
+        # Write the duplicate values
+        cov.set_parameter_values(dups)
 
         before_vals = {}
+        rec_arr = cov.get_parameter_values(cov.list_parameters()).get_data()
         for p in cov.list_parameters():
-            before_vals[p] = cov.get_parameter_values(p)
+            before_vals[p] = rec_arr[p]
 
         # Resolve the temporal domain issues
         cov.repair_temporal_geometry()
@@ -640,11 +642,13 @@ class CoverageIntTestBase(object):
         cov_ts = cov.num_timesteps
         self.assertEqual(cov_ts, ts)
         ntimes = cov.get_time_values()
-        np.testing.assert_array_equal(otimes, ntimes)
+        self.assertEqual(len(otimes)*2, len(ntimes))
+        print np.sort(ntimes)
+        print ntimes
         np.testing.assert_array_equal(np.sort(ntimes), ntimes)
 
         for p in cov.list_parameters():
-            np.testing.assert_array_equal(cov.get_parameter_values(p), before_vals[p][:cov_ts])
+            np.testing.assert_array_equal(cov.get_parameter_values(p).get_data()[p], before_vals[p])
 
         lcov = AbstractCoverage.load(cov.persistence_dir)
         with self.assertRaises(IOError):
@@ -731,8 +735,7 @@ class CoverageIntTestBase(object):
         time_steps = 5000
         try:
             scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
-            _slice = slice(4998, 5020, None)
-            ret = scov.get_parameter_values('time', _slice)
+            ret = scov.get_parameter_values('time', time_segment=(4998, 5020)).get_data()['time']
             self.assertTrue(np.array_equal(ret, np.arange(4998, 5000, dtype=scov.get_parameter_context('time').param_type.value_encoding)))
         except NotImplementedError:
             pass
@@ -747,7 +750,6 @@ class CoverageIntTestBase(object):
             scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
             _slice = slice(4000, 5020, 5)
             ret = scov.get_parameter_values('time', time_segment=(4000, 5020))
-            print ret.get_data()['time']
             self.assertTrue(np.array_equal(ret.get_data()['time'], np.arange(4000, 5000, 1, dtype=scov.get_parameter_context('time').param_type.value_encoding)))
         except NotImplementedError:
             pass
@@ -760,35 +762,52 @@ class CoverageIntTestBase(object):
         time_steps = 5000
         try:
             scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
-            _slice = slice(5010, 5020, None)
-            with self.assertRaises(IndexError):
-                scov.get_parameter_values('time', _slice)
+            slice_vals = scov.get_parameter_values('time', time_segment=(5010, 5020)).get_data()['time']
+            self.assertEqual(len(slice_vals), 0)
         except NotImplementedError as ex:
             pass
         except:
             raise
 
-    def test_int_raises_index_error(self):
+    def test_int_returns_closest_value(self):
         # Tests that an integer defined outside the coverage data bounds raises an error when attempting retrieval
         brick_size = 1000
         time_steps = 5000
         try:
             scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
-            with self.assertRaises(IndexError):
-                scov.get_parameter_values('time', 9000)
+            slice_vals = scov.get_parameter_values('time', time=10.2).get_data()['time']
+            self.assertEqual(len(slice_vals), 1)
+            self.assertEqual(slice_vals[0], 10.)
+
+            slice_vals = scov.get_parameter_values('time', time=10.7).get_data()['time']
+            self.assertEqual(len(slice_vals), 1)
+            self.assertEqual(slice_vals[0], 11.)
+
+            slice_vals = scov.get_parameter_values('time', time=-101.1).get_data()['time']
+            self.assertEqual(len(slice_vals), 1)
+            self.assertEqual(slice_vals[0], 0.)
+
+            slice_vals = scov.get_parameter_values('time', time=9000).get_data()['time']
+            self.assertEqual(len(slice_vals), 1)
+            self.assertEqual(slice_vals[0], 4999.)
+
         except NotImplementedError:
             pass
         except:
             raise
 
-    def test_array_raises_index_error(self):
+    def test_time_segemet_out_of_bounds(self):
         # Tests that an array defined outside the coverage data bounds raises an error when attempting retrieval
         brick_size = 1000
         time_steps = 5000
         try:
             scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
-            with self.assertRaises(IndexError):
-                scov.get_parameter_values('time', [[5,9000]])
+            time_vals = scov.get_parameter_values('time', time_segment=(5, 9000)).get_data()['time']
+            self.assertEqual(len(time_vals), 4995)
+            arr = np.arange(5, 5000)
+            np.testing.assert_array_equal(time_vals, arr)
+            self.assertTrue(False)
+
         except NotImplementedError:
             pass
         except:
@@ -802,49 +821,31 @@ class CoverageIntTestBase(object):
 
         try:
             cov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
-            dat = cov.get_parameter_values('time')
+            dat = cov.get_parameter_values('time').get_data()['time']
             for s in range(len(dat)):
                 for e in range(len(dat)):
                     e+=1
                     if s < e:
                         for st in range(e-s):
-                            sl = slice(s, e, st+1)
-                            mock_data = np.array(range(*sl.indices(sl.stop)))
-                            data = cov.get_parameter_values('time', sl)
-                            results.append(np.array_equiv(mock_data, data))
+                            mock_data = np.arange(s, e)
+                            data = cov.get_parameter_values('time', time_segment=(s, e-1)).get_data()['time']
+                            results.append(np.array_equiv(mock_data, data.astype(int)))
             self.assertTrue(False not in results)
         except NotImplementedError:
             pass
         except:
             raise
 
-    def test_get_by_int(self):
+    def test_get_by_time(self):
         results = []
         brick_size = 10
         time_steps = 30
         try:
             cov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
-            dat = cov.get_parameter_values('time')
-            for s in range(len(dat)):
+            dat = cov.get_parameter_values('time').get_data()['time']
+            for s in dat:
                 mock_data = s
-                data = cov.get_parameter_values('time', s)
-                results.append(np.array_equiv(mock_data, data))
-            self.assertTrue(False not in results)
-        except NotImplementedError:
-            pass
-        except:
-            raise
-
-    def test_get_by_list(self):
-        results = []
-        brick_size = 10
-        time_steps = 30
-        try:
-            cov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
-            dat = cov.get_parameter_values('time')
-            for s in range(len(dat)):
-                mock_data = s
-                data = cov.get_parameter_values('time', [s])
+                data = cov.get_parameter_values('time', time=s).get_data()['time']
                 results.append(np.array_equiv(mock_data, data))
             self.assertTrue(False not in results)
         except NotImplementedError:
@@ -878,7 +879,7 @@ class CoverageIntTestBase(object):
         try:
             cov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
             if cov.num_timesteps:
-                cov.set_parameter_values('time', np.arange(30) + 20)
+                cov.set_parameter_values({'time': np.arange(30) + 20})
             vdict = cov.get_value_dictionary(temporal_slice=(25, 30))
             for p in cov.list_parameters():
                 self.assertIn(p, vdict)
@@ -1016,15 +1017,19 @@ class CoverageIntTestBase(object):
             cov, cov_name = self.get_cov()
 
             with self.assertRaises(KeyError):
-                cov.set_parameter_values('invalid_parameter', np.arange(cov.num_timesteps))
+                cov.set_parameter_values({'invalid_parameter': np.arange(cov.num_timesteps)})
 
             cov.mode = 'r'
             with self.assertRaises(IOError):
-                cov.set_parameter_values('time', np.arange(cov.num_timesteps))
+                cov.set_parameter_values({'time': np.arange(100, 110)})
 
             cov.close()
+
+            cov, cov_name = self.get_cov()
+            cov.close()
             with self.assertRaises(IOError):
-                cov.set_parameter_values('time', np.arange(cov.num_timesteps))
+                arr = np.arange(120, 135)
+                cov.set_parameter_values({'time': arr})
         except NotImplementedError:
             pass
         except:
@@ -1075,7 +1080,7 @@ class CoverageIntTestBase(object):
 
             # Add data for the parameter
             #TODO: This gets repeated, create separate function
-            scov.set_parameter_values('time', value=np.arange(nt))
+            scov.set_parameter_values({'time': np.arange(nt)})
 
             pickled_coverage_file = os.path.join(self.working_dir, 'sample.cov')
             SimplexCoverage.pickle_save(scov, pickled_coverage_file)
@@ -1123,21 +1128,21 @@ class CoverageIntTestBase(object):
             fill_arr = np.empty(nt, dtype='f')
             fill_arr.fill(pc_in.fill_value)
 
-            self.assertTrue(np.array_equal(scov.get_parameter_values(parameter_name), fill_arr))
+            self.assertTrue(np.array_equal(scov.get_parameter_values(parameter_name).get_data()[parameter_name], fill_arr))
 
             sample_values = np.arange(nt, dtype='f')
-            scov.set_parameter_values(parameter_name, value=sample_values)
+            scov.set_parameter_values({parameter_name: sample_values, 'time': np.arange(2000, 2000+len(sample_values))})
 
-            self.assertTrue(np.array_equal(sample_values, scov.get_parameter_values(parameter_name)))
+            self.assertTrue(np.array_equal(sample_values, scov.get_parameter_values(parameter_name).get_data()[parameter_name]))
 
             scov.insert_timesteps(100)
-            self.assertEqual(len(scov.get_parameter_values(parameter_name)), nt + 100)
+            self.assertEqual(len(scov.get_parameter_values(parameter_name).get_data()[parameter_name]), nt + 100)
 
             nvals = np.arange(nt, nt + 100, dtype='f')
-            scov.set_parameter_values(parameter_name, value=nvals, tdoa=slice(nt, None))
+            scov.set_parameter_values({parameter_name: nvals, 'time': np.arange(3000, 3000+nt)})
             sample_values = np.append(sample_values, nvals)
 
-            self.assertTrue(np.array_equal(sample_values, scov.get_parameter_values(parameter_name)))
+            self.assertTrue(np.array_equal(sample_values, scov.get_parameter_values(parameter_name).get_data()['name']))
 
             with self.assertRaises(ValueError):
                 scov.append_parameter(pc_in)

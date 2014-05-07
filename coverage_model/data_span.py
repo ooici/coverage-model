@@ -12,6 +12,7 @@ from ast import literal_eval
 from coverage_model.address import Address, AddressFactory
 import hashlib
 
+
 class Span():
 
     def __init__(self, span_uuid, coverage_id, param_dict, ingest_time=None, compressors=None):
@@ -29,7 +30,8 @@ class Span():
             params = self.param_dict.keys()
         for param in params:
             if param in self.param_dict:
-                param_stat_dict[param] = (self.param_dict[param].min(), self.param_dict[param].max())
+                if len(self.param_dict[param].get_data()) > 0:
+                    param_stat_dict[param] = (self.param_dict[param].min(), self.param_dict[param].max())
         # for key, data in self.param_dict.iteritems():
         #     param_stat_dict[key] = (data.min(), data.max())
         stats = SpanStats(Address(self.id), param_stat_dict)
