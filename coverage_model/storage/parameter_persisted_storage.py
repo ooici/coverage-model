@@ -1,25 +1,28 @@
 #!/usr/bin/env python
 
 """
-@package coverage_model.postgres_persisted_storage
-@file coverage_model.postgres_persisted_storage
+@package coverage_model.parameter_persisted_storage
+@file coverage_model.parameter_persisted_storage
 @author Casey Bryant
-@brief Persistence Layer specialized classes for storing persisted data to Postgres
+@brief Persistence Layer specialized classes for abstracting parameter persistence from the underlying storage mechanism
 """
 
-from ooi.logging import log
 import os
-import numpy as np
 import json
 import base64
 import numbers
+
+import numpy as np
+
+from ooi.logging import log
 from coverage_model.metadata_factory import MetadataManagerFactory
 from coverage_model.basic_types import AbstractStorage, AxisTypeEnum
 from coverage_model.persistence_helpers import ParameterManager
-from coverage_model.storage.parameter_data import ParameterData, NumpyParameterData, ConstantOverTime, NumpyDictParameterData
+from coverage_model.parameter_data import ParameterData, NumpyParameterData, ConstantOverTime, NumpyDictParameterData
 from coverage_model.data_span import Span
-from coverage_model.storage.postgres_span_tables import SpanTablesFactory, SpanTables
+from coverage_model.storage.span_storage_factory import SpanTablesFactory
 from coverage_model.persistence import SimplePersistenceLayer
+
 
 class PostgresPersistenceLayer(SimplePersistenceLayer):
     """

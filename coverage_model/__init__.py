@@ -11,6 +11,7 @@ from coverage_model import utils
 from utils import create_guid, fix_slice
 from numexpr_utils import make_range_expr
 from coverage_model.base_test_cases import CoverageModelUnitTestCase, CoverageModelIntTestCase
+from coverage_model.parameter_data import NumpyParameterData, NumpyDictParameterData, ConstantOverTime
 
 _core = [
     'ParameterContext',
@@ -29,6 +30,9 @@ _core = [
     'MutabilityEnum',
     'VariabilityEnum',
     'Span',
+    'NumpyParameterData',
+    'NumpyDictParameterData',
+    'ConstantOverTime',
     ]
 
 _types = [

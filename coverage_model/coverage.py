@@ -33,22 +33,27 @@
 #    if isinstance(value, AbstractDomain):
 #        self.__spatial_domain = value
 
+from copy import deepcopy
+import os
+import collections
+import pickle
+from collections import Iterable
+
+import numpy as np
+
 from ooi.logging import log
 from pyon.util.async import spawn
-
-from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_doa, Dictable, InMemoryStorage, Span
+from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, Dictable, \
+    Span
 from coverage_model.parameter import Parameter, ParameterDictionary, ParameterContext
 from coverage_model.parameter_values import get_value_class, AbstractParameterValue
-from coverage_model.persistence import PersistenceLayer, InMemoryPersistenceLayer, SimplePersistenceLayer, is_persisted
-from coverage_model.postgres_persisted_storage import PostgresPersistedStorage, PostgresPersistenceLayer
+from coverage_model.persistence import InMemoryPersistenceLayer, is_persisted
+from coverage_model.storage.parameter_persisted_storage import PostgresPersistenceLayer
 from coverage_model.metadata_factory import MetadataManagerFactory
 from coverage_model.parameter_functions import ParameterFunctionException
 from coverage_model import utils
 from coverage_model.utils import Interval, create_guid
-from copy import deepcopy
-import numpy as np
-import os, collections, pickle
-from collections import Iterable
+
 
 #=========================
 # Coverage Objects
@@ -2110,7 +2115,7 @@ class SimplexCoverage(AbstractCoverage):
                 self.value_caching = self._persistence_layer.value_caching
 
                 from coverage_model.persistence import PersistedStorage, SparsePersistedStorage
-                from coverage_model.postgres_persisted_storage import PostgresPersistedStorage
+                from coverage_model.storage.parameter_persisted_storage import PostgresPersistedStorage
                 for parameter_name in self._persistence_layer.parameter_metadata:
                     md = self._persistence_layer.parameter_metadata[parameter_name]
                     mm = self._persistence_layer.master_manager

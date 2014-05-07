@@ -8,6 +8,7 @@ from pyon.datastore.postgresql.base_store import PostgresDataStore
 from coverage_model.data_span import Span, SpanStats
 from coverage_model.config import CoverageConfig
 from coverage_model.db_connectors import PostgresDB
+from coverage_model.storage.span_storage import SpanStorage
 
 
 class SpanJsonDumper(psycopg2.extras.Json):
@@ -15,7 +16,7 @@ class SpanJsonDumper(psycopg2.extras.Json):
         return obj.as_json()
 
 
-class SpanTables(object):
+class PostgresSpanStorage(SpanStorage):
     span_table_name = 'coverage_span_data'
     span_stats_table_name = 'coverage_span_stats'
     bin_table_name = 'coverage_bin_stats'
@@ -28,21 +29,21 @@ class SpanTables(object):
         dsm = DatastoreManager()
         self.config = CoverageConfig()
 
-        self.span_store = dsm.get_datastore(ds_name=SpanTables.span_table_name)
+        self.span_store = dsm.get_datastore(ds_name=PostgresSpanStorage.span_table_name)
         if self.span_store is None:
-            raise RuntimeError("Unable to load datastore for %s" % SpanTables.span_table_name)
+            raise RuntimeError("Unable to load datastore for %s" % PostgresSpanStorage.span_table_name)
         else:
-            SpanTables.span_table_name = self.span_store._get_datastore_name()
+            PostgresSpanStorage.span_table_name = self.span_store._get_datastore_name()
             log.trace("Got datastore: %s type %s" % (self.span_store._get_datastore_name(), str(type(self.span_store))))
-        self.stats_store = dsm.get_datastore(ds_name=SpanTables.span_stats_table_name)
+        self.stats_store = dsm.get_datastore(ds_name=PostgresSpanStorage.span_stats_table_name)
         if self.stats_store is None:
-            raise RuntimeError("Unable to load datastore for %s" % SpanTables.span_stats_table_name)
+            raise RuntimeError("Unable to load datastore for %s" % PostgresSpanStorage.span_stats_table_name)
         else:
             self.span_stats_table_name = self.stats_store._get_datastore_name()
             log.trace("Got datastore: %s type %s", self.stats_store._get_datastore_name(), type(self.stats_store))
-        self.bin_store = dsm.get_datastore(ds_name=SpanTables.bin_table_name)
+        self.bin_store = dsm.get_datastore(ds_name=PostgresSpanStorage.bin_table_name)
         if self.bin_store is None:
-            raise RuntimeError("Unable to load datastore for %s" % SpanTables.bin_table_name)
+            raise RuntimeError("Unable to load datastore for %s" % PostgresSpanStorage.bin_table_name)
         else:
             self.bin_table_name = self.stats_store._get_datastore_name()
             log.trace("Got datastore: %s type %s", self.bin_store._get_datastore_name(), type(self.bin_store))
@@ -54,11 +55,8 @@ class SpanTables(object):
             cur.execute(sql_str, [SpanJsonDumper(span)])
 
     def get_span_insert_sql(self, span):
-        span_as_json = span.as_json()
-        # with self.span_store.pool.cursor(**self.span_store.cursor_args) as cur:
-        #     cur.execute("""INSERT INTO ion_coverage_span_data (id, data) VALUES (%s, %s)""", [span.id, SpanJsonDumper(span)])
         sql_str = """INSERT INTO  %s (id, coverage_id, ingest_time, data) VALUES ('%s', '%s', %f, %s);""" % \
-                  (SpanTables.span_table_name, span.id, span.coverage_id, span.ingest_time, '%s')
+                  (PostgresSpanStorage.span_table_name, span.id, span.coverage_id, span.ingest_time, '%s')
 
         return sql_str
 
@@ -94,7 +92,6 @@ class SpanTables(object):
 
     def get_spans(self, span_ids=None, coverage_ids=None, start_time=None, stop_time=None, decompressors=None):
         statement = """SELECT data::text from %s where coverage_id = '%s'""" % (self.span_table_name, coverage_ids)
-        results = {}
         with self.span_store.pool.cursor(**self.span_store.cursor_args) as cur:
             cur.execute(statement)
             results = cur.fetchall()
@@ -105,13 +102,3 @@ class SpanTables(object):
             spans.append(Span.from_json(data, decompressors))
 
         return spans
-
-
-class SpanTablesFactory(object):
-    span_table = None
-
-    @classmethod
-    def get_span_table_obj(cls):
-        if cls.span_table is None:
-            cls.span_table = SpanTables()
-        return cls.span_table

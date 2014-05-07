@@ -1,18 +1,18 @@
 __author__ = 'casey'
 
+import shutil
+import tempfile
 
 from nose.plugins.attrib import attr
-import numpy as np
-import os, shutil, tempfile
-import unittest
 from pyon.core.bootstrap import CFG
 from pyon.datastore.datastore_common import DatastoreFactory
 import psycopg2
 import psycopg2.extras
 from coverage_model import *
 from coverage_model.address import *
-from coverage_model.storage.parameter_data import *
-from coverage_test_base import CoverageIntTestBase, get_props, get_parameter_dict, EXEMPLAR_CATEGORIES
+from coverage_model.parameter_data import *
+from coverage_test_base import get_parameter_dict
+
 
 @attr('UNIT',group='cov')
 class TestPostgresStorageUnit(CoverageModelUnitTestCase):

@@ -7,12 +7,12 @@
 @brief Persistence Layer specialized classes for storing persisted data to Postgres
 """
 
-from nose.plugins.attrib import attr
 import numpy as np
-import unittest
-from coverage_model import *
 
-from coverage_model.storage.parameter_data import NumpyParameterData, ConstantOverTime
+from nose.plugins.attrib import attr
+from coverage_model import *
+from coverage_model.parameter_data import NumpyParameterData, ConstantOverTime
+
 
 @attr('UNIT',group='cov')
 class TestSpanUnit(CoverageModelUnitTestCase):
