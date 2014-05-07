@@ -361,7 +361,7 @@ class AbstractCoverage(AbstractIdentifiable):
         lst.sort()
         return lst
 
-    def get_parameter_values(self, param_names, time_segment=None, time=None, sort_parameter=None, return_value=None):
+    def get_parameter_values(self, param_names=None, time_segment=None, time=None, sort_parameter=None, return_value=None, fill_empty_params=False):
         """
         Retrieve the value for a parameter
 
@@ -377,13 +377,17 @@ class AbstractCoverage(AbstractIdentifiable):
         if self.closed:
             raise IOError('I/O operation on closed file')
 
+        # Get all parameters if none are specified
+        if param_names is None:
+            param_names = self._range_dictionary.keys()
+
         if not isinstance(param_names, Iterable) or isinstance(param_names, basestring):
             param_names = [param_names]
         for param_name in param_names:
             if not param_name in self._range_value:
                 raise KeyError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
-        return self._persistence_layer.read_parameters(param_names, time_segment, time, sort_parameter)
+        return self._persistence_layer.read_parameters(param_names, time_segment, time, sort_parameter, fill_empty_params=fill_empty_params)
 
     def get_value_dictionary(self, param_list=None, temporal_slice=None, domain_slice=None):
         '''
@@ -1072,13 +1076,11 @@ class ViewCoverage(AbstractCoverage):
         self._persistence_layer.flush()
 
     def __setup(self, parameter_dictionary):
-        print parameter_dictionary
         for p in parameter_dictionary:
             if p in self.reference_coverage._range_dictionary:
                 # Add the context from the reference coverage
                 self._range_dictionary.add_context(self.reference_coverage._range_dictionary.get_context(p))
                 # Add the value class from the reference coverage
-                print self.reference_coverage._range_value[p]
                 self._range_value[p] = self.reference_coverage._range_value[p]
             else:
                 log.info('Parameter \'%s\' skipped; not in \'reference_coverage\'', p)

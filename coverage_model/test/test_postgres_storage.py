@@ -120,32 +120,6 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
                 np_dict['const_float'] = ConstantOverTime('const_float', 88.8, time_start=10000, time_end=10000+nt)
                 np_dict['const_str'] = ConstantOverTime('const_str', 'Jello', time_start=10000, time_end=10000+nt)
 
-                #scov.set_parameter_values('boolean', value=[True, True, True], tdoa=[[2,4,14]])
-                #scov.set_parameter_values('const_ft', value=-71.11) # Set a constant with correct data type
-                #scov.set_parameter_values('const_int', value=45.32) # Set a constant with incorrect data type (fixed under the hood)
-                #scov.set_parameter_values('const_str', value='constant string value') # Set with a string
-                #scov.set_parameter_values('const_rng_flt', value=(12.8, 55.2)) # Set with a tuple
-                #scov.set_parameter_values('const_rng_int', value=[-10, 10]) # Set with a list
-
-                #arrval = []
-                #recval = []
-                #catval = []
-                #fstrval = []
-                #catkeys = EXEMPLAR_CATEGORIES.keys()
-                #letts='abcdefghijklmnopqrstuvwxyz'
-                #while len(letts) < nt:
-                #    letts += 'abcdefghijklmnopqrstuvwxyz'
-                #for x in xrange(nt):
-                #    arrval.append(np.random.bytes(np.random.randint(1,20))) # One value (which is a byte string) for each member of the domain
-                #    d = {letts[x]: letts[x:]}
-                #    recval.append(d) # One value (which is a dict) for each member of the domain
-                #    catval.append(random.choice(catkeys))
-                #    fstrval.append(''.join([random.choice(letts) for x in xrange(8)])) # A random string of length 8
-                #scov.set_parameter_values('array', value=arrval)
-                #scov.set_parameter_values('record', value=recval)
-                #scov.set_parameter_values('category', value=catval)
-                #scov.set_parameter_values('fixed_str', value=fstrval)
-
                 scov.set_parameter_values(np_dict)
 
         cls.coverages.add(scov.persistence_guid)
@@ -225,6 +199,34 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         scov.set_parameter_values({'const_float': ConstantOverTime('const_float', 17.0)})
         new_float_arr = scov.get_parameter_values((scov.temporal_parameter_name, 'const_float')).get_data()
         # self.assertTrue(False)
+
+    def test_fill_unfound_data(self):
+        ts = 10
+        scov, cov_name = self.construct_cov(nt=ts)
+        self.assertIsNotNone(scov)
+
+        fill_value = 'Empty'
+        param_name = 'dummy'
+        scov.append_parameter(ParameterContext(param_name, fill_value=fill_value))
+        vals = scov.get_parameter_values([param_name, 'const_float'], fill_empty_params=True)
+
+        retrieved_dummy_array = vals.get_data()[param_name]
+        expected_dummy_array = np.empty(ts, dtype=np.array([param_name]).dtype)
+        expected_dummy_array.fill(fill_value)
+
+        np.testing.assert_array_equal(retrieved_dummy_array, expected_dummy_array)
+
+    def test_get_all_parameters(self):
+        ts = 10
+        scov, cov_name = self.construct_cov(nt=ts)
+        self.assertIsNotNone(scov)
+
+        vals = scov.get_parameter_values(fill_empty_params=True)
+
+        params_retrieved = vals.get_data().dtype.names
+        params_expected = scov._range_dictionary.keys()
+
+        self.assertEqual(sorted(params_expected), sorted(params_retrieved))
 
     def test_reconstruct_coverage(self):
         ts = 10

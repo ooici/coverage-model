@@ -258,30 +258,24 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         span = Span(write_id, self.master_manager.guid, values, compressors=self.value_list)
         span_table = SpanTablesFactory.get_span_table_obj()
         span_table.write_span(span)
-        # js_str = span.as_json(compressors=self.value_list)
-        # ret_span = Span.from_json(js_str, decompressors=self.value_list)
-        # spans = span_table.get_spans(coverage_ids=self.master_manager.guid, decompressors=self.value_list)
-        # for span in spans:
-        #     print span.as_json()
-        #
-        #
-        # self.span_list.append(span)
-        # self.spans[write_id] = converted_dict
 
     def _get_span_dict(self, params, time_range=None, time=None):
         return SpanTablesFactory.get_span_table_obj().get_spans(coverage_ids=self.master_manager.guid, decompressors=self.value_list)
 
-    def read_parameters(self, params, time_range=None, time=None, sort_parameter=None):
-        np_dict, function_params, rec_arr = self.get_data_products(params, time_range, time, sort_parameter, create_record_array=True)
+    def read_parameters(self, params, time_range=None, time=None, sort_parameter=None, fill_empty_params=False):
+        np_dict, function_params, rec_arr = self.get_data_products(params, time_range, time, sort_parameter, create_record_array=True, fill_empty_params=fill_empty_params)
         return rec_arr
 
-    def get_data_products(self, params, time_range=None, time=None, sort_parameter=None, create_record_array=False):
+    def get_data_products(self, params, time_range=None, time=None, sort_parameter=None, create_record_array=False, fill_empty_params=False):
         if self.alignment_parameter not in params:
             params.append(self.alignment_parameter)
 
         associated_spans = self._get_span_dict(params, time_range, time)
         numpy_params, function_params = self._create_param_dict_from_spans_dict(params, associated_spans)
-        np_dict = self._create_parameter_dictionary_of_numpy_arrays(numpy_params, function_params)
+        dict_params = None
+        if fill_empty_params is True:
+            dict_params=params
+        np_dict = self._create_parameter_dictionary_of_numpy_arrays(numpy_params, function_params, params=dict_params)
         np_dict = self._sort_flat_arrays(np_dict, sort_parameter=sort_parameter)
         np_dict = self._trim_values_to_range(np_dict, time_range=time_range, time=time)
         rec_arr = None
@@ -360,7 +354,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                 return_dict[key] = np.array([val[idx]])
         return return_dict
 
-    def _create_parameter_dictionary_of_numpy_arrays(self, numpy_params, function_params=None):
+    def _create_parameter_dictionary_of_numpy_arrays(self, numpy_params, function_params=None, params=None):
         return_dict = {}
         arr_size = -1
         if self.alignment_parameter not in numpy_params:
@@ -381,14 +375,12 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             insert_index += np_data.size
         return_dict[self.alignment_parameter] = arr
 
-        print 'ids:', span_order
         for id, span_data in numpy_params.iteritems():
             if id == self.alignment_parameter:
                 continue
             npa = np.empty(total_size)
             insert_index = 0
             for span_name in span_order:
-                print 'span_name: %f' % span_name
                 np_data = span_data[span_name].get_data()
                 end_idx = insert_index + np_data.size
                 npa[insert_index:end_idx] = np_data
@@ -401,6 +393,15 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             for write_id, param_data in param_dict.iteritems():
                 arr = param_data.get_data_as_numpy_array(return_dict[self.alignment_parameter], fill_value=self.value_list[param_name].fill_value)
                 return_dict[param_name] = arr
+
+        if params is not None:
+            unset_params = set(params) - set(return_dict.keys())
+            if len(unset_params) > 0:
+                for param in unset_params:
+                    dtype = np.array([self.value_list[param].fill_value]).dtype
+                    arr = np.empty(len(return_dict[self.alignment_parameter]), dtype=dtype)
+                    arr.fill(self.value_list[param].fill_value)
+                    return_dict[param] = arr
 
         return return_dict
         for key, d in numpy_params.iteritems():
@@ -570,14 +571,11 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
 
 def base64encode(np_arr, start=None, stop=None):
     if isinstance(np_arr, np.ndarray):
-        st = json.dumps([str(np_arr.dtype), base64.b64encode(np_arr), np_arr.shape])
-        return st
+        if np_arr.flags['C_CONTIGUOUS'] is False:
+            np_arr = np.copy(np_arr)
+        return json.dumps([str(np_arr.dtype), base64.b64encode(np_arr), np_arr.shape])
     else:
         return json.dumps([str(type(np_arr)), np_arr, start, stop])
-        # if start is not None and stop is not None:
-        #     return json.dumps([str(type(np_arr)), np_arr, start, stop])
-        # else:
-        #     raise ValueError("start and stop parameters must be supplied for non-%s types", np.ndarray.__name__)
 
 
 def base64decode(json_str):
