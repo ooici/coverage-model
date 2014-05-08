@@ -264,11 +264,11 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
     def _get_span_dict(self, params, time_range=None, time=None):
         return SpanTablesFactory.get_span_table_obj().get_spans(coverage_ids=self.master_manager.guid, decompressors=self.value_list)
 
-    def read_parameters(self, params, time_range=None, time=None, sort_parameter=None, fill_empty_params=False):
-        np_dict, function_params, rec_arr = self.get_data_products(params, time_range, time, sort_parameter, create_record_array=True, fill_empty_params=fill_empty_params)
+    def read_parameters(self, params, time_range=None, time=None, sort_parameter=None, stride_length=None, fill_empty_params=False):
+        np_dict, function_params, rec_arr = self.get_data_products(params, time_range, time, sort_parameter, stride_length=stride_length, create_record_array=True, fill_empty_params=fill_empty_params)
         return rec_arr
 
-    def get_data_products(self, params, time_range=None, time=None, sort_parameter=None, create_record_array=False, fill_empty_params=False):
+    def get_data_products(self, params, time_range=None, time=None, sort_parameter=None, create_record_array=False, stride_length=None, fill_empty_params=False):
         if self.alignment_parameter not in params:
             params.append(self.alignment_parameter)
 
@@ -277,7 +277,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         dict_params = None
         if fill_empty_params is True:
             dict_params=params
-        np_dict = self._create_parameter_dictionary_of_numpy_arrays(numpy_params, function_params, params=dict_params)
+        np_dict = self._create_parameter_dictionary_of_numpy_arrays(numpy_params, function_params, stride_length=stride_length, params=dict_params)
         np_dict = self._sort_flat_arrays(np_dict, sort_parameter=sort_parameter)
         np_dict = self._trim_values_to_range(np_dict, time_range=time_range, time=time)
         rec_arr = None
@@ -315,6 +315,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                             if param_name not in numpy_params:
                                 numpy_params[param_name] = {}
                             numpy_params[param_name][data[3]] = obj
+
         return numpy_params, function_params
 
     @classmethod
@@ -356,7 +357,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                 return_dict[key] = np.array([val[idx]])
         return return_dict
 
-    def _create_parameter_dictionary_of_numpy_arrays(self, numpy_params, function_params=None, params=None):
+    def _create_parameter_dictionary_of_numpy_arrays(self, numpy_params, function_params=None, stride_length=None, params=None):
         return_dict = {}
         arr_size = -1
         if self.alignment_parameter not in numpy_params:
@@ -404,6 +405,9 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                     arr = np.empty(len(return_dict[self.alignment_parameter]), dtype=dtype)
                     arr.fill(self.value_list[param].fill_value)
                     return_dict[param] = arr
+
+        if stride_length is not None:
+            return_dict = {key:value[0::stride_length] for key, value in return_dict.items()}
 
         return return_dict
         for key, d in numpy_params.iteritems():

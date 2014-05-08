@@ -241,3 +241,13 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         rvals = rcov.get_parameter_values(val_names).get_data()
 
         np.testing.assert_array_equal(vals, rvals)
+
+    def test_striding(self):
+        ts = 1000
+        scov, cov_name = self.construct_cov(nt=ts)
+        self.assertIsNotNone(scov)
+
+        for stride_length in [2,3]:
+            expected_data = np.arange(10000,10000+ts,stride_length, dtype=np.float64)
+            returned_data = scov.get_parameter_values(scov.temporal_parameter_name, stride_length=stride_length).get_data()[scov.temporal_parameter_name]
+            np.testing.assert_array_equal(expected_data, returned_data)

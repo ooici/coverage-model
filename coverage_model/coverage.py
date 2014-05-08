@@ -366,7 +366,7 @@ class AbstractCoverage(AbstractIdentifiable):
         lst.sort()
         return lst
 
-    def get_parameter_values(self, param_names=None, time_segment=None, time=None, sort_parameter=None, return_value=None, fill_empty_params=False):
+    def get_parameter_values(self, param_names=None, time_segment=None, time=None, sort_parameter=None, stride_length=None, return_value=None, fill_empty_params=False):
         """
         Retrieve the value for a parameter
 
@@ -392,7 +392,7 @@ class AbstractCoverage(AbstractIdentifiable):
             if not param_name in self._range_value:
                 raise KeyError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
-        return self._persistence_layer.read_parameters(param_names, time_segment, time, sort_parameter, fill_empty_params=fill_empty_params)
+        return self._persistence_layer.read_parameters(param_names, time_segment, time, sort_parameter, stride_length=stride_length, fill_empty_params=fill_empty_params)
 
     def get_value_dictionary(self, param_list=None, temporal_slice=None, domain_slice=None):
         '''
@@ -1344,7 +1344,7 @@ class ComplexCoverage(AbstractCoverage):
             cls._interval_qsort(arr, left, pivot-1)
             cls._interval_qsort(arr, pivot+1, right)
     
-    def get_parameter_values(self, param_names, time_segment=None, time=None, sort_parameter=None, return_value=None):
+    def get_parameter_values(self, param_names, time_segment=None, time=None, sort_parameter=None, stride_length=None, return_value=None):
         '''
         Obtain the value set for a given parameter over a specified domain
         '''
@@ -1353,7 +1353,7 @@ class ComplexCoverage(AbstractCoverage):
             raise TypeError("A Timeseries ComplexCoverage doesn't support "
                             "get_parameter_values, please use "
                             "get_value_dictionary")
-        return AbstractCoverage.get_parameter_values(self, param_names, time_segment, time, sort_parameter, return_value)
+        return AbstractCoverage.get_parameter_values(self, param_names, time_segment, time, sort_parameter, stride_length=stride_length, return_value=return_value)
 
     def get_value_dictionary(self, param_list=None, temporal_slice=None, domain_slice=None):
         if temporal_slice and domain_slice:
