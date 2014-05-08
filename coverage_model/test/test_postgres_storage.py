@@ -57,18 +57,21 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
     if not data_dict:
         return scov
 
-    if 'time' in data_dict:
-        time_array = data_dict['time']
-    else:
-        time_array = np.arange(nt)
 
-    for k,v in data_dict.iteritems():
-        data_dict[k] = NumpyParameterData(k, v, time_array)
-
+    data_dict = _easy_dict(data_dict)
     scov.set_parameter_values(data_dict)
     return scov
 
+def _easy_dict(data_dict):
+    if 'time' in data_dict:
+        time_array = data_dict['time']
+    else:
+        elements = data_dict.values()[0]
+        time_array = np.arange(len(elements))
 
+    for k,v in data_dict.iteritems():
+        data_dict[k] = NumpyParameterData(k, v, time_array)
+    return data_dict
 
 @attr('INT',group='cov')
 class TestPostgresStorageInt(CoverageModelUnitTestCase):
@@ -332,3 +335,22 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
          np.testing.assert_array_equal(data_dict['quantity'],
                  np.array([30., 40., 50., -9999., -9999., -9999., -9999., -9999., -9999., -9999.]))
 
+    def test_category_get_set(self):
+
+        param_type = CategoryType(categories={0:'port_timestamp', 1:'driver_timestamp', 2:'internal_timestamp', 3:'time', -99:'empty'})
+        param = ParameterContext('category', param_type=param_type)
+
+        scov = _make_cov(self.working_dir, ['dat', param], nt=0)
+        self.addCleanup(scov.close)
+
+
+
+        data_dict = _easy_dict({
+            'time' : np.array([0, 1]),
+            'dat' : np.array([20, 20]),
+            'category' : np.array(['driver_timestamp', 'driver_timestamp'], dtype='O')
+            })
+
+        scov.set_parameter_values(data_dict)
+
+        scov.get_parameter_values().get_data()
