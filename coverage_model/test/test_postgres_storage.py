@@ -251,3 +251,35 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
             expected_data = np.arange(10000,10000+ts,stride_length, dtype=np.float64)
             returned_data = scov.get_parameter_values(scov.temporal_parameter_name, stride_length=stride_length).get_data()[scov.temporal_parameter_name]
             np.testing.assert_array_equal(expected_data, returned_data)
+
+    def test_open_interval(self):
+         ts = 0
+         scov, cov_name = self.construct_cov(nt=ts)
+         time_array = np.arange(10000, 10003)
+         data_dict = {
+             'time' : NumpyParameterData('time', time_array, time_array),
+             'quantity' : NumpyParameterData('quantity', np.array([30, 40, 50]), time_array)
+         }
+         scov.set_parameter_values(data_dict)
+
+         # Get data on open interval (-inf, 10002]
+         data_dict = scov.get_parameter_values(param_names=['time', 'quantity'], time_segment=(None, 10002)).get_data()
+         np.testing.assert_array_equal(data_dict['time'], np.array([10000., 10001., 10002.]))
+         np.testing.assert_array_equal(data_dict['quantity'], np.array([30., 40., 50.]))
+
+         # Get data on open interval [10001, inf)
+         data_dict = scov.get_parameter_values(param_names=['time', 'quantity'], time_segment=(10001, None)).get_data()
+         np.testing.assert_array_equal(data_dict['time'], np.array([10001., 10002.]))
+         np.testing.assert_array_equal(data_dict['quantity'], np.array([40., 50.]))
+
+         # Get all data on open interval (-inf, inf)
+         scov.set_parameter_values({'time': NumpyParameterData('time', np.arange(10003, 10010))})
+         data_dict = scov.get_parameter_values(param_names=['time', 'quantity']).get_data()
+         np.testing.assert_array_equal(data_dict['time'], np.arange(10000, 10010))
+         np.testing.assert_array_equal(data_dict['quantity'],
+                 np.array([30., 40., 50., -9999., -9999., -9999., -9999., -9999., -9999., -9999.]))
+
+         data_dict = scov.get_parameter_values(param_names=['time', 'quantity'], time_segment=(None, None)).get_data()
+         np.testing.assert_array_equal(data_dict['time'], np.arange(10000, 10010))
+         np.testing.assert_array_equal(data_dict['quantity'],
+                 np.array([30., 40., 50., -9999., -9999., -9999., -9999., -9999., -9999., -9999.]))

@@ -348,8 +348,17 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         if time_range is None and time is None:
             return_dict = np_dict
         elif time_range is not None:
-            for key, val in np_dict.iteritems():
-                return_dict[key] = val[np.where(np.logical_and(time_range[0] <= time_array, time_range[1] >= time_array))]
+            if time_range[0] is not None and time_range[1] is None:
+                for key, val in np_dict.iteritems():
+                    return_dict[key] = val[np.where(time_range[0] <= time_array)]
+            elif time_range[0] is None and time_range[1] is not None:
+                for key, val in np_dict.iteritems():
+                    return_dict[key] = val[np.where(time_range[1] >= time_array)]
+            elif time_range[0] is not None and time_range[1] is not None:
+                for key, val in np_dict.iteritems():
+                    return_dict[key] = val[np.where(np.logical_and(time_range[0] <= time_array, time_range[1] >= time_array))]
+            else:
+                return_dict = np_dict
             return return_dict
         else:
             idx = (np.abs(time_array-time)).argmin()
@@ -382,8 +391,11 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             if id == self.alignment_parameter:
                 continue
             npa = np.empty(total_size)
+            npa.fill(self.value_list[id].fill_value)
             insert_index = 0
             for span_name in span_order:
+                if span_name not in span_data:
+                    continue
                 np_data = span_data[span_name].get_data()
                 end_idx = insert_index + np_data.size
                 npa[insert_index:end_idx] = np_data

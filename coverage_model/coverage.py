@@ -67,7 +67,7 @@ class AbstractCoverage(AbstractIdentifiable):
     """
 
     VALUE_CACHE_LIMIT = 30
-    version = '0.0.1'
+    version = '0.0.3'
 
     def __init__(self, mode=None):
         AbstractIdentifiable.__init__(self)

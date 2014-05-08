@@ -68,6 +68,12 @@ class Span():
             return True
         return False
 
+    def __gt__(self, other):
+        return self.ingest_time > other.ingest_time
+
+    def __lt__(self, other):
+        return not self.__gt__(other)
+
 
 class SpanStats(object):
 
