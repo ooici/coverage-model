@@ -102,3 +102,15 @@ class PostgresSpanStorage(SpanStorage):
             spans.append(Span.from_json(data, decompressors))
 
         return spans
+
+    def get_stored_span_hash(self, span_id):
+        statement = """SELECT hash from %s where span_address='%s'; """ % (self.span_stats_table_name, span_id)
+        with self.span_store.pool.cursor(**self.span_store.cursor_args) as cur:
+            cur.execute(statement)
+            results = cur.fetchall()
+
+        stored_hash = None
+        for row in results:
+            stored_hash, = row
+
+        return stored_hash

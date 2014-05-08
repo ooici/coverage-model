@@ -81,7 +81,6 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         else:
             raise TypeError("alignment_parameter arg must implement %s.  Found %s", (basestring.__name__, type(alignment_parameter).__name__))
 
-
         log.debug('Persistence Layer Successfully Initialized')
 
     def __getattr__(self, key):
@@ -570,6 +569,22 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                     self.brick_dispatcher.shutdown(force=force, timeout=timeout)
 
         self._closed = True
+
+    def validate_span_data(self):
+        invalid_spans = []
+        valid_spans = []
+        associated_spans = self._get_span_dict(self.value_list.keys())
+        compressors = self.value_list
+        for span in associated_spans:
+            span.compressors = compressors
+            stored_hash = SpanTablesFactory.get_span_table_obj().get_stored_span_hash(span.id)
+            recalculated_hash = span.get_hash()
+            if stored_hash == recalculated_hash:
+                valid_spans.append(span.id)
+            else:
+                invalid_spans.append(span.id)
+
+        return valid_spans, invalid_spans
 
 
 def base64encode(np_arr, start=None, stop=None):

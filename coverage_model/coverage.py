@@ -2253,6 +2253,9 @@ class SimplexCoverage(AbstractCoverage):
 
         return stats, not_evaluated
 
+    def validate_span_data(self):
+        return self._persistence_layer.validate_span_data()
+
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
         return AbstractCoverage._fromdict(cmdict, {'parameter_dictionary': '_range_dictionary'})

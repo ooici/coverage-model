@@ -59,7 +59,8 @@ class Span():
         return Span(str(json_dict['id']), str(json_dict['coverage_id']), uncompressed_params, ingest_time=json_dict['ingest_time'])
 
     def get_hash(self):
-        m = hashlib.md5(self.as_json())
+        data = [ self.id, self.ingest_time, self.coverage_id, sorted(self.param_dict) ]
+        m = hashlib.md5(str(data))
         return m.hexdigest()
 
     def __eq__(self, other):
