@@ -390,13 +390,15 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         for id, span_data in numpy_params.iteritems():
             if id == self.alignment_parameter:
                 continue
-            npa = np.empty(total_size)
-            npa.fill(self.value_list[id].fill_value)
+            npa = None
             insert_index = 0
             for span_name in span_order:
                 if span_name not in span_data:
                     continue
                 np_data = span_data[span_name].get_data()
+                if npa is None:
+                    npa = np.empty(total_size, dtype=np_data.dtype)
+                    npa.fill(self.value_list[id].fill_value)
                 end_idx = insert_index + np_data.size
                 npa[insert_index:end_idx] = np_data
                 insert_index += np_data.size
@@ -602,12 +604,16 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
 
         return valid_spans, invalid_spans
 
-
+import cPickle
 def base64encode(np_arr, start=None, stop=None):
     if isinstance(np_arr, np.ndarray):
         if np_arr.flags['C_CONTIGUOUS'] is False:
             np_arr = np.copy(np_arr)
-        return json.dumps([str(np_arr.dtype), base64.b64encode(np_arr), np_arr.shape])
+        if np_arr.dtype == np.object:
+            np_arr = cPickle.dumps(np_arr, cPickle.HIGHEST_PROTOCOL)
+            return json.dumps(['_cpickle_', base64.b64encode(np_arr)])
+        else:
+            return json.dumps([str(np_arr.dtype), base64.b64encode(np_arr), np_arr.shape])
     else:
         return json.dumps([str(type(np_arr)), np_arr, start, stop])
 
@@ -620,6 +626,8 @@ def base64decode(json_str):
         if len(loaded) > 2:
             return arr.reshape(loaded[2])
         return arr
+    elif isinstance(loaded, list) and len(loaded) == 2 and loaded[0] == '_cpickle_':
+        return cPickle.loads(base64.decodestring(loaded[1]))
     elif isinstance(loaded, list) and len(loaded) == 4:
         return (loaded[1], loaded[2], loaded[3])
     else:

@@ -2,6 +2,8 @@ __author__ = 'casey'
 
 import shutil
 import tempfile
+import calendar
+from datetime import datetime
 
 from nose.plugins.attrib import attr
 from pyon.core.bootstrap import CFG
@@ -14,6 +16,7 @@ from coverage_model.parameter_data import *
 from coverage_test_base import get_parameter_dict
 
 
+
 @attr('UNIT',group='cov')
 class TestPostgresStorageUnit(CoverageModelUnitTestCase):
 
@@ -21,6 +24,54 @@ class TestPostgresStorageUnit(CoverageModelUnitTestCase):
     def nope(cls):
         pass
 
+def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
+    # Construct temporal and spatial Coordinate Reference System objects
+    tcrs = CRS([AxisTypeEnum.TIME])
+    scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+    # Construct temporal and spatial Domain objects
+    tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+    sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
+
+    if isinstance(params, ParameterDictionary):
+        pdict = params
+    else:
+        # Instantiate a ParameterDictionary
+        pdict = ParameterDictionary()
+
+        if make_temporal:
+            # Create a set of ParameterContext objects to define the parameters in the coverage, add each to the ParameterDictionary
+            t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('float32')))
+            t_ctxt.uom = 'seconds since 01-01-1970'
+            pdict.add_context(t_ctxt, is_temporal=True)
+
+        for p in params:
+            if isinstance(p, ParameterContext):
+                pdict.add_context(p)
+            elif isinstance(params, tuple):
+                pdict.add_context(ParameterContext(p[0], param_type=QuantityType(value_encoding=np.dtype(p[1]))))
+            else:
+                pdict.add_context(ParameterContext(p, param_type=QuantityType(value_encoding=np.dtype('float32'))))
+
+    scov = SimplexCoverage(root_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom)
+    if not data_dict:
+        return scov
+
+
+    data_dict = _easy_dict(data_dict)
+    scov.set_parameter_values(data_dict)
+    return scov
+
+def _easy_dict(data_dict):
+    if 'time' in data_dict:
+        time_array = data_dict['time']
+    else:
+        elements = data_dict.values()[0]
+        time_array = np.arange(len(elements))
+
+    for k,v in data_dict.iteritems():
+        data_dict[k] = NumpyParameterData(k, v, time_array)
+    return data_dict
 
 @attr('INT',group='cov')
 class TestPostgresStorageInt(CoverageModelUnitTestCase):
@@ -242,44 +293,28 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
 
         np.testing.assert_array_equal(vals, rvals)
 
-    def test_striding(self):
-        ts = 1000
-        scov, cov_name = self.construct_cov(nt=ts)
-        self.assertIsNotNone(scov)
+    def test_date_limit(self):
+        start_date = datetime(2036, 2, 7, 6, 28, 15) # 2036-02-07T06:28:15
+        unix_timestamp = calendar.timegm(start_date.timetuple())
+        ntp_timestamp = unix_timestamp + 2208988800
+        scov = _make_cov(self.working_dir, ['dat'], data_dict={'time':np.arange(ntp_timestamp, ntp_timestamp+10), 'dat':np.arange(20,30)})
 
-        for stride_length in [2,3]:
-            expected_data = np.arange(10000,10000+ts,stride_length, dtype=np.float64)
-            returned_data = scov.get_parameter_values(scov.temporal_parameter_name, stride_length=stride_length).get_data()[scov.temporal_parameter_name]
-            np.testing.assert_array_equal(expected_data, returned_data)
+        scov.close()
 
-    def test_open_interval(self):
-         ts = 0
-         scov, cov_name = self.construct_cov(nt=ts)
-         time_array = np.arange(10000, 10003)
-         data_dict = {
-             'time' : NumpyParameterData('time', time_array, time_array),
-             'quantity' : NumpyParameterData('quantity', np.array([30, 40, 50]), time_array)
-         }
-         scov.set_parameter_values(data_dict)
+    def test_category_get_set(self):
 
-         # Get data on open interval (-inf, 10002]
-         data_dict = scov.get_parameter_values(param_names=['time', 'quantity'], time_segment=(None, 10002)).get_data()
-         np.testing.assert_array_equal(data_dict['time'], np.array([10000., 10001., 10002.]))
-         np.testing.assert_array_equal(data_dict['quantity'], np.array([30., 40., 50.]))
+        param_type = CategoryType(categories={0:'port_timestamp', 1:'driver_timestamp', 2:'internal_timestamp', 3:'time', -99:'empty'})
+        param = ParameterContext('category', param_type=param_type)
 
-         # Get data on open interval [10001, inf)
-         data_dict = scov.get_parameter_values(param_names=['time', 'quantity'], time_segment=(10001, None)).get_data()
-         np.testing.assert_array_equal(data_dict['time'], np.array([10001., 10002.]))
-         np.testing.assert_array_equal(data_dict['quantity'], np.array([40., 50.]))
+        scov = _make_cov(self.working_dir, ['dat', param], nt=0)
+        self.addCleanup(scov.close)
 
-         # Get all data on open interval (-inf, inf)
-         scov.set_parameter_values({'time': NumpyParameterData('time', np.arange(10003, 10010))})
-         data_dict = scov.get_parameter_values(param_names=['time', 'quantity']).get_data()
-         np.testing.assert_array_equal(data_dict['time'], np.arange(10000, 10010))
-         np.testing.assert_array_equal(data_dict['quantity'],
-                 np.array([30., 40., 50., -9999., -9999., -9999., -9999., -9999., -9999., -9999.]))
+        data_dict = _easy_dict({
+            'time' : np.array([0, 1]),
+            'dat' : np.array([20, 20]),
+            'category' : np.array(['driver_timestamp', 'driver_timestamp'], dtype='O')
+            })
 
-         data_dict = scov.get_parameter_values(param_names=['time', 'quantity'], time_segment=(None, None)).get_data()
-         np.testing.assert_array_equal(data_dict['time'], np.arange(10000, 10010))
-         np.testing.assert_array_equal(data_dict['quantity'],
-                 np.array([30., 40., 50., -9999., -9999., -9999., -9999., -9999., -9999., -9999.]))
+        scov.set_parameter_values(data_dict)
+
+        scov.get_parameter_values().get_data()
