@@ -17,10 +17,10 @@ import numpy as np
 from ooi.logging import log
 from coverage_model.metadata_factory import MetadataManagerFactory
 from coverage_model.basic_types import AbstractStorage, AxisTypeEnum
-from coverage_model.persistence_helpers import ParameterManager
+from coverage_model.persistence_helpers import ParameterManager, pack, unpack
 from coverage_model.parameter_data import ParameterData, NumpyParameterData, ConstantOverTime, NumpyDictParameterData
 from coverage_model.data_span import Span
-from coverage_model.storage.span_storage_factory import SpanTablesFactory
+from coverage_model.storage.span_storage_factory import SpanStorageFactory
 from coverage_model.persistence import SimplePersistenceLayer
 
 
@@ -31,7 +31,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
 
     def __init__(self, root, guid, name=None, mode=None, inline_data_writes=True, auto_flush_values=True,
                  bricking_scheme=None, brick_dispatcher=None, value_caching=True, coverage_type=None,
-                 alignment_parameter=AxisTypeEnum.TIME.lower(), **kwargs):
+                 alignment_parameter=AxisTypeEnum.TIME.lower(), storage_name=None, **kwargs):
         """
         Constructor for PersistenceLayer
 
@@ -66,6 +66,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         self.parameter_metadata = {} # {parameter_name: [brick_list, parameter_domains, rtree]}
         self.spans = {}
         self.span_list = []
+        self.storage_name = storage_name
 
         for pname in self.param_groups:
             log.debug('parameter group: %s', pname)
@@ -246,23 +247,21 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             if type(arr) not in (ConstantOverTime,):
                 all_values_constant_over_time = False
             if arr_len == -1 and isinstance(arr, NumpyParameterData):
-                arr_len = arr.get_data().size
-            elif isinstance(arr, NumpyParameterData) and arr.get_data().size != arr_len:
+                arr_len = arr.get_data().shape[0]
+            elif isinstance(arr, NumpyParameterData) and arr.get_data().shape[0] != arr_len:
                 raise ValueError("Array size for %s is inconsistent.  Expected %s elements, found %s." % (key, str(arr_len), str(arr.get_data().size)))
-            compressed_value = self.value_list[key].compress(arr)
             min_val, max_val = self.value_list[key].get_statistics(arr)
             self.update_parameter_bounds(key, (min_val, max_val))
-            converted_dict[key] = (compressed_value, min_val, max_val, write_time)
 
-        if not all_values_constant_over_time and self.alignment_parameter not in converted_dict:
+        if not all_values_constant_over_time and self.alignment_parameter not in values:
             raise LookupError("Array must be supplied for parameter, %s, to ensure alignment" % self.alignment_parameter)
 
         span = Span(write_id, self.master_manager.guid, values, compressors=self.value_list)
-        span_table = SpanTablesFactory.get_span_table_obj()
+        span_table = SpanStorageFactory.get_span_storage_obj(self.storage_name)
         span_table.write_span(span)
 
     def _get_span_dict(self, params, time_range=None, time=None):
-        return SpanTablesFactory.get_span_table_obj().get_spans(coverage_ids=self.master_manager.guid, decompressors=self.value_list)
+        return SpanStorageFactory.get_span_storage_obj(self.storage_name).get_spans(coverage_ids=self.master_manager.guid, decompressors=self.value_list)
 
     def read_parameters(self, params, time_range=None, time=None, sort_parameter=None, stride_length=None, fill_empty_params=False):
         np_dict, function_params, rec_arr = self.get_data_products(params, time_range, time, sort_parameter, stride_length=stride_length, create_record_array=True, fill_empty_params=fill_empty_params)
@@ -371,13 +370,13 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         arr_size = -1
         if self.alignment_parameter not in numpy_params:
             raise RuntimeError("Cannot create dense array without alignment parameter, %s", self.alignment_parameter)
-        total_size = 0
+        shape_outer_dimmension = 0
         span_order = []
         for id, span_data in numpy_params[self.alignment_parameter].iteritems():
-            total_size += span_data.get_data().size
+            shape_outer_dimmension += span_data.get_data().size
             span_order.append(id)
         span_order.sort()
-        arr = np.empty(total_size)
+        arr = np.empty(shape_outer_dimmension)
         insert_index = 0
         t_dict = numpy_params[self.alignment_parameter]
         for span_id in span_order:
@@ -392,13 +391,20 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                 continue
             npa = None
             insert_index = 0
+            # param_outer_dimmension = 0;
+            # param_inner_dimmension = 0;
+            # for span_name in span_order:
+            #     np_data = span_data[span_name].get_data()
+            #     param_outer_dimmension = np_data.shape[0]
+
             for span_name in span_order:
                 if span_name not in span_data:
                     continue
                 np_data = span_data[span_name].get_data()
                 if npa is None:
-                    npa = np.empty(total_size, dtype=np_data.dtype)
-                    npa.fill(self.value_list[id].fill_value)
+                    npa = np.empty(shape_outer_dimmension, dtype=np_data.dtype)
+                    if self.value_list[id].fill_value is not None:
+                        npa.fill(self.value_list[id].fill_value)
                 end_idx = insert_index + np_data.size
                 npa[insert_index:end_idx] = np_data
                 insert_index += np_data.size
@@ -407,9 +413,10 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                 # arr[insert_index:np_data.size+insert_index] = np_data
 
         for param_name, param_dict in function_params.iteritems():
-            for write_id, param_data in param_dict.iteritems():
-                arr = param_data.get_data_as_numpy_array(return_dict[self.alignment_parameter], fill_value=self.value_list[param_name].fill_value)
-                return_dict[param_name] = arr
+            arr = ConstantOverTime.merge_data_as_numpy_array(return_dict[self.alignment_parameter],
+                                                             param_dict,
+                                                             fill_value=self.value_list[param_name].fill_value)
+            return_dict[param_name] = arr
 
         if params is not None:
             unset_params = set(params) - set(return_dict.keys())
@@ -595,7 +602,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         compressors = self.value_list
         for span in associated_spans:
             span.compressors = compressors
-            stored_hash = SpanTablesFactory.get_span_table_obj().get_stored_span_hash(span.id)
+            stored_hash = SpanStorageFactory.get_span_storage_obj(self.storage_name).get_stored_span_hash(span.id)
             recalculated_hash = span.get_hash()
             if stored_hash == recalculated_hash:
                 valid_spans.append(span.id)
@@ -605,7 +612,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         return valid_spans, invalid_spans
 
 import cPickle
-def base64encode(np_arr, start=None, stop=None):
+def base64encode(np_arr, start=None, stop=None, param_type=None):
     if isinstance(np_arr, np.ndarray):
         if np_arr.flags['C_CONTIGUOUS'] is False:
             np_arr = np.copy(np_arr)
@@ -614,6 +621,8 @@ def base64encode(np_arr, start=None, stop=None):
             return json.dumps(['_cpickle_', base64.b64encode(np_arr)])
         else:
             return json.dumps([str(np_arr.dtype), base64.b64encode(np_arr), np_arr.shape])
+    elif param_type == 'mp':
+        return json.dumps([param_type, base64.b64encode(np_arr)])
     else:
         return json.dumps([str(type(np_arr)), np_arr, start, stop])
 
@@ -628,6 +637,8 @@ def base64decode(json_str):
         return arr
     elif isinstance(loaded, list) and len(loaded) == 2 and loaded[0] == '_cpickle_':
         return cPickle.loads(base64.decodestring(loaded[1]))
+    elif isinstance(loaded, list) and len(loaded) == 2 and loaded[0] == 'mp':
+        return (base64.b64decode(loaded[1]),)
     elif isinstance(loaded, list) and len(loaded) == 4:
         return (loaded[1], loaded[2], loaded[3])
     else:
@@ -657,17 +668,48 @@ class PostgresPersistedStorage(AbstractStorage):
 
     def compress(self, values):
         if isinstance(values, NumpyParameterData):
-            # return base64.b64encode(values.get_data())
-            return base64encode(values.get_data())
+            data = values.get_data()
+            # if data.dtype == np.object:
+            #     # if np.iterable(data):
+            #     #     data = [pack(x) for x in data]
+            #     # else:
+            #     data = pack(data)
+            #     return base64encode(data, param_type='mp')
+            return base64encode(data)
+            # return base64encode(data)
         elif isinstance(values, ConstantOverTime):
             return base64encode(values.get_data(), start=values.start, stop=values.stop)
         else:
             raise TypeError("values must implement %s or %s, found %s" % (NumpyParameterData.__name__, ConstantOverTime.__name__, type(values)))
 
+    def _object_unpack(self, value):
+        value = unpack(value)
+        if isinstance(value, np.ndarray):
+            return value.tolist()
+        elif isinstance(value, tuple):
+            return list(value)
+        else:
+            return value
+
     def decompress(self, obj):
         vals = base64decode(obj)
         if isinstance(vals, np.ndarray):
             return NumpyParameterData(self.parameter_manager.parameter_name, vals)
+        # if isinstance(vals[0], basestring) and vals[0].startswith('_mp_'):
+        #
+        #     st = vals[0][len('_mp_'):]
+        #     if hasattr(vals[0], '__iter__'):
+        #         vals = np.array([unpack(x) for x in vals[0]])
+        #     else:
+        #         vals = np.array([unpack(vals[0])])
+        #     return NumpyParameterData(self.parameter_manager.parameter_name, vals)
+        elif isinstance(vals, tuple) and len(vals) == 1 and isinstance(vals[0], basestring):
+            # if hasattr(vals[0], '__iter__'):
+            #     vals = np.array([unpack(x) for x in vals[0]])
+            # else:
+            vals = np.array([unpack(vals[0])])
+            return NumpyParameterData(self.parameter_manager.parameter_name, vals)
+
         elif isinstance(vals, tuple):
             return ConstantOverTime(self.parameter_manager.parameter_name, vals[0], time_start=vals[1], time_end=vals[2])
         else:
@@ -696,13 +738,16 @@ class PostgresPersistedStorage(AbstractStorage):
                 # if fast didn't return valid values, do it slow, but right
                 if min_val in invalid_fill_values or max_val in invalid_fill_values or math.isnan(min_val) or math.isnan(max_val):
                     ts = datetime.datetime.now()
-                    mx = [x for x in v if x not in invalid_fill_values and (type(x) in valid_types or issubclass(type(x), numbers.Number))]
-                    if len(mx) > 0:
-                        min_val = min(mx)
-                        max_val = max(mx)
-                    time_loss = datetime.datetime.now() - ts
-                    log.debug("Repaired numpy statistics inconsistency for parameter/type %s/%s.  Time loss of %s seconds ",
-                              self.parameter_manager.parameter_name, str(v.dtype.type), str(time_loss))
+                    try:
+                        mx = [x for x in v.all() if x not in invalid_fill_values and (type(x) in valid_types or issubclass(type(x), numbers.Number))]
+                        if len(mx) > 0:
+                            min_val = min(mx)
+                            max_val = max(mx)
+                        time_loss = datetime.datetime.now() - ts
+                        log.debug("Repaired numpy statistics inconsistency for parameter/type %s/%s.  Time loss of %s seconds ",
+                                  self.parameter_manager.parameter_name, str(v.dtype.type), str(time_loss))
+                    except:
+                        pass
             elif isinstance(v, ConstantOverTime) and not isinstance(v.get_data(), basestring):
                 data = v.get_data()
                 if data in valid_types or isinstance(data, numbers.Number):

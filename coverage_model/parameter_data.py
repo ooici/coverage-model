@@ -99,7 +99,7 @@ class NumpyParameterData(ParameterData):
         if alignment_array is not None:
             if not isinstance(alignment_array, np.ndarray):
                 raise TypeError("alignment_array must implement type %s" % np.ndarray.__name__)
-            if not param_array.size == alignment_array.size:
+            if not param_array.shape[0] == alignment_array.shape[0]:
                 raise ValueError("param_array and alignment_array must have the same number of elements")
         super(NumpyParameterData, self).__init__(param_name, param_array)
         self._alignment = alignment_array
@@ -149,6 +149,13 @@ class ConstantOverTime(ParameterData):
     def max(self):
         return self._data
 
+    @classmethod
+    def merge_data_as_numpy_array(cls, alignment_array, obj_dict, fill_value=None, arr=None):
+        order = sorted(obj_dict.keys())
+        for key in order:
+            arr = obj_dict[key].get_data_as_numpy_array(alignment_array, fill_value=fill_value, arr=arr)
+        return arr
+
     def get_data_as_numpy_array(self, alignment_array, fill_value=None, arr=None):
         """
         NaN fill value causes array equivalency checks to fail
@@ -166,6 +173,7 @@ class ConstantOverTime(ParameterData):
             arr.fill(fill_value)
         elif arr.size != alignment_array.size:
             raise IndexError("Supplied array must be same size as alignment array. Found %i elements. Expected %i." % (arr.size, alignment_array.size))
+
         if self.start is None and self.stop is None:
             arr.fill(self._data)
             pass
@@ -212,7 +220,6 @@ class ConstantOverTime(ParameterData):
             return other
 
     def __lt__(self, other):
-        print 'sorting'
         greater_stop = self._greater_stop(other)
         if greater_stop is None:
             greater_start = self._greater_start(other)
@@ -233,7 +240,7 @@ class ConstantOverTime(ParameterData):
         self.__lt__(other)
 
     def __str__(self):
-        return '%s: %s %s %f %f' % (self.__class__.__name__, self.param_name, str(self._data), self.start, self.stop)
+        return '%s: %s %s %s %s' % (self.__class__.__name__, self.param_name, str(self._data), str(self.start), str(self.stop))
 
     def __eq__(self, other):
         if self.__dict__ == other.__dict__:

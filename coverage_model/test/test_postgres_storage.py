@@ -68,7 +68,9 @@ def _easy_dict(data_dict):
         elements = data_dict.values()[0]
         time_array = np.arange(len(elements))
 
+    print 'time size = %s' % time_array.size
     for k,v in data_dict.iteritems():
+        print '%s size = %i' % (k, v.size)
         data_dict[k] = NumpyParameterData(k, v, time_array)
     return data_dict
 
@@ -233,7 +235,6 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         f(rec_arr['const_float'], rec_arr[scov.temporal_parameter_name], 88.8, scov._persistence_layer.value_list['const_float'].fill_value)
         f(rec_arr['const_str'], rec_arr[scov.temporal_parameter_name], 'Jello', scov._persistence_layer.value_list['const_str'].fill_value)
 
-
     def test_add_constant(self):
         ts = 10
         scov, cov_name = self.construct_cov(nt=ts)
@@ -243,12 +244,24 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         np_dict[scov.temporal_parameter_name] = NumpyParameterData(scov.temporal_parameter_name, time_array, time_array)
         scov.set_parameter_values(np_dict)
 
-        initial_floats = scov.get_parameter_values('const_float').get_data()['const_float']
-        scov.set_parameter_values({'const_float': ConstantOverTime('const_float', 99.9, time_start=10009.0)})
-        scov.set_parameter_values({'const_float': ConstantOverTime('const_float', 1.0, time_start=10008.0)})
-        scov.set_parameter_values({'const_float': ConstantOverTime('const_float', 17.0)})
-        new_float_arr = scov.get_parameter_values((scov.temporal_parameter_name, 'const_float')).get_data()
-        # self.assertTrue(False)
+        rv = scov.get_parameter_values(scov.temporal_parameter_name)
+        expected_array = np.empty(len(rv.get_data()))
+        expected_array.fill(2048)
+        scov.append_parameter(ParameterContext('sparseness', fill_value=9999))
+
+        scov.set_parameter_values({'sparseness': ConstantOverTime('sparseness', 2048, time_start=0, time_end=30000)})
+        returned_array = scov.get_parameter_values([scov.temporal_parameter_name, 'sparseness']).get_data()['sparseness']
+        np.testing.assert_array_equal(expected_array, returned_array)
+
+        expected_array[-3:] = 17
+        scov.set_parameter_values({'sparseness': ConstantOverTime('sparseness', 17, time_start=10012)})
+        returned_array = scov.get_parameter_values([scov.temporal_parameter_name, 'sparseness']).get_data()['sparseness']
+        np.testing.assert_array_equal(expected_array, returned_array)
+
+        expected_array[0:1] = -10
+        scov.set_parameter_values({'sparseness': ConstantOverTime('sparseness', -10, time_end=9999)})
+        returned_array = scov.get_parameter_values([scov.temporal_parameter_name, 'sparseness']).get_data()['sparseness']
+        np.testing.assert_array_equal(expected_array, returned_array)
 
     def test_fill_unfound_data(self):
         ts = 10
@@ -352,4 +365,58 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
 
         scov.set_parameter_values(data_dict)
 
+        returned_dict = scov.get_parameter_values(param_names=data_dict.keys()).get_data()
         scov.get_parameter_values().get_data()
+        print returned_dict
+        for k,v in data_dict.iteritems():
+            print
+            np.testing.assert_array_equal(v.get_data(), returned_dict[k])
+
+    def test_array_types(self):
+        param_type = ArrayType(inner_encoding='<f4')
+        param_ctx = ParameterContext("array_type", param_type=param_type)
+
+        scov = _make_cov(self.working_dir, ['quantity', param_ctx], nt = 0)
+
+        data_dict = {
+            'time' : np.array([0,1], dtype='<f8'),
+            'array_type' : np.array([[0,0,0], [1,1,1,1]], dtype=np.object)
+        }
+
+        for k,v in data_dict.iteritems():
+            print '%s = %s : %s' % (k,v,v.dtype)
+        data_dict = _easy_dict(data_dict)
+        print 'setting_values'
+        scov.set_parameter_values(data_dict)
+
+        returned_dict = scov.get_parameter_values(param_names=data_dict.keys()).get_data()
+        print returned_dict
+        for k,v in data_dict.iteritems():
+            np.testing.assert_array_equal(v.get_data(), returned_dict[k])
+
+    def test_invalid_persistence_name(self):
+        # Construct temporal and spatial Coordinate Reference System objects
+        tcrs = CRS([AxisTypeEnum.TIME])
+        scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+
+        # Construct temporal and spatial Domain objects
+        tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
+        sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
+        pdict = ParameterDictionary()
+        t_ctxt = ParameterContext('time', param_type=QuantityType(value_encoding=np.dtype('float32')))
+        t_ctxt.uom = 'seconds since 01-01-1970'
+        pdict.add_context(t_ctxt, is_temporal=True)
+        data_dict = {
+            'time' : np.array([0,1])
+        }
+        data_dict = _easy_dict(data_dict)
+
+        scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom)
+        scov.set_parameter_values(data_dict)
+
+        scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, persistence_name='postgres_span_storage')
+        scov.set_parameter_values(data_dict)
+
+        with self.assertRaises(RuntimeError):
+            scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, persistence_name='Hello')
+            scov.set_parameter_values(data_dict)

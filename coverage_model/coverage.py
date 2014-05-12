@@ -1635,7 +1635,7 @@ class ComplexCoverage(AbstractCoverage):
 
     def _append_to_coverage(self, cov, value_dictionary):
         cov = AbstractCoverage.load(cov.persistence_dir, mode='r+')
-        cov.set_parameter_values(value_dictionary, slice(cov.num_timesteps - shape, cov.num_timesteps))
+        cov.set_parameter_values(value_dictionary)
         cov.close()
         self.refresh()
 
@@ -2064,7 +2064,10 @@ class SimplexCoverage(AbstractCoverage):
 
     """
 
-    def __init__(self, root_dir, persistence_guid, name=None, parameter_dictionary=None, temporal_domain=None, spatial_domain=None, mode=None, in_memory_storage=False, bricking_scheme=None, inline_data_writes=True, auto_flush_values=True, value_caching=True):
+    def __init__(self, root_dir, persistence_guid, name=None, parameter_dictionary=None,
+                 temporal_domain=None, spatial_domain=None, mode=None, in_memory_storage=False,
+                 bricking_scheme=None, inline_data_writes=True, auto_flush_values=True, value_caching=True,
+                 persistence_name=None):
         """
         Constructor for SimplexCoverage
 
@@ -2214,7 +2217,8 @@ class SimplexCoverage(AbstractCoverage):
                                                                auto_flush_values=auto_flush_values,
                                                                value_caching=value_caching,
                                                                coverage_type='simplex',
-                                                               version=self.version)
+                                                               version=self.version,
+                                                               storage_name=persistence_name)
 
                 for o, pc in parameter_dictionary.itervalues():
                     self.append_parameter(pc)
