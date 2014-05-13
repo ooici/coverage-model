@@ -796,7 +796,7 @@ class CoverageIntTestBase(object):
         except:
             raise
 
-    def test_time_segemet_out_of_bounds(self):
+    def test_time_segment_out_of_bounds(self):
         # Tests that an array defined outside the coverage data bounds raises an error when attempting retrieval
         brick_size = 1000
         time_steps = 5000
@@ -806,7 +806,6 @@ class CoverageIntTestBase(object):
             self.assertEqual(len(time_vals), 4995)
             arr = np.arange(5, 5000)
             np.testing.assert_array_equal(time_vals, arr)
-            self.assertTrue(False)
 
         except NotImplementedError:
             pass

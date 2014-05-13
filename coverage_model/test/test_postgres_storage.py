@@ -68,9 +68,7 @@ def _easy_dict(data_dict):
         elements = data_dict.values()[0]
         time_array = np.arange(len(elements))
 
-    print 'time size = %s' % time_array.size
     for k,v in data_dict.iteritems():
-        print '%s size = %i' % (k, v.size)
         data_dict[k] = NumpyParameterData(k, v, time_array)
     return data_dict
 
@@ -249,7 +247,12 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         expected_array.fill(2048)
         scov.append_parameter(ParameterContext('sparseness', fill_value=9999))
 
-        scov.set_parameter_values({'sparseness': ConstantOverTime('sparseness', 2048, time_start=0, time_end=30000)})
+        scov.set_parameter_values({'sparseness': ConstantOverTime('sparseness', 2048)})
+        returned_array = scov.get_parameter_values([scov.temporal_parameter_name, 'sparseness']).get_data()['sparseness']
+        np.testing.assert_array_equal(expected_array, returned_array)
+
+        expected_array[1:4] = 4096
+        scov.set_parameter_values({'sparseness': ConstantOverTime('sparseness', 4096, time_start=10000, time_end=10002)})
         returned_array = scov.get_parameter_values([scov.temporal_parameter_name, 'sparseness']).get_data()['sparseness']
         np.testing.assert_array_equal(expected_array, returned_array)
 
@@ -367,30 +370,77 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
 
         returned_dict = scov.get_parameter_values(param_names=data_dict.keys()).get_data()
         scov.get_parameter_values().get_data()
-        print returned_dict
         for k,v in data_dict.iteritems():
-            print
             np.testing.assert_array_equal(v.get_data(), returned_dict[k])
+
+    def create_numpy_object_array(self, array):
+        if isinstance(array, np.ndarray):
+            array = array.tolist()
+        arr = np.empty(len(array), dtype=object)
+        arr[:] = array
+        return arr
 
     def test_array_types(self):
         param_type = ArrayType(inner_encoding='<f4')
         param_ctx = ParameterContext("array_type", param_type=param_type)
 
+        # test well-formed
         scov = _make_cov(self.working_dir, ['quantity', param_ctx], nt = 0)
 
         data_dict = {
             'time' : np.array([0,1], dtype='<f8'),
-            'array_type' : np.array([[0,0,0], [1,1,1,1]], dtype=np.object)
+            'array_type' : self.create_numpy_object_array([[0,0,0], [1,1,1]])
         }
 
-        for k,v in data_dict.iteritems():
-            print '%s = %s : %s' % (k,v,v.dtype)
         data_dict = _easy_dict(data_dict)
-        print 'setting_values'
         scov.set_parameter_values(data_dict)
 
         returned_dict = scov.get_parameter_values(param_names=data_dict.keys()).get_data()
-        print returned_dict
+        for k,v in data_dict.iteritems():
+            np.testing.assert_array_equal(v.get_data(), returned_dict[k])
+
+        # test ragged
+        scov = _make_cov(self.working_dir, ['quantity', param_ctx], nt = 0)
+
+        data_dict = {
+            'time' : np.array([0,1], dtype='<f8'),
+            'array_type' : self.create_numpy_object_array([[0,0,0], [1,1,1,1]])
+        }
+
+        data_dict = _easy_dict(data_dict)
+        scov.set_parameter_values(data_dict)
+
+        returned_dict = scov.get_parameter_values(param_names=data_dict.keys()).get_data()
+        for k,v in data_dict.iteritems():
+            np.testing.assert_array_equal(v.get_data(), returned_dict[k])
+
+        # test one element
+        scov = _make_cov(self.working_dir, ['quantity', param_ctx], nt = 0)
+
+        data_dict = {
+            'time' : np.array([0], dtype='<f8'),
+            'array_type' : self.create_numpy_object_array([[0,0,0]])
+        }
+
+        data_dict = _easy_dict(data_dict)
+        scov.set_parameter_values(data_dict)
+
+        returned_dict = scov.get_parameter_values(param_names=data_dict.keys()).get_data()
+        for k,v in data_dict.iteritems():
+            np.testing.assert_array_equal(v.get_data(), returned_dict[k])
+
+        # test numpy array
+        scov = _make_cov(self.working_dir, ['quantity', param_ctx], nt = 0)
+
+        data_dict = {
+            'time' : np.array([0,1], dtype='<f8'),
+            'array_type' : self.create_numpy_object_array(np.array([[1,1,1], [2,2,2]]))
+        }
+
+        data_dict = _easy_dict(data_dict)
+        scov.set_parameter_values(data_dict)
+
+        returned_dict = scov.get_parameter_values(param_names=data_dict.keys()).get_data()
         for k,v in data_dict.iteritems():
             np.testing.assert_array_equal(v.get_data(), returned_dict[k])
 

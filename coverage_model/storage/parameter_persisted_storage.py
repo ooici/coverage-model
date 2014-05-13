@@ -636,7 +636,9 @@ def base64decode(json_str):
             return arr.reshape(loaded[2])
         return arr
     elif isinstance(loaded, list) and len(loaded) == 2 and loaded[0] == '_cpickle_':
-        return cPickle.loads(base64.decodestring(loaded[1]))
+        val = base64.b64decode(loaded[1])
+        val = cPickle.loads(base64.decodestring(loaded[1]))
+        return val
     elif isinstance(loaded, list) and len(loaded) == 2 and loaded[0] == 'mp':
         return (base64.b64decode(loaded[1]),)
     elif isinstance(loaded, list) and len(loaded) == 4:
