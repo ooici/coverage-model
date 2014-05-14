@@ -491,3 +491,29 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         with self.assertRaises(RuntimeError):
             scov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, persistence_name='Hello')
             scov.set_parameter_values(data_dict)
+
+
+    def test_lon_bug(self):
+        lon = ParameterContext('lon', param_type=SparseConstantType(value_encoding='float64'))
+        lat = ParameterContext('lat', param_type=SparseConstantType(value_encoding='float64'))
+
+        cov = _make_cov(self.working_dir, ['quantity', lon, lat], nt=0)
+        import time
+        ntp_now = time.time() + 2208988800
+        
+        data_dict = {
+
+            #'quality_flag' : NumpyParameterData('quality_flag', np.array([None]), np.array([ntp_now])),
+            #'preferred_timestamp' : NumpyParameterData('preferred_timesatmp', np.array(['driver_timestamp']), np.array([ntp_now])),
+            #'temp' : NumpyParameterData('temp', np.array([300000]), np.array([ntp_now])),
+            #'port_timestamp' : NumpyParameterData('port_timestamp', np.array([ntp_now]), np.array([ntp_now])),
+            'lon' : ConstantOverTime('lon', -71., time_start = ntp_now, time_end=None),
+            #'pressure' : NumpyParameterData('pressure', np.array([256.8]), np.array([ntp_now])),
+            #'internal_timestamp' : NumpyParameterData('internal_timestamp', np.array([ntp_now]), np.array([ntp_now])),
+            'time' : NumpyParameterData('time', np.array([ntp_now])),
+            #'lat' : ConstantOverTime('lat', 45, time_start = ntp_now, time_end=None),
+            #'driver_timestamp' : NumpyParameterData('driver_timestamp', np.array([ntp_now]), np.array([ntp_now])),
+            #'conductivity' : NumpyParameterData('conductivity', np.array([4341400]), np.array([ntp_now])),
+            }
+        cov.set_parameter_values(data_dict)
+
