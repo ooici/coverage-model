@@ -140,6 +140,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         #                                auto_flush=self.auto_flush_values)
         # else:
         v = PostgresPersistedStorage(pm, metadata_manager=self.master_manager,
+                                         parameter_context=parameter_context,
                                          dtype=parameter_context.param_type.storage_encoding,
                                          fill_value=parameter_context.param_type.fill_value,
                                          mode=self.mode)
@@ -655,22 +656,33 @@ def simple_decode(json_str):
     return np.array(json.loads(json_str))
 
 
+from coverage_model.parameter_types import ArrayType
 class PostgresPersistedStorage(AbstractStorage):
 
-    def __init__(self, parameter_manager, metadata_manager, dtype, fill_value, mode=None):
+    def __init__(self, parameter_manager, metadata_manager, parameter_context, dtype, fill_value, mode=None):
         self.parameter_manager = parameter_manager
         self.metadata_manager = metadata_manager
         self.dtype = dtype
         self.fill_value = fill_value
         self.mode = mode
+        self.parameter_context = parameter_context
 
     def __setitem__(self, slice_, value):
         if self.mode == 'r':
             raise IOError('PersistenceLayer not open for writing: mode == \'{0}\''.format(self.mode))
 
+    def create_numpy_object_array(self, array):
+        if isinstance(array, np.ndarray):
+            array = array.tolist()
+        arr = np.empty(len(array), dtype=object)
+        arr[:] = array
+        return arr
+
     def compress(self, values):
         if isinstance(values, NumpyParameterData):
             data = values.get_data()
+            if isinstance(self.parameter_context.param_type, ArrayType):
+                data = self.create_numpy_object_array(data)
             # if data.dtype == np.object:
             #     # if np.iterable(data):
             #     #     data = [pack(x) for x in data]

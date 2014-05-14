@@ -92,7 +92,7 @@ class TestSampleCovViewInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
         vcov.replace_reference_coverage(use_current_param_dict=False, parameter_dictionary='temp')
         self.assertEqual(vcov.list_parameters(), ['temp'])
-        np.testing.assert_array_equal(vcov.get_parameter_values('temp'), cov1.get_parameter_values('temp'))
+        np.testing.assert_array_equal(vcov.get_parameter_values('temp').get_data()['temp'], cov1.get_parameter_values('temp').get_data()['temp'])
 
         vcov.replace_reference_coverage(use_current_param_dict=False, parameter_dictionary=None)
         self.assertEqual(vcov.list_parameters(), ['conductivity', 'lat', 'lon', 'temp', 'time'])
@@ -171,9 +171,8 @@ class TestSampleCovViewInt(CoverageModelIntTestCase, CoverageIntTestBase):
         read_cov = ViewCoverage(self.working_dir, create_guid(), name='sample view cov', reference_coverage_location=write_cov.persistence_dir)
 
         # Add some data to the writable copy & ensure a flush
-        write_cov.insert_timesteps(100)
         tdat = range(write_cov.num_timesteps - 100, write_cov.num_timesteps)
-        write_cov.set_time_values(tdat, slice(-100, None))
+        write_cov.set_time_values(tdat)
 
         # Refresh the read coverage
         read_cov.refresh()

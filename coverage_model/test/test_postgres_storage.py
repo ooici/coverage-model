@@ -444,6 +444,27 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         for k,v in data_dict.iteritems():
             np.testing.assert_array_equal(v.get_data(), returned_dict[k])
 
+        # test numpy array
+        scov = _make_cov(self.working_dir, ['quantity', param_ctx], nt = 0)
+
+        data_dict = {
+            'time' : np.array([0,1], dtype='<f8'),
+            'array_type' : np.array([[1,1,1], [2,2,2]])
+        }
+
+        data_dict = _easy_dict(data_dict)
+        scov.set_parameter_values(data_dict)
+
+        data_dict = {
+            'time' : np.array([0,1], dtype='<f8'),
+            'array_type' : self.create_numpy_object_array(np.array([[1,1,1], [2,2,2]]))
+        }
+        data_dict = _easy_dict(data_dict)
+
+        returned_dict = scov.get_parameter_values(param_names=data_dict.keys()).get_data()
+        for k,v in data_dict.iteritems():
+            np.testing.assert_array_equal(v.get_data(), returned_dict[k])
+
     def test_invalid_persistence_name(self):
         # Construct temporal and spatial Coordinate Reference System objects
         tcrs = CRS([AxisTypeEnum.TIME])

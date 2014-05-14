@@ -75,7 +75,8 @@ class AbstractCoverage(AbstractIdentifiable):
         self._range_dictionary = ParameterDictionary()
         self._range_value = RangeValues()
         self.value_caching = True
-        self._value_cache = collections.OrderedDict()
+        self._value_cache = collections.deque(maxlen=5)
+        self.param_cache = self._value_cache
         self._bricking_scheme = {'brick_size': 100000, 'chunk_size': 100000}
 
         self.temporal_domain = GridDomain(GridShape('temporal',[0]), CRS.standard_temporal(), MutabilityEnum.EXTENSIBLE)
@@ -392,7 +393,49 @@ class AbstractCoverage(AbstractIdentifiable):
             if not param_name in self._range_value:
                 raise KeyError('Parameter \'{0}\' not found in coverage'.format(param_name))
 
-        return self._persistence_layer.read_parameters(param_names, time_segment, time, sort_parameter, stride_length=stride_length, fill_empty_params=fill_empty_params)
+        if self.value_caching:
+            vals = self.get_cached_values(param_names, time_segment, time, sort_parameter, stride_length, fill_empty_params)
+            if vals is not None:
+                return vals
+
+        vals = self._persistence_layer.read_parameters(param_names, time_segment, time, sort_parameter, stride_length=stride_length, fill_empty_params=fill_empty_params)
+        if self.value_caching:
+            self.cache_it(vals, param_names, time_segment, time, sort_parameter, stride_length, fill_empty_params)
+        return vals
+
+    def cache_it(self, vals, param_names, time_segement, time, sort_parameter, stride_length, fill_empty_params):
+        if time_segement is None or time_segement[0] is None or time_segement[1] is None:
+            return
+        tup = time_segement, time, sort_parameter, stride_length, fill_empty_params
+        cache = False
+        if len(self._value_cache) !=0:
+            for val in self._value_cache:
+                if cmp(val[0], tup) == 0:
+                    for param_name in param_names:
+                        if param_name not in val[1]:
+                            cache = True
+                            break
+                else:
+                    cache = True
+                    break
+        else:
+            cache = True
+        if cache:
+            self._value_cache.append((tup, param_names, vals))
+
+    def get_cached_values(self, params, time_segement, time, sort_parameter, stride_length, fill_empty_params):
+        tup = time_segement, time, sort_parameter, stride_length, fill_empty_params
+        rv = None
+        for val in self._value_cache:
+            if val[0] == tup:
+                cached = True
+                for param in params:
+                    if param not in val[1]:
+                        cached = False
+                if cached:
+                    rv = val[2]
+                    break
+        return rv
 
     def get_value_dictionary(self, param_list=None, temporal_slice=None, domain_slice=None):
         '''
@@ -517,16 +560,18 @@ class AbstractCoverage(AbstractIdentifiable):
         self._value_cache[key] = return_value
         return return_value
 
-    # def set_time_values(self, value, tdoa=None):
-    #     """
-    #     Convenience method for setting time values
-    #
-    #     @param value    The value to set
-    #     @param tdoa The temporal DomainOfApplication; default to full Domain
-    #     """
-    #     return self._persistence_layer.write_parameters(self.get_write_id(), value)
+    def set_time_values(self, values):
+        """
+        Convenience method for setting time values
 
-    def get_time_values(self, tdoa=None, return_value=None):
+        @param value    The value to set
+        @param tdoa The temporal DomainOfApplication; default to full Domain
+        """
+        if isinstance(values, list):
+            values = np.array(values)
+        return self._persistence_layer.write_parameters(self.get_write_id(), {self.temporal_parameter_name: values})
+
+    def get_time_values(self, time_segement=None, stride_length=None, return_value=None):
         """
         Convenience method for retrieving time values
 
@@ -534,7 +579,8 @@ class AbstractCoverage(AbstractIdentifiable):
         @param tdoa The temporal DomainOfApplication; default to full Domain
         @param return_value If supplied, filled with response value
         """
-        return self.get_parameter_values(self.temporal_parameter_name).get_data()[self.temporal_parameter_name]
+        return self.get_parameter_values(self.temporal_parameter_name, time_segment=time_segement,
+                                         stride_length=stride_length, return_value=return_value).get_data()[self.temporal_parameter_name]
 
     @property
     def num_timesteps(self):
@@ -1113,6 +1159,9 @@ class ViewCoverage(AbstractCoverage):
 
     def set_parameter_values(self, param_name, value, tdoa=None, sdoa=None):
         raise TypeError('Cannot set parameter values against a ViewCoverage')
+
+    def get_parameter_values(self, param_names, time_segment=None, time=None, sort_parameter=None, stride_length=None, return_value=None):
+        return self.reference_coverage.get_parameter_values(param_names, time_segment, time, sort_parameter, stride_length, return_value)
 
     def get_value_dictionary(self, *args, **kwargs):
 
@@ -2135,7 +2184,7 @@ class SimplexCoverage(AbstractCoverage):
                     # if pc.param_type._value_class == 'SparseConstantValue':
                     #     s = SparsePersistedStorage(md, mm, self._persistence_layer.brick_dispatcher, dtype=pc.param_type.storage_encoding, fill_value=pc.param_type.fill_value, mode=self.mode, inline_data_writes=inline_data_writes, auto_flush=auto_flush_values)
                     # else:
-                    s = PostgresPersistedStorage(md, metadata_manager=mm, dtype=pc.param_type.storage_encoding, fill_value=pc.param_type.fill_value, mode=self._persistence_layer.mode)
+                    s = PostgresPersistedStorage(md, metadata_manager=mm, parameter_context=pc, dtype=pc.param_type.storage_encoding, fill_value=pc.param_type.fill_value, mode=self._persistence_layer.mode)
                     self._persistence_layer.value_list[parameter_name] = s
                     self._range_value[parameter_name] = get_value_class(param_type=pc.param_type, domain_set=pc.dom, storage=s)
                     if parameter_name in self._persistence_layer.parameter_bounds:

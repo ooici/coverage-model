@@ -235,30 +235,42 @@ class TestParameterValuesInt(CoverageModelIntTestCase):
         cov.set_time_values(vals)
 
         # Make sure the _value_cache is an instance of OrderedDict and that it's empty
-        self.assertIsInstance(cov._value_cache, collections.OrderedDict)
+        self.assertIsInstance(cov._value_cache, collections.deque)
         self.assertEqual(len(cov._value_cache), 0)
 
         # Get the time values and make sure they match what we assigned
-        got = cov.get_time_values()
+        got = cov.get_time_values(time_segement=(0,20000))
         np.testing.assert_array_equal(vals, got)
 
         # Now check that there is 1 entry in the _value_cache and that it's a match for vals
         self.assertEqual(len(cov._value_cache), 1)
-        np.testing.assert_array_equal(cov._value_cache[cov._value_cache.keys()[0]], vals)
+        cached_vals = None
+        for t in cov._value_cache:
+            cached_vals = t[2].get_data()
+        np.testing.assert_array_equal(cached_vals['time'], got)
 
         # Now retrieve a slice and make sure it matches the same slice of vals
-        sl = slice(20, 1000, 3)
-        got = cov.get_time_values(sl)
-        np.testing.assert_array_equal(vals[sl], got)
+        sl = np.arange(18,1000, 3)
+        got = cov.get_time_values(time_segement=(18, 1000), stride_length=3)
+        np.testing.assert_array_equal(sl, got)
 
         # Now check that there are 2 entries and that the second is a match for vals
         self.assertEqual(len(cov._value_cache), 2)
-        np.testing.assert_array_equal(cov._value_cache[cov._value_cache.keys()[1]], vals[sl])
+        cached_vals = None
+        for t in cov._value_cache:
+            cached_vals = t[2].get_data()
+        np.testing.assert_array_equal(cached_vals['time'], sl)
+
+        # Call get 40 times with the same request - check that the _value_cache doesn't grow
+        expected_length = len(cov._value_cache) + 1
+        for x in xrange(40):
+            cov.get_time_values(time_segement=(0,10))
+        self.assertEqual(len(cov._value_cache), expected_length)
 
         # Call get 40 times - check that the _value_cache stops growing @ 30
         for x in xrange(40):
-            cov.get_time_values(x)
-        self.assertEqual(len(cov._value_cache), 30)
+            cov.get_time_values(time_segement=(0,x))
+        self.assertEqual(len(cov._value_cache), 5)
 
     def test_value_caching_with_domain_expansion(self):
         cov = self._make_empty_oneparamcov()
@@ -271,7 +283,7 @@ class TestParameterValuesInt(CoverageModelIntTestCase):
         cov.set_time_values(vals)
 
         # Prime the value_cache
-        got = cov.get_time_values()
+        got = cov.get_time_values(time_segement=(0,2000))
 
         # Expand the domain
         cov.insert_timesteps(nt)
