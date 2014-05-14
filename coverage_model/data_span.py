@@ -11,6 +11,7 @@ import json
 from ast import literal_eval
 from coverage_model.address import Address, AddressFactory
 import hashlib
+from coverage_model.parameter_data import ConstantOverTime, NumpyParameterData
 
 
 class Span():
@@ -30,10 +31,10 @@ class Span():
             params = self.param_dict.keys()
         for param in params:
             if param in self.param_dict:
-                if len(self.param_dict[param].get_data()) > 0:
+                if isinstance(self.param_dict[param], ConstantOverTime):
+                    param_stat_dict[param] = (self.param_dict[param].get_data(), self.param_dict[param].get_data())
+                elif isinstance(self.param_dict[param], NumpyParameterData):
                     param_stat_dict[param] = (self.param_dict[param].min(), self.param_dict[param].max())
-        # for key, data in self.param_dict.iteritems():
-        #     param_stat_dict[key] = (data.min(), data.max())
         stats = SpanStats(Address(self.id), param_stat_dict)
         return stats
 

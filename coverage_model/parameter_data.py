@@ -8,7 +8,6 @@
 """
 
 import numpy as np
-from coverage_model.parameter import ParameterContext
 
 
 class ParameterDataDict(object):
