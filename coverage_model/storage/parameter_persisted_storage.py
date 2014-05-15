@@ -474,6 +474,9 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
 
         pass
 
+    def has_data(self):
+        return SpanStorageFactory.get_span_storage_obj(self.storage_name).has_data(self.master_manager.guid)
+
     def read_parameters_as_dense_array(self, params, time_range=None, time=None, sort_parameter=None):
         return_dict = {}
         arr_size = 0

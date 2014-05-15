@@ -90,7 +90,7 @@ class PostgresSpanStorage(SpanStorage):
         bin_sql = ""
         return stats_sql, bin_sql
 
-    def get_spans(self, span_ids=None, coverage_ids=None, start_time=None, stop_time=None, decompressors=None):
+    def get_spans(self, span_ids=None, coverage_ids=None, params=None, start_time=None, stop_time=None, decompressors=None):
         statement = """SELECT data::text from %s where coverage_id = '%s'""" % (self.span_table_name, coverage_ids)
         with self.span_store.pool.cursor(**self.span_store.cursor_args) as cur:
             cur.execute(statement)
@@ -102,6 +102,22 @@ class PostgresSpanStorage(SpanStorage):
             spans.append(Span.from_json(data, decompressors))
 
         return spans
+
+    def has_data(self, coverage_id):
+        statement = """SELECT coverage_id FROM %s WHERE coverage_id = '%s'""" % (self.span_stats_table_name, coverage_id)
+        results = []
+        with self.span_store.pool.cursor(**self.span_store.cursor_args) as cur:
+            cur.execute(statement)
+            results = cur.fetchall()
+
+        print results
+        for row in results:
+            cov_id, = row
+            print "Has", cov_id
+            if coverage_id == cov_id:
+                return True
+
+        return False
 
     def get_stored_span_hash(self, span_id):
         statement = """SELECT hash from %s where span_address='%s'; """ % (self.span_stats_table_name, span_id)

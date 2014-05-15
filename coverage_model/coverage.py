@@ -2313,15 +2313,11 @@ class SimplexCoverage(AbstractCoverage):
     def _fromdict(cls, cmdict, arg_masks=None):
         return AbstractCoverage._fromdict(cmdict, {'parameter_dictionary': '_range_dictionary'})
 
+    def has_parameter_data(self):
+        return self._persistence_layer.has_data()
+
     def is_empty(self):
-        '''
-        A stub, please replace
-        '''
-        try:
-            self.get_parameter_values().get_data()
-        except RuntimeError:
-            return True
-        return False
+        return not self.has_parameter_data()
 
 
 

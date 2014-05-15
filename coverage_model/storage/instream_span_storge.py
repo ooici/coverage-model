@@ -7,7 +7,7 @@ class InstreamSpanStorage(SpanStorage):
     def write_span(self, span):
         raise NotImplementedError("Cannot write to an incoming stream")
 
-    def get_spans(self, span_ids=None, coverage_ids=None, start_time=None, stop_time=None, decompressors=None):
+    def get_spans(self, span_ids=None, coverage_ids=None, params=None, start_time=None, stop_time=None, decompressors=None):
         raise NotImplementedError("This should be implemented")
 
     def get_span_hash(self, span_id):

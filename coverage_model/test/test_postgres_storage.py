@@ -517,3 +517,25 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
             }
         cov.set_parameter_values(data_dict)
 
+    def test_has_data(self):
+        lon = ParameterContext('lon', param_type=SparseConstantType(value_encoding='float64'))
+        lat = ParameterContext('lat', param_type=SparseConstantType(value_encoding='float64'))
+
+        cov = _make_cov(self.working_dir, ['quantity', lon, lat], nt=0)
+        import time
+        ntp_now = time.time() + 2208988800
+
+        self.assertTrue(cov.is_empty())
+        self.assertFalse(cov.has_parameter_data())
+        data_dict = {
+
+            'lon' : ConstantOverTime('lon', -71., time_start = ntp_now, time_end=None),
+            'time' : NumpyParameterData('time', np.array([ntp_now])),
+            'lat' : ConstantOverTime('lat', 45, time_start = ntp_now, time_end=None),
+            }
+        cov.set_parameter_values(data_dict)
+        self.assertFalse(cov.is_empty())
+        self.assertTrue(cov.has_parameter_data())
+        cov.set_parameter_values(data_dict)
+        self.assertFalse(cov.is_empty())
+        self.assertTrue(cov.has_parameter_data())
