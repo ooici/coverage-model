@@ -2313,6 +2313,18 @@ class SimplexCoverage(AbstractCoverage):
     def _fromdict(cls, cmdict, arg_masks=None):
         return AbstractCoverage._fromdict(cmdict, {'parameter_dictionary': '_range_dictionary'})
 
+    def is_empty(self):
+        '''
+        A stub, please replace
+        '''
+        try:
+            self.get_parameter_values().get_data()
+        except RuntimeError:
+            return True
+        return False
+
+
+
 
 #=========================
 # Range Objects
