@@ -69,8 +69,6 @@ class TestSampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         if (nt is None) or (nt == 0) or (make_empty is True):
             return scov, 'TestSampleCovInt'
         else:
-            scov.insert_timesteps(nt)
-
             params = {}
             params['time'] = np.arange(nt)
             if not only_time:
@@ -105,7 +103,6 @@ class TestSampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         ret = []
 
 
-        # scov.insert_timesteps(timesteps)
         param_list = []
         if param == 'all':
             param_list = scov.list_parameters()
@@ -120,10 +117,10 @@ class TestSampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
             param_dict = {param: data}
             if param is not 'time':
                 param_dict['time'] = time_arr
-            scov.set_parameter_values(param_dict)
             scov.get_dirty_values_async_result().get(timeout=60)
             # TODO: Is the res = assignment below correct?
-            ret = scov.get_parameter_values(param).get_data()[param]
+        scov.set_parameter_values(param_dict)
+        ret = scov.get_parameter_values(param).get_data()[param]
         return (ret == data).all()
 
     def test_list_parameters_coords_only(self):
@@ -167,10 +164,8 @@ class TestOneParamCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         if (nt is None) or (nt == 0) or (make_empty is True):
             return scov, 'TestOneParamCovInt'
         else:
-            scov.insert_timesteps(nt)
-
             # Add data for the parameter
-            scov.set_parameter_values('time', value=np.arange(nt))
+            scov.set_parameter_values(make_parameter_data_dict({'time': np.arange(nt)}))
 
         if in_memory and save_coverage:
             SimplexCoverage.pickle_save(scov, os.path.join(cls.working_dir, 'sample.cov'))
@@ -182,19 +177,22 @@ class TestOneParamCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         data = data[_slice]
         ret = []
 
-        scov.insert_timesteps(timesteps)
         param_list = []
         if param == 'all':
             param_list = scov.list_parameters()
         else:
             param_list.append(param)
 
+        param_data_dict = {}
         for param in param_list:
-            scov.set_parameter_values(param, data, _slice)
-            scov.get_dirty_values_async_result().get(timeout=60)
-            # TODO: Is the res = assignment below correct?
-            ret = scov.get_parameter_values(param, _slice)
-        return (ret == data).all()
+            param_data_dict[param] = data
+        scov.set_parameter_values(make_parameter_data_dict(param_data_dict))
+
+        returned_data = scov.get_parameter_values(param_list).get_data()
+        for param in param_list:
+            if not np.array_equal(returned_data[param], param_data_dict[param].get_data()):
+                return False
+        return True
 
     @unittest.skip('Does not apply to empty coverage.')
     def test_get_all_data_metrics(self):
@@ -245,6 +243,12 @@ class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
         scov = SimplexCoverage(cls.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory, bricking_scheme=bricking_scheme, auto_flush_values=auto_flush_values)
 
+        if nt is not None and nt > 0:
+            values = { scov.temporal_parameter_name: np.arange(nt) }
+            if not only_time:
+                values['lat'] = (np.random.random_sample(nt) * 180) - 90
+            scov.set_parameter_values(make_parameter_data_dict(values))
+
         if in_memory and save_coverage:
             SimplexCoverage.pickle_save(scov, os.path.join(cls.working_dir, 'sample.cov'))
 
@@ -258,10 +262,10 @@ class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
         expected = np.empty(0, dtype=cov.get_parameter_context('time').param_type.value_encoding)
 
-        slices = [slice(None), slice(0, None), slice(None, 10), slice(2, 8), slice(3, 19, 8)]
+        slices = [(None, None), (0, None), (None, 10), (2, 8), (3, 19)]
 
         for s in slices:
-            ret = cov.get_parameter_values('time', s)
+            ret = cov.get_parameter_values(['time'], time_segment=s).get_data()['time']
             self.assertTrue(np.array_equal(ret, expected))
 
     def test_get_by_int(self):
@@ -272,9 +276,10 @@ class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         ints = [0, 2, 5, 109]
 
         for i in ints:
-            ret = cov.get_parameter_values('time', i)
+            ret = cov.get_parameter_values('time', time=i).get_data()['time']
             self.assertTrue(np.array_equal(ret, expected))
 
+    @unittest.skip('No longer supported')
     def test_get_by_list(self):
         cov = self.get_cov()[0]
 
@@ -291,9 +296,8 @@ class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         brick_size = 1000
         time_steps = 5000
         scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
-        _slice = slice(5010, 5020, None)
         self.assertTrue(np.array_equal(
-            scov.get_parameter_values('time', _slice),
+            scov.get_parameter_values('time', time_segment=(5010,5020)).get_data()['time'],
             np.empty(0, dtype=scov.get_parameter_context('time').param_type.value_encoding)))
 
     def test_int_raises_index_error(self):
@@ -302,8 +306,9 @@ class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         time_steps = 5000
         scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
         self.assertTrue(np.array_equal(
-            scov.get_parameter_values('time', 9000),
-            np.empty(0, dtype=scov.get_parameter_context('time').param_type.value_encoding)))
+            scov.get_parameter_values('time', time=9000).get_data()['time'],
+            np.array([4999], dtype=scov.get_parameter_context('time').param_type.value_encoding)))
+
 
     def test_array_raises_index_error(self):
         # Tests that an array defined outside the coverage data bounds raises an error when attempting retrieval
@@ -311,8 +316,8 @@ class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         time_steps = 5000
         scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
         self.assertTrue(np.array_equal(
-            scov.get_parameter_values('time', [[5,9000]]),
-            np.empty(0, dtype=scov.get_parameter_context('time').param_type.value_encoding)))
+            scov.get_parameter_values('time', time_segment=(5,9000)).get_data()['time'],
+            np.arange(5,5000, dtype=scov.get_parameter_context('time').param_type.value_encoding)))
 
     # @unittest.skip('Does not apply to empty coverage.')
     # def test_refresh(self):
@@ -417,24 +422,26 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         else:
             # Add data for each parameter
             if only_time:
-                scov.insert_timesteps(nt)
-                scov.set_parameter_values('time', value=np.arange(nt))
+                scov.set_parameter_values(make_parameter_data_dict({scov.temporal_parameter_name: np.arange(nt)}))
             else:
-                scov.set_parameter_values('sparse', [[[2, 4, 6], [8, 10, 12]]])
-                scov.insert_timesteps(nt/2)
+                values = {}
+                # scov.set_parameter_values('sparse', [[[2, 4, 6], [8, 10, 12]]])
+                # scov.insert_timesteps(nt/2)
+                #
+                # scov.set_parameter_values('sparse', [[[4, 8], [16, 20]]])
+                # scov.insert_timesteps(nt/2)
 
-                scov.set_parameter_values('sparse', [[[4, 8], [16, 20]]])
-                scov.insert_timesteps(nt/2)
-
-                scov.set_parameter_values('time', value=np.arange(nt))
-                scov.set_parameter_values('boolean', value=[True, True, True], tdoa=[[2,4,14]])
-                scov.set_parameter_values('const_float', value=-71.11) # Set a constant with correct data type
-                scov.set_parameter_values('const_int', value=45.32) # Set a constant with incorrect data type (fixed under the hood)
-                scov.set_parameter_values('const_str', value='constant string value') # Set with a string
-                scov.set_parameter_values('const_rng_flt', value=(12.8, 55.2)) # Set with a tuple
-                scov.set_parameter_values('const_rng_int', value=[-10, 10]) # Set with a list
-
-                scov.set_parameter_values('quantity', value=np.random.random_sample(nt)*(26-23)+23)
+                values[scov.temporal_parameter_name] = NumpyParameterData(scov.temporal_parameter_name, np.arange(nt))
+                bools =  np.empty(nt, dtype=np.bool)
+                bools.fill(False)
+                bools[2::4] = True
+                values['boolean'] = NumpyParameterData('boolean', bools)
+                values['const_float'] = ConstantOverTime('const_float', -71.11) # Set a constant with correct data type
+                values['const_int'] = ConstantOverTime('const_int', 45.32) # Set a constant with incorrect data type (fixed under the hood)
+                values['const_str'] = ConstantOverTime('const_str', 'constant string value') # Set with a string
+                values['const_rng_flt'] = ConstantOverTime('const_rng_flt', (12.8, 55.2)) # Set with a tuple
+                values['const_rng_int'] = ConstantOverTime('const_rng_int', (-10, 10)) # Set with a list TODO test with a tuple
+                values['quantity'] = NumpyParameterData('quantity', np.random.random_sample(nt)*(26-23)+23)
 
                 arrval = []
                 recval = []
@@ -450,10 +457,11 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
                     recval.append(d) # One value (which is a dict) for each member of the domain
                     catval.append(random.choice(catkeys))
                     fstrval.append(''.join([random.choice(letts) for x in xrange(8)])) # A random string of length 8
-                scov.set_parameter_values('array', value=arrval)
-                scov.set_parameter_values('record', value=recval)
-                scov.set_parameter_values('category', value=catval)
-                scov.set_parameter_values('fixed_str', value=fstrval)
+                values['array'] = NumpyParameterData('array', np.array(arrval))
+                values['record'] = NumpyParameterData('record', np.array(recval))
+                values['category'] = NumpyParameterData('category', np.array(catval))
+                values['fixed_str'] = NumpyParameterData('fixed_str', np.array(fstrval))
+                scov.set_parameter_values(values)
 
         if in_memory and save_coverage:
             SimplexCoverage.pickle_save(scov, os.path.join(cls.working_dir, 'sample.cov'))
@@ -464,11 +472,11 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         # TODO: Only tests time parameter so far.
         param = 'time'
         data = data[_slice]
-        scov.insert_timesteps(timesteps)
-        scov.set_parameter_values(param, data, _slice)
+        scov.set_parameter_values(make_parameter_data_dict({param: data}))
         scov.get_dirty_values_async_result().get(timeout=60)
-        ret = scov.get_parameter_values(param, _slice)
-        return (ret == data).all()
+        ret = scov.get_parameter_values(param)
+
+        return (ret.get_data()[param] == data).all()
 
     def test_ptypescov_get_values(self):
         # Tests retrieval of values from QuantityType, ConstantType,
@@ -478,13 +486,27 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         self.assertIsInstance(ptypes_cov, AbstractCoverage)
 
         # QuantityType
-        results.append((ptypes_cov._range_value.time[:] == np.arange(2000)).any())
+        function_params = {}
+        res = ptypes_cov.get_parameter_values(['time', 'const_int', 'const_rng_int'], function_params=function_params)
+        np.testing.assert_array_equal( res.get_data()['time'], np.arange(2000))
         # ConstantType
-        results.append(ptypes_cov._range_value.const_int[0] == 45)
+        self.assertTrue('const_int' in function_params)
+        self.assertTrue('const_rng_int' in function_params)
+        self.assertEqual(len(function_params['const_int']), 1)
+        self.assertEqual(len(function_params['const_rng_int']), 1)
+        for val in function_params['const_int'].values():
+            self.assertEqual(ConstantOverTime('const_int', 45.32), val)
+        for val in function_params['const_rng_int'].values():
+            self.assertEqual(ConstantOverTime('const_rng_int', (-10,10)), val)
+
+        expected_const_int_arr = np.empty(2000)
+        expected_const_int_arr.fill(45)
+        np.testing.assert_array_equal(res.get_data()['const_int'], expected_const_int_arr)
         # ConstantRangeType
-        results.append(ptypes_cov._range_value.const_rng_int[0] == (-10, 10))
+        expected_const_rng_int_arr = np.empty(2000, dtype=np.object)
+        expected_const_rng_int_arr.fill((-10,10))
+        np.testing.assert_array_equal(res.get_data()['const_rng_int'], expected_const_rng_int_arr)
         ptypes_cov.close()
-        self.assertTrue(False not in results)
 
     @unittest.skip('Does not apply to empty coverage.')
     def test_get_all_data_metrics(self):

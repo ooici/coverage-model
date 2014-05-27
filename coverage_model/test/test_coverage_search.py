@@ -75,7 +75,6 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
                             'numexpr_func',
                             'category',
                             'record',
-                            'sparse',
                             'lat',
                             'lon',
                             'depth',
@@ -106,25 +105,20 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
         else:
             # Add data for each parameter
             if only_time:
-                scov.insert_timesteps(nt)
-                scov.set_parameter_values('time', value=np.arange(1, nt))
+                scov.set_parameter_values(make_parameter_data_dict({scov.temporal_parameter_name: np.arange(1, nt)}))
             else:
-                scov.set_parameter_values('sparse', [[[2, 4, 6], [8, 10, 12]]])
-                scov.insert_timesteps(nt/2)
-
-                scov.set_parameter_values('sparse', [[[4, 8], [16, 20]]])
-                scov.insert_timesteps(nt/2)
-
-                scov.set_parameter_values('time', value=100 * np.random.random_sample(nt))
+                parameter_values = {}
+                parameter_values[scov.temporal_parameter_name]=100 * np.random.random_sample(nt)
                 scov.append_parameter(ParameterContext('depth'))
-                scov.set_parameter_values('depth', value=1000 * np.random.random_sample(nt))
+                parameter_values['depth']=1000 * np.random.random_sample(nt)
                 scov.append_parameter(ParameterContext('salinity'))
-                scov.set_parameter_values('salinity', value=1000 * np.random.random_sample(nt))
+                parameter_values['salinity'] =1000 * np.random.random_sample(nt)
 
                 scov.append_parameter(ParameterContext('m_lon'))
                 scov.append_parameter(ParameterContext('m_lat'))
-                scov.set_parameter_values('m_lon', value=160 * np.random.random_sample(nt))
-                scov.set_parameter_values('m_lat', value=70 * np.random.random_sample(nt))
+                parameter_values['m_lon'] =160 * np.random.random_sample(nt)
+                parameter_values['m_lat'] =70 * np.random.random_sample(nt)
+                scov.set_parameter_values(make_parameter_data_dict(parameter_values))
 
         if in_memory and save_coverage:
             SimplexCoverage.pickle_save(scov, os.path.join(cls.working_dir, 'sample.cov'))
@@ -208,12 +202,8 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
         self.assertIsNotNone(scov)
 
         mm = scov._persistence_layer.master_manager
-        if hasattr(mm, 'span_collection'):
-            for k, span in mm.span_collection.span_dict.iteritems():
-                if 'time' in span.params:
-                    time_min, time_max = span.params['time']
-                if 'depth' in span.params:
-                    lat_min, lat_max = span.params['depth']
+        lat_min, lat_max = scov.get_data_bounds('depth')
+        time_min, time_max = scov.get_data_bounds('time')
 
         criteria = SearchCriteria((ParamValueRange(IndexedParameters.Time, (1, 100))))
         criteria.append(ParamValueRange(IndexedParameters.Vertical, (time_min, time_max)))
@@ -236,24 +226,30 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
     def test_data_arrives_out_of_order(self):
         cov = self.create_cov()
 
-        nt = 10
-        cov.insert_timesteps(nt)
-        cov.set_parameter_values('time', value=np.arange(21, 31))
         cov.append_parameter(ParameterContext('depth'))
-        cov.set_parameter_values('depth', value=200 * np.random.random_sample(nt))
+        nt = 10
+        data = {
+            'time': np.arange(21, 21+nt),
+            'depth': 200 * np.random.random_sample(nt)
+        }
+        cov.set_parameter_values(make_parameter_data_dict(data))
         id_ = cov.persistence_guid
         cov.close()
 
         cov2 = AbstractCoverage.load(self.working_dir, id_, mode='w')
         self.assertIsNotNone(cov2)
 
-        cov2.insert_timesteps(10)
-        cov2.set_parameter_values('time', value=np.arange(11, 21), tdoa=slice(10,None))
-        cov2.set_parameter_values('depth', value=200 * np.random.random_sample(nt), tdoa=slice(10,None))
+        data = {
+            cov.temporal_parameter_name: np.arange(11, 11+nt),
+            'depth': 200 * np.random.random_sample(nt)
+        }
+        cov2.set_parameter_values(make_parameter_data_dict(data))
 
-        cov2.insert_timesteps(10)
-        cov2.set_parameter_values('time', value=np.arange(1, 11), tdoa=slice(20,30))
-        cov2.set_parameter_values('depth', value=200 * np.random.random_sample(nt), tdoa=slice(20,30))
+        data = {
+            cov.temporal_parameter_name: np.arange(1, 1+nt),
+            'depth': 200 * np.random.random_sample(nt)
+        }
+        cov2.set_parameter_values(make_parameter_data_dict(data))
 
         time_param = ParamValueRange(IndexedParameters.Time, (1, 100))
         coverage_id_param = ParamValue(IndexedParameters.CoverageId, id_)
@@ -282,25 +278,23 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
         cov1, cov_name = self.construct_cov(nt=100)
         self.assertIsNotNone(cov1)
         id1 = cov1.persistence_guid
-        cov1_dict = cov1.get_value_dictionary()
+        cov1_dict = cov1.get_value_dictionary().get_data()
 
         cov2, cov_name = self.construct_cov(nt=50)
         self.assertIsNotNone(cov2)
         id2 = cov2.persistence_guid
-        cov2_dict = cov2.get_value_dictionary()
+        cov2_dict = cov2.get_value_dictionary().get_data()
 
         cov3, cov_name = self.construct_cov(nt=20)
         self.assertIsNotNone(cov3)
         id3 = cov3.persistence_guid
-        cov3_dict = cov3.get_value_dictionary()
+        cov3_dict = cov3.get_value_dictionary().get_data()
 
         for cov in [cov1, cov2, cov3]:
             cov.close()
 
         def check_equal_param_dicts(p_dict_1, p_dict_2):
-            self.assertEqual(p_dict_1.keys(), p_dict_2.keys())
-            for key in p_dict_1.keys():
-                self.assertTrue(np.array_equal(p_dict_1[key], p_dict_2[key]))
+            np.testing.assert_array_equal(p_dict_1, p_dict_2)
 
         cov1r = AbstractCoverage.load(self.working_dir, id1)
         cov2r = AbstractCoverage.load(self.working_dir, id2)
@@ -309,7 +303,7 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
         self.assertIsNotNone(cov2r)
         self.assertIsNotNone(cov3r)
         for cov_tup in [(cov1_dict, cov1r), (cov2_dict, cov2r), (cov3_dict, cov3r)]:
-            check_equal_param_dicts(cov_tup[0], cov_tup[1].get_value_dictionary())
+            check_equal_param_dicts(cov_tup[0], cov_tup[1].get_value_dictionary().get_data())
 
         cov1a = AbstractCoverage.load(self.working_dir, id1)
         cov2a = AbstractCoverage.load(self.working_dir, id2)
@@ -318,7 +312,7 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
         self.assertIsNotNone(cov2a)
         self.assertIsNotNone(cov3a)
         for cov_tup in [(cov1_dict, cov1a), (cov2_dict, cov2a), (cov3_dict, cov3a)]:
-            check_equal_param_dicts(cov_tup[0], cov_tup[1].get_value_dictionary())
+            check_equal_param_dicts(cov_tup[0], cov_tup[1].get_value_dictionary().get_data())
 
         from multiprocessing import Process, Queue, queues
 
@@ -333,7 +327,7 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
                 message = 'Construction failed'
             elif cov_ is not None:
                 try:
-                    check_equal_param_dicts(value_dict, cov_.get_value_dictionary())
+                    check_equal_param_dicts(value_dict, cov_.get_value_dictionary().get_data())
                 except:
                     message = 'Values inconsistent'
             q.put(message)

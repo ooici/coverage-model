@@ -58,7 +58,7 @@ def verify_encoding(value_encoding):
 
 
 def verify_fill_value(value_encoding, value, is_object_type):
-    if value_encoding is not None:
+    if value_encoding is not None and not isinstance(value_encoding, tuple):
         dt = np.dtype(value_encoding)
         dtk = dt.kind
         if dtk == 'O' or is_object_type: # object & CategoryRangeType must be None for now...
@@ -116,7 +116,7 @@ class AbstractParameterType(AbstractIdentifiable):
 
     @fill_value.setter
     def fill_value(self, value):
-        self._fill_value = verify_fill_value(self.value_encoding, value, isinstance(self, ConstantRangeType))
+        self._fill_value = verify_fill_value(self.value_encoding, value, False)
 
     @property
     def value_encoding(self):
@@ -235,6 +235,27 @@ class AbstractParameterType(AbstractIdentifiable):
         iparams, dparams = self._calc_param_sets()
 
         return dparams
+
+    def create_filled_array(self, size):
+        arr = np.empty(size, dtype=np.dtype(self.value_encoding))
+        arr[:] = self.fill_value
+        return arr
+
+    def create_data_array(self, data=None, size=None):
+        if data is not None:
+            return np.array(data, dtype=np.dtype(self.value_encoding))
+        elif size is not None:
+            return self.create_filled_array(size)
+        else:
+            raise RuntimeError('Not enough information to create array')
+
+    def create_value_array(self, data=None, size=None):
+        if data is not None:
+            return np.array(data, dtype=np.dtype(self.value_encoding))
+        elif size is not None:
+            return np.zeros(size, dtype=np.dtype(self.value_encoding))
+        else:
+            raise RuntimeError('Not enough information to create array')
 
     def _gen_template_attrs(self):
         for k, v in self._template_attrs.iteritems():
@@ -562,7 +583,7 @@ class TimeRangeType(AbstractSimplexParameterType):
 
 class ParameterFunctionType(AbstractSimplexParameterType):
 
-    def __init__(self, function, value_encoding=None, **kwargs):
+    def __init__(self, function, value_encoding=None, callback=None, **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractSimplexParameterType; see documentation for that class for details
@@ -594,6 +615,8 @@ class ParameterFunctionType(AbstractSimplexParameterType):
 
         self._gen_template_attrs()
 
+        self._callback = callback
+
         # TODO: Find a way to allow a parameter to NOT be stored at all....basically, storage == None
         # For now, just use whatever the _value_encoding and _fill_value say it should be...
 
@@ -607,13 +630,22 @@ class ParameterFunctionType(AbstractSimplexParameterType):
 
     def _todict(self, exclude=None):
         # Must exclude _cov_range_value from persistence
-        return super(ParameterFunctionType, self)._todict(exclude=['_pval_callback', '_pctxt_callback', '_fmap', '_iparams', '_dparams'])
+        return super(ParameterFunctionType, self)._todict(exclude=['_pval_callback', '_pctxt_callback', '_fmap', '_iparams', '_dparams', '_callback'])
+
+    @property
+    def callback(self):
+        return self._callback
+
+    @callback.setter
+    def callback(self, value):
+        self._callback = value
 
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
         ret = super(ParameterFunctionType, cls)._fromdict(cmdict, arg_masks=arg_masks)
         # Add the _pval_callback attribute, initialized to None
         ret._pval_callback = None
+        ret.callback = None
         return ret
 
     def __eq__(self, other):
@@ -745,7 +777,7 @@ class ConstantRangeType(AbstractComplexParameterType):
     """
 
     """
-    def __init__(self, base_type=None, **kwargs):
+    def __init__(self, base_type=None, fill_value=("", ""), **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterType; see documentation for that class for details
@@ -762,6 +794,27 @@ class ConstantRangeType(AbstractComplexParameterType):
         self._template_attrs.update(self.base_type._template_attrs)
 
         self._gen_template_attrs()
+        if base_type is not None:
+            self.value_encoding = base_type.value_encoding
+        else:
+            self.value_encoding = ve
+        self.value_encoding = "%s, %s" % (self.value_encoding, self.value_encoding)
+
+        self.fill_value = fill_value
+
+    @property
+    def fill_value(self):
+        if hasattr(self, '_fill_value'):
+            return self._fill_value
+        else:
+            return None
+
+    @fill_value.setter
+    def fill_value(self, value):
+        if self.value_encoding.find('None') != -1:
+            self._fill_value = value
+        else:
+            self._fill_value = verify_fill_value(self.value_encoding, value, False)
 
     def is_valid_value(self, value):
         # my_kind = np.dtype(self.value_encoding).kind
@@ -811,7 +864,7 @@ class ArrayType(AbstractComplexParameterType):
     """
     Homogeneous set of unnamed things (array)
     """
-    def __init__(self, inner_encoding=None, inner_fill_value=None, **kwargs):
+    def __init__(self, inner_encoding=None, inner_fill_value=None, inner_length=1, **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterType; see documentation for that class for details
@@ -825,5 +878,6 @@ class ArrayType(AbstractComplexParameterType):
             self.inner_encoding = verify_encoding(inner_encoding)
 
         self.inner_fill_value = verify_fill_value(self.inner_encoding, inner_fill_value, False)
-
         self._gen_template_attrs()
+
+        # self.dtype = np.dtype(', '.join([np.dtype(self.inner_encoding).name for x in range(inner_length)]))

@@ -50,29 +50,28 @@ class TestSpanUnit(CoverageModelUnitTestCase):
 
         pd = ConstantOverTime(name, data, time_start=start)
 
+        param_type = ConstantType(value_encoding='float32')
+        param_type.fill_value = np.NaN
+
         alignment_array = arr[10:14]
-        got = pd.get_data_as_numpy_array(alignment_array)
-        expected = np.empty(4)
-        expected.fill(data)
-        self.assertTrue(np.array_equal(expected, got))
+        got = pd.get_data_as_numpy_array(alignment_array, param_type)
+        expected = param_type.create_data_array(data, 4)
+        np.testing.assert_array_equal(expected, got)
 
         alignment_array = arr[10:]
-        got = pd.get_data_as_numpy_array(alignment_array, fill_value=fill_val)
-        expected = np.empty(alignment_array.size)
-        expected.fill(data)
+        got = pd.get_data_as_numpy_array(alignment_array, param_type)
+        expected = param_type.create_data_array(data, alignment_array.size)
         np.testing.assert_array_equal(got, expected)
 
         alignment_array = arr[0:]
-        got = pd.get_data_as_numpy_array(alignment_array, fill_value=fill_val)
-        expected = np.empty(alignment_array.size)
-        expected.fill(fill_val)
+        got = pd.get_data_as_numpy_array(alignment_array, param_type)
+        expected = param_type.create_filled_array(alignment_array.size)
         expected[5:alignment_array.size] = data
         np.testing.assert_array_equal(got, expected)
 
         alignment_array = arr[0:10]
-        got = pd.get_data_as_numpy_array(alignment_array, fill_value=fill_val)
-        expected = np.empty(alignment_array.size)
-        expected.fill(fill_val)
+        got = pd.get_data_as_numpy_array(alignment_array, param_type)
+        expected = param_type.create_filled_array(alignment_array.size)
         expected[5:alignment_array.size] = data
         np.testing.assert_array_equal(got, expected)
 
@@ -80,84 +79,83 @@ class TestSpanUnit(CoverageModelUnitTestCase):
         pd = ConstantOverTime(name, data, time_start=start, time_end=stop)
 
         alignment_array = arr[10:14]
-        got = pd.get_data_as_numpy_array(alignment_array)
-        expected = np.empty(4)
-        expected.fill(data)
+        got = pd.get_data_as_numpy_array(alignment_array, param_type)
+        expected = param_type.create_data_array(data, 4)
         np.testing.assert_array_equal(got, expected)
 
         alignment_array = arr[10:]
-        got = pd.get_data_as_numpy_array(alignment_array, fill_value=fill_val)
-        expected = np.empty(11)
+        got = pd.get_data_as_numpy_array(alignment_array, param_type)
+        expected = np.empty(11, dtype=np.dtype('float32'))
         expected.fill(fill_val)
         expected[0:6] = data
         np.testing.assert_array_equal(got, expected)
 
         alignment_array = arr[0:]
-        got = pd.get_data_as_numpy_array(alignment_array, fill_value=fill_val)
-        expected = np.empty(alignment_array.size)
+        got = pd.get_data_as_numpy_array(alignment_array, param_type)
+        expected = np.empty(alignment_array.size, dtype=np.dtype('float32'))
         expected.fill(fill_val)
         expected[5:11+5] = data
         np.testing.assert_array_equal(got, expected)
 
         alignment_array = arr[0:11]
-        got = pd.get_data_as_numpy_array(alignment_array, fill_value=fill_val)
-        expected = np.empty(alignment_array.size)
+        got = pd.get_data_as_numpy_array(alignment_array, param_type)
+        expected = np.empty(alignment_array.size, dtype=np.dtype('float32'))
         expected.fill(fill_val)
         expected[5:] = data
-        expected = np.array([fill_val, fill_val, fill_val, fill_val, fill_val, data, data, data, data, data, data])
+        expected = np.array([fill_val, fill_val, fill_val, fill_val, fill_val, data, data, data, data, data, data], dtype=np.dtype('float32'))
         np.testing.assert_array_equal(got, expected)
 
         pd = ConstantOverTime(name, data, time_end=stop)
 
         alignment_array = arr[10:14]
-        got = pd.get_data_as_numpy_array(alignment_array)
-        expected = np.empty(4)
+        got = pd.get_data_as_numpy_array(alignment_array, param_type)
+        expected = np.empty(4, dtype=np.dtype('float32'))
         expected.fill(data)
         np.testing.assert_array_equal(got, expected)
 
         alignment_array = arr[10:]
-        got = pd.get_data_as_numpy_array(alignment_array, fill_value=fill_val)
-        expected = np.empty(11)
+        got = pd.get_data_as_numpy_array(alignment_array, param_type)
+        expected = np.empty(11, dtype=np.dtype('float32'))
         expected.fill(fill_val)
         expected[0:6] = data
         np.testing.assert_array_equal(got, expected)
 
         alignment_array = arr[0:]
-        got = pd.get_data_as_numpy_array(alignment_array, fill_value=fill_val)
-        expected = np.empty(alignment_array.size)
+        got = pd.get_data_as_numpy_array(alignment_array, param_type)
+        expected = np.empty(alignment_array.size, dtype=np.dtype('float32'))
         expected.fill(fill_val)
         expected[0:11+5] = data
         np.testing.assert_array_equal(got, expected)
 
         alignment_array = arr[0:11]
-        got = pd.get_data_as_numpy_array(alignment_array, fill_value=fill_val)
-        expected = np.empty(alignment_array.size)
+        got = pd.get_data_as_numpy_array(alignment_array, param_type)
+        expected = np.empty(alignment_array.size, dtype=np.dtype('float32'))
         expected.fill(data)
         np.testing.assert_array_equal(got, expected)
 
         pd = ConstantOverTime(name, data)
 
         alignment_array = arr[10:14]
-        got = pd.get_data_as_numpy_array(alignment_array)
-        expected = np.empty(4)
+        got = pd.get_data_as_numpy_array(alignment_array, param_type)
+        expected = np.empty(4, dtype=np.dtype('float32'))
         expected.fill(data)
         np.testing.assert_array_equal(got, expected)
 
         alignment_array = arr[10:]
-        got = pd.get_data_as_numpy_array(alignment_array, fill_value=fill_val)
-        expected = np.empty(11)
+        got = pd.get_data_as_numpy_array(alignment_array, param_type)
+        expected = np.empty(11, dtype=np.dtype('float32'))
         expected.fill(data)
         np.testing.assert_array_equal(got, expected)
 
         alignment_array = arr[0:]
-        got = pd.get_data_as_numpy_array(alignment_array, fill_value=fill_val)
-        expected = np.empty(alignment_array.size)
+        got = pd.get_data_as_numpy_array(alignment_array, param_type)
+        expected = np.empty(alignment_array.size, dtype=np.dtype('float32'))
         expected.fill(data)
         np.testing.assert_array_equal(got, expected)
 
         alignment_array = arr[0:11]
-        got = pd.get_data_as_numpy_array(alignment_array, fill_value=fill_val)
-        expected = np.empty(alignment_array.size)
+        got = pd.get_data_as_numpy_array(alignment_array, param_type)
+        expected = np.empty(alignment_array.size, dtype=np.dtype('float32'))
         expected.fill(data)
         np.testing.assert_array_equal(got, expected)
 

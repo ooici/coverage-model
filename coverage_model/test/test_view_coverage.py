@@ -171,8 +171,7 @@ class TestSampleCovViewInt(CoverageModelIntTestCase, CoverageIntTestBase):
         read_cov = ViewCoverage(self.working_dir, create_guid(), name='sample view cov', reference_coverage_location=write_cov.persistence_dir)
 
         # Add some data to the writable copy & ensure a flush
-        tdat = range(write_cov.num_timesteps - 100, write_cov.num_timesteps)
-        write_cov.set_time_values(tdat)
+        write_cov.set_parameter_values(make_parameter_data_dict({'time': np.arange(10000, 10000+100)}))
 
         # Refresh the read coverage
         read_cov.refresh()

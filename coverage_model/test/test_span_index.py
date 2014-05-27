@@ -16,6 +16,8 @@ from coverage_model.db_connectors import DBFactory, DB
 from coverage_model.search.coverage_search import *
 from coverage_model.search.search_parameter import *
 from coverage_model.search.search_constants import *
+from coverage_model.storage.span_storage_factory import SpanStorageFactory
+from coverage_model.storage.postgres_span_storage import PostgresSpanStorage
 
 from coverage_test_base import CoverageIntTestBase, get_props, get_parameter_dict, EXEMPLAR_CATEGORIES
 
@@ -172,49 +174,23 @@ class TestSpanInt(CoverageModelUnitTestCase):
         else:
             # Add data for each parameter
             if only_time:
-                scov.insert_timesteps(nt)
-                scov.set_parameter_values('time', value=np.arange(1000, 10000, nt+1))
+                scov.set_parameter_values(make_parameter_data_dict({scov.temporal_parameter_name: np.arange(1000, 10000, nt+1)}))
             else:
-                scov.set_parameter_values('sparse', [[[2, 4, 6], [8, 10, 12]]])
-                scov.insert_timesteps(nt/2)
-
-                scov.set_parameter_values('sparse', [[[4, 8], [16, 20]]])
-                scov.insert_timesteps(nt/2)
-
-                scov.set_parameter_values('time', value=np.arange(1000, 1000+nt))
-                scov.append_parameter(ParameterContext('depth'))
-                scov.set_parameter_values('depth', value=1000 * np.random.random_sample(nt))
-                #scov.set_parameter_values('boolean', value=[True, True, True], tdoa=[[2,4,14]])
-                #scov.set_parameter_values('const_ft', value=-71.11) # Set a constant with correct data type
-                #scov.set_parameter_values('const_int', value=45.32) # Set a constant with incorrect data type (fixed under the hood)
-                #scov.set_parameter_values('const_str', value='constant string value') # Set with a string
-                #scov.set_parameter_values('const_rng_flt', value=(12.8, 55.2)) # Set with a tuple
-                #scov.set_parameter_values('const_rng_int', value=[-10, 10]) # Set with a list
-
-                value = 160 * np.random.random_sample(nt)
+                parameter_values = {}
+                # scov.set_parameter_values('sparse', [[[2, 4, 6], [8, 10, 12]]])
+                # scov.insert_timesteps(nt/2)
+                #
+                # scov.set_parameter_values('sparse', [[[4, 8], [16, 20]]])
+                # scov.insert_timesteps(nt/2)
                 scov.append_parameter(ParameterContext('m_lon'))
                 scov.append_parameter(ParameterContext('m_lat'))
-                scov.set_parameter_values('m_lon', value=value)
-                scov.set_parameter_values('m_lat', value=70 * np.random.random_sample(nt))
+                scov.append_parameter(ParameterContext('depth'))
 
-                #arrval = []
-                #recval = []
-                #catval = []
-                #fstrval = []
-                #catkeys = EXEMPLAR_CATEGORIES.keys()
-                #letts='abcdefghijklmnopqrstuvwxyz'
-                #while len(letts) < nt:
-                #    letts += 'abcdefghijklmnopqrstuvwxyz'
-                #for x in xrange(nt):
-                #    arrval.append(np.random.bytes(np.random.randint(1,20))) # One value (which is a byte string) for each member of the domain
-                #    d = {letts[x]: letts[x:]}
-                #    recval.append(d) # One value (which is a dict) for each member of the domain
-                #    catval.append(random.choice(catkeys))
-                #    fstrval.append(''.join([random.choice(letts) for x in xrange(8)])) # A random string of length 8
-                #scov.set_parameter_values('array', value=arrval)
-                #scov.set_parameter_values('record', value=recval)
-                #scov.set_parameter_values('category', value=catval)
-                #scov.set_parameter_values('fixed_str', value=fstrval)
+                parameter_values['time']= np.arange(1000, 1000+nt)
+                parameter_values['depth']= 1000 * np.random.random_sample(nt)
+                parameter_values['m_lon'] = 160 * np.random.random_sample(nt)
+                parameter_values['m_lat'] = 70 * np.random.random_sample(nt)
+                scov.set_parameter_values(make_parameter_data_dict(parameter_values))
 
         cls.coverages.add(scov.persistence_guid)
         return scov, 'TestSpanInt'
@@ -226,24 +202,16 @@ class TestSpanInt(CoverageModelUnitTestCase):
         scov, cov_name = self.construct_cov(nt=10)
         self.assertIsNotNone(scov)
 
-        time_npa = scov.get_parameter_values('time')
-        lat_npa = scov.get_parameter_values('m_lat')
-        lon_npa = scov.get_parameter_values('m_lon')
-        mm = scov._persistence_layer.master_manager
-        if hasattr(mm, 'span_collection'):
-            for k, span in mm.span_collection.span_dict.iteritems():
-                if 'time' in span.params:
-                    pmin, pmax = span.params['time']
-                    self.assertEqual(np.float32(pmin), time_npa.min())
-                    self.assertEqual(np.float32(pmax), time_npa.max())
-                if 'm_lat' in span.params:
-                    pmin, pmax = span.params['m_lat']
-                    self.assertEqual(np.float32(pmin), np.float32(lat_npa.min()))
-                    self.assertEqual(np.float32(pmax), np.float32(lat_npa.max()))
-                if 'm_lon' in span.params:
-                    pmin, pmax = span.params['m_lon']
-                    self.assertEqual(np.float32(pmin), np.float32(lon_npa.min()))
-                    self.assertEqual(np.float32(pmax), np.float32(lon_npa.max()))
+        cov_data = scov.get_parameter_values(['time', 'm_lat', 'm_lon']).get_data()
+        pmin, pmax = scov.get_data_bounds('time')
+        self.assertEqual(np.float32(pmin), cov_data['time'].min())
+        self.assertEqual(np.float32(pmax), cov_data['time'].max())
+        pmin, pmax = scov.get_data_bounds('m_lat')
+        self.assertEqual(np.float32(pmin), np.float32(cov_data['m_lat'].min()))
+        self.assertEqual(np.float32(pmax), np.float32(cov_data['m_lat'].max()))
+        pmin, pmax = scov.get_data_bounds('m_lon')
+        self.assertEqual(np.float32(pmin), np.float32(cov_data['m_lon'].min()))
+        self.assertEqual(np.float32(pmax), np.float32(cov_data['m_lon'].max()))
 
     def test_span_insert(self):
         scov, cov_name = self.construct_cov(nt=10)
@@ -252,10 +220,9 @@ class TestSpanInt(CoverageModelUnitTestCase):
         span_store = DatastoreFactory.get_datastore(datastore_name='coverage_spans', config=CFG)
         if span_store is None:
             raise RuntimeError("Unable to load datastore for coverage_spans")
-        mm = scov._persistence_layer.master_manager
         span_addr = []
         with span_store.pool.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-            cur.execute("SELECT span_address from %s where coverage_id='%s'" % (span_store._get_datastore_name(), mm.guid))
+            cur.execute("SELECT span_address from %s where coverage_id='%s'" % ('ion_coverage_span_stats', scov.persistence_guid))
             self.assertGreater(cur.rowcount, 0)
             for row in cur:
                 span_addr.append(row['span_address'])
@@ -279,18 +246,9 @@ class TestSpanInt(CoverageModelUnitTestCase):
         scov, cov_name = self.construct_cov(nt=10)
         self.assertIsNotNone(scov)
 
-        time_min, time_max = (-1.0,-1.0)
-        lat_min, lat_max = (1000.0, 1000.0)
-        lon_min, lon_max = (1000.0, 1000.0)
-        mm = scov._persistence_layer.master_manager
-        if hasattr(mm, 'span_collection'):
-            for k, span in mm.span_collection.span_dict.iteritems():
-                if 'time' in span.params:
-                    time_min, time_max = span.params['time']
-                if 'm_lat' in span.params:
-                    lat_min, lat_max = span.params['m_lat']
-                if 'm_lon' in span.params:
-                    lon_min, lon_max = span.params['m_lon']
+        time_min, time_max = scov.get_data_bounds('time')
+        lat_min, lat_max = scov.get_data_bounds('m_lat')
+        lon_min, lon_max = scov.get_data_bounds('m_lon')
 
         criteria = SearchCriteria()
         param = ParamValueRange(IndexedParameters.Time, (time_min+1, time_max+1))
@@ -299,24 +257,15 @@ class TestSpanInt(CoverageModelUnitTestCase):
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
-        self.assertTrue(mm.guid in results.get_found_coverage_ids())
+        self.assertTrue(scov.persistence_guid in results.get_found_coverage_ids())
 
     def test_search_for_span_time_fails(self):
         scov, cov_name = self.construct_cov(nt=10)
         self.assertIsNotNone(scov)
 
-        time_min, time_max = (-1.0,-1.0)
-        lat_min, lat_max = (1000.0, 1000.0)
-        lon_min, lon_max = (1000.0, 1000.0)
-        mm = scov._persistence_layer.master_manager
-        if hasattr(mm, 'span_collection'):
-            for k, span in mm.span_collection.span_dict.iteritems():
-                if 'time' in span.params:
-                    time_min, time_max = span.params['time']
-                if 'm_lat' in span.params:
-                    lat_min, lat_max = span.params['m_lat']
-                if 'm_lon' in span.params:
-                    lon_min, lon_max = span.params['m_lon']
+        time_min, time_max = scov.get_data_bounds('time')
+        lat_min, lat_max = scov.get_data_bounds('m_lat')
+        lon_min, lon_max = scov.get_data_bounds('m_lon')
 
         criteria = SearchCriteria()
         param = ParamValueRange(IndexedParameters.Time, (time_min+20, time_max+30))
@@ -325,24 +274,15 @@ class TestSpanInt(CoverageModelUnitTestCase):
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
-        self.assertFalse(mm.guid in results.get_found_coverage_ids())
+        self.assertFalse(scov.persistence_guid in results.get_found_coverage_ids())
 
     def test_search_for_span_lat_fails(self):
         scov, cov_name = self.construct_cov(nt=10)
         self.assertIsNotNone(scov)
 
-        time_min, time_max = (-1.0,-1.0)
-        lat_min, lat_max = (1000.0, 1000.0)
-        lon_min, lon_max = (1000.0, 1000.0)
-        mm = scov._persistence_layer.master_manager
-        if hasattr(mm, 'span_collection'):
-            for k, span in mm.span_collection.span_dict.iteritems():
-                if 'time' in span.params:
-                    time_min, time_max = span.params['time']
-                if 'm_lat' in span.params:
-                    lat_min, lat_max = span.params['m_lat']
-                if 'm_lon' in span.params:
-                    lon_min, lon_max = span.params['m_lon']
+        time_min, time_max = scov.get_data_bounds('time')
+        lat_min, lat_max = scov.get_data_bounds('m_lat')
+        lon_min, lon_max = scov.get_data_bounds('m_lon')
 
         criteria = SearchCriteria()
         param = ParamValueRange(IndexedParameters.Time, (time_min+1, time_max+1))
@@ -351,24 +291,15 @@ class TestSpanInt(CoverageModelUnitTestCase):
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
-        self.assertFalse(mm.guid in results.get_found_coverage_ids())
+        self.assertFalse(scov.persistence_guid in results.get_found_coverage_ids())
 
     def test_search_for_span_lon_fails(self):
         scov, cov_name = self.construct_cov(nt=10)
         self.assertIsNotNone(scov)
 
-        time_min, time_max = (-1.0,-1.0)
-        lat_min, lat_max = (1000.0, 1000.0)
-        lon_min, lon_max = (1000.0, 1000.0)
-        mm = scov._persistence_layer.master_manager
-        if hasattr(mm, 'span_collection'):
-            for k, span in mm.span_collection.span_dict.iteritems():
-                if 'time' in span.params:
-                    time_min, time_max = span.params['time']
-                if 'm_lat' in span.params:
-                    lat_min, lat_max = span.params['m_lat']
-                if 'm_lon' in span.params:
-                    lon_min, lon_max = span.params['m_lon']
+        time_min, time_max = scov.get_data_bounds('time')
+        lat_min, lat_max = scov.get_data_bounds('m_lat')
+        lon_min, lon_max = scov.get_data_bounds('m_lon')
 
         criteria = SearchCriteria()
         param = ParamValueRange(IndexedParameters.Time, (time_min+1, time_max+1))
@@ -377,24 +308,15 @@ class TestSpanInt(CoverageModelUnitTestCase):
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
-        self.assertFalse(mm.guid in results.get_found_coverage_ids())
+        self.assertFalse(scov.persistence_guid in results.get_found_coverage_ids())
 
     def test_search_for_span_that_barely_overlaps_searched_box(self):
         scov, cov_name = self.construct_cov(nt=10)
         self.assertIsNotNone(scov)
 
-        time_min, time_max = (-1.0,-1.0)
-        lat_min, lat_max = (1000.0, 1000.0)
-        lon_min, lon_max = (1000.0, 1000.0)
-        mm = scov._persistence_layer.master_manager
-        if hasattr(mm, 'span_collection'):
-            for k, span in mm.span_collection.span_dict.iteritems():
-                if 'time' in span.params:
-                    time_min, time_max = span.params['time']
-                if 'm_lat' in span.params:
-                    lat_min, lat_max = span.params['m_lat']
-                if 'm_lon' in span.params:
-                    lon_min, lon_max = span.params['m_lon']
+        time_min, time_max = scov.get_data_bounds('time')
+        lat_min, lat_max = scov.get_data_bounds('m_lat')
+        lon_min, lon_max = scov.get_data_bounds('m_lon')
 
         criteria = SearchCriteria()
         param = ParamValueRange(IndexedParameters.Time, (time_min+1, time_max+1))
@@ -403,21 +325,14 @@ class TestSpanInt(CoverageModelUnitTestCase):
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
-        self.assertTrue(mm.guid in results.get_found_coverage_ids())
+        self.assertTrue(scov.persistence_guid in results.get_found_coverage_ids())
 
     def test_search_for_span_using_lat_and_lon(self):
         scov, cov_name = self.construct_cov(nt=10)
         self.assertIsNotNone(scov)
 
-        lat_min, lat_max = (1000.0, 1000.0)
-        lon_min, lon_max = (1000.0, 1000.0)
-        mm = scov._persistence_layer.master_manager
-        if hasattr(mm, 'span_collection'):
-            for k, span in mm.span_collection.span_dict.iteritems():
-                if 'm_lat' in span.params:
-                    lat_min, lat_max = span.params['m_lat']
-                if 'm_lon' in span.params:
-                    lon_min, lon_max = span.params['m_lon']
+        lat_min, lat_max = scov.get_data_bounds('m_lat')
+        lon_min, lon_max = scov.get_data_bounds('m_lon')
 
         criteria = SearchCriteria()
         param = ParamValueRange(IndexedParameters.Latitude, (lat_min-1, lat_max+20))
@@ -426,28 +341,28 @@ class TestSpanInt(CoverageModelUnitTestCase):
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
-        self.assertTrue(mm.guid in results.get_found_coverage_ids())
+        self.assertTrue(scov.persistence_guid in results.get_found_coverage_ids())
 
         lat = ParamValueRange(IndexedParameters.Latitude, (lat_min-1, lat_min-0.5))
         lon = ParamValueRange(IndexedParameters.Longitude, (lon_min-1, lon_min-0.5))
         criteria = SearchCriteria([lat, lon])
         search = CoverageSearch(criteria)
         results = search.select()
-        self.assertFalse(mm.guid in results.get_found_coverage_ids())
+        self.assertFalse(scov.persistence_guid in results.get_found_coverage_ids())
 
         lat = ParamValue(IndexedParameters.Latitude, (lat_min+lat_max)/2)
         lon = ParamValue(IndexedParameters.Longitude, (lon_min+lon_max)/2)
         criteria = SearchCriteria([lat, lon])
         search = CoverageSearch(criteria)
         results = search.select()
-        self.assertTrue(mm.guid in results.get_found_coverage_ids())
+        self.assertTrue(scov.persistence_guid in results.get_found_coverage_ids())
 
         lat = ParamValueRange(IndexedParameters.Latitude, (lat_min-1, lat_max+1))
         lon = ParamValueRange(IndexedParameters.Longitude, (lon_min-150, lon_max+10))
         criteria = SearchCriteria([lat, lon])
         search = CoverageSearch(criteria)
         results = search.select()
-        self.assertTrue(mm.guid in results.get_found_coverage_ids())
+        self.assertTrue(scov.persistence_guid in results.get_found_coverage_ids())
 
         lat = ParamValueRange(IndexedParameters.Latitude, (lat_min-1, lat_max+1))
         criteria = SearchCriteria(lat)
@@ -458,18 +373,9 @@ class TestSpanInt(CoverageModelUnitTestCase):
         scov, cov_name = self.construct_cov(nt=10)
         self.assertIsNotNone(scov)
 
-        time_min, time_max = (-1.0,-1.0)
-        lat_min, lat_max = (1000.0, 1000.0)
-        lon_min, lon_max = (1000.0, 1000.0)
-        mm = scov._persistence_layer.master_manager
-        if hasattr(mm, 'span_collection'):
-            for k, span in mm.span_collection.span_dict.iteritems():
-                if 'time' in span.params:
-                    time_min, time_max = span.params['time']
-                if 'm_lat' in span.params:
-                    lat_min, lat_max = span.params['m_lat']
-                if 'm_lon' in span.params:
-                    lon_min, lon_max = span.params['m_lon']
+        time_min, time_max = scov.get_data_bounds('time')
+        lat_min, lat_max = scov.get_data_bounds('m_lat')
+        lon_min, lon_max = scov.get_data_bounds('m_lon')
 
         criteria = SearchCriteria()
         param = ParamValueRange(IndexedParameters.Time, (time_min-1, time_max+1))
@@ -478,24 +384,13 @@ class TestSpanInt(CoverageModelUnitTestCase):
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
-        self.assertTrue(mm.guid in results.get_found_coverage_ids())
+        self.assertTrue(scov.persistence_guid in results.get_found_coverage_ids())
 
     def test_search_for_span_contained_inside_large_box(self):
         scov, cov_name = self.construct_cov(nt=10)
         self.assertIsNotNone(scov)
 
-        time_min, time_max = (-1.0,-1.0)
-        lat_min, lat_max = (1000.0, 1000.0)
-        lon_min, lon_max = (1000.0, 1000.0)
-        mm = scov._persistence_layer.master_manager
-        if hasattr(mm, 'span_collection'):
-            for k, span in mm.span_collection.span_dict.iteritems():
-                if 'time' in span.params:
-                    time_min, time_max = span.params['time']
-                if 'm_lat' in span.params:
-                    lat_min, lat_max = span.params['m_lat']
-                if 'm_lon' in span.params:
-                    lon_min, lon_max = span.params['m_lon']
+        time_min, time_max = scov.get_data_bounds('time')
 
         criteria = SearchCriteria()
         param = ParamValueRange(IndexedParameters.Time, (time_min+1, time_max+1))
@@ -504,73 +399,46 @@ class TestSpanInt(CoverageModelUnitTestCase):
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
-        self.assertTrue(mm.guid in results.get_found_coverage_ids())
+        self.assertTrue(scov.persistence_guid in results.get_found_coverage_ids())
 
     def test_for_searched_time_range_smaller_than_span_time_range(self):
         scov, cov_name = self.construct_cov(nt=10)
         self.assertIsNotNone(scov)
 
-        time_min, time_max = (-1.0,-1.0)
-        lat_min, lat_max = (1000.0, 1000.0)
-        lon_min, lon_max = (1000.0, 1000.0)
-        mm = scov._persistence_layer.master_manager
-        if hasattr(mm, 'span_collection'):
-            for k, span in mm.span_collection.span_dict.iteritems():
-                if 'time' in span.params:
-                    time_min, time_max = span.params['time']
-                if 'm_lat' in span.params:
-                    lat_min, lat_max = span.params['m_lat']
-                if 'm_lon' in span.params:
-                    lon_min, lon_max = span.params['m_lon']
+        time_min, time_max = scov.get_data_bounds('time')
 
         criteria = SearchCriteria()
         param = ParamValueRange(IndexedParameters.Time, (time_min+1, time_max-1))
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
-        self.assertTrue(mm.guid in results.get_found_coverage_ids())
+        self.assertTrue(scov.persistence_guid in results.get_found_coverage_ids())
 
     def test_for_searched_time_range_larger_than_span_time_range(self):
         scov, cov_name = self.construct_cov(nt=10)
         self.assertIsNotNone(scov)
 
-        time_min, time_max = (-1.0,-1.0)
-        lat_min, lat_max = (1000.0, 1000.0)
-        lon_min, lon_max = (1000.0, 1000.0)
-        mm = scov._persistence_layer.master_manager
-        if hasattr(mm, 'span_collection'):
-            for k, span in mm.span_collection.span_dict.iteritems():
-                if 'time' in span.params:
-                    time_min, time_max = span.params['time']
-                if 'm_lat' in span.params:
-                    lat_min, lat_max = span.params['m_lat']
-                if 'm_lon' in span.params:
-                    lon_min, lon_max = span.params['m_lon']
+        time_min, time_max = scov.get_data_bounds('time')
 
         criteria = SearchCriteria()
         param = ParamValueRange(IndexedParameters.Time, (time_min-1, time_max+1))
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
-        self.assertTrue(mm.guid in results.get_found_coverage_ids())
+        self.assertTrue(scov.persistence_guid in results.get_found_coverage_ids())
 
     def test_for_searched_vertical_range(self):
         scov, cov_name = self.construct_cov(nt=10)
         self.assertIsNotNone(scov)
 
-        depth_min, depth_max = (-1.0,-1.0)
-        mm = scov._persistence_layer.master_manager
-        if hasattr(mm, 'span_collection'):
-            for k, span in mm.span_collection.span_dict.iteritems():
-                if 'depth' in span.params:
-                    depth_min, depth_max = span.params['depth']
+        depth_min, depth_max = scov.get_data_bounds('depth')
 
         criteria = SearchCriteria()
         param = ParamValueRange(IndexedParameters.Vertical, (depth_min-1, depth_max-1))
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
-        self.assertTrue(mm.guid in results.get_found_coverage_ids())
+        self.assertTrue(scov.persistence_guid in results.get_found_coverage_ids())
 
         del criteria
         criteria = SearchCriteria()
@@ -578,7 +446,7 @@ class TestSpanInt(CoverageModelUnitTestCase):
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
-        self.assertFalse(mm.guid in results.get_found_coverage_ids())
+        self.assertFalse(scov.persistence_guid in results.get_found_coverage_ids())
 
         del criteria
         criteria = SearchCriteria()
@@ -586,7 +454,7 @@ class TestSpanInt(CoverageModelUnitTestCase):
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
-        self.assertTrue(mm.guid in results.get_found_coverage_ids())
+        self.assertTrue(scov.persistence_guid in results.get_found_coverage_ids())
 
         del criteria
         criteria = SearchCriteria()
@@ -594,7 +462,7 @@ class TestSpanInt(CoverageModelUnitTestCase):
         criteria.append(param)
         search = CoverageSearch(criteria)
         results = search.select()
-        self.assertTrue(mm.guid in results.get_found_coverage_ids())
+        self.assertTrue(scov.persistence_guid in results.get_found_coverage_ids())
 
     def test_minimum_search_criteria(self):
         param = ParamValue('dummy', 10)

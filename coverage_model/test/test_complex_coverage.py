@@ -52,7 +52,7 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 
     scov = SimplexCoverage(root_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom)
 
-    scov.insert_timesteps(nt)
+    p_dict = {}
     for p in scov.list_parameters():
         if data_dict is not None and p in data_dict:
             if data_dict[p] is None:
@@ -62,10 +62,11 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
             dat = range(nt)
 
         try:
-            scov.set_parameter_values(p, dat)
+            p_dict[p] = dat
         except Exception as ex:
             import sys
             raise Exception('Error setting values for {0}: {1}'.format(p, data_dict[p])), None, sys.exc_traceback
+    scov.set_parameter_values(make_parameter_data_dict(p_dict))
 
     scov.close()
 
@@ -234,16 +235,19 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
         self.assertTrue(np.array_equal(sample_values, ccov.get_parameter_values(parameter_name)))
 
-        ccov.insert_timesteps(100)
-        self.assertEqual(len(ccov.get_parameter_values(parameter_name)), nt + 100)
+        self.assertEqual(len(ccov.get_parameter_values(parameter_name).get_data()[parameter_name]), nt + 100)
 
         nvals = np.arange(nt, nt + 100, dtype='f')
-        ccov.set_parameter_values('data_a', value=nvals, tdoa=slice(nt, None))
-        ccov.set_parameter_values('data_b', value=nvals, tdoa=slice(nt, None))
+        p_vals = {
+            'time': np.arange(10000, 10000+nt),
+            'data_a': nvals,
+            'data_b': nvals
+        }
+        ccov.set_parameter_values(make_parameter_data_dict(p_vals))
 
         sample_values = ccov.get_parameter_values('data_a') * ccov.get_parameter_values('data_b')
 
-        self.assertTrue(np.array_equal(sample_values, ccov.get_parameter_values(parameter_name)))
+        self.assertTrue(np.array_equal(sample_values, ccov.get_parameter_values(parameter_name).get_data()[parameter_name]))
 
         with self.assertRaises(ValueError):
             ccov.append_parameter(pc_in)
@@ -412,7 +416,6 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
                          ['aXb', 'apples', 'apples_to_oranges', 'first_param', 'oranges', 'second_param', 'time'])
 
         self.assertEqual(ccov.temporal_parameter_name, 'time')
-        self.assertEqual(ccov.num_timesteps, num_times)
 
         self.assertTrue(np.array_equal(ccov.get_parameter_values('first_param'), first_data))
         self.assertTrue(np.allclose(ccov.get_parameter_values('second_param'), second_data))
@@ -509,7 +512,6 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
                                    reference_coverage_locs=[cova_pth, covb_pth, covc_pth],
                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 
-        self.assertEqual(comp_cov.num_timesteps, 3*size)
         tvals = comp_cov.get_time_values()
         self.assertTrue(np.array_equal(tvals, np.arange(3*size, dtype='float32')))
         self.assertEqual(tvals.dtype, np.dtype('float32'))  # np.array_equal does NOT check dtype!!
@@ -546,11 +548,13 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
         # Add some data to the last coverage (covc) and make sure it comes in
         cov_c = AbstractCoverage.load(covc_pth, mode='a')
-        cov_c.insert_timesteps(size)
-        cov_c.set_time_values(range(size*3, size*4), slice(size, None))
         addnl_c_data = np.arange(size*8, size*9, dtype='float32')
-        cov_c.set_parameter_values('data_all', addnl_c_data, slice(size, None))
-        cov_c.set_parameter_values('data_c', addnl_c_data, slice(size, None))
+        p_dict = {
+            'time': np.arange(size*3, size*4),
+            'data_all': addnl_c_data,
+            'data_c': addnl_c_data
+        }
+        cov_c.set_parameter_values(make_parameter_data_dict(p_dict))
         cov_c.close()
 
         # Refresh the complex coverage
@@ -721,7 +725,6 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         self.assertEqual(ccov.list_parameters(), ['first_param', 'full_param', 'second_param', 'time'])
 
         self.assertEqual(ccov.temporal_parameter_name, 'time')
-        self.assertEqual(ccov.num_timesteps, num_times)
 
         time_interleave = np.append(first_times, second_times)
         sort_i = np.argsort(time_interleave)
@@ -825,7 +828,6 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 
         # Verify stuff worked normally...
-        self.assertEqual(comp_cov.num_timesteps, 2*size)
         tvals = comp_cov.get_time_values()
         self.assertTrue(np.array_equal(tvals, np.arange(2*size, dtype='float32')))
 
@@ -833,7 +835,6 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         comp_cov.append_reference_coverage(covc_pth)
 
         # Now make sure the new data is there!
-        self.assertEqual(comp_cov.num_timesteps, 3*size)
         tvals = comp_cov.get_time_values()
         self.assertTrue(np.array_equal(tvals, np.arange(3*size, dtype='float32')))
 

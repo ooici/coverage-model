@@ -54,7 +54,6 @@ def _fill(scov, size, limit):
 
         # Expand the domain
         si=time.time()
-        scov.insert_timesteps(size)
         expand_timer.append(time.time()-si)
 
         upper_bnd = origin + size
@@ -63,7 +62,8 @@ def _fill(scov, size, limit):
         loc = slice(origin, upper_bnd)
         st = time.time()
 
-        scov.set_parameter_values('quantity_time', value=np.arange(size)+origin, tdoa=loc)
+        scov.set_parameter_values({scov.temporal_parameter_name: np.arange(10000, 10000+size),
+                                   'quantity_time': np.arange(size)+origin})
         insert_timer.append(time.time()-st)
 
     time.sleep(0.5)

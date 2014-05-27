@@ -2,12 +2,16 @@ __author__ = 'casey'
 
 
 from coverage_model.storage.postgres_span_storage import PostgresSpanStorage
+from coverage_model.storage.in_memory_storage import InMemoryStorage
 
 
 class SpanStorageFactory(object):
     span_table = None
     default_span_storage_name = 'postgres_span_storage'
-    storage_class_dict = {default_span_storage_name: PostgresSpanStorage}
+    storage_class_dict = {
+        default_span_storage_name: PostgresSpanStorage,
+        'in_memory_storage': InMemoryStorage
+    }
     storage_object_dict = {}
 
     @classmethod

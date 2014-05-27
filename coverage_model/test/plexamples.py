@@ -30,11 +30,10 @@ class A(object):
 def run_test():
     pdict = standup_pdict()
     scov = SimplexCoverage('writer4',pdict,in_memory_storage=False)
-    scov.insert_timesteps(10)
     pl = scov._persistence_layer
-    payload = np.arange(5)
-    slice_ = (0,)
-    pl.set_values('salinity',payload,slice_)
+    values = { 'salinity': np.arange(5),
+               scov.temporal_parameter_name: np.arange(10, 10+5)}
+    pl.write_parameters('1', values)
     return pl
 
 # Stand up an example parameter dictionary
@@ -467,7 +466,6 @@ def nc2bricks():
 
     # Insert the timesteps (automatically expands other arrays)
     tvar=ds.variables['time']
-    scov.insert_timesteps(tvar.size)
 
     # Add data to the parameters - NOT using setters at this point, direct assignment to arrays
     for v in var_names:

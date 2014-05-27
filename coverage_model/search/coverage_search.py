@@ -18,6 +18,8 @@ from coverage_model.search.search_constants import *
 from coverage_model.search.search_parameter import *
 from coverage_model.coverage import AbstractCoverage
 from coverage_model.data_span import *
+from coverage_model.storage.span_storage import SpanStorage
+from coverage_model.storage.span_storage_factory import SpanStorageFactory
 
 
 class CoverageSearch(object):
@@ -34,7 +36,8 @@ class CoverageSearch(object):
         self.viewable_parameters = viewable_parameters
 
     def select(self, db_name=None, limit=-1):
-        db = DBFactory.get_db(db_name)
+        db = SpanStorageFactory.get_span_storage_obj(db_name)
+        # db = DBFactory.get_db(db_name)
         span_dict = db.search(self.search_criteria, limit)
         return CoverageSearchResults(span_dict, self.search_criteria, viewable_parameters=self.viewable_parameters,
                                      order_by=self.order_by)

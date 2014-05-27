@@ -152,7 +152,8 @@ class CoverageIntTestBase(object):
             # Get All data bounds
             bnds = scov.get_data_bounds()
             for i,v in enumerate(bnds):
-                self.assertTrue(np.allclose((check_vals[v].min(), check_vals[v].max()), bnds[v]))
+                if v in bnds and v in check_vals:
+                    self.assertTrue(np.allclose((check_vals[v].min(), check_vals[v].max()), bnds[v]))
 
             # Get a data bounds for a specific subset of parameters
             from random import choice
@@ -163,12 +164,14 @@ class CoverageIntTestBase(object):
                 p2 = choice(params)
             bnds = scov.get_data_bounds(parameter_name=[p1, p2])
             for i,v in enumerate(bnds):
-                self.assertTrue(np.allclose((check_vals[v].min(), check_vals[v].max()), bnds[v]))
+                if v in check_vals and v in bnds:
+                    self.assertTrue(np.allclose((check_vals[v].min(), check_vals[v].max()), bnds[v]))
 
             # Get all data extents
             extents = scov.get_data_extents()
             for i, v in enumerate(extents):
-                self.assertEqual(extents[v], (len(check_vals[v]),))
+                if v in extents and v in check_vals:
+                    self.assertEqual(extents[v], (len(check_vals[v]),))
         except NotImplementedError:
             pass
         except:
@@ -210,10 +213,8 @@ class CoverageIntTestBase(object):
             self.assertIsInstance(cov, AbstractCoverage)
             cov_info_str = cov.info
             self.assertIsInstance(cov_info_str, basestring)
-            # self.assertEqual(cov.name, 'sample coverage_model')
 
-            self.assertEqual(cov.num_timesteps, time_steps)
-            self.assertEqual(list(cov.temporal_domain.shape.extents), [time_steps])
+            self.assertEqual(cov.num_timesteps(), time_steps)
 
             params = cov.list_parameters()
             for param in params:
@@ -231,15 +232,13 @@ class CoverageIntTestBase(object):
 
         try:
             with self.get_cov(nt=nt)[0] as cov:
-                self.assertEqual(cov.num_timesteps, nt)
                 for p in cov.list_parameters():
-                    self.assertEqual(len(cov.get_parameter_values(p).get_data()[p]), nt)
+                    self.assertEqual(len(cov.get_parameter_values(p, fill_empty_params=True).get_data()[p]), nt)
                 pdir = cov.persistence_dir
 
             with AbstractCoverage.load(pdir) as cov:
-                self.assertEqual(cov.num_timesteps, nt)
                 for p in cov.list_parameters():
-                    self.assertEqual(len(cov.get_parameter_values(p).get_data()[p]), nt)
+                    self.assertEqual(len(cov.get_parameter_values(p, fill_empty_params=True).get_data()[p]), nt)
         except NotImplementedError:
             pass
         except:
@@ -268,6 +267,7 @@ class CoverageIntTestBase(object):
                 spatial_domain=sdom,
                 in_memory_storage=in_memory)
 
+    @unittest.skip('Bricking is OBE')
     def test_create_multi_bricks(self):
         # Tests creation of multiple (5) bricks
         brick_size = 1000
@@ -385,8 +385,6 @@ class CoverageIntTestBase(object):
             read_cov = AbstractCoverage.load(write_cov.persistence_dir)
 
             # Add some data to the writable copy & ensure a flush
-            write_cov.insert_timesteps(100)
-            tdat = range(write_cov.num_timesteps - 100, write_cov.num_timesteps)
             times = {}
             times[write_cov.temporal_parameter_name] = np.arange(10000, 10020)
             write_cov.set_parameter_values(times)
@@ -592,7 +590,7 @@ class CoverageIntTestBase(object):
             rcov = SimplexCoverage.load(scov.persistence_dir, mode='r')
             self.assertEqual(rcov.mode, 'r')
             with self.assertRaises(IOError):
-                rcov.insert_timesteps(10)
+                scov.set_parameter_values({'time': np.arange(10)})
         except NotImplementedError:
             pass
         except:
@@ -602,12 +600,12 @@ class CoverageIntTestBase(object):
         try:
             scov, cov_name = self.get_cov()
             self.assertEqual(scov.mode, 'a')
-            scov.insert_timesteps(10)
+            scov.set_parameter_values({'time': np.arange(10)})
             scov.close()
             rcov = SimplexCoverage.load(scov.persistence_dir, mode='r')
             self.assertEqual(rcov.mode, 'r')
             with self.assertRaises(IOError):
-                rcov._range_value.time[0] = 1
+                scov.set_parameter_values({'time': np.arange(10,20)})
         except NotImplementedError:
             pass
         except:
@@ -632,23 +630,20 @@ class CoverageIntTestBase(object):
         cov.set_parameter_values(dups)
 
         before_vals = {}
-        rec_arr = cov.get_parameter_values(cov.list_parameters()).get_data()
+        rec_arr = cov.get_parameter_values(cov.list_parameters(), fill_empty_params=True).get_data()
         for p in cov.list_parameters():
             before_vals[p] = rec_arr[p]
 
         # Resolve the temporal domain issues
         cov.repair_temporal_geometry()
 
-        cov_ts = cov.num_timesteps
-        self.assertEqual(cov_ts, ts)
         ntimes = cov.get_time_values()
         self.assertEqual(len(otimes)*2, len(ntimes))
-        print np.sort(ntimes)
-        print ntimes
         np.testing.assert_array_equal(np.sort(ntimes), ntimes)
 
         for p in cov.list_parameters():
-            np.testing.assert_array_equal(cov.get_parameter_values(p).get_data()[p], before_vals[p])
+
+            np.testing.assert_array_equal(cov.get_parameter_values(p, fill_empty_params=True).get_data()[p], before_vals[p])
 
         lcov = AbstractCoverage.load(cov.persistence_dir)
         with self.assertRaises(IOError):
@@ -659,6 +654,7 @@ class CoverageIntTestBase(object):
             cov.repair_temporal_geometry()
 
     @get_props()
+    @unittest.skip('Temporal repair OBE')
     def test_repair_temporal_geometry(self):
         props = self.test_repair_temporal_geometry.props
         ts = props['time_steps']
@@ -672,6 +668,7 @@ class CoverageIntTestBase(object):
                 raise
 
     @get_props()
+    @unittest.skip('Temporal repair OBE')
     def test_repair_temporal_geometry_from_load(self):
         props = self.test_repair_temporal_geometry_from_load.props
         ts = props['time_steps']
@@ -802,7 +799,7 @@ class CoverageIntTestBase(object):
         time_steps = 5000
         try:
             scov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
-            time_vals = scov.get_parameter_values('time', time_segment=(5, 9000)).get_data()['time']
+            time_vals = scov.get_parameter_values(['time'], time_segment=(5, 9000)).get_data()['time']
             self.assertEqual(len(time_vals), 4995)
             arr = np.arange(5, 5000)
             np.testing.assert_array_equal(time_vals, arr)
@@ -861,7 +858,7 @@ class CoverageIntTestBase(object):
             for p in cov.list_parameters():
                 self.assertIn(p, vdict)
 
-            if cov.num_timesteps:
+            if cov.has_data():
                 self.assertEquals(len(vdict['time']), 30)
                 np.testing.assert_array_equal(vdict['time'], np.arange(30))
             else:
@@ -877,17 +874,16 @@ class CoverageIntTestBase(object):
         time_steps = 30
         try:
             cov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
-            if cov.num_timesteps:
-                cov.set_parameter_values({'time': np.arange(30) + 20})
+            cov.set_parameter_values({'time': np.arange(30) + 20})
             vdict = cov.get_value_dictionary(temporal_slice=(25, 30))
             for p in cov.list_parameters():
                 self.assertIn(p, vdict)
-                if cov.num_timesteps:
+                if cov.has_data():
                     self.assertEquals(len(vdict[p]), 5)
                 else:
                     self.assertEquals(len(vdict[p]), 0)
 
-            if cov.num_timesteps:
+            if cov.has_data():
                 np.testing.assert_array_equal(vdict['time'], np.arange(25,30))
             else:
                 np.testing.assert_array_equal(vdict['time'], np.array([]))
@@ -1016,7 +1012,7 @@ class CoverageIntTestBase(object):
             cov, cov_name = self.get_cov()
 
             with self.assertRaises(KeyError):
-                cov.set_parameter_values({'invalid_parameter': np.arange(cov.num_timesteps)})
+                cov.set_parameter_values({'invalid_parameter': np.arange(20)})
 
             cov.mode = 'r'
             with self.assertRaises(IOError):
@@ -1127,21 +1123,22 @@ class CoverageIntTestBase(object):
             fill_arr = np.empty(nt, dtype='f')
             fill_arr.fill(pc_in.fill_value)
 
-            self.assertTrue(np.array_equal(scov.get_parameter_values(parameter_name).get_data()[parameter_name], fill_arr))
+            self.assertTrue(parameter_name not in scov.get_parameter_values(parameter_name).get_data().dtype.fields)
 
             sample_values = np.arange(nt, dtype='f')
-            scov.set_parameter_values({parameter_name: sample_values, 'time': np.arange(2000, 2000+len(sample_values))})
+            time_arr = np.arange(2000,2000+nt)
+            scov.set_parameter_values({parameter_name: sample_values, 'time': time_arr})
 
-            self.assertTrue(np.array_equal(sample_values, scov.get_parameter_values(parameter_name).get_data()[parameter_name]))
-
-            scov.insert_timesteps(100)
-            self.assertEqual(len(scov.get_parameter_values(parameter_name).get_data()[parameter_name]), nt + 100)
+            self.assertTrue(np.array_equal(sample_values, scov.get_parameter_values(parameter_name, time_segment=(2000, 2000+len(sample_values))).get_data()[parameter_name]))
 
             nvals = np.arange(nt, nt + 100, dtype='f')
-            scov.set_parameter_values({parameter_name: nvals, 'time': np.arange(3000, 3000+nt)})
+            write_data = { 'time': np.arange(4000, 4000+nvals.size),
+                           parameter_name: nvals }
+            scov.set_parameter_values(make_parameter_data_dict(write_data))
+
             sample_values = np.append(sample_values, nvals)
 
-            self.assertTrue(np.array_equal(sample_values, scov.get_parameter_values(parameter_name).get_data()['name']))
+            self.assertTrue(np.array_equal(sample_values, scov.get_parameter_values(parameter_name, time_segment=(2000,None)).get_data()[parameter_name]))
 
             with self.assertRaises(ValueError):
                 scov.append_parameter(pc_in)
@@ -1208,7 +1205,7 @@ def _make_master_parameter_dict():
     bool_ctxt.description = ''
     pdict.add_context(bool_ctxt)
 
-    cnst_flt_ctxt = ParameterContext('const_float', param_type=ConstantType(), variability=VariabilityEnum.NONE)
+    cnst_flt_ctxt = ParameterContext('const_float', param_type=ConstantType(value_encoding=np.dtype('float32')), variability=VariabilityEnum.NONE)
     cnst_flt_ctxt.description = 'example of a parameter of type ConstantType, base_type float (default)'
     cnst_flt_ctxt.long_name = 'example of a parameter of type ConstantType, base_type float (default)'
     cnst_flt_ctxt.axis = AxisTypeEnum.LON
@@ -1225,11 +1222,11 @@ def _make_master_parameter_dict():
     cnst_str_ctxt.description = 'example of a parameter of type ConstantType, base_type fixed-len string'
     pdict.add_context(cnst_str_ctxt)
 
-    cnst_rng_flt_ctxt = ParameterContext('const_rng_flt', param_type=ConstantRangeType(), variability=VariabilityEnum.NONE)
+    cnst_rng_flt_ctxt = ParameterContext('const_rng_flt', param_type=ConstantRangeType(value_encoding='float64'), fill_value=(-9999.0,-9999.0))
     cnst_rng_flt_ctxt.description = 'example of a parameter of type ConstantRangeType, base_type float (default)'
     pdict.add_context(cnst_rng_flt_ctxt)
 
-    cnst_rng_int_ctxt = ParameterContext('const_rng_int', param_type=ConstantRangeType(QuantityType(value_encoding='int16')), variability=VariabilityEnum.NONE)
+    cnst_rng_int_ctxt = ParameterContext('const_rng_int', param_type=ConstantRangeType(value_encoding='int16'), fill_value=(-9999,-9999))
     cnst_rng_int_ctxt.long_name = 'example of a parameter of type ConstantRangeType, base_type int16'
     pdict.add_context(cnst_rng_int_ctxt)
     cnst_rng_int_ctxt.description = ''

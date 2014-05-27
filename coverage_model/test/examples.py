@@ -213,18 +213,19 @@ def samplecov(save_coverage=False, in_memory=False, inline_data_writes=True):
 
     # Insert some timesteps (automatically expands other arrays)
     nt = 30
-    scov.insert_timesteps(nt)
-
+    parameter_values = {}
     # Add data for each parameter
-    scov.set_parameter_values('time', value=np.arange(nt))
-    scov.set_parameter_values('lat', value=45)
-    scov.set_parameter_values('lon', value=-71)
+    parameter_values['time'] = NumpyParameterData('time', np.arange(nt))
+    parameter_values['lat'] = ConstantOverTime('lat', 45)
+    parameter_values['lon'] = ConstantOverTime('lon', -71)
     # make a random sample of 10 values between 23 and 26
     # Ref: http://docs.scipy.org/doc/numpy/reference/generated/numpy.random.random_sample.html#numpy.random.random_sample
     # --> To sample  multiply the output of random_sample by (b-a) and add a
     tvals=np.random.random_sample(nt)*(26-23)+23
-    scov.set_parameter_values('temp', value=tvals)
-    scov.set_parameter_values('conductivity', value=np.random.random_sample(nt)*(110-90)+90)
+    parameter_values['temp'] = NumpyParameterData('temp', tvals)
+    parameter_values['conductivity'] = NumpyParameterData('conductivity', np.random.random_sample(nt)*(110-90)+90)
+
+    scov.set_parameter_values(parameter_values)
 
     if in_memory and save_coverage:
         SimplexCoverage.pickle_save(scov, 'test_data/sample.cov')
@@ -328,15 +329,17 @@ def samplecov2(save_coverage=False, in_memory=False, inline_data_writes=True):
 #    scov.insert_timesteps(10)
 
     # Add data for each parameter
-    scov.set_parameter_values('time', value=np.arange(nt))
-    scov.set_parameter_values('lat', value=45.32)
-    scov.set_parameter_values('lon', value=-71.11)
+    parameter_values = {
+        'time': NumpyParameterData('time', np.arange(nt)),
+        'lat': ConstantOverTime('lat', 45.32),
+        'lon': ConstantOverTime('lon', -71.11)
+    }
     # make a random sample of 10 values between 23 and 26
     # Ref: http://docs.scipy.org/doc/numpy/reference/generated/numpy.random.random_sample.html#numpy.random.random_sample
     # --> To sample  multiply the output of random_sample by (b-a) and add a
     tvals=np.random.random_sample(nt)*(26-23)+23
-    scov.set_parameter_values('temp', value=tvals)
-    scov.set_parameter_values('conductivity', value=np.random.random_sample(nt)*(110-90)+90)
+    parameter_values['temp'] = NumpyParameterData('temp', tvals)
+    parameter_values['conductivity'] = NumpyParameterData('conductivity', np.random.random_sample(nt)*(110-90)+90)
 
     if in_memory and save_coverage:
         SimplexCoverage.pickle_save(scov, 'test_data/sample2.cov')
@@ -404,10 +407,9 @@ def oneparamcov(save_coverage=False, in_memory=False, inline_data_writes=True):
 
     # Insert some timesteps (automatically expands other arrays)
     nt = 1000
-    scov.insert_timesteps(nt)
 
     # Add data for the parameter
-    scov.set_parameter_values('time', value=np.arange(nt))
+    scov.set_parameter_values(make_parameter_data_dict({'time', np.arange(nt)}))
 
     if in_memory and save_coverage:
         SimplexCoverage.pickle_save(scov, 'test_data/sample.cov')
@@ -437,10 +439,9 @@ def oneparamcov_noautoflush(save_coverage=False, in_memory=False, inline_data_wr
 
     # Insert some timesteps (automatically expands other arrays)
     nt = 100
-    scov.insert_timesteps(nt)
 
     # Add data for the parameter
-    scov.set_parameter_values('time', value=np.arange(nt))
+    scov.set_parameter_values(make_parameter_data_dict({'time': np.arange(nt)}))
 
     if in_memory and save_coverage:
         SimplexCoverage.pickle_save(scov, 'test_data/sample.cov')
@@ -584,22 +585,28 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True, mak
 
     nt = 20
 
-    scov.set_parameter_values('sparse', [[[2, 4, 6], [8, 10, 12]]])
-    scov.insert_timesteps(nt/2)
-
-    scov.set_parameter_values('sparse', [[[4, 8], [16, 20]]])
-    scov.insert_timesteps(nt/2)
+    # scov.set_parameter_values('sparse', [[[2, 4, 6], [8, 10, 12]]])
+    # scov.insert_timesteps(nt/2)
+    #
+    # scov.set_parameter_values('sparse', [[[4, 8], [16, 20]]])
+    # scov.insert_timesteps(nt/2)
 
     # Add data for each parameter
-    scov.set_parameter_values('quantity_time', value=np.arange(nt))
-    scov.set_parameter_values('boolean', value=[True, True, True], tdoa=[[2,4,14]])
-    scov.set_parameter_values('const_float', value=-71.11) # Set a constant with correct data type
-    scov.set_parameter_values('const_int', value=45.32) # Set a constant with incorrect data type (fixed under the hood)
-    scov.set_parameter_values('const_str', value='constant string value') # Set with a string
-    scov.set_parameter_values('const_rng_flt', value=(12.8, 55.2)) # Set with a tuple
-    scov.set_parameter_values('const_rng_int', value=[-10, 10]) # Set with a list
+    parameter_values = {
+        'quantity_time': NumpyParameterData('quantity_time', np.arange(nt)),
+        'const_float': ConstantOverTime('const_float', -71.11), # Set a constant with correct data type
+        'const_int': ConstantOverTime('const_int', 45.32), # Set a constant with incorrect data type (fixed under the hood)
+        'const_str': ConstantOverTime('const_str', 'constant string value'), # Set with a string
+        'const_rng_flt': ConstantOverTime('const_rng_flt', (12.8, 55.2)), # Set with a tuple
+        'const_rng_int': ConstantOverTime('const_rng_int', [-10, 10]), # Set with a list
+        'quantity': NumpyParameterData('quantity', np.random.random_sample(nt)*(26-23)+23)
+    }
 
-    scov.set_parameter_values('quantity', value=np.random.random_sample(nt)*(26-23)+23)
+    bools = np.empty(nt, dtype=np.bool)
+    bools.fill(False)
+    bools[2::4] = True
+    parameter_values['boolean'] = NumpyParameterData('boolean', bools)
+
 
 #    # Setting three range expressions such that indices 0-2 == 10, 3-7 == 15 and >=8 == 20
 #    scov.set_parameter_values('function', value=make_range_expr(10, 0, 3, min_incl=True, max_incl=False, else_val=-999.9))
@@ -620,11 +627,12 @@ def ptypescov(save_coverage=False, in_memory=False, inline_data_writes=True, mak
         recval.append(d) # One value (which is a dict) for each member of the domain
         catval.append(random.choice(catkeys))
         fstrval.append(''.join([random.choice(letts) for x in xrange(8)])) # A random string of length 8
-    scov.set_parameter_values('array', value=arrval)
-    scov.set_parameter_values('record', value=recval)
-    scov.set_parameter_values('category', value=catval)
-    scov.set_parameter_values('fixed_str', value=fstrval)
+    parameter_values['array'] = NumpyParameterData('array', arrval)
+    parameter_values['record'] = NumpyParameterData('record', recval)
+    parameter_values['category'] = NumpyParameterData('category', catval)
+    parameter_values['fixed_str'] =NumpyParameterData('fixed_str', fstrval)
 
+    scov.set_parameter_values(parameter_values)
     if in_memory and save_coverage:
         SimplexCoverage.pickle_save(scov, 'test_data/ptypes.cov')
 
@@ -653,12 +661,12 @@ def sbe37im_samplecov(num_timesteps=100000, value_caching=True):
 
     # Insert some timesteps (automatically expands other arrays)
     nt = num_timesteps
-    scov.insert_timesteps(nt)
-
     # Add data for each parameter
-    scov.set_parameter_values('time', value=np.arange(nt))
-    scov.set_parameter_values('lat', value=45)
-    scov.set_parameter_values('lon', value=-71)
+    parameter_values = {
+        'time': NumpyParameterData('time', np.arange(nt)),
+        'lat': ConstantOverTime('lat', 45),
+        'lon': ConstantOverTime('lon', -71),
+    }
 
     # Make a bunch of data to assign to the dependent parameters.  This would be added to the coverage via ingestion
     # From DPS info:
@@ -667,12 +675,13 @@ def sbe37im_samplecov(num_timesteps=100000, value_caching=True):
     # and the seabird website here: http://www.seabird.com/products/spec_sheets/37imdata.htm
 
     # SBE 37IM - temperature in 't_dec' example range between 280000 and 350000
-    scov.set_parameter_values('tempwat_l0', value=np.random.random_sample(nt)*(350000-280000)+280000)
+    parameter_values['tempwat_l0'] = NumpyParameterData('tempwat_l0', np.random.random_sample(nt)*(350000-280000)+280000),
     # SBE 37IM - conductivity, ranging between 100000 & 750000 (not 0 because never 0 in seawater)
-    scov.set_parameter_values('condwat_l0', value=np.random.random_sample(nt)*(750000-100000)+100000)
+    parameter_values['condwat_l0'] = NumpyParameterData('condwat_l0', np.random.random_sample(nt)*(750000-100000)+100000),
     # SBE 37IM - pressure, ranging between 2789 and 10000 (couldn't find a range in the DPS, this seems reasonable!)
-    scov.set_parameter_values('preswat_l0', value=np.random.random_sample(nt)*(10000-2789)+2789)
+    parameter_values['preswat_l0'] = NumpyParameterData('preswat_l0', np.random.random_sample(nt)*(10000-2789)+2789)
 
+    scov.set_parameter_values(parameter_values)
 
     return scov
 
@@ -706,11 +715,9 @@ def sbe37im_complexcov(num_timesteps=10, value_caching=True):
     llcov = SimplexCoverage('test_data', create_guid(), 'lat lon coverage for an SBE 37IM', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, value_caching=value_caching)
 
     # Insert some timesteps (automatically expands other arrays)
-    nt = num_timesteps
-    llcov.insert_timesteps(nt)
 
     # Add data for the llcov
-    llcov.set_parameter_values('time', value=np.arange(nt))
+    llcov.set_parameter_values('time', value=np.arange(num_timesteps))
     llcov.set_parameter_values('lat', value=45)
     llcov.set_parameter_values('lon', value=-71)
 
@@ -727,17 +734,16 @@ def sbe37im_complexcov(num_timesteps=10, value_caching=True):
 
     scov = SimplexCoverage('test_data', create_guid(), 'lat lon coverage for an SBE 37IM', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, value_caching=value_caching)
 
-    scov.insert_timesteps(nt)
-
     # Add data for the L0 cov
-    scov.set_parameter_values('time', value=np.arange(nt))
-
-    # SBE 37IM - temperature in 't_dec' example range between 280000 and 350000
-    scov.set_parameter_values('tempwat_l0', value=np.random.random_sample(nt)*(350000-280000)+280000)
-    # SBE 37IM - conductivity, ranging between 100000 & 750000 (not 0 because never 0 in seawater)
-    scov.set_parameter_values('condwat_l0', value=np.random.random_sample(nt)*(750000-100000)+100000)
-    # SBE 37IM - pressure, ranging between 2789 and 10000 (couldn't find a range in the DPS, this seems reasonable!)
-    scov.set_parameter_values('preswat_l0', value=np.random.random_sample(nt)*(10000-2789)+2789)
+    param_vals = { 'time': np.arange(num_timesteps),
+                   # SBE 37IM - temperature in 't_dec' example range between 280000 and 350000
+                   'tempwat_10': np.random.random_sample(num_timesteps)*(350000-280000)+280000,
+                   # SBE 37IM - conductivity, ranging between 100000 & 750000 (not 0 because never 0 in seawater)
+                   'condwat_l0': np.random.random_sample(num_timesteps)*(750000-100000)+100000,
+                   # SBE 37IM - pressure, ranging between 2789 and 10000 (couldn't find a range in the DPS, this seems reasonable!)
+                   'preswat_l0': np.random.random_sample(num_timesteps)*(10000-2789)+2789
+                 }
+    scov.set_parameter_values(make_parameter_data_dict(param_vals))
 
     scov.close()
 
@@ -754,8 +760,6 @@ def sbe37im_complexcov(num_timesteps=10, value_caching=True):
     pdict.add_context(contexts.pop('pracsal'))
 
     ccov = ComplexCoverage('test_data', create_guid(), 'l1 l2 coverage for SBE 37IM', parameter_dictionary=pdict, reference_coverage_locs=[llcov.persistence_dir, scov.persistence_dir], complex_type=ComplexCoverageType.PARAMETRIC_STRICT)
-    # ccov.insert_timesteps(nt)
-    # ccov.set_parameter_values('TIME', value=np.arange(nt))
 
     return ccov
 
@@ -798,20 +802,24 @@ def nospatialcov(save_coverage=False, in_memory=False, inline_data_writes=True):
 
     # Insert some timesteps (automatically expands other arrays)
     nt = 20
-    scov.insert_timesteps(nt)
 
+    parameter_values = {
     # Add data for each parameter
-    scov.set_parameter_values('quantity_time', value=np.arange(nt))
-    scov.set_parameter_values('quantity', value=np.random.random_sample(nt)*(26-23)+23)
-    scov.set_parameter_values('constant', value=20)
+        scov.temporal_parameter_name: NumpyParameterData(scov.temporal_parameter_name, np.arange(10000, 10000+nt)),
+        'quantity_time': NumpyParameterData('quantity_time', np.arange(nt)),
+        'quantity': NumpyParameterData('quantity', np.random.random_sample(nt)*(26-23)+23),
+        'constant': ConstantOverTime('constant',20)
+    }
 
     arrval = []
     arr2val = []
     for x in xrange(nt): # One value (which IS an array) for each member of the domain
         arrval.append(np.random.bytes(np.random.randint(1,20)))
         arr2val.append(np.random.random_sample(np.random.randint(1,10)))
-    scov.set_parameter_values('array', value=arrval)
-    scov.set_parameter_values('array2', value=arr2val)
+    parameter_values['array'] = NumpyParameterData('array', arrval)
+    parameter_values['array2'] = NumpyParameterData('array2', arr2val)
+
+    scov.set_parameter_values(parameter_values)
 
     if in_memory and save_coverage:
         SimplexCoverage.pickle_save(scov, 'test_data/ptypes.cov')
@@ -867,7 +875,6 @@ def ncgrid2cov(save_coverage=False, in_memory=False, inline_data_writes=True):
 
     # Insert the timesteps (automatically expands other arrays)
     tvar=ds.variables['time']
-    scov.insert_timesteps(tvar.size)
 
     # Add data to the parameters - NOT using setters at this point, direct assignment to arrays
     for v in var_names:
@@ -944,7 +951,6 @@ def ncstation2cov(save_coverage=False, in_memory=False, inline_data_writes=True)
 
     # Insert the timesteps (automatically expands other arrays)
     tvar=ds.variables['time']
-    scov.insert_timesteps(tvar.size)
 
     # Add data to the parameters - NOT using setters at this point, direct assignment to arrays
     for v in var_names:
@@ -992,17 +998,14 @@ def benchmark_value_setting(num_params=10, num_insertions=100, repeat=1, bulk_ts
         cov = SimplexCoverage('test_data', create_guid(), 'empty sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom)
 
         rep_time = time.time()
-        if bulk_ts_insert:
-            cov.insert_timesteps(num_insertions)
         for x in xrange(num_insertions):
+            parameter_values = { 'time': NumpyParameterData('time', np.array([1])) }
             in_time = time.time()
-            if not bulk_ts_insert:
-                cov.insert_timesteps(1)
-            slice_ = slice(cov.num_timesteps - 1, None)
-            cov.set_parameter_values('time', 1, tdoa=slice_)
             for i in xrange(num_params-1):
-                cov.set_parameter_values('param_{0}'.format(i), 1.1, tdoa=slice_)
+                name = 'param_{0}'.format(i)
+                parameter_values[name] = NumpyParameterData(name, np.array([1.1]))
 
+            cov.set_parameter_values(parameter_values)
             in_time = time.time() - in_time
             insert_times.append(in_time)
             counter += 1

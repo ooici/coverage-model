@@ -274,7 +274,8 @@ class PostgresDB(DB):
             raise
         return results
 
-    def _get_lat_long_extents(self, criteria):
+    @staticmethod
+    def _get_lat_long_extents(criteria):
         from coverage_model.search.search_constants import IndexedParameters, AllowedSearchParameters, MinimumOneParameterFrom
         lat_min = None
         lat_max = None

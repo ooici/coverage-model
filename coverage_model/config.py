@@ -57,7 +57,7 @@ class CoverageConfig(object):
         return self.get_preferred_key(options, self.ordered_lon_key_preferences)
 
     def get_lat_key(self, options):
-        return self.get_preferred_key(options, self.ordered_lon_key_preferences)
+        return self.get_preferred_key(options, self.ordered_lat_key_preferences)
 
     def get_time_key(self, options):
         return self.get_preferred_key(options, self.ordered_time_key_preferences)

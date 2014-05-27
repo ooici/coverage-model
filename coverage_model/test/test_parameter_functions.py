@@ -19,15 +19,15 @@ def errfunc(val1, val2):
 def pyfunc(val1, val2):
     return val1 * val2
 
-def _get_vals(name, slice_):
+def _get_vals(name, time_segment=[None,None], stride=None):
     if name == 'VALS':
-        return np.array([1, 3, 5, 6, 23])[slice_]
+        return np.array([1, 3, 5, 6, 23])[time_segment[0]:time_segment[1]:stride]
     elif name == 'first':
-        return np.array([1, 2, 3, 4, 5])[slice_]
+        return np.array([1, 2, 3, 4, 5])[time_segment[0]:time_segment[1]:stride]
     elif name == 'second':
-        return np.array([1, 4, 6, 8, 10])[slice_]
+        return np.array([1, 4, 6, 8, 10])[time_segment[0]:time_segment[1]:stride]
     else:
-        return np.zeros(5)[slice_]
+        return np.zeros(5)[time_segment[0]:time_segment[1]:stride]
 
 def callback_arg_func(pv_callback):
     a = pv_callback('tempwat_l0')
@@ -40,40 +40,40 @@ class TestParameterFunctionsUnit(CoverageModelUnitTestCase):
     def test_numexpr_function(self):
         func = NumexprFunction('v*10', 'v*10', ['v'], {'v': 'VALS'})
 
-        ret = func.evaluate(_get_vals, slice(None))
+        ret = func.evaluate(_get_vals, (None,None))
         np.testing.assert_array_equal(ret, np.array([1, 3, 5, 6, 23]) * 10)
 
     def test_numexpr_function_slice(self):
         func = NumexprFunction('v*10', 'v*10', ['v'], {'v': 'VALS'})
 
-        ret = func.evaluate(_get_vals, slice(3, None))
+        ret = func.evaluate(_get_vals, (3, None))
         np.testing.assert_array_equal(ret, np.array([6, 23]) * 10)
 
     def test_nested_numexpr_function(self):
         func1 = NumexprFunction('v*10', 'v*10', ['v'], {'v': 'VALS'})
         func2 = NumexprFunction('v*10', 'v*10', ['v'], {'v': func1})
 
-        ret = func2.evaluate(_get_vals, slice(None))
+        ret = func2.evaluate(_get_vals, time_segment=(None,None))
         np.testing.assert_array_equal(ret, np.array([100, 300, 500, 600, 2300]))
 
     def test_numexpr_function_splat(self):
         func = NumexprFunction('v*a', 'v*a', ['v', 'a*'], {'v': 'VALS', 'a*': 'VALS'})
 
-        ret = func.evaluate(_get_vals, slice(None))
+        ret = func.evaluate(_get_vals, (None,None))
         np.testing.assert_array_equal(ret, np.array([1*23, 3*23, 5*23, 6*23, 23*23]))
 
     def test_python_function(self):
         owner = 'coverage_model.test.test_parameter_functions'
         func = PythonFunction('multiplier', owner, 'pyfunc', ['first', 'second'])
 
-        ret = func.evaluate(_get_vals, slice(None))
+        ret = func.evaluate(_get_vals, (None,None))
         np.testing.assert_array_equal(ret, np.array([1*1, 2*4, 3*6, 4*8, 5*10]))
 
     def test_python_function_splat(self):
         owner = 'coverage_model.test.test_parameter_functions'
         func = PythonFunction('multiplier', owner, 'pyfunc', ['first', 'second*'], param_map={'first': 'first', 'second*': 'second'})
 
-        ret = func.evaluate(_get_vals, slice(None))
+        ret = func.evaluate(_get_vals, (None,None))
         np.testing.assert_array_equal(ret, np.array([1*10, 2*10, 3*10, 4*10, 5*10]))
 
     def test_python_function_exception(self):
@@ -86,7 +86,7 @@ class TestParameterFunctionsUnit(CoverageModelUnitTestCase):
         owner = 'coverage_model.test.test_parameter_functions'
         func = PythonFunction('multiplier', owner, 'pyfunc', ['first', 'second'])
 
-        ret = func.evaluate(_get_vals, slice(1, 4))
+        ret = func.evaluate(_get_vals, (1, 4))
         np.testing.assert_array_equal(ret, np.array([2*4, 3*6, 4*8]))
 
     def test_nested_python_function(self):
@@ -94,7 +94,7 @@ class TestParameterFunctionsUnit(CoverageModelUnitTestCase):
         func1 = PythonFunction('square', owner, 'pyfunc', ['first', 'first'])
         func2 = PythonFunction('quartic', owner, 'pyfunc', [func1, func1])
 
-        ret = func2.evaluate(_get_vals, slice(None))
+        ret = func2.evaluate(_get_vals, (None,None))
         np.testing.assert_array_equal(ret, np.array([1,  16,  81, 256, 625]))
 
     def get_module_dependencies(self):
@@ -127,8 +127,8 @@ class TestParameterFunctionsInt(CoverageModelIntTestCase):
         self.contexts = None
         self.value_classes = None
 
-    def _get_param_vals(self, name, slice_):
-        shp = utils.slice_shape(slice_, (10,))
+    def _get_param_vals(self, name, time_segment, stride=None):
+        shp = utils.slice_shape(time_segment, (10,))
 
         def _getarr(vmin, shp, vmax=None,):
             if vmax is None:
@@ -155,7 +155,7 @@ class TestParameterFunctionsInt(CoverageModelIntTestCase):
         else:
             return np.zeros(shp)
 
-        return ret[slice_]
+        return ret[time_segment]
 
     def _ctxt_callback(self, context_name):
         return self.contexts[context_name]
@@ -244,7 +244,7 @@ class TestParameterFunctionsInt(CoverageModelIntTestCase):
         # Add the callback for retrieving values
         for n, p in self.contexts.iteritems():
             if hasattr(p, '_pval_callback'):
-                p._pval_callback = self._get_param_vals
+                p.param_type.callback = self._get_param_vals
                 p._ctxt_callback = self._ctxt_callback
                 self.value_classes[n] = get_value_class(p.param_type, dom_set)
 
@@ -283,7 +283,7 @@ class TestParameterFunctionsInt(CoverageModelIntTestCase):
         # Add the callback for retrieving values
         for n, p in self.contexts.iteritems():
             if hasattr(p, '_pval_callback'):
-                p._pval_callback = self._get_param_vals
+                p.param_type.callback = self._get_param_vals
                 p._ctxt_callback = self._ctxt_callback
                 self.value_classes[n] = get_value_class(p.param_type, dom_set)
 
@@ -327,7 +327,7 @@ class TestParameterFunctionsInt(CoverageModelIntTestCase):
         # Add the callback for retrieving values
         for n, p in self.contexts.iteritems():
             if hasattr(p, '_pval_callback'):
-                p._pval_callback = self._get_param_vals
+                p.param_type.callback = self._get_param_vals
                 p._ctxt_callback = self._ctxt_callback
                 # self.value_classes[n] = get_value_class(p.param_type, dom_set)
 

@@ -10,6 +10,18 @@
 import numpy as np
 
 
+def make_parameter_data_dict(data_dict):
+    if 'time' in data_dict:
+        time_array = data_dict['time']
+    else:
+        elements = data_dict.values()[0]
+        time_array = np.arange(len(elements))
+
+    for k,v in data_dict.iteritems():
+        data_dict[k] = NumpyParameterData(k, v, time_array)
+    return data_dict
+
+
 class ParameterDataDict(object):
     pass
 
@@ -31,7 +43,7 @@ class ParameterData(object):
 
 class NumpyDictParameterData(ParameterData):
 
-    def __init__(self, param_dict, alignment_key=None, param_context_dict=None):
+    def __init__(self, param_dict, alignment_key=None, param_context_dict=None, as_rec_array=False):
         if not isinstance(param_dict, dict):
             raise TypeError("param_dict must implement type %s" % dict.__name__)
         alignment_array = None
@@ -46,14 +58,30 @@ class NumpyDictParameterData(ParameterData):
         if not isinstance(alignment_array, np.ndarray):
             raise TypeError("alignment_array must implement type %s" % np.ndarray.__name__)
         self.size = alignment_array.size
-        names = []
-        data = []
-        for param_name, param_data in param_dict.iteritems():
-            self._validate_param_data(param_name, param_data, alignment_array.size)
-            names.append(param_name)
-            data.append(param_data)
-        data_arr = np.rec.fromarrays(data, names=names)
-        super(NumpyDictParameterData, self).__init__('none', data_arr)
+
+        data = param_dict
+        try:
+            name_arr = []
+            data_arr = []
+            format_arr = []
+            for param_name, param_data in param_dict.iteritems():
+                self._validate_param_data(param_name, param_data, alignment_array.size)
+                name_arr.append(param_name)
+                if len(param_data.shape) > 1:
+                    param_data = np.core.records.fromrecords(param_data)
+                data_arr.append(param_data)
+                param_dict[param_name] = param_data
+                dt = np.dtype(param_data.dtype).str
+                format_arr.append(np.dtype(param_data.dtype).str)
+            format_arr = ', '.join(format_arr)
+
+            if as_rec_array:
+                data = np.core.records.fromarrays(data_arr, names=name_arr, formats=format_arr)
+        except Exception as e:
+            # print "Record array creation failed, just return numpy arrays. Failure: %s" % e.message
+            #TODO log something
+            data = param_dict
+        super(NumpyDictParameterData, self).__init__('none', data)
 
         self.alignment_key = alignment_key
         self.param_context_dict = param_context_dict
@@ -63,7 +91,7 @@ class NumpyDictParameterData(ParameterData):
                 raise TypeError("dict keys must implement type %s" % basestring.__name__)
             if not isinstance(param_data, np.ndarray):
                 raise TypeError("param_array must implement type %s" % np.ndarray.__name__)
-            if not param_data.size == size:
+            if not param_data.shape[0] == size:
                 raise ValueError("param_array, %s, and alignment_array must have the same number of elements." % param_name)
 
     # def add_param_data(self, param_name, param_data, param_context):
@@ -149,13 +177,13 @@ class ConstantOverTime(ParameterData):
         return self._data
 
     @classmethod
-    def merge_data_as_numpy_array(cls, alignment_array, obj_dict, fill_value=None, arr=None):
+    def merge_data_as_numpy_array(cls, alignment_array, obj_dict, param_type=None, arr=None):
         order = sorted(obj_dict.keys())
         for key in order:
-            arr = obj_dict[key].get_data_as_numpy_array(alignment_array, fill_value=fill_value, arr=arr)
+            arr = obj_dict[key].get_data_as_numpy_array(alignment_array, param_type, arr=arr)
         return arr
 
-    def get_data_as_numpy_array(self, alignment_array, fill_value=None, arr=None):
+    def get_data_as_numpy_array(self, alignment_array, param_type, arr=None):
         """
         NaN fill value causes array equivalency checks to fail
         Using arrays created by numpy.arange() does not include elements that are
@@ -164,18 +192,11 @@ class ConstantOverTime(ParameterData):
         if not isinstance(alignment_array, np.ndarray):
             raise TypeError("alignment_array must implement type %s", np.ndarray)
 
-        dtype = type(fill_value)
-        if isinstance(fill_value, basestring):
-            dtype = object
         if arr is None:
-            arr = np.empty(alignment_array.size, dtype)
-            arr.fill(fill_value)
-        elif arr.size != alignment_array.size:
-            raise IndexError("Supplied array must be same size as alignment array. Found %i elements. Expected %i." % (arr.size, alignment_array.size))
+            arr = param_type.create_filled_array(alignment_array.size)
 
         if self.start is None and self.stop is None:
-            arr.fill(self._data)
-            pass
+            arr[:] = self._data
         elif self.start is None:
             arr[alignment_array <= self.stop] = self._data
         elif self.stop is None:
@@ -245,3 +266,31 @@ class ConstantOverTime(ParameterData):
         if self.__dict__ == other.__dict__:
             return True
         return False
+
+
+class RepeatOverTime(ConstantOverTime):
+    def __init__(self, param_name, value, time_start=None, time_end=None):
+        super(RepeatOverTime, self).__init__(param_name, value, time_start, time_end)
+
+    def get_data_as_numpy_array(self, alignment_array, param_type, arr=None):
+        """
+        NaN fill value causes array equivalency checks to fail
+        Using arrays created by numpy.arange() does not include elements that are
+         equivalent to start_range.
+        """
+        if not isinstance(alignment_array, np.ndarray):
+            raise TypeError("alignment_array must implement type %s", np.ndarray)
+
+        arr = param_type.create_filled_array(alignment_array.size)
+
+        if self.start is None and self.stop is None:
+            arr[:] = self._data
+        elif self.start is None:
+            arr[alignment_array <= self.stop] = self._data
+        elif self.stop is None:
+            arr[alignment_array >= self.start] = self._data
+        else:
+            arr[np.logical_and(alignment_array >= self.start, alignment_array <= self.stop)] = self._data
+
+        return arr
+

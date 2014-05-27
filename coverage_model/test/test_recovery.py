@@ -212,17 +212,17 @@ class TestRecoveryInt(CoverageModelIntTestCase):
 
         # Insert some timesteps (automatically expands other arrays)
         nt = 200000
-        scov.insert_timesteps(nt)
 
         # Add data for each parameter
-        scov.set_parameter_values('time', value=np.arange(nt))
-        scov.set_parameter_values('lat', value=45)
-        scov.set_parameter_values('lon', value=-71)
+        data = { scov.temporal_parameter_name: np.arange(nt),
+                 'lat': 45,
+                 'lon': -71
+        }
+        scov.set_parameter_values(make_parameter_data_dict(data))
 
         dset = Dataset()
         dset.parameter_dictionary = pdict.dump()
         dset.spatial_domain = sdom.dump()
         dset.temporal_domain = tdom.dump()
-
 
         return scov, dset

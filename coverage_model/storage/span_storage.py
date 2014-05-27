@@ -11,5 +11,8 @@ class SpanStorage(object):
     def get_span_hash(self, span_id):
         raise NotImplementedError('Not implemented in base class')
 
+    def search(self, search_criteria, limit=None):
+        raise NotImplementedError('Not implemented in base class')
+
     def has_data(self, coverage_id):
         raise NotImplementedError('Not implemented in base class')

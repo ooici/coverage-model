@@ -17,6 +17,8 @@ class AddressFactory(object):
                     return FileAddress.from_db_str(st)
                 elif s[0] == Address.__name__:
                     return Address.from_db_str(st)
+            elif len(st) > 0:
+                return Address(st)
         except Exception as ex:
             pass
         raise ValueError("Do not know how to build address from string: %s", st)

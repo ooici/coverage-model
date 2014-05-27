@@ -266,7 +266,7 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
         # Do NOT expand storage - no need to store anything here!!
 
         # Grab a local pointer to the coverage's _cov_range_value object
-        self._pval_callback = self.parameter_type._pval_callback
+        self._pval_callback = self.parameter_type.callback
         self._memoized_values = None
 
     @property
@@ -282,17 +282,17 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
         # No-op - What's the min/max for this value class?
         pass
 
-    def __getitem__(self, slice_):
+    def __getitem__(self, time_segment=None, stride=None):
         if self._memoized_values is not None:
             return self._memoized_values
         else:
             if self._pval_callback is None:
                 raise ParameterFunctionException('\'_pval_callback\' is None; cannot evaluate!!')
 
-            slice_ = utils.fix_slice(slice_, self.shape)
+            # slice_ = utils.fix_slice(slice_, self.shape)
 
             try:
-                r = self.content.evaluate(self._pval_callback, slice_, self.parameter_type.fill_value)
+                r = self.content.evaluate(self._pval_callback, time_segment, self.parameter_type.fill_value, stride=stride)
                 ve = self.parameter_type.value_encoding
                 if hasattr(self.parameter_type, 'inner_encoding'):
                     ve = self.parameter_type.inner_encoding
@@ -303,7 +303,7 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
                 import sys
                 raise ParameterFunctionException(ex.message, type(ex)), None, sys.exc_traceback
 
-            return _cleanse_value(r, slice_)
+            return _cleanse_value(r, time_segment)
 
     def __setitem__(self, slice_, value):
         self._memoized_values = value
@@ -592,7 +592,7 @@ class ConstantRangeValue(AbstractComplexParameterValue):
         """
         kwc=kwargs.copy()
         AbstractComplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
-        self._storage.expand((1,), 0, 2)
+        self._storage.expand((1,), 0, 1)
 
     @property
     def content(self):
@@ -600,7 +600,7 @@ class ConstantRangeValue(AbstractComplexParameterValue):
         if self._storage[0] == self.fill_value:
             ret = self.fill_value
         else:
-            ret = tuple(self._storage[:2])
+            ret = self._storage[0]
 
         return ret
 
@@ -616,12 +616,12 @@ class ConstantRangeValue(AbstractComplexParameterValue):
         slice_ = utils.fix_slice(slice_, self.shape)
 
         ret_shape = utils.slice_shape(slice_, self.shape)
-        ret = np.empty(ret_shape, dtype=np.dtype(object)) # Always object type because it's 2 values / element!!
-        ret.fill(self.content)
+        ret = np.empty(ret_shape, dtype=self.value_encoding) # Always object type because it's 2 values / element!!
+        ret[:] = self.content
 
         return _cleanse_value(ret, slice_)
 
-    def __setitem__(self, slice_, value):
+    def __setitem__(self, time_segment, value):
         if self.parameter_type.is_valid_value(value):
             if value == self.fill_value:
                 self._storage[:2] = self.fill_value
@@ -636,7 +636,7 @@ class ConstantRangeValue(AbstractComplexParameterValue):
             if np.dtype(self.value_encoding).kind == 'S':
                 va = [str(v) for v in va]
 
-            self._storage[:2] = np.array(va[:2], dtype=self.value_encoding)
+            self._storage[:2] = np.array((va[0], va[1]), dtype=self.value_encoding)
 
             self._update_min_max(self.content)
 

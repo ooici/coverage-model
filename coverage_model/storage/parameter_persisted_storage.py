@@ -22,6 +22,7 @@ from coverage_model.parameter_data import ParameterData, NumpyParameterData, Con
 from coverage_model.data_span import Span
 from coverage_model.storage.span_storage_factory import SpanStorageFactory
 from coverage_model.persistence import SimplePersistenceLayer
+from coverage_model.parameter_types import QuantityType
 
 
 class PostgresPersistenceLayer(SimplePersistenceLayer):
@@ -98,12 +99,18 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
 
     def update_parameter_bounds(self, parameter_name, bounds):
         dmin, dmax = bounds
-        if parameter_name in self.parameter_bounds:
-            pmin, pmax = self.parameter_bounds[parameter_name]
-            dmin = min(dmin, pmin)
-            dmax = max(dmax, pmax)
-        self.parameter_bounds[parameter_name] = (dmin, dmax)
-        self.master_manager.flush()
+        if isinstance(self.parameter_metadata[parameter_name].parameter_context.param_type, QuantityType): # TODO should we store bounds for non quantity types?
+            if parameter_name in self.parameter_bounds:
+                pmin, pmax = self.parameter_bounds[parameter_name]
+                dmin = min(dmin, pmin)
+                dmax = max(dmax, pmax)
+            if dmax is None and dmin is not None:
+                dmax = dmin
+            elif dmin is None and dmax is not None:
+                dmin = dmax
+            if dmin is not None and dmax is not None:
+                self.parameter_bounds[parameter_name] = (dmin, dmax)
+                self.master_manager.flush()
 
     # CBM TODO: This needs to be improved greatly - should callback all the way to the Application layer as a "failure handler"
     def write_failure_callback(self, message, work):
@@ -245,7 +252,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                 values[key] = arr
             if not isinstance(arr, ParameterData):
                 raise TypeError("Value for %s must implement <%s>, found <%s>" % (key, ParameterData.__name__, arr.__class__.__name__))
-            if type(arr) not in (ConstantOverTime,):
+            if not isinstance(arr, ConstantOverTime):
                 all_values_constant_over_time = False
             if arr_len == -1 and isinstance(arr, NumpyParameterData):
                 arr_len = arr.get_data().shape[0]
@@ -264,11 +271,14 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
     def _get_span_dict(self, params, time_range=None, time=None):
         return SpanStorageFactory.get_span_storage_obj(self.storage_name).get_spans(coverage_ids=self.master_manager.guid, decompressors=self.value_list)
 
-    def read_parameters(self, params, time_range=None, time=None, sort_parameter=None, stride_length=None, fill_empty_params=False):
-        np_dict, function_params, rec_arr = self.get_data_products(params, time_range, time, sort_parameter, stride_length=stride_length, create_record_array=True, fill_empty_params=fill_empty_params)
+    def read_parameters(self, params, time_range=None, time=None, sort_parameter=None, stride_length=None, fill_empty_params=False, function_params=None, as_record_array=True):
+        np_dict, functions, rec_arr = self.get_data_products(params, time_range, time, sort_parameter, stride_length=stride_length, create_record_array=as_record_array, fill_empty_params=fill_empty_params)
+        if function_params is not None and isinstance(function_params, dict):
+            function_params.clear()
+            function_params.update(functions)
         return rec_arr
 
-    def get_data_products(self, params, time_range=None, time=None, sort_parameter=None, create_record_array=False, stride_length=None, fill_empty_params=False):
+    def get_data_products(self, params, time_range=None, time=None, sort_parameter=None, create_record_array=True, stride_length=None, fill_empty_params=False):
         if self.alignment_parameter not in params:
             params.append(self.alignment_parameter)
 
@@ -277,13 +287,16 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         dict_params = None
         if fill_empty_params is True:
             dict_params=params
-        np_dict = self._create_parameter_dictionary_of_numpy_arrays(numpy_params, function_params, stride_length=stride_length, params=dict_params)
-        np_dict = self._sort_flat_arrays(np_dict, sort_parameter=sort_parameter)
-        np_dict = self._trim_values_to_range(np_dict, time_range=time_range, time=time)
+        np_dict = self._create_parameter_dictionary_of_numpy_arrays(numpy_params, function_params, params=dict_params)
+        np_dict = self._append_parameter_fuction_data(params, np_dict)
         rec_arr = None
-        if create_record_array is True:
-            rec_arr = self._convert_to_numpy_dict_parameter(np_dict)
+        if self.alignment_parameter in np_dict:
+            np_dict = self._sort_flat_arrays(np_dict, sort_parameter=sort_parameter)
+            np_dict = self._trim_values_to_range(np_dict, time_range=time_range, time=time)
+        if stride_length is not None:
+            np_dict = {key:value[0::stride_length] for key, value in np_dict.items()}
 
+        rec_arr = self._convert_to_numpy_dict_parameter(np_dict, as_rec_array=create_record_array)
         return np_dict, function_params, rec_arr
 
     def _create_param_dict_from_spans_dict(self, params, span_dict):
@@ -293,7 +306,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             for span in span_dict:
                 for param_name, data in span.param_dict.iteritems():
                     if param_name in params or params is None:
-                        if type(data) in (ConstantOverTime,):
+                        if isinstance(data, ConstantOverTime):
                             if param_name not in function_params:
                                 function_params[param_name] = {}
                             function_params[param_name][span.ingest_time] = data
@@ -307,7 +320,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                 for param_name, data in span.iteritems():
                     if param_name in params or params is None:
                         obj = self.value_list[param_name].decompress(data[0])
-                        if type(obj) in (ConstantOverTime,):
+                        if isinstance(obj, ConstantOverTime):
                             if param_name not in function_params:
                                 function_params[param_name] = {}
                             function_params[param_name][data[3]] = obj
@@ -330,12 +343,12 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             sorted_array_dict[key] = value[sorted_indexes]
         return sorted_array_dict
 
-    def _convert_to_numpy_dict_parameter(self, np_dict, sort_parameter=None):
+    def _convert_to_numpy_dict_parameter(self, np_dict, sort_parameter=None, as_rec_array=False):
         param_context_dict = {}
         for key in np_dict.keys():
             param_context_dict[key] = self.value_list[key]
 
-        ndpd = NumpyDictParameterData(np_dict, alignment_key=self.alignment_parameter, param_context_dict=param_context_dict)
+        ndpd = NumpyDictParameterData(np_dict, alignment_key=self.alignment_parameter, param_context_dict=param_context_dict, as_rec_array=as_rec_array)
         # if sort_parameter is None or sort_parameter not in ndpd.get_data().names:
         #     sort_parameter = self.alignment_parameter
         # ndpd.get_data().sort(order=sort_parameter)
@@ -346,6 +359,8 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         return_dict = {}
         time_array = np_dict[self.alignment_parameter]
         if time_range is None and time is None:
+            return_dict = np_dict
+        elif time_array.size == 0:
             return_dict = np_dict
         elif time_range is not None:
             if time_range[0] is not None and time_range[1] is None:
@@ -366,20 +381,33 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                 return_dict[key] = np.array([val[idx]])
         return return_dict
 
-    def _create_parameter_dictionary_of_numpy_arrays(self, numpy_params, function_params=None, stride_length=None, params=None):
+    def _append_parameter_fuction_data(self, params, param_dict, time_segment=None, time=None):
+        if time is not None and time_segment is None:
+            time_segment = (time,time)
+        for param in list(set(params)-set(param_dict.keys())):
+            param_type = self.parameter_metadata[param].parameter_context.param_type
+            from coverage_model.parameter_types import ParameterFunctionType
+            if isinstance(param_type, ParameterFunctionType):
+                data = param_type.function.evaluate(param_type.callback, time_segment, time)
+                param_dict[param] = data
+        return param_dict
+
+    def _create_parameter_dictionary_of_numpy_arrays(self, numpy_params, function_params=None, params=None):
         return_dict = {}
         arr_size = -1
-        if self.alignment_parameter not in numpy_params:
-            raise RuntimeError("Cannot create dense array without alignment parameter, %s", self.alignment_parameter)
         shape_outer_dimmension = 0
         span_order = []
-        for id, span_data in numpy_params[self.alignment_parameter].iteritems():
-            shape_outer_dimmension += span_data.get_data().size
-            span_order.append(id)
-        span_order.sort()
+        span_size_dict = {}
+        t_dict = {}
+        if self.alignment_parameter in numpy_params:
+            for id, span_data in numpy_params[self.alignment_parameter].iteritems():
+                span_size_dict[id] = span_data.get_data().size
+                shape_outer_dimmension += span_data.get_data().size
+                span_order.append(id)
+            span_order.sort()
+            t_dict = numpy_params[self.alignment_parameter]
         arr = np.empty(shape_outer_dimmension)
         insert_index = 0
-        t_dict = numpy_params[self.alignment_parameter]
         for span_id in span_order:
             np_data = t_dict[span_id].get_data()
             end_idx = insert_index+np_data.size
@@ -400,6 +428,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
 
             for span_name in span_order:
                 if span_name not in span_data:
+                    insert_index += span_size_dict[span_name]
                     continue
                 np_data = span_data[span_name].get_data()
                 if npa is None:
@@ -416,7 +445,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         for param_name, param_dict in function_params.iteritems():
             arr = ConstantOverTime.merge_data_as_numpy_array(return_dict[self.alignment_parameter],
                                                              param_dict,
-                                                             fill_value=self.value_list[param_name].fill_value)
+                                                             param_type=self.parameter_metadata[param_name].parameter_context.param_type)
             return_dict[param_name] = arr
 
         if params is not None:
@@ -425,11 +454,8 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                 for param in unset_params:
                     dtype = np.array([self.value_list[param].fill_value]).dtype
                     arr = np.empty(len(return_dict[self.alignment_parameter]), dtype=dtype)
-                    arr.fill(self.value_list[param].fill_value)
+                    arr[:] = self.value_list[param].fill_value
                     return_dict[param] = arr
-
-        if stride_length is not None:
-            return_dict = {key:value[0::stride_length] for key, value in return_dict.items()}
 
         return return_dict
         for key, d in numpy_params.iteritems():
@@ -477,6 +503,25 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
     def has_data(self):
         return SpanStorageFactory.get_span_storage_obj(self.storage_name).has_data(self.master_manager.guid)
 
+    def num_timesteps(self):
+        ts = 0
+        span_dict = self._get_span_dict(self.alignment_parameter)
+        for span in span_dict:
+            ts += span.param_dict[self.alignment_parameter].get_data().size
+        return ts
+
+    def has_dirty_values(self):
+        """
+        Checks if the master file values have been modified
+
+        @return True if master file metadata has been modified
+        """
+        for v in self.value_list.values():
+            if v.has_dirty_values():
+                return True
+
+        return False
+
     def read_parameters_as_dense_array(self, params, time_range=None, time=None, sort_parameter=None):
         return_dict = {}
         arr_size = 0
@@ -488,7 +533,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                     time_exists = True
                 if key in params:
                     d = self.value_list[key].decompress(data[0])
-                    if type(d) in (ConstantOverTime,):
+                    if isinstance(d, ConstantOverTime):
                         if key not in function_data:
                             function_data[key] = list()
                         function_data[key].append(d)
@@ -616,7 +661,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         return valid_spans, invalid_spans
 
 import cPickle
-def base64encode(np_arr, start=None, stop=None, param_type=None):
+def base64encode(np_arr, start=None, stop=None, param_type=None, class_=None):
     if isinstance(np_arr, np.ndarray):
         if np_arr.flags['C_CONTIGUOUS'] is False:
             np_arr = np.copy(np_arr)
@@ -628,11 +673,32 @@ def base64encode(np_arr, start=None, stop=None, param_type=None):
     elif param_type == 'mp':
         return json.dumps([param_type, base64.b64encode(np_arr)])
     else:
-        return json.dumps([str(type(np_arr)), np_arr, start, stop])
+        enc = TupleEncoder()
+        js = enc.encode([np_arr.__class__.__name__, np_arr, start, stop, class_])
+        return js
+
+
+class TupleEncoder(json.JSONEncoder):
+    def encode(self, o):
+        def hint_tuples(item):
+            if isinstance(item, tuple):
+                return {'_tup_': True, 'v': item}
+            if isinstance(item, list):
+                return [hint_tuples(e) for e in item]
+            else:
+                return item
+        return super(TupleEncoder, self).encode(hint_tuples(o))
+
+
+def hinted_tuple_hook(o):
+    if '_tup_' in o:
+        return tuple(o['v'])
+    else:
+        return o
 
 
 def base64decode(json_str):
-    loaded = json.loads(json_str)
+    loaded = json.loads(json_str, object_hook=hinted_tuple_hook)
     if isinstance(loaded, list) and len(loaded) == 3:
         data_type = np.dtype(loaded[0])
         arr = np.frombuffer(base64.decodestring(loaded[1]),data_type)
@@ -645,8 +711,8 @@ def base64decode(json_str):
         return val
     elif isinstance(loaded, list) and len(loaded) == 2 and loaded[0] == 'mp':
         return (base64.b64decode(loaded[1]),)
-    elif isinstance(loaded, list) and len(loaded) == 4:
-        return (loaded[1], loaded[2], loaded[3])
+    elif isinstance(loaded, list) and len(loaded) == 5:
+        return (loaded[0], loaded[1], loaded[2], loaded[3], loaded[4])
     else:
         raise TypeError("Cannot decompress type %s" % type(loaded))
 
@@ -695,7 +761,7 @@ class PostgresPersistedStorage(AbstractStorage):
             return base64encode(data)
             # return base64encode(data)
         elif isinstance(values, ConstantOverTime):
-            return base64encode(values.get_data(), start=values.start, stop=values.stop)
+            return base64encode(values.get_data(), start=values.start, stop=values.stop, class_=values.__class__.__name__)
         else:
             raise TypeError("values must implement %s or %s, found %s" % (NumpyParameterData.__name__, ConstantOverTime.__name__, type(values)))
 
@@ -728,7 +794,13 @@ class PostgresPersistedStorage(AbstractStorage):
             return NumpyParameterData(self.parameter_manager.parameter_name, vals)
 
         elif isinstance(vals, tuple):
-            return ConstantOverTime(self.parameter_manager.parameter_name, vals[0], time_start=vals[1], time_end=vals[2])
+            from coverage_model.parameter_data import RepeatOverTime
+            if vals[4] == ConstantOverTime.__name__:
+                return ConstantOverTime(self.parameter_manager.parameter_name, vals[1], time_start=vals[2], time_end=vals[3])
+            elif vals[4] == RepeatOverTime.__name__:
+                return RepeatOverTime(self.parameter_manager.parameter_name, vals[1], time_start=vals[2], time_end=vals[3])
+            else:
+                raise Exception("Could not rebuild class %s" % vals[4])
         else:
             raise Exception("Could not handle decompressed value %s" % vals)
 
@@ -775,6 +847,20 @@ class PostgresPersistedStorage(AbstractStorage):
     def expand(self, arrshp, origin, expansion, fill_value=None):
         pass # No op
 
+    def has_dirty_values(self):
+        """
+        Checks if the master file values have been modified
+
+        @return True if master file metadata has been modified
+        """
+        if self.metadata_manager.is_dirty():
+            return True
+        if self.parameter_manager.is_dirty():
+            return True
+
+        return False
+
     def flush_values(self):
-        pass # No op
+        self.parameter_manager.flush()
+        self.metadata_manager.flush()
 

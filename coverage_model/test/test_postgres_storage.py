@@ -14,6 +14,7 @@ from coverage_model import *
 from coverage_model.address import *
 from coverage_model.parameter_data import *
 from coverage_test_base import get_parameter_dict
+from coverage_model.parameter_types import *
 
 
 @attr('UNIT',group='cov')
@@ -50,7 +51,7 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
             elif isinstance(params, tuple):
                 pdict.add_context(ParameterContext(p[0], param_type=QuantityType(value_encoding=np.dtype(p[1]))))
             else:
-                pdict.add_context(ParameterContext(p, param_type=QuantityType(value_encoding=np.dtype('float32'))))
+                pdict.add_context(ParameterContext(p, param_type=QuantityType(value_encoding=np.dtype('float64'))))
 
     scov = SimplexCoverage(root_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom)
     if not data_dict:
@@ -163,7 +164,7 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
                 scov.append_parameter(ParameterContext('depth', fill_value=9999.0))
                 # scov.append_parameter(ParameterContext('lon'))
                 # scov.append_parameter(ParameterContext('lat'))
-                scov.append_parameter(ParameterContext('const_str', fill_value='Nope'))
+                scov.append_parameter(ParameterContext('const_str', param_type=ConstantType(value_encoding='S10'), fill_value='Nope'))
                 np_dict['depth'] = NumpyParameterData('depth', np.random.uniform(0,200,[nt]), time_array)
                 np_dict['lon'] = NumpyParameterData('lon', np.random.uniform(-180,180,[nt]), time_array)
                 np_dict['lat'] = NumpyParameterData('lat', np.random.uniform(-90,90,[nt]), time_array)
@@ -230,7 +231,7 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
 
         f = np.vectorize(f)
 
-        f(rec_arr['const_float'], rec_arr[scov.temporal_parameter_name], 88.8, scov._persistence_layer.value_list['const_float'].fill_value)
+        f(rec_arr['const_float'], rec_arr[scov.temporal_parameter_name], np.float32(88.8), scov._persistence_layer.value_list['const_float'].fill_value)
         f(rec_arr['const_str'], rec_arr[scov.temporal_parameter_name], 'Jello', scov._persistence_layer.value_list['const_str'].fill_value)
 
     def test_add_constant(self):
