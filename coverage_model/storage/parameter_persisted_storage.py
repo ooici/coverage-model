@@ -268,6 +268,9 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         span_table = SpanStorageFactory.get_span_storage_obj(self.storage_name)
         span_table.write_span(span)
 
+    def get_spans_by_id(self, spans):
+        return SpanStorageFactory.get_span_storage_obj(self.storage_name).get_spans(spans)
+
     def _get_span_dict(self, params, time_range=None, time=None):
         return SpanStorageFactory.get_span_storage_obj(self.storage_name).get_spans(coverage_ids=self.master_manager.guid, decompressors=self.value_list)
 

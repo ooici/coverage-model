@@ -540,3 +540,26 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         cov.set_parameter_values(data_dict)
         self.assertFalse(cov.is_empty())
         self.assertTrue(cov.has_parameter_data())
+
+    def test_sparse_arrays(self):
+        sparse_array = ParameterContext('sparse_array', param_type=QuantityType(value_encoding='float32, float32, float32'), fill_value=(0.0,0.0,0.0))
+        cov = _make_cov(self.working_dir, ['quantity', sparse_array], nt=0)
+        import time
+        ntp_now = time.time() + 2208988800
+        data_dict = {
+            'sparse_array' : ConstantOverTime('sparse_array', (0.0, 1.2, 3.12), time_start=ntp_now)
+            # 'time' : NumpyParameterData('time', np.arange(0, 100))
+        }
+        cov.set_parameter_values(data_dict)
+
+        data_dict = {
+            'time' : NumpyParameterData('time', np.arange(ntp_now , ntp_now + 10)),
+            'quantity' : NumpyParameterData('quantity', np.arange(10))
+        }
+        cov.set_parameter_values(data_dict)
+        retrieved_data = cov.get_parameter_values().get_data()
+        self.assertEqual(10, retrieved_data['sparse_array'].size)
+        for x in range(10):
+            self.assertEqual(np.float32(0.0), retrieved_data['sparse_array'][x][0])
+            self.assertEqual(np.float32(1.2), retrieved_data['sparse_array'][x][1])
+            self.assertEqual(np.float32(3.12), retrieved_data['sparse_array'][x][2])

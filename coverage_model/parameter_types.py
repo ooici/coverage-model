@@ -465,8 +465,10 @@ class QuantityType(AbstractSimplexParameterType):
         kwc=kwargs.copy()
         AbstractSimplexParameterType.__init__(self, value_class='NumericValue', **kwc)
         if value_encoding is None:
-            self._value_encoding = np.dtype('float32').str
+            self._value_encoding = 'float32'
         else:
+            if isinstance(value_encoding, np.dtype):
+                value_encoding = value_encoding.str
             try:
                 dt = np.dtype(value_encoding)
                 if dt.isbuiltin not in (0,1):
@@ -474,7 +476,7 @@ class QuantityType(AbstractSimplexParameterType):
                 if dt in UNSUPPORTED_DTYPES:
                     raise TypeError('\'value_encoding\' {0} is not supported by H5py: UNSUPPORTED types ==> {1}'.format(value_encoding, UNSUPPORTED_DTYPES))
 
-                self._value_encoding = dt.str
+                self._value_encoding = value_encoding
 
             except TypeError:
                 raise

@@ -136,6 +136,8 @@ class SearchCoverage(object):
 
     def _extract_parameter_data(self):
         observation_list = []
+        span_data = self._cov.get_spans(self.spans)
+        print self.spans, span_data
         for span_address in self.spans:
             span_address = AddressFactory.from_db_str(span_address)
             span = self._cov._persistence_layer.master_manager.span_collection.get_span(span_address)

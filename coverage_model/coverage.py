@@ -422,6 +422,9 @@ class AbstractCoverage(AbstractIdentifiable):
                     break
         return rv
 
+    def get_spans(self, spans):
+        return self._persistence_layer.get_spans_by_id(spans)
+
     def get_value_dictionary(self, param_list=None, temporal_slice=None, domain_slice=None):
         '''
         Retrieves a dictionary of parameters and value sets.
