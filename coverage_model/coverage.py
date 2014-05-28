@@ -433,20 +433,21 @@ class AbstractCoverage(AbstractIdentifiable):
         if self.closed:
             raise IOError('I/O operation on closed file')
         
-
-        param_list = param_list or []
-        
-        for p in param_list:
-            if p not in self._range_value:
-                raise KeyError('Parameter \'{0}\' not found in coverage'.format(p))
+        if param_list is None:
+            param_list = self.list_parameters()
+        else:
+            for p in param_list:
+                if p not in self._range_value:
+                    raise KeyError('Parameter \'{0}\' not found in coverage'.format(p))
         if self.is_empty():
             retval = {}
-            for p in param_list or self.list_parameters():
+            for p in param_list:
                 retval[p] = np.array([], dtype=self.get_parameter_context(p).param_type.value_encoding)
             return retval
 
 
-        return self.get_parameter_values(param_list, time_segment=temporal_slice)
+        param_list = param_list or []
+        return self.get_parameter_values(param_list, time_segment=temporal_slice, as_record_array=False, fill_empty_params=True).get_data()
 
     def _get_me_a_slice(self, temporal_slice, domain_slice):
         if temporal_slice is None and domain_slice is None:

@@ -858,7 +858,7 @@ class CoverageIntTestBase(object):
             for p in cov.list_parameters():
                 self.assertIn(p, vdict)
 
-            if cov.has_data():
+            if cov.has_parameter_data():
                 self.assertEquals(len(vdict['time']), 30)
                 np.testing.assert_array_equal(vdict['time'], np.arange(30))
             else:
@@ -874,16 +874,16 @@ class CoverageIntTestBase(object):
         time_steps = 30
         try:
             cov, cov_name = self.get_cov(brick_size=brick_size, nt=time_steps)
-            cov.set_parameter_values({'time': np.arange(30) + 20})
+            # cov.set_parameter_values({'time': np.arange(30) + 20})
             vdict = cov.get_value_dictionary(temporal_slice=(25, 30))
             for p in cov.list_parameters():
                 self.assertIn(p, vdict)
-                if cov.has_data():
+                if cov.has_parameter_data():
                     self.assertEquals(len(vdict[p]), 5)
                 else:
                     self.assertEquals(len(vdict[p]), 0)
 
-            if cov.has_data():
+            if cov.has_parameter_data():
                 np.testing.assert_array_equal(vdict['time'], np.arange(25,30))
             else:
                 np.testing.assert_array_equal(vdict['time'], np.array([]))
