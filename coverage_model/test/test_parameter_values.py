@@ -581,15 +581,15 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
                     start = time_segment[0]
                     end = time_segment[1]
                     if time_segment[0] is None and time_segment[1] is None:
-                        return arr
+                        arr =  arr
                     elif time_segment[0] is None and time_segment[1] is not None:
-                        return arr[:time_segment[1]+1]
+                        arr =  arr[:time_segment[1]+1]
                     elif time_segment[0] is not None and time_segment[1] is None:
-                        return arr[time_segment[1]:]
+                        arr =  arr[time_segment[1]:]
                     else:
-                        return arr[time_segment[0]:time_segment[1]+1]
-                else:
-                    return arr
+                        arr = arr[time_segment[0]:time_segment[1]+1]
+
+                return NumpyDictParameterData({name: arr})
         numexpr_type.callback = get_vals
         pyfunc_type.callback = get_vals
 
@@ -706,6 +706,7 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         return_vals = np.array([cats[k] for k in val_arr])
         np.testing.assert_array_equal(return_vals, cat_vals_arr['category'])
 
+    @unittest.skip('Sparse values replaced in R3')
     def test_sparse_constant_value_interop(self):
          # Setup the type
         scv_type = SparseConstantType(fill_value=-998, value_encoding='int32')
@@ -830,6 +831,7 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         np.testing.assert_allclose(scv_arr_val[:], awant)
         np.testing.assert_allclose(cov.get_parameter_values('scv_arr'), awant)
 
+    @unittest.skip('Sparse arrays replaced in R3')
     def test_sparse_constant_value_ndarray_interop(self):
         ifv = 827.38
         scv_arr_type = SparseConstantType(base_type=ArrayType(inner_encoding='float32', inner_fill_value=ifv))

@@ -14,7 +14,7 @@ import numexpr as ne
 from numbers import Number
 from collections import OrderedDict
 from coverage_model.basic_types import AbstractBase
-
+from coverage_model.parameter_data import NumpyDictParameterData
 
 class ParameterFunctionException(Exception):
     def __init__(self, message, original_type=None):
@@ -183,6 +183,8 @@ class PythonFunction(AbstractFunction):
                     args.append(lambda arg: pval_callback(arg, time_segment))
                 else:
                     v = pval_callback(a, time_segment)
+                    if isinstance(v, NumpyDictParameterData):
+                        v = v.get_data()[a]
                     if k.endswith('*'):
                         v = v[-1]
                     args.append(v)
@@ -258,13 +260,15 @@ class NumexprFunction(AbstractFunction):
                 ld[k] = a
             else:
                 if k.endswith('*'):
-                    print 'here'
-                    print time_segment
                     vals = pval_callback(a, time_segment, stride)
-                    print vals[-1]
-                    ld[k[:-1]] = pval_callback(a, time_segment, stride)[-1]
+                    if isinstance(vals, NumpyDictParameterData):
+                        vals = vals.get_data()[a]
+                    ld[k[:-1]] = vals[-1]
                 else:
-                    ld[k] = pval_callback(a, time_segment, stride=stride)
+                    vals = pval_callback(a, time_segment, stride=stride)
+                    if isinstance(vals, NumpyDictParameterData):
+                        vals = vals.get_data()[a]
+                    ld[k] = vals
 
         return ne.evaluate(self.expression, local_dict=ld)
 

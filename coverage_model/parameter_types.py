@@ -617,8 +617,6 @@ class ParameterFunctionType(AbstractSimplexParameterType):
 
         self._gen_template_attrs()
 
-        self._callback = callback
-
         # TODO: Find a way to allow a parameter to NOT be stored at all....basically, storage == None
         # For now, just use whatever the _value_encoding and _fill_value say it should be...
 
@@ -636,11 +634,11 @@ class ParameterFunctionType(AbstractSimplexParameterType):
 
     @property
     def callback(self):
-        return self._callback
+        return self._pval_callback
 
     @callback.setter
     def callback(self, value):
-        self._callback = value
+        self._pval_callback = value
 
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):

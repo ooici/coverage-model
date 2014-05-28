@@ -566,13 +566,11 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
 
 
     def test_pfs(self):
-        print "Verified"
-        pf_example = PythonFunction(name='identity', 
+        pf_example = PythonFunction(name='identity',
                                     owner='coverage_model.test.test_postgres_storage',
                                     func_name='identity',
                                     arg_list=['x'],
                                     param_map={'x':'quantity'})
-        print "Made it this far too"
 
         pf_context = ParameterContext('identity', param_type=ParameterFunctionType(pf_example))
 
@@ -588,9 +586,8 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
 
 
         retval = cov.get_parameter_values(['identity']).get_data()['identity']
-        np.testing.assert_allclose(retval, np.arange(10))
-
+        np.testing.assert_allclose(retval, np.arange(10)*3)
 
 
 def identity(x):
-    return np.copy(x)
+    return np.copy(x)*3
