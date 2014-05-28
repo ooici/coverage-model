@@ -563,3 +563,34 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
             self.assertEqual(np.float32(0.0), retrieved_data['sparse_array'][x][0])
             self.assertEqual(np.float32(1.2), retrieved_data['sparse_array'][x][1])
             self.assertEqual(np.float32(3.12), retrieved_data['sparse_array'][x][2])
+
+
+    def test_pfs(self):
+        print "Verified"
+        pf_example = PythonFunction(name='identity', 
+                                    owner='coverage_model.test.test_postgres_storage',
+                                    func_name='identity',
+                                    arg_list=['x'],
+                                    param_map={'x':'quantity'})
+        print "Made it this far too"
+
+        pf_context = ParameterContext('identity', param_type=ParameterFunctionType(pf_example))
+
+        cov = _make_cov(self.working_dir, ['quantity', pf_context], nt=0)
+        import time
+        ntp_now = time.time() + 2208988800
+
+        data_dict = {
+            'time' : NumpyParameterData('time', np.arange(ntp_now , ntp_now + 10)),
+            'quantity' : NumpyParameterData('quantity', np.arange(10))
+        }
+        cov.set_parameter_values(data_dict)
+
+
+        retval = cov.get_parameter_values(['identity']).get_data()['identity']
+        np.testing.assert_allclose(retval, np.arange(10))
+
+
+
+def identity(x):
+    return np.copy(x)
