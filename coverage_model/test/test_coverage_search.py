@@ -125,7 +125,7 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
 
         return scov, 'TestCoverageInt'
 
-    @unittest.skipIf(False, 'Not Automated. Requires setup.')
+    @unittest.skipIf(True, 'Not Automated. Requires setup.')
     def test_coverage_conversion(self):
         cov_id = '1fd8b69e63744f9e9705fbfd003102fa'
         cov_dir = '/Users/casey/Desktop/datasets'
@@ -278,17 +278,17 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
         cov1, cov_name = self.construct_cov(nt=100)
         self.assertIsNotNone(cov1)
         id1 = cov1.persistence_guid
-        cov1_dict = cov1.get_value_dictionary().get_data()
+        cov1_dict = cov1.get_parameter_values().get_data()
 
         cov2, cov_name = self.construct_cov(nt=50)
         self.assertIsNotNone(cov2)
         id2 = cov2.persistence_guid
-        cov2_dict = cov2.get_value_dictionary().get_data()
+        cov2_dict = cov2.get_parameter_values().get_data()
 
         cov3, cov_name = self.construct_cov(nt=20)
         self.assertIsNotNone(cov3)
         id3 = cov3.persistence_guid
-        cov3_dict = cov3.get_value_dictionary().get_data()
+        cov3_dict = cov3.get_parameter_values().get_data()
 
         for cov in [cov1, cov2, cov3]:
             cov.close()
@@ -303,7 +303,7 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
         self.assertIsNotNone(cov2r)
         self.assertIsNotNone(cov3r)
         for cov_tup in [(cov1_dict, cov1r), (cov2_dict, cov2r), (cov3_dict, cov3r)]:
-            check_equal_param_dicts(cov_tup[0], cov_tup[1].get_value_dictionary().get_data())
+            check_equal_param_dicts(cov_tup[0], cov_tup[1].get_parameter_values().get_data())
 
         cov1a = AbstractCoverage.load(self.working_dir, id1)
         cov2a = AbstractCoverage.load(self.working_dir, id2)
@@ -312,7 +312,7 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
         self.assertIsNotNone(cov2a)
         self.assertIsNotNone(cov3a)
         for cov_tup in [(cov1_dict, cov1a), (cov2_dict, cov2a), (cov3_dict, cov3a)]:
-            check_equal_param_dicts(cov_tup[0], cov_tup[1].get_value_dictionary().get_data())
+            check_equal_param_dicts(cov_tup[0], cov_tup[1].get_parameter_values().get_data())
 
         from multiprocessing import Process, Queue, queues
 
@@ -327,7 +327,7 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
                 message = 'Construction failed'
             elif cov_ is not None:
                 try:
-                    check_equal_param_dicts(value_dict, cov_.get_value_dictionary().get_data())
+                    check_equal_param_dicts(value_dict, cov_.get_parameter_values().get_data())
                 except:
                     message = 'Values inconsistent'
             q.put(message)

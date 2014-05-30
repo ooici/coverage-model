@@ -269,7 +269,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         span_table.write_span(span)
 
     def get_spans_by_id(self, spans):
-        return SpanStorageFactory.get_span_storage_obj(self.storage_name).get_spans(spans)
+        return SpanStorageFactory.get_span_storage_obj(self.storage_name).get_spans(coverage_ids=self.master_manager.guid, span_ids=spans, decompressors=self.value_list)
 
     def _get_span_dict(self, params, time_range=None, time=None):
         return SpanStorageFactory.get_span_storage_obj(self.storage_name).get_spans(coverage_ids=self.master_manager.guid, decompressors=self.value_list)
@@ -288,10 +288,10 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         associated_spans = self._get_span_dict(params, time_range, time)
         numpy_params, function_params = self._create_param_dict_from_spans_dict(params, associated_spans)
         dict_params = None
-        if fill_empty_params is True:
-            dict_params=params
         np_dict = self._create_parameter_dictionary_of_numpy_arrays(numpy_params, function_params, params=dict_params)
         np_dict = self._append_parameter_fuction_data(params, np_dict)
+        if fill_empty_params is True:
+            np_dict = self._fill_empty_params(params, np_dict)
         rec_arr = None
         if self.alignment_parameter in np_dict:
             np_dict = self._sort_flat_arrays(np_dict, sort_parameter=sort_parameter)
@@ -352,9 +352,6 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             param_context_dict[key] = self.value_list[key]
 
         ndpd = NumpyDictParameterData(np_dict, alignment_key=self.alignment_parameter, param_context_dict=param_context_dict, as_rec_array=as_rec_array)
-        # if sort_parameter is None or sort_parameter not in ndpd.get_data().names:
-        #     sort_parameter = self.alignment_parameter
-        # ndpd.get_data().sort(order=sort_parameter)
 
         return ndpd
 
@@ -381,7 +378,8 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         else:
             idx = (np.abs(time_array-time)).argmin()
             for key, val in np_dict.iteritems():
-                return_dict[key] = np.array([val[idx]])
+                return_dict[key] = np.array([val[idx]], dtype=val.dtype)
+                print 't2', key, return_dict[key], return_dict[key].dtype, val.dtype, val
         return return_dict
 
     def _append_parameter_fuction_data(self, params, param_dict, time_segment=None, time=None):
@@ -435,9 +433,10 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                     continue
                 np_data = span_data[span_name].get_data()
                 if npa is None:
-                    npa = np.empty(shape_outer_dimmension, dtype=np_data.dtype)
+                    dt = np.dtype(self.parameter_metadata[id].parameter_context.param_type.value_encoding)
+                    npa = np.empty(shape_outer_dimmension, dtype=dt)
                     if self.value_list[id].fill_value is not None:
-                        npa.fill(self.value_list[id].fill_value)
+                        npa[:] = self.value_list[id].fill_value
                 end_idx = insert_index + np_data.size
                 npa[insert_index:end_idx] = np_data
                 insert_index += np_data.size
@@ -451,57 +450,21 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                                                              param_type=self.parameter_metadata[param_name].parameter_context.param_type)
             return_dict[param_name] = arr
 
+        return return_dict
+
+    def _fill_empty_params(self, params, np_dict):
+        filled_params = {}
         if params is not None:
-            unset_params = set(params) - set(return_dict.keys())
+            unset_params = set(params) - set(np_dict.keys())
             if len(unset_params) > 0:
                 for param in unset_params:
                     dtype = np.array([self.value_list[param].fill_value]).dtype
-                    arr = np.empty(len(return_dict[self.alignment_parameter]), dtype=dtype)
+                    arr = np.empty(len(np_dict[self.alignment_parameter]), dtype=dtype)
                     arr[:] = self.value_list[param].fill_value
-                    return_dict[param] = arr
+                    filled_params[param] = arr
 
-        return return_dict
-        for key, d in numpy_params.iteritems():
-            alignment_array = self.value_list[self.alignment_parameter].decompress(d[self.alignment_parameter][0]).get_data()
-            new_size = alignment_array.size
-            for param_dict, vals in d.iteritems():
-                if isinstance(vals[0], np.ndarray) and  new_size != vals[0].size:
-                    raise Exception("Span, %s, array is not aligned %s" % (key, param_dict))
-                if param_dict not in return_dict.keys():
-                    dtype = self.value_list[param_dict].fill_value
-                    if isinstance(dtype, basestring):
-                        dtype = object
-                    else:
-                        dtype = type(dtype)
-                    if arr_size > 0:
-                        arr = np.empty(arr_size, dtype)
-                        arr.fill(self.value_list[param_dict].fill_value)
-                        return_dict[param_dict] = arr
-                    else:
-                        return_dict[param_dict] = np.empty(0, dtype)
-                    param_data = self.value_list[param_dict].decompress(vals[0])
-                    if isinstance(param_data, NumpyParameterData):
-                        return_dict[param_dict] = np.append(return_dict[param_dict], param_data.get_data())
-                    elif isinstance(param_data, ConstantOverTime):
-                        return_dict[param_dict] = np.append(return_dict[param_dict], param_data.get_data_as_numpy_array(alignment_array, fill_value=self.value_list[param_dict].fill_value))
-                    else:
-                        arr = np.empty(arr_size)
-                        arr.fill(self.value_list[param_dict].fill_value)
-                        return_dict[param_dict] = np.append(return_dict[param_dict], arr)
-            if new_size is not None:
-                for key in return_dict:
-                    if key not in d.keys() and key in self.value_list:
-                        dtype = self.value_list[key].fill_value
-                        if isinstance(dtype, basestring):
-                            dtype = object
-                        else:
-                            dtype = type(dtype)
-                        arr = np.empty(new_size, dtype)
-                        arr.fill(self.value_list[key].fill_value)
-                        return_dict[key] = np.append(return_dict[key], arr)
-                arr_size += new_size
-
-        pass
+        np_dict.update(filled_params)
+        return np_dict
 
     def has_data(self):
         return SpanStorageFactory.get_span_storage_obj(self.storage_name).has_data(self.master_manager.guid)
@@ -738,6 +701,9 @@ class PostgresPersistedStorage(AbstractStorage):
         self.fill_value = fill_value
         self.mode = mode
         self.parameter_context = parameter_context
+
+    def __getitem__(self, slice_):
+        return None
 
     def __setitem__(self, slice_, value):
         if self.mode == 'r':

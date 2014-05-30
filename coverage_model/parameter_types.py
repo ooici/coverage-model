@@ -237,6 +237,7 @@ class AbstractParameterType(AbstractIdentifiable):
         return dparams
 
     def create_filled_array(self, size):
+        print 'cfa dtype=', self.value_encoding
         arr = np.empty(size, dtype=np.dtype(self.value_encoding))
         arr[:] = self.fill_value
         return arr
@@ -873,11 +874,16 @@ class ArrayType(AbstractComplexParameterType):
         AbstractComplexParameterType.__init__(self, value_class='ArrayValue', **kwc)
 
         if inner_encoding is None or np.dtype(inner_encoding).kind in ['S', 'O']:
-            self.inner_encoding = None
+            self.inner_encoding = 'object'
         else:
             self.inner_encoding = verify_encoding(inner_encoding)
 
         self.inner_fill_value = verify_fill_value(self.inner_encoding, inner_fill_value, False)
         self._gen_template_attrs()
 
-        # self.dtype = np.dtype(', '.join([np.dtype(self.inner_encoding).name for x in range(inner_length)]))
+        self._fill_value = tuple([self.inner_fill_value for x in range(inner_length)])
+        self.value_encoding = ', '.join([self.inner_encoding for x in range(inner_length)])
+
+        print self.inner_fill_value
+        print self.fill_value
+        print np.dtype(self.value_encoding)

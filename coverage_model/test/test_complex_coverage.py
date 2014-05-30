@@ -62,7 +62,7 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
             dat = range(nt)
 
         try:
-            p_dict[p] = dat
+            p_dict[p] = np.array(dat)
         except Exception as ex:
             import sys
             raise Exception('Error setting values for {0}: {1}'.format(p, data_dict[p])), None, sys.exc_traceback

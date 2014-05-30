@@ -350,7 +350,7 @@ class AbstractCoverage(AbstractIdentifiable):
 
     def get_parameter_values(self, param_names=None, time_segment=None, time=None,
                              sort_parameter=None, stride_length=None, return_value=None, fill_empty_params=False,
-                             function_params=None, as_record_array=True):
+                             function_params=None, as_record_array=False):
         """
         Retrieve the value for a parameter
 
@@ -1211,9 +1211,7 @@ class ComplexCoverage(AbstractCoverage):
             root_dir = root_dir if not root_dir.endswith(persistence_guid) else os.path.split(root_dir)[0]
 
 
-            pth = os.path.join(root_dir, persistence_guid)
             if is_persisted(root_dir, persistence_guid):
-#cjb            if os.path.exists(pth):
                 self._existing_coverage(root_dir, persistence_guid)
             else:
                 self._new_coverage(root_dir, persistence_guid, name, reference_coverage_locs, parameter_dictionary, complex_type)
@@ -1228,7 +1226,6 @@ class ComplexCoverage(AbstractCoverage):
         # If the path does exist, initialize the simple persistence layer
         pth = os.path.join(root_dir, persistence_guid)
         if not is_persisted(root_dir, persistence_guid):
-#cjb        if not os.path.exists(pth):
             raise SystemError('Cannot find specified coverage: {0}'.format(pth))
         self._persistence_layer = PostgresPersistenceLayer(root_dir, persistence_guid, mode=self.mode)
         if self._persistence_layer.version != self.version:
@@ -1278,23 +1275,23 @@ class ComplexCoverage(AbstractCoverage):
         parameter_dictionary = self._persistence_layer.param_dict
 
 
-        if complex_type == ComplexCoverageType.PARAMETRIC_STRICT:
-            # PARAMETRIC_STRICT - combine parameters from multiple coverages - MUST HAVE IDENTICAL TIME VALUES
-            self._build_parametric(reference_coverages, parameter_dictionary)
-        elif complex_type == ComplexCoverageType.TEMPORAL_INTERLEAVED:
-            # TEMPORAL_INTERLEAVED - combine parameters from multiple coverages - may have differing time values
-            self._build_temporal_interleaved(reference_coverages, parameter_dictionary)
-        elif complex_type == ComplexCoverageType.TEMPORAL_AGGREGATION:
-            # TEMPORAL_AGGREGATION - combine coverages temporally
-            self._build_temporal_aggregation(reference_coverages, parameter_dictionary)
-        elif complex_type == ComplexCoverageType.TEMPORAL_BROADCAST:
-            # TEMPORAL_BROADCAST - combine coverages temporally, broadcasting non-primary coverages
-            self._build_temporal_broadcast(reference_coverages, parameter_dictionary)
-        elif complex_type == ComplexCoverageType.SPATIAL_JOIN:
-            # Complex spatial - combine coverages across a higher-order topology
-            raise NotImplementedError('Not yet implemented')
-        elif complex_type == ComplexCoverageType.TIMESERIES:
-            self._build_timeseries(reference_coverages, parameter_dictionary)
+        # if complex_type == ComplexCoverageType.PARAMETRIC_STRICT:
+        #     # PARAMETRIC_STRICT - combine parameters from multiple coverages - MUST HAVE IDENTICAL TIME VALUES
+        #     self._build_parametric(reference_coverages, parameter_dictionary)
+        # elif complex_type == ComplexCoverageType.TEMPORAL_INTERLEAVED:
+        #     # TEMPORAL_INTERLEAVED - combine parameters from multiple coverages - may have differing time values
+        #     self._build_temporal_interleaved(reference_coverages, parameter_dictionary)
+        # elif complex_type == ComplexCoverageType.TEMPORAL_AGGREGATION:
+        #     # TEMPORAL_AGGREGATION - combine coverages temporally
+        #     self._build_temporal_aggregation(reference_coverages, parameter_dictionary)
+        # elif complex_type == ComplexCoverageType.TEMPORAL_BROADCAST:
+        #     # TEMPORAL_BROADCAST - combine coverages temporally, broadcasting non-primary coverages
+        #     self._build_temporal_broadcast(reference_coverages, parameter_dictionary)
+        # elif complex_type == ComplexCoverageType.SPATIAL_JOIN:
+        #     # Complex spatial - combine coverages across a higher-order topology
+        #     raise NotImplementedError('Not yet implemented')
+        # elif complex_type == ComplexCoverageType.TIMESERIES:
+        #     self._build_timeseries(reference_coverages, parameter_dictionary)
 
     def close(self, force=False, timeout=None):
         if not hasattr(self, '_closed'):
@@ -1388,7 +1385,7 @@ class ComplexCoverage(AbstractCoverage):
             pivot = cls._interval_pivot(arr, left, right, pivot)
             cls._interval_qsort(arr, left, pivot-1)
             cls._interval_qsort(arr, pivot+1, right)
-    
+
     def get_parameter_values(self, param_names, time_segment=None, time=None, sort_parameter=None, stride_length=None, return_value=None):
         '''
         Obtain the value set for a given parameter over a specified domain
@@ -1542,7 +1539,7 @@ class ComplexCoverage(AbstractCoverage):
         '''
         param_list = param_list or self.list_parameters()
         tname = self.temporal_parameter_name
-        # Potential issue here if the s-cov doesn't use the same temporal 
+        # Potential issue here if the s-cov doesn't use the same temporal
         # parameter name
         if slice_.start == slice_.stop and slice_.start is not None:
             dtype = self._range_dictionary[tname].param_type.value_encoding
@@ -1583,7 +1580,7 @@ class ComplexCoverage(AbstractCoverage):
         s = slice(None,None,stride)
         for k,v in value_dict.iteritems():
             value_dict[k] = v[s]
-        
+
 
     def insert_value_set(self, value_dictionary):
         '''
@@ -1658,7 +1655,7 @@ class ComplexCoverage(AbstractCoverage):
 
         # In an ideal case and simple input the value sets arrive in a
         # monotonically increasing order, the solution is to append the value
-        # set to the last coverage in the interval_map. 
+        # set to the last coverage in the interval_map.
         if value_interval.x0 > full_interval.x1:
             interval, cov = interval_map[-1]
             self._append_to_coverage(cov, value_dictionary)
@@ -1697,17 +1694,17 @@ class ComplexCoverage(AbstractCoverage):
         # Construct temporal and spatial Domain objects
         tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
         sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
-        scov = SimplexCoverage(root_dir, 
+        scov = SimplexCoverage(root_dir,
                                utils.create_guid(),
                                name,
-                               parameter_dictionary=pdict, 
+                               parameter_dictionary=pdict,
                                temporal_domain=tdom,
                                spatial_domain=sdom,
                                mode='r+')
         path = scov.persistence_dir
         self.append_reference_coverage(path)
         return scov
-        
+
 
 
     @classmethod
@@ -1739,7 +1736,7 @@ class ComplexCoverage(AbstractCoverage):
             if axis_arr[i] == val and idx_arr[i] < idx_arr[right]:
                 cls._value_dict_swap(value_dict, i, store_index)
                 store_index += 1
-                
+
         cls._value_dict_swap(value_dict, store_index, right)
         return store_index
 
@@ -2009,77 +2006,76 @@ class ComplexCoverage(AbstractCoverage):
 
         self._head_coverage_path = None
 
-    # def _build_temporal_aggregation(self, rcovs, parameter_dictionary):
-    #     # First open all the coverages and sort them temporally
-    #     time_bounds = []
-    #     for cpth, cov in self._verify_rcovs(rcovs):
-    #
-    #         # Get the time bounds for the coverage
-    #         if cov.num_timesteps == 0:
-    #             tbnds = (None, None)
-    #         else:
-    #             tbnds = cov.get_data_bounds(cov.temporal_parameter_name)
-    #             if tbnds[0] == tbnds[1]:
-    #                 tbnds = (tbnds[0], None)
-    #
-    #         spn = Span(tbnds[0], tbnds[1], value=cpth)
-    #
-    #         if spn in time_bounds:
-    #             log.warn('Coverage with time bounds \'%s\' already present; ignoring', spn.tuplize())
-    #             continue
-    #
-    #         time_bounds.append(spn)
-    #
-    #         self._reference_covs[cpth] = cov
-    #
-    #         # Add parameters from the coverage if not already present
-    #         covpd = cov.parameter_dictionary # Provides a copy
-    #         for p, pc in covpd.iteritems():
-    #             if p not in parameter_dictionary:
-    #                 if p not in self._range_dictionary:
-    #                     # Add the context from the reference coverage
-    #                     pc = pc[1]  # pc is a tuple (ordinal, ParameterContext)
-    #                     self._assign_domain(pc)
-    #                     self._range_dictionary.add_context(pc)
-    #                     # Add the sparse value class
-    #                     from coverage_model.parameter_types import SparseConstantType
-    #                     ppt=self._range_dictionary.get_context(p).param_type
-    #                     self._range_value[p] = get_value_class(
-    #                         SparseConstantType(value_encoding=ppt.value_encoding,
-    #                                            fill_value=ppt.fill_value),
-    #                         DomainSet(self.temporal_domain))
-    #                 else:
-    #                     log.info('Parameter \'%s\' from coverage \'%s\' already present, skipping...', p, cpth)
-    #
-    #     time_bounds.sort()
-    #
-    #     # Next build domain spans for each coverage
-    #     rcov_domain_spans = []
-    #     start = 0
-    #     for i, tb in enumerate(time_bounds):
-    #         cov = self._reference_covs[tb.value]
-    #         end = start + cov.num_timesteps
-    #         rcov_domain_spans.append(Span(start, end, value=tb.value))
-    #         start = end
-    #
-    #     rcov_domain_spans.sort()
-    #
-    #     self.rcov_domain_spans = rcov_domain_spans
-    #
-    #     # Add data for all spans
-    #     for s in self.rcov_domain_spans:
-    #         cov = self._reference_covs[s.value]
-    #         for p in self.list_parameters():
-    #             if p in cov._range_dictionary:
-    #                 self._range_value[p][:] = cov._range_value[p]
-    #             else:
-    #                 self._range_value[p][:] = self._range_dictionary.get_context(p).fill_value
-    #         self.insert_timesteps(len(s))
-    #
-    #     self._head_coverage_path = self._reference_covs[self.rcov_domain_spans[-1].value].head_coverage_path
+    def _build_temporal_aggregation(self, rcovs, parameter_dictionary):
+        # First open all the coverages and sort them temporally
+        time_bounds = []
+        for cpth, cov in self._verify_rcovs(rcovs):
+
+            # Get the time bounds for the coverage
+            if cov.num_timesteps == 0:
+                tbnds = (None, None)
+            else:
+                tbnds = cov.get_data_bounds(cov.temporal_parameter_name)
+                if tbnds[0] == tbnds[1]:
+                    tbnds = (tbnds[0], None)
+
+            spn = Span(tbnds[0], tbnds[1], value=cpth)
+
+            if spn in time_bounds:
+                log.warn('Coverage with time bounds \'%s\' already present; ignoring', spn.tuplize())
+                continue
+
+            time_bounds.append(spn)
+
+            self._reference_covs[cpth] = cov
+
+            # Add parameters from the coverage if not already present
+            covpd = cov.parameter_dictionary # Provides a copy
+            for p, pc in covpd.iteritems():
+                if p not in parameter_dictionary:
+                    if p not in self._range_dictionary:
+                        # Add the context from the reference coverage
+                        pc = pc[1]  # pc is a tuple (ordinal, ParameterContext)
+                        self._assign_domain(pc)
+                        self._range_dictionary.add_context(pc)
+                        # Add the sparse value class
+                        from coverage_model.parameter_types import SparseConstantType
+                        ppt=self._range_dictionary.get_context(p).param_type
+                        self._range_value[p] = get_value_class(
+                            SparseConstantType(value_encoding=ppt.value_encoding,
+                                               fill_value=ppt.fill_value),
+                            DomainSet(self.temporal_domain))
+                    else:
+                        log.info('Parameter \'%s\' from coverage \'%s\' already present, skipping...', p, cpth)
+
+        time_bounds.sort()
+
+        # Next build domain spans for each coverage
+        rcov_domain_spans = []
+        start = 0
+        for i, tb in enumerate(time_bounds):
+            cov = self._reference_covs[tb.value]
+            end = start + cov.num_timesteps()
+            rcov_domain_spans.append(Span(start, end, value=tb.value))
+            start = end
+
+        rcov_domain_spans.sort()
+
+        self.rcov_domain_spans = rcov_domain_spans
+
+        # Add data for all spans
+        for s in self.rcov_domain_spans:
+            cov = self._reference_covs[s.value]
+            for p in self.list_parameters():
+                if p in cov._range_dictionary:
+                    self._range_value[p][:] = cov._range_value[p]
+                else:
+                    self._range_value[p][:] = self._range_dictionary.get_context(p).fill_value
+
+        self._head_coverage_path = self._reference_covs[self.rcov_domain_spans[-1].value].head_coverage_path
 
     def _build_timeseries(self, rcovs, parameter_dictionary):
-        
+
         for p, pc in parameter_dictionary.iteritems():
             if p not in self._range_dictionary:
                 pc = pc[1]
@@ -2609,28 +2605,3 @@ class ParameterFilter(AbstractFilter):
     """
     def __init__(self):
         AbstractFilter.__init__(self)
-
-
-
-#=========================
-# Possibly OBE ?
-#=========================
-
-#class Topology():
-#    """
-#    Sets of topological entities
-#    Mappings between topological entities
-#    """
-#    pass
-#
-#class TopologicalEntity():
-#    """
-#
-#    """
-#    pass
-#
-#class ConstructionType():
-#    """
-#    Lattice or not (i.e. 'unstructured')
-#    """
-#    pass

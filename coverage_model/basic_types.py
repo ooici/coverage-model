@@ -289,7 +289,8 @@ class InMemoryStorage(AbstractStorage):
 
     def expand(self, arrshp, origin, expansion):
         narr = np.empty(arrshp, dtype=self.dtype)
-        narr.fill(self.fill_value)
+        print self.fill_value, self.dtype, type(self)
+        narr[:] = self.fill_value
         loc=[origin for x in xrange(expansion)]
         self._storage = np.insert(self._storage[:], loc, narr, axis=0)
 

@@ -335,7 +335,7 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
             if isinstance(assn_vals[pname], ConstantOverTime):
                 vals[:] = assn_vals[pname].get_data()
             else:
-                vals = np.array(assn_vals[pname])
+                vals = cov.parameter_dictionary[pname].param_type.create_data_array(assn_vals[pname], assn_vals[cov.temporal_parameter_name].size)
             start = assn_vals[cov.temporal_parameter_name][0]
             end = assn_vals[cov.temporal_parameter_name][-1]
             cov.set_parameter_values(assn_vals)
@@ -344,7 +344,9 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
             start = 0
             end = len(vals)-1
 
-        np.testing.assert_array_equal(cov.get_parameter_values(pname, time_segment=(start, end)).get_data()[pname], vals[:])
+        print cov.get_parameter_values(pname, time_segment=(start, end), fill_empty_params=True).get_data()[pname].dtype
+        print vals[:].dtype
+        np.testing.assert_array_equal(cov.get_parameter_values(pname, time_segment=(start, end), fill_empty_params=True).get_data()[pname], vals[:])
         np.testing.assert_array_equal(cov.get_parameter_values(pname, time_segment=(end, None)).get_data()[pname], vals[-1:])
         np.testing.assert_array_equal(cov.get_parameter_values(pname, time_segment=(start, end), stride_length=3).get_data()[pname], vals[0::3])
         if isinstance(val_cls.parameter_type, ArrayType) or \
@@ -366,7 +368,7 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
             if isinstance(assn_vals[pname], ConstantOverTime):
                 vals[:] = assn_vals[pname].get_data()
             else:
-                vals = np.array(assn_vals[pname])
+                vals = cov.parameter_dictionary[pname].param_type.create_data_array(assn_vals[pname], assn_vals[cov.temporal_parameter_name].size)
             start = assn_vals[cov.temporal_parameter_name][0]
             end = assn_vals[cov.temporal_parameter_name][-1]
             cov.set_parameter_values(assn_vals)
@@ -633,8 +635,8 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
 
     def test_array_value_interop(self):
         # Setup the type
-        arr_type = ArrayType()
-        arr_type_ie = ArrayType(inner_encoding=np.dtype('int32'))
+        arr_type = ArrayType('int32', inner_length=3)
+        arr_type_ie = ArrayType(inner_encoding=np.dtype('float32'), inner_length=3)
 
         # Setup the values
         ntimes = 20

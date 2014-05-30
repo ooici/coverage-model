@@ -60,31 +60,37 @@ class NumpyDictParameterData(ParameterData):
         self.size = alignment_array.size
 
         data = param_dict
-        try:
-            name_arr = []
-            data_arr = []
-            format_arr = []
-            for param_name, param_data in param_dict.iteritems():
-                self._validate_param_data(param_name, param_data, alignment_array.size)
-                name_arr.append(param_name)
-                if len(param_data.shape) > 1:
-                    param_data = np.core.records.fromrecords(param_data)
-                data_arr.append(param_data)
-                param_dict[param_name] = param_data
-                dt = np.dtype(param_data.dtype).str
-                format_arr.append(np.dtype(param_data.dtype).str)
-            format_arr = ', '.join(format_arr)
-
-            if as_rec_array:
-                data = np.core.records.fromarrays(data_arr, names=name_arr, formats=format_arr)
-        except Exception as e:
-            # print "Record array creation failed, just return numpy arrays. Failure: %s" % e.message
-            #TODO log something
-            data = param_dict
         super(NumpyDictParameterData, self).__init__('none', data)
+        self.is_record_array = False
+        if as_rec_array:
+            self.convert_to_record_array()
 
         self.alignment_key = alignment_key
         self.param_context_dict = param_context_dict
+
+    def convert_to_record_array(self):
+        if not self.is_record_array:
+            try:
+                name_arr = []
+                data_arr = []
+                format_arr = []
+                for param_name, param_data in self._data.iteritems():
+                    self._validate_param_data(param_name, param_data, self._data[self.alignment_key].size)
+                    name_arr.append(param_name)
+                    if len(param_data.shape) > 1:
+                        param_data = np.core.records.fromrecords(param_data)
+                    data_arr.append(param_data)
+                    # param_dict[param_name] = param_data
+                    format_arr.append(np.dtype(param_data.dtype).str)
+                format_arr = ', '.join(format_arr)
+
+                data = np.core.records.fromarrays(data_arr, names=name_arr, formats=format_arr)
+            except Exception as e:
+                # print "Record array creation failed, just return numpy arrays. Failure: %s" % e.message
+                #TODO log something
+                self.is_record_array = False
+
+        return self.is_record_array
 
     def _validate_param_data(self, param_name, param_data, size, param_context=None):
             if not isinstance(param_name, basestring):

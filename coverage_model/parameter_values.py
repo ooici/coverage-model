@@ -397,13 +397,16 @@ class SparseConstantValue(AbstractComplexParameterValue):
         return v_arr
 
     def __getitem__(self, slice_):
-        slice_ = utils.fix_slice(slice_, self.shape)
+        print self.shape
+        # slice_ = utils.fix_slice(slice_, self.shape)
 
         # Nothing asked for!
+        print slice_
         if len(slice_) is 0:
             return np.empty(0, dtype=self.value_encoding)
 
         try:
+            print type(self.storage)
             spans = self._storage[0]
         except ValueError, ve:
             if ve.message != 'No Bricks!':
@@ -465,6 +468,7 @@ class SparseConstantValue(AbstractComplexParameterValue):
 
         try:
             spans = self._storage[0]
+            print spans, self.fill_value
         except ValueError, ve:
             if ve.message != 'No Bricks!':
                 raise
@@ -472,7 +476,7 @@ class SparseConstantValue(AbstractComplexParameterValue):
             spans = self.fill_value
 
         if isinstance(value, SparseConstantValue):  # RDT --> Coverage style assignment
-            value = value[0, :]
+            value = value[0,]
 
         if not isinstance(value, AbstractParameterValue):
             # If the value is an array/iterable, we only take the first one of the outermost dimension
@@ -482,10 +486,11 @@ class SparseConstantValue(AbstractComplexParameterValue):
         else:
             bnds = value.bounds
 
-        if not hasattr(spans, '__iter__') and spans == self.fill_value:
+        if not hasattr(spans, '__iter__') and spans == self.fill_value or spans == self.fill_value:
             spans = [Span(value=value)]
             slice_ = (self.shape[0] - 1,)
 
+        print type(spans), spans, spans[-1], type(self)
         # Get the last span
         lspn = spans[-1]
         if isinstance(lspn.value, AbstractParameterValue):

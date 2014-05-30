@@ -135,20 +135,14 @@ class SearchCoverage(object):
         self._extract_parameter_data()
 
     def _extract_parameter_data(self):
-        observation_list = []
-        span_data = self._cov.get_spans(self.spans)
-        print self.spans, span_data
-        for span_address in self.spans:
-            span_address = AddressFactory.from_db_str(span_address)
-            span = self._cov._persistence_layer.master_manager.span_collection.get_span(span_address)
+        for span in self._cov.get_spans(self.spans):
             intersection = None
             span_np_dict = {}
-            for param_name in span.params.keys():
-                val = self._cov._range_value[param_name]._storage
-                span_np_dict[param_name] = val.get_brick_slice(span_address.brick_id)
+            for param_name in span.param_dict.keys():
+                span_np_dict[param_name] = span.param_dict[param_name].get_data()
 
                 for param in self.view_criteria.criteria.values():
-                    if param.param_name in span.params and param.param_name == param_name:
+                    if param.param_name in span.param_dict and param.param_name == param_name:
                         indexes = np.argwhere( (span_np_dict[param_name]>=param.value[0]) &
                                                (span_np_dict[param_name]<=param.value[1]) )
                         if len(indexes.shape) > 1:
@@ -163,8 +157,6 @@ class SearchCoverage(object):
                 else:
                     self.np_array_dict[param_name] = np_array[intersection]
 
-        dtype = []
-        npas = []
         self.data_size = None
         for key, val in self.np_array_dict.iteritems():
             if self.data_size is None:

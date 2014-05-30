@@ -1123,7 +1123,13 @@ class CoverageIntTestBase(object):
             fill_arr = np.empty(nt, dtype='f')
             fill_arr.fill(pc_in.fill_value)
 
-            self.assertTrue(parameter_name not in scov.get_parameter_values(parameter_name).get_data().dtype.fields)
+            param_dict = scov.get_parameter_values(parameter_name)
+            returned_params = set()
+            if param_dict.is_record_array:
+                returned_params.update(param_dict.get_data().dtype.fields)
+            else:
+                returned_params.update(param_dict.get_data().keys())
+            self.assertTrue(parameter_name not in returned_params)
 
             sample_values = np.arange(nt, dtype='f')
             time_arr = np.arange(2000,2000+nt)
