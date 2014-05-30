@@ -574,7 +574,14 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
 
         pf_context = ParameterContext('identity', param_type=ParameterFunctionType(pf_example))
 
-        cov = _make_cov(self.working_dir, ['quantity', pf_context], nt=0)
+        ne_example = NumexprFunction(name = 'sum',
+                                     expression= 'x+2',
+                                     arg_list=['x'],
+                                     param_map={'x':'quantity'})
+
+        ne_context = ParameterContext('sum', param_type=ParameterFunctionType(ne_example))
+
+        cov = _make_cov(self.working_dir, ['quantity', pf_context, ne_context], nt=0)
         import time
         ntp_now = time.time() + 2208988800
 
@@ -587,6 +594,9 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
 
         retval = cov.get_parameter_values(['identity']).get_data()['identity']
         np.testing.assert_allclose(retval, np.arange(10)*3)
+
+        retval = cov.get_parameter_values(['sum']).get_data()['sum']
+        np.testing.assert_allclose(retval, np.arange(10) + 2)
 
 
 def identity(x):
