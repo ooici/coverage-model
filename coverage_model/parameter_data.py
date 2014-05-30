@@ -84,7 +84,7 @@ class NumpyDictParameterData(ParameterData):
                     format_arr.append(np.dtype(param_data.dtype).str)
                 format_arr = ', '.join(format_arr)
 
-                data = np.core.records.fromarrays(data_arr, names=name_arr, formats=format_arr)
+                self._data = np.core.records.fromarrays(data_arr, names=name_arr, formats=format_arr)
             except Exception as e:
                 # print "Record array creation failed, just return numpy arrays. Failure: %s" % e.message
                 #TODO log something

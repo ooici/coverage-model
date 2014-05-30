@@ -438,6 +438,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                     if self.value_list[id].fill_value is not None:
                         npa[:] = self.value_list[id].fill_value
                 end_idx = insert_index + np_data.size
+                print npa.dtype, np_data
                 npa[insert_index:end_idx] = np_data
                 insert_index += np_data.size
             return_dict[id] = npa

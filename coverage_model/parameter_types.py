@@ -414,6 +414,7 @@ class CategoryType(AbstractComplexParameterType):
         if key_fill_value is None or key_fill_value not in categories:
             key_fill_value = categories.keys()[0]
 
+        print self._value_encoding
         self._template_attrs['categories'] = categories
         self._template_attrs['fill_value'] = key_fill_value
         self._gen_template_attrs()

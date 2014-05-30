@@ -576,7 +576,7 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         # Setup the values
         ntimes = 20
 
-        def get_vals(name, time_segment=None, stride=None):
+        def get_vals(name, time_segment=None, stride_length=None):
             if name == 'time':
                 arr = np.atleast_1d(range(ntimes))
                 if time_segment is not None:

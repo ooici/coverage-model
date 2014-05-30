@@ -165,7 +165,7 @@ class PythonFunction(AbstractFunction):
                 raise
 
 
-    def evaluate(self, pval_callback, time_segment, fill_value=-9999, stride=None):
+    def evaluate(self, pval_callback, time_segment, fill_value=-9999, stride_length=None):
         self._import_func()
 
         arg_map = self._apply_mapping()
@@ -247,25 +247,26 @@ class NumexprFunction(AbstractFunction):
         AbstractFunction.__init__(self, name, arg_list, param_map)
         self.expression = expression
 
-    def evaluate(self, pval_callback, time_segment, fill_value=-9999, stride=None):
+    def evaluate(self, pval_callback, time_segment, fill_value=-9999, stride_length=None):
         arg_map = self._apply_mapping()
 
         ld = {}
         for k in self.arg_list:
             a = arg_map[k]
             if isinstance(a, AbstractFunction):
-                ld[k] = a.evaluate(pval_callback, time_segment, fill_value, stride=stride)
+                ld[k] = a.evaluate(pval_callback, time_segment, fill_value, stride_length=stride_length)
             elif isinstance(a, Number) or hasattr(a, '__iter__') and np.array(
                     [isinstance(ai, Number) for ai in a]).all():
                 ld[k] = a
             else:
                 if k.endswith('*'):
-                    vals = pval_callback(a, time_segment, stride)
+                    vals = pval_callback(a, time_segment, stride_length)
                     if isinstance(vals, NumpyDictParameterData):
                         vals = vals.get_data()[a]
                     ld[k[:-1]] = vals[-1]
                 else:
-                    vals = pval_callback(a, time_segment, stride=stride)
+                    print type(pval_callback), pval_callback
+                    vals = pval_callback(a, time_segment, stride_length=stride_length)
                     if isinstance(vals, NumpyDictParameterData):
                         vals = vals.get_data()[a]
                     ld[k] = vals

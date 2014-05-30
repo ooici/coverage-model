@@ -282,7 +282,7 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
         # No-op - What's the min/max for this value class?
         pass
 
-    def __getitem__(self, time_segment=None, stride=None):
+    def __getitem__(self, time_segment=None, stride_length=None):
         if self._memoized_values is not None:
             return self._memoized_values
         else:
@@ -292,7 +292,7 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
             # slice_ = utils.fix_slice(slice_, self.shape)
 
             try:
-                r = self.content.evaluate(self._pval_callback, time_segment, self.parameter_type.fill_value, stride=stride)
+                r = self.content.evaluate(self._pval_callback, time_segment, self.parameter_type.fill_value, stride_length=stride_length)
                 ve = self.parameter_type.value_encoding
                 if hasattr(self.parameter_type, 'inner_encoding'):
                     ve = self.parameter_type.inner_encoding
