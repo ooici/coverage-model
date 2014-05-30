@@ -3,6 +3,7 @@ __author__ = 'casey'
 import shutil
 import tempfile
 import calendar
+import time
 from datetime import datetime
 
 from nose.plugins.attrib import attr
@@ -601,6 +602,116 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         retval = cov.get_parameter_values(['sum']).get_data()['sum']
         np.testing.assert_allclose(retval, np.arange(10) + 2)
 
+    def test_calibrations(self):
+        FILLIN = None
+        functions = {
+            'secondary_interpolation' : {
+                'owner' : 'coverage_model.test.example_functions',
+                'func_name' : 'secondary_interpolation',
+                'arg_list' : ['x','range0','range1','starts','ends'],
+            },
+            'polyval_calibration' : {
+                'owner' : 'coverage_model.test.example_functions',
+                'func_name' : 'polyval_calibration',
+                'arg_list' : ['coefficients', 'x']
+            }
+        }
+
+        params = [
+            ParameterContext('conductivity',
+                             param_type=QuantityType(value_encoding='float32'),
+                             uom='Sm-1'),
+            ParameterContext('condwat_l1b_pd_cals',
+                             param_type=SparseConstantType(value_encoding='float32,float32,float32,float32,float32'),
+                             fill_value=-9999,
+                             uom='1'),
+            ParameterContext('condwat_l1b_pd',
+                             param_type=ParameterFunctionType(PythonFunction(name='polyval_calibration',
+                                     param_map={
+                                         'coefficients':'condwat_l1b_pd_cals', 
+                                         'x' : 'conductivity'
+                                     }, 
+                                     **functions['polyval_calibration'])),
+                             uom='Sm-1'),
+            ParameterContext('condwat_l1b_start',
+                             param_type=SparseConstantType(value_encoding='float64'),
+                             uom='seconds since 1900-01-01'),
+            ParameterContext('condwat_l1b_pr_cals',
+                             param_type=SparseConstantType(value_encoding='float32,float32,float32,float32,float32'),
+                             uom='1'),
+            ParameterContext('condwat_l1b_pr',
+                             param_type=ParameterFunctionType(PythonFunction(name='polyval_calibration',
+                                     param_map={
+                                         'coefficients':'condwat_l1b_pr_cals', 
+                                         'x' : 'conductivity'
+                                     }, 
+                                     **functions['polyval_calibration'])),
+                             uom='Sm-1'),
+            ParameterContext('condwat_l1b_end',
+                             param_type=SparseConstantType(value_encoding='float64'),
+                             uom='seconds since 1900-01-01'),
+            ParameterContext('condwat_l1b_interp',
+                             param_type=ParameterFunctionType(PythonFunction(name='interpolation',
+                                     param_map={
+                                         'x' : 'time',
+                                         'range0' : 'condwat_l1b_pd',
+                                         'range1' : 'condwat_l1b_pr',
+                                         'starts' : 'condwat_l1b_start',
+                                         'ends' : 'condwat_l1b_end'
+                                     }, 
+                                     **functions['secondary_interpolation'])),
+                             uom='Sm-1')
+        ]
+
+        cov = _make_cov(self.working_dir, [params[0]], nt=0)
+
+        ntp_now = time.time() + 2208988800
+        x = np.arange(ntp_now, ntp_now + 3600)
+        # Ingestion gets a data granule with time,conf
+        granule = {
+            'time' : NumpyParameterData('time', x),
+            'conductivity' : NumpyParameterData('conductivity', -3.08641975308642e-07 * (x - ntp_now) * (x - ntp_now - 3600))
+        }
+        cov.set_parameter_values(granule)
+
+        # Should work
+        cov.get_parameter_values(['conductivity'], fill_empty_params=True, as_record_array=False).get_data()
+
+        # Post-deployment calibrations are uploaded
+        for param in params[1:4]:
+            cov.append_parameter(param)
+
+        cov.set_parameter_values({
+            'condwat_l1b_pd_cals' : ConstantOverTime('condwat_l1b_pd_cals', (0.0, 0.0, 0.0, 1.20, 1.0)),
+            'condwat_l1b_start' : ConstantOverTime('condwat_l1b_start', ntp_now+10)
+        })
+
+        # Ensure that the polyval works
+        data = cov.get_parameter_values(['conductivity', 'condwat_l1b_pd'], fill_empty_params=True, as_record_array=False).get_data()
+        cond = data['conductivity']
+        calibrated = data['condwat_l1b_pd']
+        np.testing.assert_allclose(calibrated, cond * 1.2 + 1.0)
+
+
+        # Post-recover calibrations are uploaded
+        # Post-deployment calibrations are uploaded
+        for param in params[4:]:
+            cov.append_parameter(param)
+
+        cov.set_parameter_values({
+            'condwat_l1b_pr_cals' : ConstantOverTime('condwat_l1b_pr_cals', (0.0, 0.0, 0.0, 1.20, 2.0)),
+            'condwat_l1b_end' : ConstantOverTime('condwat_l1b_end', ntp_now+1800)
+        })
+
+
+        data = cov.get_parameter_values(['conductivity', 'condwat_l1b_pr'], fill_empty_params=True, as_record_array=False).get_data()
+        cond = data['conductivity']
+        calibrated = data['condwat_l1b_pd']
+        np.testing.assert_allclose(calibrated, cond * 1.2 + 2.0)
+
+        
+        data = cov.get_parameter_values(['conductivity', 'condwat_l1b_interp'], fill_empty_params=True, as_record_array=False).get_data()
 
 def identity(x):
     return np.copy(x)*3
+
