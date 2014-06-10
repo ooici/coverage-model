@@ -1,7 +1,7 @@
 from basic_types import AxisTypeEnum, MutabilityEnum, VariabilityEnum, Span
-from coverage import AbstractCoverage, SimplexCoverage, ViewCoverage, ComplexCoverage, ComplexCoverageType, \
+from coverage import AbstractCoverage, SimplexCoverage, ViewCoverage, ComplexCoverageType, \
     SimpleDomainSet, GridDomain, GridShape, CRS
-from coverage_model.coverages.complex_coverage import NewComplexCoverage
+from coverage_model.coverages.complex_coverage import ComplexCoverage
 from coverage_model.parameter_functions import PythonFunction, NumexprFunction
 from parameter import ParameterContext, ParameterDictionary, ParameterFunctionValidator
 from parameter_types import ArrayType, BooleanType, CategoryRangeType, CategoryType, ConstantType, CountRangeType, \
@@ -34,7 +34,6 @@ _core = [
     'NumpyParameterData',
     'NumpyDictParameterData',
     'ConstantOverTime',
-    'NewComplexCoverage',
     # 'RepeatOverTime'
     ]
 

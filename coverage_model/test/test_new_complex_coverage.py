@@ -18,7 +18,7 @@ import unittest
 from copy import deepcopy
 from coverage_model.hdf_utils import HDFLockingFile
 from coverage_test_base import CoverageIntTestBase, get_props
-from coverage_model.coverages.complex_coverage import NewComplexCoverage
+from coverage_model.coverages.complex_coverage import ComplexCoverage
 import time
 
 
@@ -158,7 +158,7 @@ class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
         cov_pths = [cova_pth, covb_pth]
 
 
-        ccov = NewComplexCoverage(self.working_dir, create_guid(), 'complex coverage',
+        ccov = ComplexCoverage(self.working_dir, create_guid(), 'complex coverage',
                 reference_coverage_locs=[covb_pth],
                 parameter_dictionary=ParameterDictionary(),
                 complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
@@ -215,7 +215,7 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         covc_pth = _make_cov(cls.working_dir, ['data_all', 'data_c'], nt=sz3,
                              data_dict={'time': third_times, 'data_all': third_data, 'data_c': third_data})
 
-        comp_cov = NewComplexCoverage(cls.working_dir, create_guid(), 'sample temporal aggregation coverage',
+        comp_cov = ComplexCoverage(cls.working_dir, create_guid(), 'sample temporal aggregation coverage',
                                       parameter_dictionary=_make_param_dict(['data_all', 'data_a', 'data_b', 'data_c']),
                                       reference_coverage_locs=[cova_pth, covb_pth, covc_pth],
                                       complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
@@ -319,7 +319,7 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         pdict.add_context(val_ctxt)
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-        ccov = NewComplexCoverage('test_data', create_guid(), 'sample complex coverage',
+        ccov = ComplexCoverage('test_data', create_guid(), 'sample complex coverage',
                                   parameter_dictionary=_make_param_dict(['first_param', 'second_param', 'third_param', 'fourth_param']),
                                   mode='w', reference_coverage_locs=rcov_locs)
 
@@ -386,7 +386,7 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         covc_pth = _make_cov(self.working_dir, ['data_all', 'data_c'], nt=size,
                              data_dict={'time': third_times, 'data_all': third_data, 'data_c': third_data})
 
-        comp_cov = NewComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+        comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
                                    parameter_dictionary=_make_param_dict(['data_all', 'data_a', 'data_b', 'data_c']),
                                    reference_coverage_locs=[cova_pth, covb_pth, covc_pth],
                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
@@ -518,7 +518,7 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
         covs, cov_data = self._setup_allparams(size=size)
 
-        comp_cov = NewComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+        comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
                                    reference_coverage_locs=covs,
                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 
@@ -559,7 +559,7 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
                              data_dict={'time': second_times, 'second_param': second_data, 'full_param': second_full})
 
         # Instantiate the NewComplexCoverage
-        ccov = NewComplexCoverage(self.working_dir, create_guid(), 'sample complex coverage',
+        ccov = ComplexCoverage(self.working_dir, create_guid(), 'sample complex coverage',
                                parameter_dictionary=_make_param_dict(['first_param', 'full_param', 'second_param']),
                                reference_coverage_locs=[cova_pth, covb_pth],
                                complex_type=ComplexCoverageType.TEMPORAL_INTERLEAVED)
@@ -592,7 +592,7 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         size = 10
         covs, cov_data = self._setup_allparams(size=size, num_covs=5, sequential_covs=False)
 
-        comp_cov = NewComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+        comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
                                    reference_coverage_locs=covs,
                                    complex_type=ComplexCoverageType.TEMPORAL_INTERLEAVED)
 
@@ -621,7 +621,7 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         covc_pth = _make_cov(self.working_dir, ['data_all', 'data_c'], nt=size,
                              data_dict={'time': third_times, 'data_all': third_data, 'data_c': third_data})
 
-        comp_cov = NewComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+        comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
                                    reference_coverage_locs=[cova_pth, covb_pth],
                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 
@@ -649,7 +649,7 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         covb_pth = _make_cov(self.working_dir, ['data_all', 'data_b'], nt=size,
                              data_dict={'time': second_times, 'data_all': second_data, 'data_b': second_data})
 
-        comp_cov = NewComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+        comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
                                    reference_coverage_locs=[cova_pth, covb_pth],
                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 
@@ -658,11 +658,11 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
             # View coverage construction doesn't work for DB-based metadata.  View Coverage will be modified in the future
             self.assertTrue(True)
         else:
-            comp_cov2 = NewComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+            comp_cov2 = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
                                         reference_coverage_locs=[cova_pth],
                                         complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 
-            comp_cov3 = NewComplexCoverage(self.working_dir, create_guid(), 'sample temporal broadcast coverage',
+            comp_cov3 = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal broadcast coverage',
                                          reference_coverage_locs=[comp_cov2.persistence_dir, covb_pth],
                                          complex_type=ComplexCoverageType.TEMPORAL_BROADCAST)
 
@@ -681,7 +681,7 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         cov = AbstractCoverage.load(cova_pth)
         pdict = cov.parameter_dictionary
 
-        ccov = NewComplexCoverage(self.working_dir, create_guid(), 'complex coverage',
+        ccov = ComplexCoverage(self.working_dir, create_guid(), 'complex coverage',
                 reference_coverage_locs=[],
                 parameter_dictionary=pdict,
                 complex_type=ComplexCoverageType.TIMESERIES)
@@ -703,7 +703,7 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         covb_pth = _make_cov(self.working_dir, ['data_all', 'data_b'], nt=size,
                              data_dict={'time': second_times, 'data_all': second_data, 'data_b': second_data})
 
-        comp_cov = NewComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+        comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
                                    parameter_dictionary=_make_param_dict(['data_all', 'data_a', 'data_b']),
                                    reference_coverage_locs=[cova_pth, covb_pth],
                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
@@ -739,7 +739,7 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         covb_pth = _make_cov(self.working_dir, ['data_all', 'data_b'], nt=size,
                              data_dict={'time': second_times, 'data_all': second_data, 'data_b': second_data})
 
-        comp_cov = NewComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+        comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
                                    parameter_dictionary=_make_param_dict(['data_all', 'data_a', 'data_b']),
                                    reference_coverage_locs=[cova_pth, covb_pth],
                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)

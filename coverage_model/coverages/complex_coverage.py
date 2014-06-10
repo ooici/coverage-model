@@ -26,7 +26,7 @@ from coverage_model.coverages.aggregate_coverage import AggregateCoverage
 from coverage_model.parameter_data import NumpyDictParameterData
 
 
-class NewComplexCoverage(AggregateCoverage):
+class ComplexCoverage(AggregateCoverage):
     """
     References 1-n coverages
     """
@@ -39,7 +39,7 @@ class NewComplexCoverage(AggregateCoverage):
             mode = 'w'
 
         # Initializes base class with proper mode.
-        super(NewComplexCoverage, self).__init__(root_dir, persistence_guid, name, reference_coverage_locs, parameter_dictionary,
+        super(ComplexCoverage, self).__init__(root_dir, persistence_guid, name, reference_coverage_locs, parameter_dictionary,
                                                  mode, complex_type, temporal_domain, spatial_domain)
 
     def get_parameter_values(self, param_names=None, time_segment=None, time=None,

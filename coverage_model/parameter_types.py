@@ -237,9 +237,7 @@ class AbstractParameterType(AbstractIdentifiable):
         return dparams
 
     def create_filled_array(self, size):
-        print 'cfa dtype=', self.value_encoding
         arr = np.empty(size, dtype=np.dtype(self.value_encoding))
-        print self.name, arr.dtype, self.fill_value, self.value_encoding
         arr[:] = self.fill_value
         return arr
 
@@ -886,7 +884,3 @@ class ArrayType(AbstractComplexParameterType):
 
         self._fill_value = tuple([self.inner_fill_value for x in range(inner_length)])
         self.value_encoding = ', '.join([self.inner_encoding for x in range(inner_length)])
-
-        print self.inner_fill_value
-        print self.fill_value
-        print np.dtype(self.value_encoding)

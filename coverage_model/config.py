@@ -68,7 +68,7 @@ class CoverageConfig(object):
     def get_coverage_class(self, type, version=None):
         if type == 'complex':
             module = __import__('coverage_model.coverages.complex_coverage')
-            return getattr(module, 'NewComplexCoverage')
+            return getattr(module, 'ComplexCoverage')
         if type == 'simplex':
             module = __import__('coverage_model.coverage')
             return getattr(module, 'SimplexCoverage')

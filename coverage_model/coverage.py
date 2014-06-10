@@ -1190,7 +1190,7 @@ class ComplexCoverageType(BaseEnum):
     TIMESERIES = 'TIMESERIES'
 
 
-class ComplexCoverage(AbstractCoverage):
+class ComplexCoverageR2(AbstractCoverage):
     """
     References 1-n coverages
     """
