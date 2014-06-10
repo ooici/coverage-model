@@ -299,6 +299,9 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         if stride_length is not None:
             np_dict = {key:value[0::stride_length] for key, value in np_dict.items()}
 
+        if len(np_dict) == 0:
+            dt = np.dtype(self.parameter_metadata[self.alignment_parameter].parameter_context.param_type.value_encoding)
+            np_dict = {self.alignment_parameter: np.empty(0, dtype=dt)}
         rec_arr = self._convert_to_numpy_dict_parameter(np_dict, as_rec_array=create_record_array)
         return np_dict, function_params, rec_arr
 
@@ -349,7 +352,8 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
     def _convert_to_numpy_dict_parameter(self, np_dict, sort_parameter=None, as_rec_array=False):
         param_context_dict = {}
         for key in np_dict.keys():
-            param_context_dict[key] = self.value_list[key]
+            if key in param_context_dict:
+                param_context_dict[key] = self.value_list[key]
 
         ndpd = NumpyDictParameterData(np_dict, alignment_key=self.alignment_parameter, param_context_dict=param_context_dict, as_rec_array=as_rec_array)
 
@@ -379,18 +383,18 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             idx = (np.abs(time_array-time)).argmin()
             for key, val in np_dict.iteritems():
                 return_dict[key] = np.array([val[idx]], dtype=val.dtype)
-                print 't2', key, return_dict[key], return_dict[key].dtype, val.dtype, val
         return return_dict
 
     def _append_parameter_fuction_data(self, params, param_dict, time_segment=None, time=None):
         if time is not None and time_segment is None:
             time_segment = (time,time)
         for param in list(set(params)-set(param_dict.keys())):
-            param_type = self.parameter_metadata[param].parameter_context.param_type
-            from coverage_model.parameter_types import ParameterFunctionType
-            if isinstance(param_type, ParameterFunctionType):
-                data = param_type.function.evaluate(param_type.callback, time_segment, time)
-                param_dict[param] = data
+            if param in self.parameter_metadata:
+                param_type = self.parameter_metadata[param].parameter_context.param_type
+                from coverage_model.parameter_types import ParameterFunctionType
+                if isinstance(param_type, ParameterFunctionType):
+                    data = param_type.function.evaluate(param_type.callback, time_segment, time)
+                    param_dict[param] = data
         return param_dict
 
     def _create_parameter_dictionary_of_numpy_arrays(self, numpy_params, function_params=None, params=None):
@@ -407,7 +411,8 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                 span_order.append(id)
             span_order.sort()
             t_dict = numpy_params[self.alignment_parameter]
-        arr = np.empty(shape_outer_dimmension)
+        dt = np.dtype(self.parameter_metadata[self.alignment_parameter].parameter_context.param_type.value_encoding)
+        arr = np.empty(shape_outer_dimmension, dtype=dt)
         insert_index = 0
         for span_id in span_order:
             np_data = t_dict[span_id].get_data()
@@ -438,7 +443,6 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                     if self.value_list[id].fill_value is not None:
                         npa[:] = self.value_list[id].fill_value
                 end_idx = insert_index + np_data.size
-                print npa.dtype, np_data
                 npa[insert_index:end_idx] = np_data
                 insert_index += np_data.size
             return_dict[id] = npa

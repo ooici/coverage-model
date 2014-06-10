@@ -56,10 +56,13 @@ class NumpyDictParameterData(ParameterData):
                 alignment_array = val
                 break
         if not isinstance(alignment_array, np.ndarray):
-            raise TypeError("alignment_array must implement type %s" % np.ndarray.__name__)
+            raise TypeError("alignment_array must implement type %s, found %s" % (np.ndarray.__name__, type(alignment_array)))
         self.size = alignment_array.size
-
+        from coverage_model.util.numpy_utils import sort_flat_arrays
         data = param_dict
+        if alignment_key is not None:
+            data = sort_flat_arrays(param_dict, alignment_key)
+
         super(NumpyDictParameterData, self).__init__('none', data)
         self.is_record_array = False
         if as_rec_array:

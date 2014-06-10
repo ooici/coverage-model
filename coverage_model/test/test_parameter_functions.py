@@ -19,15 +19,15 @@ def errfunc(val1, val2):
 def pyfunc(val1, val2):
     return val1 * val2
 
-def _get_vals(name, time_segment=[None,None], stride=None):
+def _get_vals(name, time_segment=(None,None), stride_length=None):
     if name == 'VALS':
-        return np.array([1, 3, 5, 6, 23])[time_segment[0]:time_segment[1]:stride]
+        return np.array([1, 3, 5, 6, 23])[time_segment[0]:time_segment[1]:stride_length]
     elif name == 'first':
-        return np.array([1, 2, 3, 4, 5])[time_segment[0]:time_segment[1]:stride]
+        return np.array([1, 2, 3, 4, 5])[time_segment[0]:time_segment[1]:stride_length]
     elif name == 'second':
-        return np.array([1, 4, 6, 8, 10])[time_segment[0]:time_segment[1]:stride]
+        return np.array([1, 4, 6, 8, 10])[time_segment[0]:time_segment[1]:stride_length]
     else:
-        return np.zeros(5)[time_segment[0]:time_segment[1]:stride]
+        return np.zeros(5)[time_segment[0]:time_segment[1]:stride_length]
 
 def callback_arg_func(pv_callback):
     a = pv_callback('tempwat_l0')
@@ -127,7 +127,7 @@ class TestParameterFunctionsInt(CoverageModelIntTestCase):
         self.contexts = None
         self.value_classes = None
 
-    def _get_param_vals(self, name, time_segment, stride=None):
+    def _get_param_vals(self, name, time_segment, stride_length=None):
         shp = utils.slice_shape(time_segment, (10,))
 
         def _getarr(vmin, shp, vmax=None,):

@@ -239,6 +239,7 @@ class AbstractParameterType(AbstractIdentifiable):
     def create_filled_array(self, size):
         print 'cfa dtype=', self.value_encoding
         arr = np.empty(size, dtype=np.dtype(self.value_encoding))
+        print self.name, arr.dtype, self.fill_value, self.value_encoding
         arr[:] = self.fill_value
         return arr
 
@@ -414,7 +415,6 @@ class CategoryType(AbstractComplexParameterType):
         if key_fill_value is None or key_fill_value not in categories:
             key_fill_value = categories.keys()[0]
 
-        print self._value_encoding
         self._template_attrs['categories'] = categories
         self._template_attrs['fill_value'] = key_fill_value
         self._gen_template_attrs()
@@ -686,6 +686,8 @@ class SparseConstantType(AbstractComplexParameterType):
 
         if fv is not None:
             self.fill_value = fv
+        else:
+            self.fill_value = np.NaN
 
 
 class FunctionType(AbstractComplexParameterType):

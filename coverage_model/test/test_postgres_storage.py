@@ -687,10 +687,10 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         })
 
         # Ensure that the polyval works
-        data = cov.get_parameter_values(['conductivity', 'condwat_l1b_pd'], fill_empty_params=True, as_record_array=False).get_data()
+        data = cov.get_parameter_values(['conductivity', 'condwat_l1b_pd'], sort_parameter='time', fill_empty_params=True, as_record_array=False).get_data()
         cond = data['conductivity']
         calibrated = data['condwat_l1b_pd']
-        np.testing.assert_allclose(calibrated, cond * 1.2 + 1.0)
+        np.testing.assert_array_equal(calibrated, cond * 1.2 + 1.0)
 
 
         # Post-recover calibrations are uploaded
@@ -704,9 +704,9 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         })
 
 
-        data = cov.get_parameter_values(['conductivity', 'condwat_l1b_pr'], fill_empty_params=True, as_record_array=False).get_data()
+        data = cov.get_parameter_values(['conductivity', 'condwat_l1b_pr', 'condwat_l1b_pr_cals'], fill_empty_params=True, as_record_array=False).get_data()
         cond = data['conductivity']
-        calibrated = data['condwat_l1b_pd']
+        calibrated = data['condwat_l1b_pr']
         np.testing.assert_allclose(calibrated, cond * 1.2 + 2.0)
 
         

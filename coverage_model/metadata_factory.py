@@ -15,6 +15,10 @@ class MetadataManagerFactory(object):
         return manager
 
     @staticmethod
+    def get_coverage_class(directory, guid):
+        return MetadataManagerFactory.mmm.get_coverage_class(directory, guid)
+
+    @staticmethod
     def getCoverageType(directory, guid):
         return MetadataManagerFactory.mmm.getCoverageType(directory, guid)
 

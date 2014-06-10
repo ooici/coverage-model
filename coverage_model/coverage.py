@@ -59,6 +59,11 @@ from coverage_model.utils import Interval, create_guid
 # Coverage Objects
 #=========================
 
+def get_dir_and_id_from_path(path):
+    if path.endswith(os.path.sep): # Strip trailing separator if it exists
+        path = path[:-1]
+    return os.path.split(path)
+
 class AbstractCoverage(AbstractIdentifiable):
     """
     Core data model, persistence, etc
@@ -145,19 +150,7 @@ class AbstractCoverage(AbstractIdentifiable):
         elif not isinstance(persistence_guid, basestring):
             raise ValueError('\'persistence_guid\' must be a string')
 
-        # Otherwise, determine which coverage type to use to open the file
-#        ctype = get_coverage_type(os.path.join(root_dir, persistence_guid, '{0}_master.hdf5'.format(persistence_guid)))
-        ctype = MetadataManagerFactory.getCoverageType(root_dir, persistence_guid)
-
-        if ctype == 'simplex':
-            ccls = SimplexCoverage
-        elif ctype == 'view':
-            ccls = ViewCoverage
-        elif ctype == 'complex':
-            ccls = ComplexCoverage
-        else:
-            raise TypeError('Unknown Coverage type specified in master file : {0}', ctype)
-
+        ccls = MetadataManagerFactory.get_coverage_class(root_dir, persistence_guid)
         return ccls(root_dir, persistence_guid, mode=mode)
 
     @classmethod
@@ -291,8 +284,17 @@ class AbstractCoverage(AbstractIdentifiable):
             pcontext._pctxt_callback = self.get_parameter_context
 
         self._range_dictionary.add_context(pcontext)
-        s = self._persistence_layer.init_parameter(pcontext, self._bricking_scheme)
-        self._range_value[pname] = get_value_class(param_type=pcontext.param_type, domain_set=pcontext.dom, storage=s)
+
+        # add = False
+        # if hasattr(self._persistence_layer, 'param_dict'):
+        #     if pname not in self._persistence_layer.param_dict:
+        #         add = True
+        #     elif pcontext != self._persistence_layer.param_dict[pname]:
+        #         raise ValueError("Cannot change a parameter context")
+        # if add:
+        self._persistence_layer.init_parameter(pcontext, self._bricking_scheme)
+        storage = self._persistence_layer.value_list[pname]
+        self._range_value[pname] = get_value_class(param_type=pcontext.param_type, domain_set=pcontext.dom, storage=storage)
 
     def get_parameter(self, param_name):
         """
@@ -374,7 +376,7 @@ class AbstractCoverage(AbstractIdentifiable):
             param_names = [param_names]
         for param_name in param_names:
             if not param_name in self._range_value:
-                raise KeyError('Parameter \'{0}\' not found in coverage'.format(param_name))
+                raise KeyError('Parameter %s not found in coverage' % (param_name))
 
         if self.value_caching:
             vals = self.get_cached_values(param_names, time_segment, time, sort_parameter, stride_length, fill_empty_params)
@@ -714,7 +716,7 @@ class AbstractCoverage(AbstractIdentifiable):
         ret = {}
         for pn in self._parameter_name_arg_to_params(parameter_name):
             p = self._range_dictionary.get_context(pn)
-            ret[pn] = (self._persistence_layer.num_timesteps(),) #TODO - get total extents from value type
+            ret[pn] = (self.num_timesteps(),) #TODO - get total extents from value type
 
         if len(ret) == 1:
             ret = ret.values()[0]
@@ -1275,23 +1277,23 @@ class ComplexCoverage(AbstractCoverage):
         parameter_dictionary = self._persistence_layer.param_dict
 
 
-        # if complex_type == ComplexCoverageType.PARAMETRIC_STRICT:
-        #     # PARAMETRIC_STRICT - combine parameters from multiple coverages - MUST HAVE IDENTICAL TIME VALUES
-        #     self._build_parametric(reference_coverages, parameter_dictionary)
-        # elif complex_type == ComplexCoverageType.TEMPORAL_INTERLEAVED:
-        #     # TEMPORAL_INTERLEAVED - combine parameters from multiple coverages - may have differing time values
-        #     self._build_temporal_interleaved(reference_coverages, parameter_dictionary)
-        # elif complex_type == ComplexCoverageType.TEMPORAL_AGGREGATION:
-        #     # TEMPORAL_AGGREGATION - combine coverages temporally
-        #     self._build_temporal_aggregation(reference_coverages, parameter_dictionary)
-        # elif complex_type == ComplexCoverageType.TEMPORAL_BROADCAST:
-        #     # TEMPORAL_BROADCAST - combine coverages temporally, broadcasting non-primary coverages
-        #     self._build_temporal_broadcast(reference_coverages, parameter_dictionary)
-        # elif complex_type == ComplexCoverageType.SPATIAL_JOIN:
-        #     # Complex spatial - combine coverages across a higher-order topology
-        #     raise NotImplementedError('Not yet implemented')
-        # elif complex_type == ComplexCoverageType.TIMESERIES:
-        #     self._build_timeseries(reference_coverages, parameter_dictionary)
+        if complex_type == ComplexCoverageType.PARAMETRIC_STRICT:
+            # PARAMETRIC_STRICT - combine parameters from multiple coverages - MUST HAVE IDENTICAL TIME VALUES
+            self._build_parametric(reference_coverages, parameter_dictionary)
+        elif complex_type == ComplexCoverageType.TEMPORAL_INTERLEAVED:
+            # TEMPORAL_INTERLEAVED - combine parameters from multiple coverages - may have differing time values
+            self._build_temporal_interleaved(reference_coverages, parameter_dictionary)
+        elif complex_type == ComplexCoverageType.TEMPORAL_AGGREGATION:
+            # TEMPORAL_AGGREGATION - combine coverages temporally
+            self._build_temporal_aggregation(reference_coverages, parameter_dictionary)
+        elif complex_type == ComplexCoverageType.TEMPORAL_BROADCAST:
+            # TEMPORAL_BROADCAST - combine coverages temporally, broadcasting non-primary coverages
+            self._build_temporal_broadcast(reference_coverages, parameter_dictionary)
+        elif complex_type == ComplexCoverageType.SPATIAL_JOIN:
+            # Complex spatial - combine coverages across a higher-order topology
+            raise NotImplementedError('Not yet implemented')
+        elif complex_type == ComplexCoverageType.TIMESERIES:
+            self._build_timeseries(reference_coverages, parameter_dictionary)
 
     def close(self, force=False, timeout=None):
         if not hasattr(self, '_closed'):
@@ -2257,6 +2259,9 @@ class SimplexCoverage(AbstractCoverage):
         except:
             self._closed = True
             raise
+
+    def get_fill_value(self, param_name):
+        return self.get_parameter_context(param_name).fill_value
 
     def calculate_statistics(self, params=None, time_range=None):
         """time_range is currently not implemented"""

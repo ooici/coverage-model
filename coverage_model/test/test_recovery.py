@@ -215,9 +215,11 @@ class TestRecoveryInt(CoverageModelIntTestCase):
 
         # Add data for each parameter
         data = { scov.temporal_parameter_name: np.arange(nt),
-                 'lat': 45,
-                 'lon': -71
+                 'lat': np.empty(nt),
+                 'lon': np.empty(nt)
         }
+        data['lat'][:] = 45
+        data['lon'][:] = -71
         scov.set_parameter_values(make_parameter_data_dict(data))
 
         dset = Dataset()

@@ -35,6 +35,12 @@ class DbBackedMetadataManager(MetadataManager):
         return DBFactory.get_db().is_persisted(guid)
 
     @staticmethod
+    def get_coverage_class(directory, guid):
+        from coverage_model.config import CoverageConfig
+        config = CoverageConfig()
+        return config.get_coverage_class(DbBackedMetadataManager.getCoverageType(directory, guid))
+
+    @staticmethod
     def getCoverageType(directory, guid):
         if DbBackedMetadataManager.is_persisted_in_db(guid) is True:
             cov_type = DBFactory.get_db().get_coverage_type(guid)

@@ -55,8 +55,6 @@ def identity(x):
 
 def polyval_calibration(coefficients, x):
     retval = np.empty_like(x)
-    print coefficients[0:2]
-    print type(coefficients[0])
     # Strip away the record array
     coefficients = coefficients.view('float32').reshape(coefficients.shape + (-1,))
     for i in xrange(x.shape[0]):

@@ -294,7 +294,11 @@ class TestCoverageSearchInt(CoverageModelUnitTestCase):
             cov.close()
 
         def check_equal_param_dicts(p_dict_1, p_dict_2):
-            np.testing.assert_array_equal(p_dict_1, p_dict_2)
+            intersect = set(p_dict_1.keys()).intersection(p_dict_2.keys())
+            self.assertEqual(set(p_dict_1.keys()), intersect)
+            self.assertEqual(set(p_dict_2.keys()), intersect)
+            for key in p_dict_1.keys():
+                np.testing.assert_array_equal(p_dict_1[key], p_dict_2[key])
 
         cov1r = AbstractCoverage.load(self.working_dir, id1)
         cov2r = AbstractCoverage.load(self.working_dir, id2)

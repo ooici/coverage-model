@@ -265,7 +265,6 @@ class NumexprFunction(AbstractFunction):
                         vals = vals.get_data()[a]
                     ld[k[:-1]] = vals[-1]
                 else:
-                    print type(pval_callback), pval_callback
                     vals = pval_callback(a, time_segment, stride_length=stride_length)
                     if isinstance(vals, NumpyDictParameterData):
                         vals = vals.get_data()[a]
