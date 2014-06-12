@@ -578,6 +578,19 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
                           [ 0.        ,  1.20000005,  3.11999989],
                           [ 0.        ,  1.20000005,  3.11999989]], dtype=np.float32))
 
+    def test_array_insert_and_return(self):
+        array_type = ParameterContext('array_type', param_type=ArrayType(), fill_value=(-9999, -9999, -9999))
+        cov = _make_cov(self.working_dir, [array_type], nt=0)
+
+        data = np.array([[0, 1.2, 3.2] * 10], dtype=np.float32).reshape(10,3)
+
+        cov.set_parameter_values({
+            'time' : NumpyParameterData('time', np.arange(10)),
+            'array_type' : NumpyParameterData('array_type', data)
+        })
+
+        return_dict = cov.get_parameter_values(as_record_array=False).get_data()
+        np.testing.assert_allclose(data, return_dict['array_type'])
 
     def test_pfs(self):
         pf_example = PythonFunction(name='identity',
