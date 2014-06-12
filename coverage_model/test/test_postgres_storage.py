@@ -562,11 +562,21 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         }
         cov.set_parameter_values(data_dict)
         retrieved_data = cov.get_parameter_values().get_data()
-        self.assertEqual(10, retrieved_data['sparse_array'].size)
-        for x in range(10):
-            self.assertEqual(np.float32(0.0), retrieved_data['sparse_array'][x][0])
-            self.assertEqual(np.float32(1.2), retrieved_data['sparse_array'][x][1])
-            self.assertEqual(np.float32(3.12), retrieved_data['sparse_array'][x][2])
+        sparse_data = retrieved_data['sparse_array']
+
+        #sparse_data = sparse_data.view('float32').reshape(sparse_data.shape + (-1,))
+
+        np.testing.assert_allclose(sparse_data, 
+                np.array([[ 0.        ,  1.20000005,  3.11999989],
+                          [ 0.        ,  1.20000005,  3.11999989],
+                          [ 0.        ,  1.20000005,  3.11999989],
+                          [ 0.        ,  1.20000005,  3.11999989],
+                          [ 0.        ,  1.20000005,  3.11999989],
+                          [ 0.        ,  1.20000005,  3.11999989],
+                          [ 0.        ,  1.20000005,  3.11999989],
+                          [ 0.        ,  1.20000005,  3.11999989],
+                          [ 0.        ,  1.20000005,  3.11999989],
+                          [ 0.        ,  1.20000005,  3.11999989]], dtype=np.float32))
 
 
     def test_pfs(self):
