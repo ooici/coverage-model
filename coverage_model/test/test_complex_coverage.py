@@ -900,7 +900,7 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         covb.close()
         ccov.append_reference_coverage(covb_pth, ReferenceCoverageExtents('second-deployment', covb_id, time_extents=(15,19)))
 
-        data = ccov.get_parameter_values(fill_empty_params=True, as_record_array=False).get_data()
+        data = ccov.get_parameter_values(time_segment=(None,None), fill_empty_params=True, as_record_array=False).get_data()
         time_dense = np.concatenate((np.arange(2,9), np.arange(15,20)))
         np.testing.assert_allclose(data['time'], time_dense)
 
