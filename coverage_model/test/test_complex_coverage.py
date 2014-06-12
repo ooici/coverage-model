@@ -754,15 +754,9 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
         comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
                                    parameter_dictionary=_make_param_dict(['data_all', 'data_a', 'data_b']),
-                                   reference_coverage_locs=[],
+                                   reference_coverage_locs=[cova_pth, covb_pth],
+                                   reference_coverage_extents=rcov_extents,
                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
-
-        comp_cov.append_reference_coverage(cova_pth, ReferenceCoverageExtents('Zero', cova_id, time_extents=(0,4)))
-
-        from pyon.util.breakpoint import breakpoint
-        breakpoint(locals(), globals())
-
-        comp_cov.append_reference_coverage(covb_pth, ReferenceCoverageExtents('Jay', covb_id, time_extents=(10,12)))
 
         times = np.empty(8, dtype='float32')
         times[0:5] = first_times[0:5]
