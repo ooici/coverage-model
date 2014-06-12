@@ -10,19 +10,9 @@ import numpy as np
 
 from ooi.logging import log
 from pyon.util.async import spawn
-from coverage_model.coverage import AbstractCoverage, ComplexCoverageType, RangeValues
-from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, Dictable, \
-    Span
-from coverage_model.parameter import Parameter, ParameterDictionary, ParameterContext
-from coverage_model.parameter_values import get_value_class, AbstractParameterValue
-from coverage_model.persistence import InMemoryPersistenceLayer, is_persisted
-from coverage_model.storage.parameter_persisted_storage import PostgresPersistenceLayer
-from coverage_model.metadata_factory import MetadataManagerFactory
-from coverage_model.parameter_functions import ParameterFunctionException
-from coverage_model import utils
-from coverage_model.utils import Interval, create_guid
-from coverage_model.coverage import SimplexCoverage, GridDomain, GridShape, CRS
+from coverage_model.coverage import AbstractCoverage, ComplexCoverageType, SimplexCoverage
 from coverage_model.coverages.aggregate_coverage import AggregateCoverage
+from coverage_model.coverages.coverage_extents import ReferenceCoverageExtents, ExtentsDict
 from coverage_model.parameter_data import NumpyDictParameterData
 
 
@@ -30,7 +20,7 @@ class ComplexCoverage(AggregateCoverage):
     """
     References 1-n coverages
     """
-    def __init__(self, root_dir, persistence_guid, name=None, reference_coverage_locs=None, parameter_dictionary=None,
+    def __init__(self, root_dir, persistence_guid, name=None, reference_coverage_locs=None, reference_coverage_extents=None, parameter_dictionary=None,
                  mode=None, complex_type=ComplexCoverageType.PARAMETRIC_STRICT, temporal_domain=None, spatial_domain=None):
 
         # Sets h5py file operation mode to 'w' if not specified
@@ -38,8 +28,9 @@ class ComplexCoverage(AggregateCoverage):
         if mode is None:
             mode = 'w'
 
+        reference_coverage_extents = ExtentsDict(reference_coverage_extents)
         # Initializes base class with proper mode.
-        super(ComplexCoverage, self).__init__(root_dir, persistence_guid, name, reference_coverage_locs, parameter_dictionary,
+        super(ComplexCoverage, self).__init__(root_dir, persistence_guid, name, reference_coverage_locs, reference_coverage_extents, parameter_dictionary,
                                                  mode, complex_type, temporal_domain, spatial_domain)
 
     def get_parameter_values(self, param_names=None, time_segment=None, time=None,
@@ -70,27 +61,35 @@ class ComplexCoverage(AggregateCoverage):
                     this_param_names = set(param_names)
                     this_param_names = this_param_names.intersection(set(coverage.list_parameters()))
                     this_param_names = list(this_param_names)
-                params = coverage.get_parameter_values(this_param_names, time_segment, time, sort_parameter, stride_length,
-                                                       return_value, fill_empty_params, function_params, as_record_array=False)
-                # if len(params.get_data()) == 1 and coverage.temporal_parameter_name in params.get_data():
-                #     continue
-                cov_dict = params.get_data()
-                for param_name in param_names:
-                    if param_name not in fill_params and param_name not in cov_dict:
-                        fill_params.add(param_name)
-                    elif param_name in cov_dict and param_name in all_empty:
-                        all_empty.remove(param_name)
-                size = cov_dict[coverage.temporal_parameter_name].size
-                self._add_filled_arrays(fill_params, cov_dict, size)
-                self._add_coverage_array(cov_dict, size, coverage.persistence_guid)
-                if time is not None and time_segment is None and len(cov_value_list) > 0:
-                    new = cov_dict[coverage.temporal_parameter_name][0]
-                    old = cov_value_list[0][0][coverage.temporal_parameter_name][0]
-                    print old, new
-                    if abs(new-time) < abs(old-time):
-                        cov_value_list = [(cov_dict, coverage)]
-                else:
-                    cov_value_list.append((cov_dict, coverage))
+                extent_segments = list([None])
+                if coverage.persistence_guid in self._persistence_layer.rcov_extents.data:
+                    extent_segments = list(self._persistence_layer.rcov_extents.data[coverage.persistence_guid])
+                for extents in extent_segments:
+                    from coverage_model.util.extent_utils import get_overlap
+                    if isinstance(extents, ReferenceCoverageExtents):
+                        extents = extents.time_extents
+                    current_time_segment = get_overlap(extents, time_segment)
+
+                    params = coverage.get_parameter_values(this_param_names, current_time_segment, time, sort_parameter, stride_length,
+                                                           return_value, fill_empty_params, function_params, as_record_array=False)
+                    # if len(params.get_data()) == 1 and coverage.temporal_parameter_name in params.get_data():
+                    #     continue
+                    cov_dict = params.get_data()
+                    for param_name in param_names:
+                        if param_name not in fill_params and param_name not in cov_dict:
+                            fill_params.add(param_name)
+                        elif param_name in cov_dict and param_name in all_empty:
+                            all_empty.remove(param_name)
+                    size = cov_dict[coverage.temporal_parameter_name].size
+                    self._add_filled_arrays(fill_params, cov_dict, size)
+                    self._add_coverage_array(cov_dict, size, coverage.persistence_guid)
+                    if time is not None and time_segment is None and len(cov_value_list) > 0:
+                        new = cov_dict[coverage.temporal_parameter_name][0]
+                        old = cov_value_list[0][0][coverage.temporal_parameter_name][0]
+                        if abs(new-time) < abs(old-time):
+                            cov_value_list = [(cov_dict, coverage)]
+                    else:
+                        cov_value_list.append((cov_dict, coverage))
 
         combined_data = self._merge_value_dicts(cov_value_list)
         if not fill_empty_params:
@@ -111,32 +110,29 @@ class ComplexCoverage(AggregateCoverage):
         # Dad doesn't store it so go to granddad
         AbstractCoverage.append_parameter(self, parameter_context)
 
-    def _append_to_coverage(self, value_dictionary):
-        raise NotImplementedError('Complex coverages are read-only')
-        # cov = AbstractCoverage.load(self.head_coverage_path, mode='r+')
-        # cov.set_parameter_values(value_dictionary)
-        # cov.close()
+    def append_reference_coverage(self, path, extents=None, **kwargs):
+        super(ComplexCoverage, self).append_reference_coverage(path, **kwargs)
+        rcov = AbstractCoverage.load(path)
+        self.set_reference_coverage_extents(rcov.persistence_guid, extents)
 
-    def new_simplex(self):
-        '''
-        Creates a new child simplex coverage with the same CRS information
-        '''
-        root_dir, guid = os.path.split(self.persistence_dir)
-        name = 'generated simplex'
-        pdict = deepcopy(self._range_dictionary)
-        tcrs = CRS([AxisTypeEnum.TIME])
-        scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
+    def set_reference_coverage_extents(self, coverage_id, extents, append=True):
+        if extents is None:
+            return
+        if not isinstance(extents, list):
+            extents = [extents]
+        for extent in extents:
+            if not isinstance(extent, ReferenceCoverageExtents):
+                raise ValueError('Extents must be of type %s' % ReferenceCoverageExtents.__name__)
+            if extent.cov_id != coverage_id:
+                raise ValueError('Extent coverage_id, %s, does not match requested coverage id %s' % (extent.cov_id, coverage_id))
+        if self._persistence_layer.rcov_extents is None:
+            self._persistence_layer.rcov_extents = ExtentsDict()
+        if append:
+            self._persistence_layer.rcov_extents.add_extents(coverage_id, extents)
+        else:
+            self._persistence_layer.rcov_extents.replace_extents(coverage_id, extents)
 
-        # Construct temporal and spatial Domain objects
-        tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
-        sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
-        scov = SimplexCoverage(root_dir, 
-                               utils.create_guid(),
-                               name,
-                               parameter_dictionary=pdict, 
-                               temporal_domain=tdom,
-                               spatial_domain=sdom,
-                               mode='r+')
-        path = scov.persistence_dir
-        self.append_reference_coverage(path)
-        return scov
+    def get_reference_coverage_extents(self, coverage_id):
+        return self._persistence_layer.rcov_extents[coverage_id]
+
+

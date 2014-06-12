@@ -266,7 +266,7 @@ def samplecomplexcov():
     tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
     sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
 
-    from coverage_model.test.test_complex_coverage import _make_cov
+    from coverage_model.test.test_R2_complex_coverage import _make_cov
     rcov_locs = [_make_cov('test_data', ['first_param']),
                  _make_cov('test_data', ['second_param']),
                  _make_cov('test_data', ['third_param', 'fourth_param']),

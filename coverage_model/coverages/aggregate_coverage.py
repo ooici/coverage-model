@@ -1,29 +1,20 @@
 __author__ = 'casey'
 
-import numpy as np
-
 from ooi.logging import log
 from coverage_model.coverage import *
-from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, Dictable, \
-    Span
+from coverage_model.parameter import ParameterDictionary
 from coverage_model.parameter_data import NumpyDictParameterData
-from coverage_model.parameter import Parameter, ParameterDictionary, ParameterContext
-from coverage_model.parameter_values import get_value_class, AbstractParameterValue
-from coverage_model.persistence import InMemoryPersistenceLayer, is_persisted
+from coverage_model.parameter_values import get_value_class
+from coverage_model.persistence import is_persisted
 from coverage_model.storage.parameter_persisted_storage import PostgresPersistenceLayer
-from coverage_model.metadata_factory import MetadataManagerFactory
-from coverage_model.parameter_functions import ParameterFunctionException
-from coverage_model import utils
-from coverage_model.utils import Interval, create_guid
-from coverage_model.coverage import get_dir_and_id_from_path
-
+from coverage_model.utils import Interval
 
 
 class AggregateCoverage(AbstractCoverage):
     """
     References 1-n coverages
     """
-    def __init__(self, root_dir, persistence_guid, name=None, reference_coverage_locs=None, parameter_dictionary=None,
+    def __init__(self, root_dir, persistence_guid, name=None, reference_coverage_locs=None, reference_coverage_extents=None, parameter_dictionary=None,
                  mode=None, complex_type=ComplexCoverageType.PARAMETRIC_STRICT, temporal_domain=None, spatial_domain=None):
 
         # Initializes base class with proper mode.
@@ -39,7 +30,7 @@ class AggregateCoverage(AbstractCoverage):
             if is_persisted(root_dir, persistence_guid):
                 self._existing_coverage(root_dir, persistence_guid)
             else:
-                self._new_coverage(root_dir, persistence_guid, name, reference_coverage_locs, parameter_dictionary, complex_type)
+                self._new_coverage(root_dir, persistence_guid, name, reference_coverage_locs, parameter_dictionary, complex_type, reference_coverage_extents)
         except:
             self._closed = True
             raise
@@ -55,7 +46,7 @@ class AggregateCoverage(AbstractCoverage):
         self.mode = self.mode
         self._reference_covs = collections.OrderedDict()
 
-    def _new_coverage(self, root_dir, persistence_guid, name, reference_coverage_locs, parameter_dictionary, complex_type):
+    def _new_coverage(self, root_dir, persistence_guid, name, reference_coverage_locs, parameter_dictionary, complex_type, reference_coverage_extents={}):
         # Coverage doesn't exist, make a new one
         if reference_coverage_locs is None or name is None:
             raise SystemError('\'reference_coverages\' and \'name\' cannot be None')
@@ -79,6 +70,7 @@ class AggregateCoverage(AbstractCoverage):
                                                            mode=self.mode,
                                                            param_dict=parameter_dictionary,
                                                            rcov_locs=reference_coverage_locs,
+                                                           rcov_extents=reference_coverage_extents,
                                                            complex_type=complex_type,
                                                            coverage_type='complex',
                                                            version=self.version)
@@ -102,7 +94,7 @@ class AggregateCoverage(AbstractCoverage):
     def append_parameter(self, parameter_context):
         raise NotImplementedError('Parameter value retrieval not implemented.')
 
-    def append_reference_coverage(self, path):
+    def append_reference_coverage(self, path, **kwargs):
         ncov = AbstractCoverage.load(path)
         ncov.close()
 
@@ -307,43 +299,6 @@ class AggregateCoverage(AbstractCoverage):
         return NumpyDictParameterData(combined_data, alignment_key=sort_parameter, as_rec_array=as_record_array)
 
 
-
-    # def get_value_dictionary(self, param_list=None, temporal_slice=None, domain_slice=None):
-    #     if temporal_slice and domain_slice:
-    #         raise ValueError("Can not specify both a temporal_slice and domain_slice")
-    #     if temporal_slice:
-    #         return self._get_value_dictionary_temporal(param_list, temporal_slice)
-    #
-    #     else:
-    #         return self._get_value_dictionary_domain(param_list, domain_slice)
-    #
-
-    def new_simplex(self):
-        '''
-        Creates a new child simplex coverage with the same CRS information
-        '''
-        root_dir, guid = os.path.split(self.persistence_dir)
-        name = 'generated simplex'
-        pdict = deepcopy(self._range_dictionary)
-        tcrs = CRS([AxisTypeEnum.TIME])
-        scrs = CRS([AxisTypeEnum.LON, AxisTypeEnum.LAT])
-
-        # Construct temporal and spatial Domain objects
-        tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
-        sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
-        scov = SimplexCoverage(root_dir, 
-                               utils.create_guid(),
-                               name,
-                               parameter_dictionary=pdict, 
-                               temporal_domain=tdom,
-                               spatial_domain=sdom,
-                               mode='r+')
-        path = scov.persistence_dir
-        self.append_reference_coverage(path)
-        return scov
-        
-
-
     @classmethod
     def _value_dict_swap(cls, value_dict, x0, x1):
         '''
@@ -485,6 +440,5 @@ class AggregateCoverage(AbstractCoverage):
                 if rt is None:
                     rt = bounds
                 else:
-                    print bounds, rt
                     rt = (min(bounds[0], rt[0]), max(bounds[1], rt[1]))
             return rt

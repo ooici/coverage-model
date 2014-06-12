@@ -4,7 +4,7 @@
 @package coverage_model.test.test_complex_coverage
 @file coverage_model/test/test_R2_complex_coverage.py
 @author Christopher Mueller
-@brief Unit & Integration tests for AggregateCoverage
+@brief Unit & Integration tests for ComplexCoverage
 """
 
 from ooi.logging import log
@@ -18,7 +18,6 @@ import unittest
 from copy import deepcopy
 from coverage_model.hdf_utils import HDFLockingFile
 from coverage_test_base import CoverageIntTestBase, get_props
-from coverage_model.coverages.aggregate_coverage import AggregateCoverage
 import time
 
 
@@ -151,7 +150,7 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #         cov_pths = [cova_pth, covb_pth]
 #
 #
-#         ccov = AggregateCoverage(self.working_dir, create_guid(), 'complex coverage',
+#         ccov = ComplexCoverage(self.working_dir, create_guid(), 'complex coverage',
 #                 reference_coverage_locs=[covb_pth],
 #                 parameter_dictionary=ParameterDictionary(),
 #                 complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
@@ -165,8 +164,8 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 
         
 
-# @attr('INT',group='cov')
-# class TestAggregateCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
+#@attr('INT',group='cov')
+# class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
 #
 #     # Make a deep copy of the base TESTING_PROPERTIES dict and then modify for this class
 #     TESTING_PROPERTIES = deepcopy(CoverageIntTestBase.TESTING_PROPERTIES)
@@ -208,18 +207,18 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #         covc_pth = _make_cov(cls.working_dir, ['data_all', 'data_c'], nt=sz3,
 #                              data_dict={'time': third_times, 'data_all': third_data, 'data_c': third_data})
 #
-#         comp_cov = AggregateCoverage(cls.working_dir, create_guid(), 'sample temporal aggregation coverage',
+#         comp_cov = ComplexCoverage(cls.working_dir, create_guid(), 'sample temporal aggregation coverage',
 #                                    reference_coverage_locs=[cova_pth, covb_pth, covc_pth],
 #                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 #
-#         return comp_cov, 'TestAggregateCoverageInt'
+#         return comp_cov, 'TestComplexCoverageInt'
 #
 #     ######################
 #     # Overridden base tests
 #     ######################
 #
 #     def _insert_set_get(self, scov=None, timesteps=None, data=None, _slice=None, param='all'):
-#         # Cannot set values against a AggregateCoverage - just return True
+#         # Cannot set values against a ComplexCoverage - just return True
 #         return True
 #
 #     def test_append_parameter(self):
@@ -257,47 +256,47 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #     def test_refresh(self):
 #         pass
 #
-#     @unittest.skip('Does not apply to AggregateCoverage')
+#     @unittest.skip('Does not apply to ComplexCoverage')
 #     def test_create_multi_bricks(self):
 #         pass
 #
-#     @unittest.skip('Does not apply to AggregateCoverage')
+#     @unittest.skip('Does not apply to ComplexCoverage')
 #     def test_coverage_pickle_and_in_memory(self):
 #         pass
 #
-#     @unittest.skip('Does not apply to AggregateCoverage')
+#     @unittest.skip('Does not apply to ComplexCoverage')
 #     def test_coverage_mode_expand_domain(self):
 #         pass
 #
-#     @unittest.skip('Does not apply to AggregateCoverage')
+#     @unittest.skip('Does not apply to ComplexCoverage')
 #     def test_coverage_mode_set_value(self):
 #         pass
 #
-#     @unittest.skip('Does not apply to AggregateCoverage')
+#     @unittest.skip('Does not apply to ComplexCoverage')
 #     def test_pickle_problems_in_memory(self):
 #         pass
 #
-#     @unittest.skip('Does not apply to AggregateCoverage')
+#     @unittest.skip('Does not apply to ComplexCoverage')
 #     def test_set_allparams_five_bricks(self):
 #         pass
 #
-#     @unittest.skip('Does not apply to AggregateCoverage')
+#     @unittest.skip('Does not apply to ComplexCoverage')
 #     def test_set_allparams_one_brick(self):
 #         pass
 #
-#     @unittest.skip('Does not apply to AggregateCoverage')
+#     @unittest.skip('Does not apply to ComplexCoverage')
 #     def test_set_time_five_bricks(self):
 #         pass
 #
-#     @unittest.skip('Does not apply to AggregateCoverage')
+#     @unittest.skip('Does not apply to ComplexCoverage')
 #     def test_set_time_five_bricks_strided(self):
 #         pass
 #
-#     @unittest.skip('Does not apply to AggregateCoverage')
+#     @unittest.skip('Does not apply to ComplexCoverage')
 #     def test_set_time_one_brick(self):
 #         pass
 #
-#     @unittest.skip('Does not apply to AggregateCoverage')
+#     @unittest.skip('Does not apply to ComplexCoverage')
 #     def test_set_time_one_brick_strided(self):
 #         pass
 #
@@ -328,7 +327,7 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #         pdict.add_context(val_ctxt)
 #
 #         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-#         ccov = AggregateCoverage('test_data', create_guid(), 'sample complex coverage', parameter_dictionary=pdict,
+#         ccov = ComplexCoverage('test_data', create_guid(), 'sample complex coverage', parameter_dictionary=pdict,
 #                                mode='w', reference_coverage_locs=rcov_locs)
 #
 #         ccov_pth = ccov.persistence_dir
@@ -339,7 +338,7 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #         ccov.close()
 #         del(ccov)
 #
-#         # Open AggregateCoverage in write mode
+#         # Open ComplexCoverage in write mode
 #         w_ccov = AbstractCoverage.load(ccov_pth)
 #
 #         # Loop over opening and reading data out of CC 10 times
@@ -347,7 +346,7 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #         while rpt > 0:
 #             read_ccov = AbstractCoverage.load(ccov_pth, mode='r')
 #             self.assertIsInstance(read_ccov, AbstractCoverage)
-#             time_value = read_ccov.get_parameter_values('time')
+#             time_value = read_ccov.get_parameter_values('time', [1])
 #             self.assertEqual(time_value, 1.0)
 #             read_ccov.close()
 #             del(read_ccov)
@@ -358,16 +357,16 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #
 #         if storage_type == 'hdf':
 #             # Only for file-based metadata
-#             # Open AggregateCoverage's master file using locking
+#             # Open ComplexCoverage's master file using locking
 #             # with HDFLockingFile(ccov_masterfile_pth, 'r+') as f:
 #
-#             # Test ability to read from AggregateCoverage in readonly mode
+#             # Test ability to read from ComplexCoverage in readonly mode
 #             locked_ccov = AbstractCoverage.load(ccov_pth, mode='r')
 #             self.assertIsInstance(locked_ccov, AbstractCoverage)
 #             time_value = locked_ccov.get_parameter_values('time', [1])
 #             self.assertEqual(time_value, 1.0)
 #
-#             # Test inability to open AggregateCoverage for writing
+#             # Test inability to open ComplexCoverage for writing
 #             with self.assertRaises(IOError):
 #                 AbstractCoverage.load(ccov_pth)
 #
@@ -383,7 +382,6 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #             locked_ccov.close()
 #             del(locked_ccov)
 #
-#     @unittest.skip("Parametric depricated")
 #     def test_parametric_strict(self):
 #         num_times = 10
 #
@@ -408,8 +406,8 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #         aplorng_ctxt = ParameterContext('apples_to_oranges', param_type=ParameterFunctionType(function=aplorng_func, value_encoding=np.dtype('float32')))
 #         pdict.add_context(aplorng_ctxt)
 #
-#         # Instantiate the AggregateCoverage
-#         ccov = AggregateCoverage(self.working_dir, create_guid(), 'sample complex coverage',
+#         # Instantiate the ComplexCoverage
+#         ccov = ComplexCoverage(self.working_dir, create_guid(), 'sample complex coverage',
 #                                reference_coverage_locs=[cova_pth, covb_pth, covc_pth],
 #                                parameter_dictionary=pdict,
 #                                complex_type=ComplexCoverageType.PARAMETRIC_STRICT)
@@ -429,7 +427,6 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #         aplorng_want = apple_data * np.cos(np.sin(orange_data)) + first_data
 #         self.assertTrue(np.allclose(ccov.get_parameter_values('apples_to_oranges'), aplorng_want))
 #
-#     @unittest.skip("Parametric depricated")
 #     def test_parametric_strict_warnings(self):
 #         num_times = 10
 #
@@ -455,7 +452,7 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #         pdict.add_context(aplorng_ctxt)
 #
 #         with mock.patch('coverage_model.coverage.log') as log_mock:
-#             ccov = AggregateCoverage(self.working_dir, create_guid(), 'sample complex coverage',
+#             ccov = ComplexCoverage(self.working_dir, create_guid(), 'sample complex coverage',
 #                                    reference_coverage_locs=[cova_pth, covb_pth, covc_pth],
 #                                    parameter_dictionary=pdict,
 #                                    complex_type=ComplexCoverageType.PARAMETRIC_STRICT)
@@ -466,7 +463,7 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #                               mock.call("Parameter '%s' from coverage '%s' already present, skipping...", 'time', covc_pth))
 #
 #         with mock.patch('coverage_model.coverage.log') as log_mock:
-#             ccov = AggregateCoverage(self.working_dir, create_guid(), 'sample complex coverage',
+#             ccov = ComplexCoverage(self.working_dir, create_guid(), 'sample complex coverage',
 #                                    reference_coverage_locs=[cova_pth, cova_pth],
 #                                    parameter_dictionary=pdict,
 #                                    complex_type=ComplexCoverageType.PARAMETRIC_STRICT)
@@ -476,7 +473,7 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #
 #         with mock.patch('coverage_model.coverage.log') as log_mock:
 #             covb_pth = _make_cov(self.working_dir, ['second_param'], data_dict={'second_param': second_data}, make_temporal=False)
-#             ccov = AggregateCoverage(self.working_dir, create_guid(), 'sample complex coverage',
+#             ccov = ComplexCoverage(self.working_dir, create_guid(), 'sample complex coverage',
 #                                    reference_coverage_locs=[cova_pth, covb_pth],
 #                                    parameter_dictionary=pdict,
 #                                    complex_type=ComplexCoverageType.PARAMETRIC_STRICT)
@@ -486,12 +483,12 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #
 #         with mock.patch('coverage_model.coverage.log') as log_mock:
 #             pdict.add_context(ParameterContext('discard_me'))
-#             ccov = AggregateCoverage(self.working_dir, create_guid(), 'sample complex coverage',
+#             ccov = ComplexCoverage(self.working_dir, create_guid(), 'sample complex coverage',
 #                                    reference_coverage_locs=[cova_pth, cova_pth],
 #                                    parameter_dictionary=pdict,
 #                                    complex_type=ComplexCoverageType.PARAMETRIC_STRICT)
 #             self.assertEqual(log_mock.warn.call_args_list[0],
-#                              mock.call("Parameters stored in a AggregateCoverage must be ParameterFunctionType parameters: discarding '%s'", 'discard_me'))
+#                              mock.call("Parameters stored in a ComplexCoverage must be ParameterFunctionType parameters: discarding '%s'", 'discard_me'))
 #
 #     def test_temporal_aggregation(self):
 #         size = 100000
@@ -511,7 +508,7 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #         covc_pth = _make_cov(self.working_dir, ['data_all', 'data_c'], nt=size,
 #                              data_dict={'time': third_times, 'data_all': third_data, 'data_c': third_data})
 #
-#         comp_cov = AggregateCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+#         comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
 #                                    reference_coverage_locs=[cova_pth, covb_pth, covc_pth],
 #                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 #
@@ -523,16 +520,28 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #         all_data = np.append(all_data, first_data)
 #         all_data = np.append(all_data, second_data)
 #         all_data = np.append(all_data, third_data)
-#         np.testing.assert_array_equal(comp_cov.get_parameter_values('data_all').get_data()['data_all'], all_data)
-#         np.testing.assert_array_equal(comp_cov.get_parameter_values('data_all', time_segment=(0, size-1)).get_data()['data_all'], first_data)
+#         self.assertTrue(np.array_equal(comp_cov.get_parameter_values('data_all'), all_data))
+#         self.assertTrue(np.array_equal(comp_cov.get_parameter_values('data_all', slice(0,size)), first_data))
 #
 #         fill_arr = np.empty(size, dtype='float32')
 #         fill_arr[:] = -9999.0
-#         np.testing.assert_array_equal(comp_cov.get_parameter_values('data_a').get_data()['data_a'], first_data)
+#         a_data = np.empty(0, dtype='float32')
+#         a_data = np.append(a_data, first_data)
+#         a_data = np.append(a_data, fill_arr)
+#         a_data = np.append(a_data, fill_arr)
+#         self.assertTrue(np.array_equal(comp_cov.get_parameter_values('data_a'), a_data))
 #
-#         np.testing.assert_array_equal(comp_cov.get_parameter_values('data_b').get_data()['data_b'], second_data)
+#         b_data = np.empty(0, dtype='float32')
+#         b_data = np.append(b_data, fill_arr)
+#         b_data = np.append(b_data, second_data)
+#         b_data = np.append(b_data, fill_arr)
+#         self.assertTrue(np.array_equal(comp_cov.get_parameter_values('data_b'), b_data))
 #
-#         np.testing.assert_array_equal(comp_cov.get_parameter_values('data_c').get_data()['data_c'], third_data)
+#         c_data = np.empty(0, dtype='float32')
+#         c_data = np.append(c_data, fill_arr)
+#         c_data = np.append(c_data, fill_arr)
+#         c_data = np.append(c_data, third_data)
+#         self.assertTrue(np.array_equal(comp_cov.get_parameter_values('data_c'), c_data))
 #
 #         # Check that the head_coverage_path is correct
 #         self.assertEqual(comp_cov.head_coverage_path, covc_pth)
@@ -548,14 +557,14 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #         cov_c.set_parameter_values(make_parameter_data_dict(p_dict))
 #         cov_c.close()
 #
-#         # # Refresh the complex coverage
-#         # comp_cov.refresh()
+#         # Refresh the complex coverage
+#         comp_cov.refresh()
 #
 #         all_data = np.append(all_data, addnl_c_data)
-#         np.testing.assert_array_equal(comp_cov.get_parameter_values('data_all').get_data()['data_all'], all_data)
+#         self.assertTrue(np.array_equal(comp_cov.get_parameter_values('data_all'), all_data))
 #
-#         third_data = np.append(third_data, addnl_c_data)
-#         np.testing.assert_array_equal(comp_cov.get_parameter_values('data_c').get_data()['data_c'], third_data)
+#         c_data = np.append(c_data, addnl_c_data)
+#         self.assertTrue(np.array_equal(comp_cov.get_parameter_values('data_c'), c_data))
 #
 #         # Check that the head_coverage_path is still correct
 #         self.assertEqual(comp_cov.head_coverage_path, covc_pth)
@@ -579,7 +588,7 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #                              data_dict={'time': third_times, 'data_all': third_data, 'data_c': third_data})
 #
 #         with mock.patch('coverage_model.coverage.log') as log_mock:
-#             comp_cov = AggregateCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+#             comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
 #                                        reference_coverage_locs=[cova_pth, covb_pth, covc_pth],
 #                                        complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 #
@@ -668,7 +677,7 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #
 #         covs, cov_data = self._setup_allparams(size=size)
 #
-#         comp_cov = AggregateCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+#         comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
 #                                    reference_coverage_locs=covs,
 #                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 #
@@ -708,8 +717,8 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #                              ['second_param', 'full_param'], nt=tpc,
 #                              data_dict={'time': second_times, 'second_param': second_data, 'full_param': second_full})
 #
-#         # Instantiate the AggregateCoverage
-#         ccov = AggregateCoverage(self.working_dir, create_guid(), 'sample complex coverage',
+#         # Instantiate the ComplexCoverage
+#         ccov = ComplexCoverage(self.working_dir, create_guid(), 'sample complex coverage',
 #                                reference_coverage_locs=[cova_pth, covb_pth],
 #                                complex_type=ComplexCoverageType.TEMPORAL_INTERLEAVED)
 #
@@ -738,7 +747,7 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #         size = 10
 #         covs, cov_data = self._setup_allparams(size=size, num_covs=5, sequential_covs=False)
 #
-#         comp_cov = AggregateCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+#         comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
 #                                    reference_coverage_locs=covs,
 #                                    complex_type=ComplexCoverageType.TEMPORAL_INTERLEAVED)
 #
@@ -770,7 +779,7 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #         covb_pth = _make_cov(self.working_dir, ['B', 'Common'], data_dict={'B': second_data, 'Common': second_common_data, 'time': second_time_data}, nt=second_num_times)
 #         covc_pth = _make_cov(self.working_dir, ['C', 'Common'], data_dict={'C': third_data, 'Common': third_common_data, 'time': third_time_data}, nt=third_num_times)
 #
-#         cov = AggregateCoverage(self.working_dir, create_guid(), 'sample temporal broadcast coverage',
+#         cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal broadcast coverage',
 #                                    reference_coverage_locs=[cova_pth, covb_pth, covc_pth],
 #                                    complex_type=ComplexCoverageType.TEMPORAL_BROADCAST)
 #
@@ -814,7 +823,7 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #         covc_pth = _make_cov(self.working_dir, ['data_all', 'data_c'], nt=size,
 #                              data_dict={'time': third_times, 'data_all': third_data, 'data_c': third_data})
 #
-#         comp_cov = AggregateCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+#         comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
 #                                    reference_coverage_locs=[cova_pth, covb_pth],
 #                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 #
@@ -842,120 +851,120 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 #         covb_pth = _make_cov(self.working_dir, ['data_all', 'data_b'], nt=size,
 #                              data_dict={'time': second_times, 'data_all': second_data, 'data_b': second_data})
 #
-#         comp_cov = AggregateCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+#         comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
 #                                    reference_coverage_locs=[cova_pth, covb_pth],
 #                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 #
-#         if comp_cov._persistence_layer.master_manager.storage_type() != 'db':
+#         if comp_cov._persistence_layer.master_manager.storage_type() != 'hdf':
 #             # TODO: correct this once ViewCoverage is worked out
 #             # View coverage construction doesn't work for DB-based metadata.  View Coverage will be modified in the future
 #             self.assertTrue(True)
 #         else:
-#             comp_cov2 = AggregateCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
-#                                         reference_coverage_locs=[cova_pth],
+#             vcov = ViewCoverage(self.working_dir, create_guid(), 'test', covb_pth)
+#             comp_cov2 = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+#                                         reference_coverage_locs=[cova_pth, vcov.persistence_dir],
 #                                         complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 #
-#             comp_cov3 = AggregateCoverage(self.working_dir, create_guid(), 'sample temporal broadcast coverage',
-#                                          reference_coverage_locs=[comp_cov2.persistence_dir, covb_pth],
+#             comp_cov3 = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal broadcast coverage',
+#                                          reference_coverage_locs=[comp_cov2.persistence_dir, cova_pth],
 #                                          complex_type=ComplexCoverageType.TEMPORAL_BROADCAST)
 #
-#             # Ensure the correct path is returned from AggregateCoverage.head_coverage_path in CC --> [SC & SC] scenario
+#             # Ensure the correct path is returned from ComplexCoverage.head_coverage_path in CC --> [SC & SC] scenario
 #             self.assertEqual(comp_cov.head_coverage_path, covb_pth)
 #
-#             # Ensure the correct path is returned from AggregateCoverage.head_coverage_path in CC --> [SC & VC] scenario
-#             self.assertEqual(comp_cov2.head_coverage_path, cova_pth)
+#             # Ensure the correct path is returned from ComplexCoverage.head_coverage_path in CC --> [SC & VC] scenario
+#             self.assertEqual(comp_cov2.head_coverage_path, covb_pth)
+#             self.assertEqual(comp_cov2.head_coverage_path, vcov.head_coverage_path)
+#
+#             # Ensure the correct path is returned from ComplexCoverage.head_coverage_path in CC --> [SC & CC --> [VC & SC]] scenario
 #             self.assertEqual(comp_cov3.head_coverage_path, covb_pth)
 #
-#             # Ensure the correct path is returned from AggregateCoverage.head_coverage_path in CC --> [SC & CC --> [VC & SC]] scenario
-#             self.assertEqual(comp_cov3.head_coverage_path, covb_pth)
+#     def test_timeseries_inserts(self):
+#
+#
+#         cova_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(0, 20, 2),'value_set' : np.arange(10)})
+#         covb_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(10,30, 2), 'value_set': np.arange(10, 20)})
+#         covc_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(5,15, 1), 'value_set': np.arange(20, 30)})
+#
+#         #cov = SimplexCoverage.load(cova_pth, mode='r+')
+#
+#         cov_pths = [cova_pth, covb_pth, covc_pth]
+#
+#
+#         ccov = ComplexCoverage(self.working_dir, create_guid(), 'complex coverage',
+#                 reference_coverage_locs=cov_pths,
+#                 parameter_dictionary=ParameterDictionary(),
+#                 complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
+#
+#         with self.assertRaises(TypeError):
+#             ccov.insert_value_set({'time':np.arange(10)})
+#
+#         ccov = ComplexCoverage(self.working_dir, create_guid(), 'complex coverage',
+#                 reference_coverage_locs=cov_pths,
+#                 parameter_dictionary=ParameterDictionary(),
+#                 complex_type=ComplexCoverageType.TIMESERIES)
+#
+#         with self.assertRaises(ValueError):
+#             # Raises error because there's no temporal domain
+#             ccov.insert_value_set({'temp': np.arange(20)})
+#
+#         with self.assertRaises(ValueError):
+#             # Raises error because of improper shape
+#             ccov.insert_value_set({'time':np.arange(10), 'temp':np.arange(20)})
 #
 #     def make_timeseries_cov(self):
 #         cova_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(10,20),'value_set':np.ones(10)})
 #         cov = AbstractCoverage.load(cova_pth)
 #         pdict = cov.parameter_dictionary
 #
-#         ccov = AggregateCoverage(self.working_dir, create_guid(), 'complex coverage',
+#         ccov = ComplexCoverage(self.working_dir, create_guid(), 'complex coverage',
 #                 reference_coverage_locs=[],
 #                 parameter_dictionary=pdict,
 #                 complex_type=ComplexCoverageType.TIMESERIES)
 #         return ccov
 #
-#     def test_striding(self):
+#     def test_timeseries_random_inserts(self):
+#
+#         ccov = self.make_timeseries_cov()
+#
+#
+#         # Overlapping AND out of order
+#         t = range(15,25)
+#         t.reverse()
+#         a = range(10)
+#         a.reverse()
+#         ccov.insert_value_set({'time' : np.array(t), 'value_set':np.ones(10) * 3})
+#         ccov.insert_value_set({'time' : np.arange(10), 'value_set' : np.ones(10)* 4})
+#         ccov.insert_value_set({'time' : np.arange(30,35), 'value_set':np.ones(5) * 5})
+#         ccov.insert_value_set({'time' : np.arange(25,30), 'value_set' : np.ones(5) * 6})
+#         ccov.insert_value_set({'time' : np.arange(5,20), 'value_set' : np.ones(15) * 7})
+#
+#         intervals = [(0,29), (5,19), (15,34)]
+#         imap = [i[0].to_tuple() for i in ccov.interval_map()]
+#         self.assertEquals(intervals, imap)
+#         vdict = ccov.get_value_dictionary()
+#         np.testing.assert_array_equal(vdict['time'], np.arange(35))
+#         np.testing.assert_array_equal(vdict['value_set'],
+#                 np.array([ 4.,  4.,  4.,  4.,  4.,  7.,  7.,  7.,  7.,  7.,  7.,  7.,  7.,
+#                 7.,  7.,  3.,  3.,  3.,  3.,  3.,  3.,  3.,  3.,  3.,  3.,  6.,
+#                 6.,  6.,  6.,  6.,  5.,  5.,  5.,  5.,  5.]))
+#
+#     def test_timeseries_striding(self):
+#         ccov = self.make_timeseries_cov()
+#         ccov.insert_value_set({'time' : np.arange(15,25), 'value_set':np.ones(10) * 3})
+#         ccov.insert_value_set({'time' : np.arange(10), 'value_set' : np.ones(10)* 4})
+#         ccov.insert_value_set({'time' : np.arange(30,35), 'value_set':np.ones(5) * 5})
+#         ccov.insert_value_set({'time' : np.arange(25,30), 'value_set' : np.ones(5) * 6})
+#         ccov.insert_value_set({'time' : np.arange(5,20), 'value_set' : np.ones(15) * 7})
+#
+#         vd = ccov.get_value_dictionary(['time'], (None,None,2))
+#         np.testing.assert_array_equal(vd['time'], np.arange(0,35,2))
+#
+#     def test_get_value_dict(self):
 #         pass
 #
-#     def test_get_all_parameters(self):
-#         size = 10
-#         first_times = np.arange(0, size, dtype='float32')
-#         first_data = np.arange(size, size*2, dtype='float32')
-#
-#         second_times = np.arange(size, size*2, dtype='float32')
-#         second_data = np.arange(size*4, size*5, dtype='float32')
-#
-#         cova_pth = _make_cov(self.working_dir, ['data_all', 'data_a'], nt=size,
-#                              data_dict={'time': first_times, 'data_all': first_data, 'data_a': first_data})
-#         covb_pth = _make_cov(self.working_dir, ['data_all', 'data_b'], nt=size,
-#                              data_dict={'time': second_times, 'data_all': second_data, 'data_b': second_data})
-#
-#         comp_cov = AggregateCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
-#                                    reference_coverage_locs=[cova_pth, covb_pth],
-#                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
-#
-#         pvals = comp_cov.get_parameter_values().get_data()
-#         expected_data_all = np.empty(size*2)
-#         expected_data_all[0:size] = first_data
-#         expected_data_all[size:size*2] = second_data
-#         np.testing.assert_array_equal(expected_data_all, pvals['data_all'])
-#         expected_times = np.empty(size*2)
-#         expected_times[0:size] = first_times
-#         expected_times[size:size*2] = second_times
-#         np.testing.assert_array_equal(expected_times, pvals['time'])
-#         expected_data_a = np.empty(size*2)
-#         expected_data_a[0:size] = first_data
-#         expected_data_a[size:size*2] = np.NaN
-#         np.testing.assert_array_equal(expected_data_a, pvals['data_a'])
-#         expected_data_b = np.empty(size*2)
-#         expected_data_b[0:size] = np.NaN
-#         expected_data_b[size:size*2] = second_data
-#         np.testing.assert_array_equal(expected_data_b, pvals['data_b'])
-#
-#     def test_get_some_parameters(self):
-#         size = 10
-#         first_times = np.arange(0, size, dtype='float32')
-#         first_data = np.arange(size, size*2, dtype='float32')
-#
-#         second_times = np.arange(size, size*2, dtype='float32')
-#         second_data = np.arange(size*4, size*5, dtype='float32')
-#
-#         cova_pth = _make_cov(self.working_dir, ['data_all', 'data_a'], nt=size,
-#                              data_dict={'time': first_times, 'data_all': first_data, 'data_a': first_data})
-#         covb_pth = _make_cov(self.working_dir, ['data_all', 'data_b'], nt=size,
-#                              data_dict={'time': second_times, 'data_all': second_data, 'data_b': second_data})
-#
-#         comp_cov = AggregateCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
-#                                    reference_coverage_locs=[cova_pth, covb_pth],
-#                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
-#
-#         pvals = comp_cov.get_parameter_values('data_a').get_data()
-#         np.testing.assert_array_equal(first_times, pvals['time'])
-#         np.testing.assert_array_equal(first_data, pvals['data_a'])
-#
-#         pvals = comp_cov.get_parameter_values('data_b').get_data()
-#         np.testing.assert_array_equal(second_times, pvals['time'])
-#         np.testing.assert_array_equal(second_data, pvals['data_b'])
-#
-#         pvals = comp_cov.get_parameter_values(['data_b', 'data_all']).get_data()
-#         expected_data_all = np.empty(size*2)
-#         expected_data_all[0:size] = first_data
-#         expected_data_all[size:size*2] = second_data
-#         np.testing.assert_array_equal(expected_data_all, pvals['data_all'])
-#         expected_times = np.empty(size*2)
-#         expected_times[0:size] = first_times
-#         expected_times[size:size*2] = second_times
-#         np.testing.assert_array_equal(expected_times, pvals['time'])
-#         expected_data_b = np.empty(size*2)
-#         expected_data_b[0:size] = np.NaN
-#         expected_data_b[size:size*2] = second_data
-#         np.testing.assert_array_equal(expected_data_b, pvals['data_b'])
+#     def test_get_value_dict_tslice(self):
+#         pass
 
 
 def create_all_params():
@@ -1069,4 +1078,3 @@ def create_all_params():
     contexts['density'] = dens_ctxt
 
     return contexts
-
