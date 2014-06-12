@@ -70,7 +70,7 @@ class ComplexCoverage(AggregateCoverage):
                         extents = extents.time_extents
                     current_time_segment = get_overlap(extents, time_segment)
 
-                    params = coverage.get_parameter_values(this_param_names, current_time_segment, time, sort_parameter, stride_length,
+                    params = coverage.get_parameter_values(this_param_names, current_time_segment, time, sort_parameter,
                                                            return_value, fill_empty_params, function_params, as_record_array=False)
                     # if len(params.get_data()) == 1 and coverage.temporal_parameter_name in params.get_data():
                     #     continue
@@ -91,7 +91,7 @@ class ComplexCoverage(AggregateCoverage):
                     else:
                         cov_value_list.append((cov_dict, coverage))
 
-        combined_data = self._merge_value_dicts(cov_value_list)
+        combined_data = self._merge_value_dicts(cov_value_list, stride_length=stride_length)
         if not fill_empty_params:
             for param_name in all_empty:
                 combined_data.pop(param_name)

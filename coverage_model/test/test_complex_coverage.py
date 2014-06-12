@@ -630,8 +630,10 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         tvals = comp_cov.get_time_values()
         self.assertTrue(np.array_equal(tvals, np.arange(2*size, dtype='float32')))
 
+        covc = AbstractCoverage.load(covc_pth)
+        covc_id = covc.persistence_guid
         # Append the new coverage
-        comp_cov.append_reference_coverage(covc_pth)
+        comp_cov.append_reference_coverage(covc_pth, extents=ReferenceCoverageExtents('c', covc_id, time_extents=(size*2, size*3)))
 
         # Now make sure the new data is there!
         tvals = comp_cov.get_time_values()
@@ -906,9 +908,9 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         np.testing.assert_allclose(data['data_b'], data_b_dense)
         
         # Test slicing
-        data = ccov.get_parameter_values(fill_empty_params=True, as_record_array=False, stride_length=3).get_data()
+        data = ccov.get_parameter_values('time', fill_empty_params=True, as_record_array=False, stride_length=3).get_data()
         # Stretch goal
-        #np.testing.assert_allclose(data['time'], time_dense[::3])
+        np.testing.assert_allclose(data['time'], time_dense[::3])
 
 
 def create_all_params():

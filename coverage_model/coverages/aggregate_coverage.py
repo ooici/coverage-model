@@ -200,7 +200,7 @@ class AggregateCoverage(AbstractCoverage):
             cls._interval_qsort(arr, left, pivot-1)
             cls._interval_qsort(arr, pivot+1, right)
 
-    def _merge_value_dicts(self, value_dicts, override_temporal_key=None):
+    def _merge_value_dicts(self, value_dicts, override_temporal_key=None, stride_length=None):
         total_size = 0
         dtype_map = {}
         for param_dict, coverage in value_dicts:
@@ -242,6 +242,9 @@ class AggregateCoverage(AbstractCoverage):
                         return_dict[key][current_index:current_index+size] = coverage.get_parameter_context(key).param_type.fill_value()
                 current_index += size
 
+        if stride_length is not None:
+            for k,v in return_dict.iteritems():
+                return_dict[k] = v[::stride_length]
         return return_dict
 
     def _add_coverage_array(cls, param_dict, size, cov_id):
@@ -259,7 +262,7 @@ class AggregateCoverage(AbstractCoverage):
                 cov_dict = {dummy_key: params}
                 cov_value_list.append((cov_dict, coverage))
 
-        combined_data = self._merge_value_dicts(cov_value_list, override_temporal_key=dummy_key)
+        combined_data = self._merge_value_dicts(cov_value_list, override_temporal_key=dummy_key, stride_length=stride_length)
         from coverage_model.util.numpy_utils import sort_flat_arrays
         if dummy_key in combined_data:
             combined_data = sort_flat_arrays(combined_data, dummy_key)
