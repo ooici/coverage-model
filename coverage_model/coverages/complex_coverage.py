@@ -113,22 +113,31 @@ class ComplexCoverage(AggregateCoverage):
     def append_reference_coverage(self, path, extents=None, **kwargs):
         super(ComplexCoverage, self).append_reference_coverage(path, **kwargs)
         rcov = AbstractCoverage.load(path)
-        self.set_reference_coverage_extents(rcov.persistence_guid, extents)
+        self.set_reference_coverage_extents(rcov.persistence_guid, extents, append=True)
 
     def set_reference_coverage_extents(self, coverage_id, extents, append=True):
+
         if extents is None:
-            return
-        if not isinstance(extents, list):
+            raise ValueError("Extents must be specified when appending reference coverages")
+
+        if not isinstance(extents, (list, tuple)):
             extents = [extents]
+
+        # Check that the extents are proper Extents and that they reference the associated coverage
         for extent in extents:
             if not isinstance(extent, ReferenceCoverageExtents):
-                raise ValueError('Extents must be of type %s' % ReferenceCoverageExtents.__name__)
+                raise TypeError('Extents must be of type %s' % ReferenceCoverageExtents.__name__)
+
             if extent.cov_id != coverage_id:
                 raise ValueError('Extent coverage_id, %s, does not match requested coverage id %s' % (extent.cov_id, coverage_id))
+
+        # Make a new one
         if self._persistence_layer.rcov_extents is None:
             self._persistence_layer.rcov_extents = ExtentsDict()
+
         if append:
             self._persistence_layer.rcov_extents.add_extents(coverage_id, extents)
+
         else:
             self._persistence_layer.rcov_extents.replace_extents(coverage_id, extents)
 

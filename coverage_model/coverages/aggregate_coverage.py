@@ -47,8 +47,9 @@ class AggregateCoverage(AbstractCoverage):
         self._reference_covs = collections.OrderedDict()
 
     def _new_coverage(self, root_dir, persistence_guid, name, reference_coverage_locs, parameter_dictionary, complex_type, reference_coverage_extents={}):
+        reference_coverage_locs = reference_coverage_locs or [] # Can be empty
         # Coverage doesn't exist, make a new one
-        if reference_coverage_locs is None or name is None:
+        if name is None:
             raise SystemError('\'reference_coverages\' and \'name\' cannot be None')
         if not isinstance(name, basestring):
             raise TypeError('\'name\' must be of type basestring')

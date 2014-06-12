@@ -745,16 +745,24 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         cova_id = cova.persistence_guid
         covb_id = covb.persistence_guid
         rcov_extents = {}
+        # cova is referenced once
         rcov_extents[cova_id] = ReferenceCoverageExtents('a', cova_id, time_extents=(0,4))
+        # covb is referenced once but with the possibility of being referenced again (hence the list)
         rcov_extents[covb_id] = [ReferenceCoverageExtents('b', covb_id, time_extents=(10,12))]
         cova.close()
         covb.close()
 
         comp_cov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
                                    parameter_dictionary=_make_param_dict(['data_all', 'data_a', 'data_b']),
-                                   reference_coverage_locs=[cova_pth, covb_pth],
-                                   reference_coverage_extents=rcov_extents,
+                                   reference_coverage_locs=[],
                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
+
+        comp_cov.append_reference_coverage(cova_pth, ReferenceCoverageExtents('Zero', cova_id, time_extents=(0,4)))
+
+        from pyon.util.breakpoint import breakpoint
+        breakpoint(locals(), globals())
+
+        comp_cov.append_reference_coverage(covb_pth, ReferenceCoverageExtents('Jay', covb_id, time_extents=(10,12)))
 
         times = np.empty(8, dtype='float32')
         times[0:5] = first_times[0:5]
@@ -847,6 +855,66 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         np.testing.assert_array_equal(expected_data_all, pvals['data_all'])
         np.testing.assert_array_equal(expected_times, pvals['time'])
         np.testing.assert_array_equal(expected_b, pvals['data_b'])
+
+    def test_attributes(self):
+        # Complex coverages are read only
+        ccov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+                                   parameter_dictionary=_make_param_dict(['data_all', 'data_a', 'data_b']),
+                                   reference_coverage_locs=[],
+                                   complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
+
+        data_dict = {
+            'time': NumpyParameterData('time', np.arange(10))
+        }
+
+        self.assertRaises(NotImplementedError, ccov.set_parameter_values, data_dict)
+
+        # A Complex Coverage has it's own parameter dictionary
+        for param_name in ['data_all', 'data_a', 'data_b']:
+            pc = ccov.get_parameter_context(param_name)
+            self.assertIsInstance(pc, ParameterContext)
+
+        # A Complex Coverage comprises windows of other datasets
+        cova_pth = _make_cov(self.working_dir, ['data_all', 'data_a'], nt=10,
+                             data_dict={'time': np.arange(10), 'data_all': np.arange(100,110), 'data_a': np.arange(50,60)})
+        cova = AbstractCoverage.load(cova_pth)
+        cova_id = cova.persistence_guid
+        cova.close()
+
+        # Should raise without a window
+        self.assertRaises(ValueError, ccov.append_reference_coverage, cova_pth)
+
+        # Append the first window of a dataset, that window doesn't encompass the entire first dataset
+        ccov.append_reference_coverage(cova_pth, ReferenceCoverageExtents('first-deployment', cova_id, time_extents=(2,8)))
+
+        # Get the data and make sure we can see values 2-8
+        data = ccov.get_parameter_values(fill_empty_params=True, as_record_array=False).get_data()
+        np.testing.assert_allclose(data['time'], np.arange(2,9))
+        np.testing.assert_allclose(data['data_all'], np.arange(102,109))
+        np.testing.assert_allclose(data['data_a'], np.arange(52,59))
+
+        # A Complex Coverage fills in missing parameters
+        np.testing.assert_allclose(data['data_b'], np.array([-9999] * 7))
+
+        
+        covb_pth = _make_cov(self.working_dir, ['data_all', 'data_b'], nt=20,
+                             data_dict={'time': np.arange(20), 'data_all': np.arange(100,120), 'data_b': np.arange(20,40)})
+        covb = AbstractCoverage.load(covb_pth)
+        covb_id = covb.persistence_guid
+        covb.close()
+        ccov.append_reference_coverage(covb_pth, ReferenceCoverageExtents('second-deployment', covb_id, time_extents=(15,19)))
+
+        data = ccov.get_parameter_values(fill_empty_params=True, as_record_array=False).get_data()
+        time_dense = np.concatenate((np.arange(2,9), np.arange(15,20)))
+        np.testing.assert_allclose(data['time'], time_dense)
+
+        data_b_dense = np.concatenate(([-9999] * 7, np.arange(35,40)))
+        np.testing.assert_allclose(data['data_b'], data_b_dense)
+        
+        # Test slicing
+        data = ccov.get_parameter_values(fill_empty_params=True, as_record_array=False, stride_length=3).get_data()
+        # Stretch goal
+        #np.testing.assert_allclose(data['time'], time_dense[::3])
 
 
 def create_all_params():
