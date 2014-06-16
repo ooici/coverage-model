@@ -44,6 +44,13 @@ class ParameterData(object):
 class NumpyDictParameterData(ParameterData):
 
     def __init__(self, param_dict, alignment_key=None, param_context_dict=None, as_rec_array=False):
+        if len(param_dict) < 1:
+            self.size = 0
+            self.alignment_key = alignment_key
+            self.param_context_dict = param_context_dict
+            super(NumpyDictParameterData, self).__init__('none', {})
+            return
+
         if not isinstance(param_dict, dict):
             raise TypeError("param_dict must implement type %s" % dict.__name__)
         alignment_array = None
@@ -53,8 +60,9 @@ class NumpyDictParameterData(ParameterData):
             alignment_array = param_dict[alignment_key]
         else:
             for key, val in param_dict.iteritems():
-                alignment_array = val
-                break
+                if val is not None and isinstance(val, np.ndarray):
+                    alignment_array = val
+                    break
         if not isinstance(alignment_array, np.ndarray):
             raise TypeError("alignment_array must implement type %s, found %s" % (np.ndarray.__name__, type(alignment_array)))
         self.size = alignment_array.size

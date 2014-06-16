@@ -56,7 +56,7 @@ class ExtentsDict(Dictable):
         if cov_id in self.data:
             self.data[cov_id].extend(extents)
         else:
-            self.data[cov_id] = extents
+            self.replace_extents(cov_id, extents)
 
     def replace_extents(self, cov_id, extents):
         if isinstance(extents, ReferenceCoverageExtents):

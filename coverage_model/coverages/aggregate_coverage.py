@@ -239,7 +239,7 @@ class AggregateCoverage(AbstractCoverage):
                     if key in param_dict:
                         return_dict[key][current_index:current_index+size] = param_dict[key]
                     elif key in coverage.list_parameters():
-                        return_dict[key][current_index:current_index+size] = coverage.get_parameter_context(key).param_type.fill_value()
+                        return_dict[key][current_index:current_index+size] = coverage.get_parameter_context(key).param_type.fill_value
                 current_index += size
 
         if stride_length is not None:
