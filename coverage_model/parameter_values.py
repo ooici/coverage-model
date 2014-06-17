@@ -9,7 +9,7 @@
 from ooi.logging import log
 from coverage_model.basic_types import AbstractBase, InMemoryStorage, VariabilityEnum, Span
 from coverage_model.numexpr_utils import is_well_formed_where, nest_wheres
-from coverage_model.parameter_functions import ParameterFunctionException
+from coverage_model.parameter_functions import ParameterFunctionException, ExternalFunction
 from coverage_model import utils
 import numpy as np
 import numexpr as ne
@@ -267,6 +267,7 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
 
         # Grab a local pointer to the coverage's _cov_range_value object
         self._pval_callback = self.parameter_type._pval_callback
+        self._pdir = self.parameter_type._pdir
         self._memoized_values = None
 
     @property
@@ -292,7 +293,10 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
             slice_ = utils.fix_slice(slice_, self.shape)
 
             try:
-                r = self.content.evaluate(self._pval_callback, slice_, self.parameter_type.fill_value)
+                if isinstance(self.parameter_type.function, ExternalFunction):
+                    r = self.content.evaluate(self._pval_callback, self._pdir, slice_, self.parameter_type.fill_value)
+                else:
+                    r = self.content.evaluate(self._pval_callback, slice_, self.parameter_type.fill_value)
                 ve = self.parameter_type.value_encoding
                 if hasattr(self.parameter_type, 'inner_encoding'):
                     ve = self.parameter_type.inner_encoding

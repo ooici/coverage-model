@@ -317,6 +317,7 @@ class AbstractCoverage(AbstractIdentifiable):
         if hasattr(pcontext, '_pval_callback'):
             pcontext._pval_callback = self.get_parameter_values
             pcontext._pctxt_callback = self.get_parameter_context
+            pcontext._pdir = self.persistence_dir
 
         self._range_dictionary.add_context(pcontext)
         s = self._persistence_layer.init_parameter(pcontext, self._bricking_scheme)
@@ -2186,6 +2187,8 @@ class SimplexCoverage(AbstractCoverage):
                     if hasattr(pc, '_pval_callback'):
                         pc._pval_callback = self.get_parameter_values
                         pc._pctxt_callback = self.get_parameter_context
+                        pc._pdir = self.persistence_dir
+
                     self._range_dictionary.add_context(pc)
                     if pc.param_type._value_class == 'SparseConstantValue':
                         s = SparsePersistedStorage(md, mm, self._persistence_layer.brick_dispatcher, dtype=pc.param_type.storage_encoding, fill_value=pc.param_type.fill_value, mode=self.mode, inline_data_writes=inline_data_writes, auto_flush=auto_flush_values)

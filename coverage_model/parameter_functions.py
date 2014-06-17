@@ -14,6 +14,7 @@ import numexpr as ne
 from numbers import Number
 from collections import OrderedDict
 from coverage_model.basic_types import AbstractBase
+import os
 
 
 class ParameterFunctionException(Exception):
@@ -269,3 +270,41 @@ class NumexprFunction(AbstractFunction):
             ret = self.expression == other.expression
 
         return ret
+
+class ExternalFunction(AbstractFunction):
+    def __init__(self, name, external_guid, external_name):
+        self.external_name = external_name
+        param_map = {external_name : external_guid}
+        AbstractFunction.__init__(self, name, [], param_map)
+
+    def load_coverage(self, pdir):
+        from coverage_model.coverage import AbstractCoverage
+        root_path, guid = os.path.split(pdir)
+        external_guid = self.param_map[self.external_name]
+        path = os.path.join(root_path, external_guid)
+        cov = AbstractCoverage.load(path, mode='r')
+        return cov
+
+    def evaluate(self, pval_callback, pdir, slice_, fill_value=-9999):
+        return self.linear_map(pval_callback, pdir, slice_)
+
+    def linear_map(self, pval_callback, pdir, slice_):
+        cov = self.load_coverage(pdir)
+        # TODO: Might not want to hard-code time
+        x = pval_callback('time', slice_)
+        x_i = cov.get_parameter_values('time')
+        y_i = cov.get_parameter_values(self.external_name)
+
+        # Where in x_i does x fit in?
+        upper = np.searchsorted(x_i, x)
+        # Clip values not in [1, N-1]
+        upper = upper.clip(1, len(x_i)-1).astype(int)
+        lower = upper - 1
+
+        # Linear interpolation
+        w = (x - x_i[lower]) / (x_i[upper] - x_i[lower])
+        y = y_i[lower] * (1-w) + y_i[upper] * w
+        return y
+
+
+
