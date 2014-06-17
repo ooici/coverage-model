@@ -475,6 +475,98 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         for k,v in data_dict.iteritems():
             np.testing.assert_array_equal(v.get_data(), returned_dict[k])
 
+    def test_ragged_array_types(self):
+        param_type = RaggedArrayType()
+        param_ctx = ParameterContext("array_type", param_type=param_type, fill_value='')
+
+        # test well-formed
+        scov = _make_cov(self.working_dir, ['quantity', param_ctx], nt = 0)
+
+        with self.assertRaises(ValueError):
+            data_dict = {
+                'time' : np.array([0,1], dtype='<f8'),
+                'array_type' : np.array([[0,0,0], [1,1,1]], dtype=np.dtype('object'))
+            }
+
+            data_dict = _easy_dict(data_dict)
+            scov.set_parameter_values(data_dict)
+
+        data_dict = {
+            'time' : np.array([0,1], dtype='<f8'),
+            'array_type' : np.array([[0,0,0], [1,1,1,1]], dtype=np.dtype('object'))
+        }
+        data_dict = _easy_dict(data_dict)
+        scov.set_parameter_values(data_dict)
+
+        returned_dict = scov.get_parameter_values(param_names=data_dict.keys()).get_data()
+        for k,v in data_dict.iteritems():
+            np.testing.assert_array_equal(v.get_data(), returned_dict[k])
+
+        # test one element
+        scov = _make_cov(self.working_dir, ['quantity', param_ctx], nt = 0)
+
+        from coverage_model.util.numpy_utils import  create_numpy_object_array
+        data_dict = {
+            'time' : np.array([0], dtype='<f8'),
+            'array_type' : RaggedArrayType.create_ragged_array(np.array([[0,0,0]]))
+        }
+
+        data_dict = _easy_dict(data_dict)
+        scov.set_parameter_values(data_dict)
+
+        returned_dict = scov.get_parameter_values(param_names=data_dict.keys()).get_data()
+        for k,v in data_dict.iteritems():
+            np.testing.assert_array_equal(v.get_data(), returned_dict[k])
+
+        # test numpy array
+        scov = _make_cov(self.working_dir, ['quantity', param_ctx], nt = 0)
+
+        data_dict = {
+            'time' : np.array([0,1], dtype='<f8'),
+            'array_type' : create_numpy_object_array(np.array([[1,1,1], [2,2,2]], dtype='i4'))
+        }
+
+        data_dict = _easy_dict(data_dict)
+        scov.set_parameter_values(data_dict)
+
+        returned_dict = scov.get_parameter_values(param_names=data_dict.keys()).get_data()
+        for k,v in data_dict.iteritems():
+            np.testing.assert_array_equal(v.get_data(), returned_dict[k])
+
+        # test numpy array
+        scov = _make_cov(self.working_dir, ['quantity', param_ctx], nt = 0)
+
+        data_dict = {
+            'time' : np.array([0,1], dtype='<f8'),
+            'array_type' : create_numpy_object_array(np.array([[1,1,1], [2,2,2,2]]))
+        }
+
+        data_dict = _easy_dict(data_dict)
+        scov.set_parameter_values(data_dict)
+
+        data_dict = {
+            'time' : np.array([2,3], dtype='<f8'),
+            'array_type' : RaggedArrayType.create_ragged_array(np.array([[1,1,1], [2,2,2]]))
+        }
+        data_dict = _easy_dict(data_dict)
+        scov.set_parameter_values(data_dict)
+
+        returned_dict = scov.get_parameter_values(time_segment=(2,3), param_names=data_dict.keys()).get_data()
+        print returned_dict
+        for k,v in data_dict.iteritems():
+            np.testing.assert_array_equal(v.get_data(), returned_dict[k])
+            self.assertEqual(2, returned_dict[k].size)
+
+        data_dict = {
+            'time' : np.array([0,1,2,3], dtype='<f8'),
+            'array_type' : create_numpy_object_array(np.array([[1,1,1], [2,2,2,2], [1,1,1], [2,2,2]]))
+        }
+        data_dict = _easy_dict(data_dict)
+        returned_dict = scov.get_parameter_values(param_names=data_dict.keys()).get_data()
+        for k,v in data_dict.iteritems():
+            np.testing.assert_array_equal(v.get_data(), returned_dict[k])
+            self.assertEqual(4, returned_dict[k].size)
+
     def test_invalid_persistence_name(self):
         # Construct temporal and spatial Coordinate Reference System objects
         tcrs = CRS([AxisTypeEnum.TIME])

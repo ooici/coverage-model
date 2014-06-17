@@ -24,6 +24,7 @@ from coverage_model.parameter_values import ConstantValue
 from coverage_model.parameter_functions import AbstractFunction
 from coverage_model.numexpr_utils import digit_match, is_well_formed_where, single_where_match
 from coverage_model.persistence import system_type
+from coverage_model.util.numpy_utils import create_numpy_object_array
 import numpy as np
 import networkx as nx
 import re
@@ -951,7 +952,7 @@ class ArrayType(AbstractComplexParameterType):
         elif shape_len == 1 and self.inner_length != 1:
             throw_shape_error = True
         else:
-            throw_shape_error
+            throw_shape_error = True
         if throw_shape_error:
             raise ValueError('Array shape must be 2D with second dimension size %i' % self.inner_length)
 
@@ -963,7 +964,7 @@ class RaggedArrayType(AbstractComplexParameterType):
     """
     Non-Homogeneous set of unnamed things array of tuples)
     """
-    def __init__(self, inner_encoding=None, inner_length=1, **kwargs):
+    def __init__(self, **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterType; see documentation for that class for details
@@ -971,11 +972,38 @@ class RaggedArrayType(AbstractComplexParameterType):
         kwc=kwargs.copy()
         AbstractComplexParameterType.__init__(self, value_class='RaggedArrayValue', **kwc)
 
-        if inner_encoding is None or np.dtype(inner_encoding).kind in ['S', 'O']:
-            self.inner_encoding = 'object'
-        else:
-            self.inner_encoding = verify_encoding(inner_encoding)
+        self.inner_encoding = 'object'
 
         self._gen_template_attrs()
 
         self.value_encoding = 'O'
+
+    def create_filled_array(self, size):
+        arr = np.empty(size, dtype=np.dtype(self.value_encoding))
+        arr[:] = self.fill_value
+        return arr
+
+    def create_data_array(self, data=None, size=None):
+        if data is not None:
+            arr = np.array(data, dtype=np.dtype(self.value_encoding))
+            return arr
+        elif size is not None:
+            return self.create_filled_array(size)
+        else:
+            raise RuntimeError('Not enough information to create array')
+
+    def create_value_array(self, data=None, size=None):
+        return self.create_data_array(data, size)
+
+    @classmethod
+    def create_ragged_array(cls, data):
+        return create_numpy_object_array(data)
+
+    def validate_value_set(self, value_set):
+        if not isinstance(value_set, np.ndarray):
+            raise TypeError('Value set must implement type: %s' % np.ndarray.__name__)
+        if len(value_set.shape) != 1:
+            raise ValueError('Array must be 1D of type object.  Found type (%s) with shape %s' % (str(value_set.dtype), value_set.shape))
+
+        if value_set.dtype != np.dtype(self.inner_encoding):
+            raise TypeError('Expected array dtype %s, found %s' % (np.dtype(self.inner_encoding), value_set.dtype))

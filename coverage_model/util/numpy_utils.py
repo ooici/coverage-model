@@ -12,3 +12,11 @@ def sort_flat_arrays(np_dict, sort_parameter):
         return sorted_array_dict
     return np_dict
 
+
+def create_numpy_object_array(array):
+    if isinstance(array, np.ndarray):
+        array = array.tolist()
+    arr = np.empty(len(array), dtype=object)
+    arr[:] = array
+    return arr
+
