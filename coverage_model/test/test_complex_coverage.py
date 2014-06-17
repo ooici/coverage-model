@@ -61,21 +61,24 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
 
     scov = SimplexCoverage(root_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom)
 
-    p_dict = {}
-    for p in scov.list_parameters():
-        if data_dict is not None and p in data_dict:
-            if data_dict[p] is None:
-                continue
-            dat = data_dict[p]
-        else:
-            dat = range(nt)
+    if nt == 0 and data_dict is None:
+        pass
+    else:
+        p_dict = {}
+        for p in scov.list_parameters():
+            if data_dict is not None and p in data_dict:
+                if data_dict[p] is None:
+                    continue
+                dat = data_dict[p]
+            else:
+                dat = range(nt)
 
-        try:
-            p_dict[p] = np.array(dat)
-        except Exception as ex:
-            import sys
-            raise Exception('Error setting values for {0}: {1}'.format(p, data_dict[p])), None, sys.exc_traceback
-    scov.set_parameter_values(make_parameter_data_dict(p_dict))
+            try:
+                p_dict[p] = np.array(dat)
+            except Exception as ex:
+                import sys
+                raise Exception('Error setting values for {0}: {1}'.format(p, data_dict[p])), None, sys.exc_traceback
+        scov.set_parameter_values(make_parameter_data_dict(p_dict))
 
     scov.close()
 
@@ -950,6 +953,47 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         data = ccov.get_parameter_values('time', fill_empty_params=True, as_record_array=False, stride_length=3).get_data()
         # Stretch goal
         np.testing.assert_allclose(data['time'], time_dense[::3])
+
+    def test_empty_coverages(self):
+        # Complex coverages are read only
+        ccov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+                                   parameter_dictionary=_make_param_dict(['data_all', 'data_a', 'data_b']),
+                                   reference_coverage_locs=[],
+                                   reference_coverage_extents=self.get_extents([]),
+                                   complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
+
+        data_dict = {
+            'time': NumpyParameterData('time', np.arange(10))
+        }
+
+        self.assertRaises(NotImplementedError, ccov.set_parameter_values, data_dict)
+
+        # A Complex Coverage has it's own parameter dictionary
+        for param_name in ['data_all', 'data_a', 'data_b']:
+            pc = ccov.get_parameter_context(param_name)
+            self.assertIsInstance(pc, ParameterContext)
+
+        # A Complex Coverage comprises windows of other datasets
+        cova_pth = _make_cov(self.working_dir, ['data_all', 'data_a'], nt=0)
+        cova = AbstractCoverage.load(cova_pth)
+        cova_id = cova.persistence_guid
+        self.assertEqual(cova.num_timesteps(), 0)
+        cova.close()
+
+        # Should raise without a window
+        self.assertRaises(ValueError, ccov.append_reference_coverage, cova_pth)
+
+        # Append the first window of a dataset, that window doesn't encompass the entire first dataset
+        ccov.append_reference_coverage(cova_pth, ReferenceCoverageExtents('first-deployment', cova_id, time_extents=(2,8)))
+
+        cova = AbstractCoverage.load(cova_pth, mode='a')
+        cova.set_parameter_values({'time': np.arange(10), 'data_all': np.arange(100,110), 'data_a': np.arange(50,60)})
+
+        # Get the data and make sure we can see values 2-8
+        data = ccov.get_parameter_values(fill_empty_params=True, as_record_array=False).get_data()
+        np.testing.assert_allclose(data['time'], np.arange(2,9))
+        np.testing.assert_allclose(data['data_all'], np.arange(102,109))
+        np.testing.assert_allclose(data['data_a'], np.arange(52,59))
 
 
 def create_all_params():

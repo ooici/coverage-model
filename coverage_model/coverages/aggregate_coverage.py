@@ -97,7 +97,6 @@ class AggregateCoverage(AbstractCoverage):
 
     def append_reference_coverage(self, path, **kwargs):
         ncov = AbstractCoverage.load(path)
-        ncov.close()
 
         # Loading the coverage worked - proceed...
         # Get the current set of reference coverages
@@ -107,6 +106,8 @@ class AggregateCoverage(AbstractCoverage):
         else:
             self._persistence_layer.rcov_locs.append(path)
 
+        if ncov.persistence_guid not in self._reference_covs:
+            self._reference_covs[ncov.persistence_guid] = ncov
         self._do_build()
 
     def _do_build(self):
@@ -142,8 +143,11 @@ class AggregateCoverage(AbstractCoverage):
         for i in covs:
             cov = i[1]
             if isinstance(cov, AbstractCoverage):
-                temporal_bounds = cov.get_data_bounds(cov.temporal_parameter_name)
-                cov_list.append((temporal_bounds[0], temporal_bounds[1], cov))
+                try:
+                    temporal_bounds = cov.get_data_bounds(cov.temporal_parameter_name)
+                    cov_list.append((temporal_bounds[0], temporal_bounds[1], cov))
+                except ValueError:
+                    cov_list.append((None, None, cov))
 
         cov_list.sort(key=lambda tup: tup[0])
 
