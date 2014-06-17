@@ -178,7 +178,7 @@ class CoverageEnvironment(CoverageModelIntTestCase, CoverageIntTestBase):
         
 
 @attr('INT',group='cov')
-class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
+class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
     # Make a deep copy of the base TESTING_PROPERTIES dict and then modify for this class
     TESTING_PROPERTIES = deepcopy(CoverageIntTestBase.TESTING_PROPERTIES)
@@ -424,6 +424,7 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
                                    reference_coverage_extents=self.get_no_extents([cova_pth, covb_pth, covc_pth]),
                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 
+        self.assertEqual(3*size, comp_cov.num_timesteps())
         tvals = comp_cov.get_time_values()
         np.testing.assert_array_equal(tvals, np.arange(3*size, dtype='float32'))
         self.assertEqual(tvals.dtype, np.dtype('float32'))  # np.array_equal does NOT check dtype!!
@@ -796,6 +797,7 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
                                    reference_coverage_extents=rcov_extents,
                                    complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
 
+        self.assertEqual(8, comp_cov.num_timesteps())
         times = np.empty(8, dtype='float32')
         times[0:5] = first_times[0:5]
         times[5:8] = second_times[0:3]

@@ -33,13 +33,8 @@ class ComplexCoverage(AggregateCoverage):
         super(ComplexCoverage, self).__init__(root_dir, persistence_guid, name, reference_coverage_locs, reference_coverage_extents, parameter_dictionary,
                                                  mode, complex_type, temporal_domain, spatial_domain)
 
-        # if reference_coverage_locs is not None:
-        #     for loc in reference_coverage_locs:
-        #         cov = AbstractCoverage.load(loc)
-        #         extents = None
-        #         if reference_coverage_extents is not None and cov.persistence_guid in reference_coverage_extents.data:
-        #             extents = reference_coverage_extents.data[cov.persistence_guid]
-        #         self.set_reference_coverage_extents(cov.persistence_guid, extents)
+    def num_timesteps(self):
+        return self.get_parameter_values('time').get_data()['time'].shape[0]
 
     def get_parameter_values(self, param_names=None, time_segment=None, time=None,
                              sort_parameter=None, stride_length=None, return_value=None, fill_empty_params=False,
