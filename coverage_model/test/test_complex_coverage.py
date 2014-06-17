@@ -986,6 +986,14 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         # Append the first window of a dataset, that window doesn't encompass the entire first dataset
         ccov.append_reference_coverage(cova_pth, ReferenceCoverageExtents('first-deployment', cova_id, time_extents=(2,8)))
 
+        # Make sure we can get the data (should be empty)
+        data = ccov.get_parameter_values(fill_empty_params=True, as_record_array=False).get_data()
+        np.testing.assert_allclose(data['time'], np.array([]))
+        np.testing.assert_allclose(data['data_a'], np.array([]))
+        np.testing.assert_allclose(data['data_b'], np.array([]))
+
+        ccov.refresh()
+
         cova = AbstractCoverage.load(cova_pth, mode='a')
         cova.set_parameter_values({'time': np.arange(10), 'data_all': np.arange(100,110), 'data_a': np.arange(50,60)})
 
