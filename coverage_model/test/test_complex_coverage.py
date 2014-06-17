@@ -480,7 +480,7 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         types = []
         types.append(('qtype', QuantityType()))
         types.append(('atype_n', ArrayType()))
-        types.append(('atype_s', ArrayType()))
+        # types.append(('atype_s', ArrayType()))
         letts='abcdefghijklmnopqrstuvwxyz'
         while len(letts) < size:
             letts += letts
@@ -520,16 +520,10 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
                 tdata.sort()
             data_dict['time'] = tdata
             data_dict['atype_n'] = [[ii for a in xrange(random.choice(range(1,size)))] for r in xrange(size)]
-            data_dict['atype_s'] = [np.random.bytes(np.random.randint(1,20)) for r in xrange(size)]
             data_dict['qtype'] = np.random.random_sample(size) * (50 - 10) + 10
             data_dict['rtype'] = [{letts[r]: letts[r:]} for r in xrange(size)]
             data_dict['btype'] = [random.choice([True, False]) for r in xrange(size)]
             data_dict['ctype_n'] = [ii*20] * size
-            data_dict['ctype_s'] = ['const_str_{0}'.format(i)] * size
-            crarr = np.empty(size, dtype=object)
-            crarr[:] = [(ii*10, ii*20)]
-            data_dict['crtype'] = crarr
-            #    data_dict['pftype'] # Calculated on demand, nothing assigned!!
             data_dict['cattype'] = [random.choice(catkeys) for r in xrange(size)]
             data_dict['sctype'] = [ii*30] * size
 
@@ -612,9 +606,6 @@ class TestNewComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         cova = AbstractCoverage.load(cova_pth)
         full_interleave = np.append(first_full, second_full)
         full_interleave = np.array(full_interleave, dtype='float32')
-        print full_interleave
-        print first_full
-        print second_full
         np.testing.assert_array_equal(ccov.get_parameter_values('full_param', sort_parameter='time').get_data()['full_param'], full_interleave[sort_i])
 
         first_interleave = np.empty((num_times,), dtype='float32')

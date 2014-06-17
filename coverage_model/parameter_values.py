@@ -718,7 +718,10 @@ class ArrayValue(AbstractComplexParameterValue):
         """
         kwc=kwargs.copy()
         AbstractComplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
-        self._storage.expand(self.shape, 0, self.shape[0])
+        if self.shape[0] > 0:
+            narr = parameter_type.create_filled_array(self.shape[0])
+            loc=[0 for x in xrange(self.shape[0])]
+            self._storage = np.insert(self._storage[:], loc, narr, axis=0)
 
     @classmethod
     def _apply_inner_encoding(cls, vals, param_type):
@@ -796,3 +799,15 @@ class ArrayValue(AbstractComplexParameterValue):
         self._storage[slice_] = value[:]
 
         self._update_min_max(value)
+
+
+class RaggedArrayValue(AbstractComplexParameterValue):
+
+    def __init__(self, parameter_type, domain_set, storage=None, **kwargs):
+        """
+
+        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterValue; see documentation for that class for details
+        """
+        kwc=kwargs.copy()
+        AbstractComplexParameterValue.__init__(self, parameter_type, domain_set, storage, **kwc)
+        self._storage.expand(self.shape, 0, self.shape[0])

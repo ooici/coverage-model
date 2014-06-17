@@ -61,10 +61,8 @@ def verify_fill_value(value_encoding, value, is_object_type):
     if value_encoding is not None and not isinstance(value_encoding, tuple):
         dt = np.dtype(value_encoding)
         dtk = dt.kind
-        if dtk == 'O' or is_object_type: # object & CategoryRangeType must be None for now...
-            return None
 
-        elif dtk == 'u': # Unsigned integer's must be positive
+        if dtk == 'u': # Unsigned integer's must be positive
             if value is not None:
                 return abs(value)
             else:
@@ -256,6 +254,9 @@ class AbstractParameterType(AbstractIdentifiable):
             return np.zeros(size, dtype=np.dtype(self.value_encoding))
         else:
             raise RuntimeError('Not enough information to create array')
+
+    def validate_value_set(self, value_set):
+        pass
 
     def _gen_template_attrs(self):
         for k, v in self._template_attrs.iteritems():
@@ -862,7 +863,7 @@ class VectorType(AbstractComplexParameterType):
 
         self._gen_template_attrs()
 
-class ArrayType(AbstractComplexParameterType):
+class OldArrayType(AbstractComplexParameterType):
     """
     Homogeneous set of unnamed things (array)
     """
@@ -884,3 +885,97 @@ class ArrayType(AbstractComplexParameterType):
 
         self._fill_value = tuple([self.inner_fill_value for x in range(inner_length)])
         self.value_encoding = ', '.join([self.inner_encoding for x in range(inner_length)])
+
+
+class ArrayType(AbstractComplexParameterType):
+    """
+    Homogeneous set of unnamed things (array)
+    """
+    def __init__(self, inner_encoding=None, inner_fill_value=None, inner_length=1, **kwargs):
+        """
+
+        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterType; see documentation for that class for details
+        """
+        kwc=kwargs.copy()
+        AbstractComplexParameterType.__init__(self, value_class='ArrayValue', **kwc)
+
+        if inner_encoding is None or np.dtype(inner_encoding).kind in ['S', 'O']:
+            self.inner_encoding = 'object'
+        else:
+            self.inner_encoding = verify_encoding(inner_encoding)
+
+        self.inner_fill_value = verify_fill_value(self.inner_encoding, inner_fill_value, False)
+        self._gen_template_attrs()
+
+        self.inner_length=inner_length
+        self._fill_value = list([self.inner_fill_value for x in range(inner_length)])
+        self.value_encoding = self.inner_encoding
+
+    def create_filled_array(self, size):
+        if self.inner_length == 1:
+            arr = np.empty(size, dtype=np.dtype(self.value_encoding))
+            arr[:] = self.fill_value[0]
+        else:
+            arr = np.empty((size,self.inner_length), dtype=np.dtype(self.value_encoding))
+            arr[:] = self.fill_value
+        return arr
+
+    def create_data_array(self, data=None, size=None):
+        if data is not None:
+            arr = np.array(data, dtype=np.dtype(self.value_encoding))
+            if len(arr.shape) == 1 or arr.shape[1] != self.inner_length:
+                arr = arr.flatten()
+                if self.inner_length == 1:
+                    return arr
+                outer_dim, rem = divmod(arr.size, 3)
+                if rem != 0:
+                    raise IndexError('Shape of data, %s, does not fit array shape (n,%i)' % (len(data), self.inner_length))
+                arr = arr.reshape((outer_dim, self.inner_length))
+            return arr
+        elif size is not None:
+            return self.create_filled_array(size)
+        else:
+            raise RuntimeError('Not enough information to create array')
+
+    def create_value_array(self, data=None, size=None):
+        return self.create_data_array(data, size)
+
+    def validate_value_set(self, value_set):
+        if not isinstance(value_set, np.ndarray):
+            raise TypeError('Value set must implement type: %s' % np.ndarray.__name__)
+        throw_shape_error = False
+        shape_len = value_set.shape
+        if shape_len == 2:
+            if value_set[1] != self.inner_length:
+                throw_shape_error = True
+        elif shape_len == 1 and self.inner_length != 1:
+            throw_shape_error = True
+        else:
+            throw_shape_error
+        if throw_shape_error:
+            raise ValueError('Array shape must be 2D with second dimension size %i' % self.inner_length)
+
+        if value_set.dtype != np.dtype(self.inner_encoding):
+            raise TypeError('Expected array dtype %s, found %s' % (np.dtype(self.inner_encoding), value_set.dtype))
+
+
+class RaggedArrayType(AbstractComplexParameterType):
+    """
+    Non-Homogeneous set of unnamed things array of tuples)
+    """
+    def __init__(self, inner_encoding=None, inner_length=1, **kwargs):
+        """
+
+        @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterType; see documentation for that class for details
+        """
+        kwc=kwargs.copy()
+        AbstractComplexParameterType.__init__(self, value_class='RaggedArrayValue', **kwc)
+
+        if inner_encoding is None or np.dtype(inner_encoding).kind in ['S', 'O']:
+            self.inner_encoding = 'object'
+        else:
+            self.inner_encoding = verify_encoding(inner_encoding)
+
+        self._gen_template_attrs()
+
+        self.value_encoding = 'O'

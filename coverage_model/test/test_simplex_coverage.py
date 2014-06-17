@@ -398,7 +398,6 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
                             'numexpr_func',
                             'category',
                             'quantity',
-                            'array',
                             'record',
                             'fixed_str',
                             'sparse']
@@ -452,12 +451,12 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
                 while len(letts) < nt:
                     letts += 'abcdefghijklmnopqrstuvwxyz'
                 for x in xrange(nt):
-                    arrval.append(np.random.bytes(np.random.randint(1,20))) # One value (which is a byte string) for each member of the domain
+                    arrval.append((np.random.bytes(np.random.randint(1,20)), np.random.bytes(np.random.randint(1,20)), np.random.bytes(np.random.randint(1,20)))) # One value (which is a byte string) for each member of the domain
                     d = {letts[x]: letts[x:]}
                     recval.append(d) # One value (which is a dict) for each member of the domain
                     catval.append(random.choice(catkeys))
                     fstrval.append(''.join([random.choice(letts) for x in xrange(8)])) # A random string of length 8
-                values['array'] = NumpyParameterData('array', np.array(arrval))
+                # values['array'] = NumpyParameterData('array', np.array(arrval, dtype=np.dtype('object')))
                 values['record'] = NumpyParameterData('record', np.array(recval))
                 values['category'] = NumpyParameterData('category', np.array(catval))
                 values['fixed_str'] = NumpyParameterData('fixed_str', np.array(fstrval))

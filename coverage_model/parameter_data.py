@@ -13,12 +13,12 @@ import numpy as np
 def make_parameter_data_dict(data_dict):
     if 'time' in data_dict:
         time_array = data_dict['time']
-    else:
+    elif len(data_dict) > 0:
         elements = data_dict.values()[0]
         time_array = np.arange(len(elements))
 
-    for k,v in data_dict.iteritems():
-        data_dict[k] = NumpyParameterData(k, v, time_array)
+        for k,v in data_dict.iteritems():
+            data_dict[k] = NumpyParameterData(k, v, time_array)
     return data_dict
 
 

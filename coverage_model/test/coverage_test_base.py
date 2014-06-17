@@ -1251,7 +1251,7 @@ def _make_master_parameter_dict():
     quant_ctxt.uom = 'degree_Celsius'
     pdict.add_context(quant_ctxt)
 
-    arr_ctxt = ParameterContext('array', param_type=ArrayType())
+    arr_ctxt = ParameterContext('array', param_type=ArrayType(inner_length=3, inner_encoding='object', inner_fill_value='None'))
     arr_ctxt.description = 'example of a parameter of type ArrayType, will be filled with variable-length \'byte-string\' data'
     pdict.add_context(arr_ctxt)
 

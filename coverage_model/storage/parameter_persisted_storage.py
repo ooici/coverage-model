@@ -252,7 +252,9 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                 values[key] = arr
             if not isinstance(arr, ParameterData):
                 raise TypeError("Value for %s must implement <%s>, found <%s>" % (key, ParameterData.__name__, arr.__class__.__name__))
+
             if not isinstance(arr, ConstantOverTime):
+                self.parameter_metadata[key].parameter_context.param_type.validate_value_set(arr.get_data())
                 all_values_constant_over_time = False
             if arr_len == -1 and isinstance(arr, NumpyParameterData):
                 arr_len = arr.get_data().shape[0]
@@ -438,10 +440,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                     continue
                 np_data = span_data[span_name].get_data()
                 if npa is None:
-                    dt = np.dtype(self.parameter_metadata[id].parameter_context.param_type.value_encoding)
-                    npa = np.empty(shape_outer_dimmension, dtype=dt)
-                    if self.value_list[id].fill_value is not None:
-                        npa[:] = self.value_list[id].fill_value
+                    npa = self.parameter_metadata[id].parameter_context.param_type.create_filled_array(shape_outer_dimmension)
                 end_idx = insert_index + np_data.size
                 npa[insert_index:end_idx] = np_data
                 insert_index += np_data.size
@@ -463,10 +462,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             unset_params = set(params) - set(np_dict.keys())
             if len(unset_params) > 0:
                 for param in unset_params:
-                    dtype = np.array([self.value_list[param].fill_value]).dtype
-                    arr = np.empty(len(np_dict[self.alignment_parameter]), dtype=dtype)
-                    arr[:] = self.value_list[param].fill_value
-                    filled_params[param] = arr
+                    filled_params[param] = self.parameter_metadata[param].parameter_context.param_type.create_filled_array(len(np_dict[self.alignment_parameter]))
 
         np_dict.update(filled_params)
         return np_dict
@@ -696,7 +692,6 @@ def simple_decode(json_str):
     return np.array(json.loads(json_str))
 
 
-from coverage_model.parameter_types import ArrayType
 class PostgresPersistedStorage(AbstractStorage):
 
     def __init__(self, parameter_manager, metadata_manager, parameter_context, dtype, fill_value, mode=None):
@@ -724,16 +719,7 @@ class PostgresPersistedStorage(AbstractStorage):
     def compress(self, values):
         if isinstance(values, NumpyParameterData):
             data = values.get_data()
-            if isinstance(self.parameter_context.param_type, ArrayType):
-                data = self.create_numpy_object_array(data)
-            # if data.dtype == np.object:
-            #     # if np.iterable(data):
-            #     #     data = [pack(x) for x in data]
-            #     # else:
-            #     data = pack(data)
-            #     return base64encode(data, param_type='mp')
             return base64encode(data)
-            # return base64encode(data)
         elif isinstance(values, ConstantOverTime):
             return base64encode(values.get_data(), start=values.start, stop=values.stop, class_=values.__class__.__name__)
         else:
@@ -788,7 +774,7 @@ class PostgresPersistedStorage(AbstractStorage):
                        np.complex_, np.complex64, np.complex128]
         invalid_fill_values = [None, np.NaN, self.fill_value]
         if self.parameter_manager.parameter_name in self.metadata_manager.param_groups:
-            if isinstance(v, NumpyParameterData) and v.get_data().dtype.type is not np.string_:
+            if isinstance(v, NumpyParameterData) and v.get_data().dtype.type is not np.string_ and len(v.get_data().shape) == 1:
                 # First try to do it fast
                 v = v.get_data()
                 try:
