@@ -56,7 +56,7 @@ class TestParameterValuesUnit(CoverageModelUnitTestCase):
         num_rec = 10
         dom = SimpleDomainSet((num_rec,))
 
-        atype = ArrayType()
+        atype = ArrayType(inner_length=3)
         aval = get_value_class(atype, domain_set=dom)
 
         for x in xrange(num_rec):

@@ -257,7 +257,7 @@ class AbstractParameterType(AbstractIdentifiable):
             raise RuntimeError('Not enough information to create array')
 
     def validate_value_set(self, value_set):
-        pass
+        return False
 
     def _gen_template_attrs(self):
         for k, v in self._template_attrs.iteritems():
@@ -892,7 +892,7 @@ class ArrayType(AbstractComplexParameterType):
     """
     Homogeneous set of unnamed things (array)
     """
-    def __init__(self, inner_encoding=None, inner_fill_value=None, inner_length=1, **kwargs):
+    def __init__(self, inner_encoding=None, inner_fill_value=None, inner_length=None, **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractComplexParameterType; see documentation for that class for details
@@ -909,10 +909,16 @@ class ArrayType(AbstractComplexParameterType):
         self._gen_template_attrs()
 
         self.inner_length=inner_length
-        self._fill_value = list([self.inner_fill_value for x in range(inner_length)])
+        self._set_fill_value()
         self.value_encoding = self.inner_encoding
 
+    def _set_fill_value(self):
+        if self.inner_length is not None:
+            self._fill_value = list([self.inner_fill_value for x in range(self.inner_length)])
+
     def create_filled_array(self, size):
+        if self.inner_length is None:
+            raise RuntimeError("Cannot create array until inner length has been set")
         if self.inner_length == 1:
             arr = np.empty(size, dtype=np.dtype(self.value_encoding))
             arr[:] = self.fill_value[0]
@@ -922,6 +928,10 @@ class ArrayType(AbstractComplexParameterType):
         return arr
 
     def create_data_array(self, data=None, size=None):
+        if data is None and self.inner_length is None:
+            raise RuntimeError("Cannot create array until inner length has been set")
+        if self.inner_length is None and data is not None:
+            self._validate_inner_length(data)
         if data is not None:
             arr = np.array(data, dtype=np.dtype(self.value_encoding))
             if len(arr.shape) == 1 or arr.shape[1] != self.inner_length:
@@ -944,21 +954,43 @@ class ArrayType(AbstractComplexParameterType):
     def validate_value_set(self, value_set):
         if not isinstance(value_set, np.ndarray):
             raise TypeError('Value set must implement type: %s' % np.ndarray.__name__)
+        updated_object = self._validate_inner_length(value_set)
         throw_shape_error = False
-        shape_len = value_set.shape
+        shape_len = len(value_set.shape)
+        shape_error = ValueError('Array shape must be 2D with second dimension size %i.  Found %s' % (self.inner_length, value_set.shape))
         if shape_len == 2:
-            if value_set[1] != self.inner_length:
-                throw_shape_error = True
+            if value_set.shape[1] != self.inner_length:
+                raise shape_error
         elif shape_len == 1 and self.inner_length != 1:
-            throw_shape_error = True
-        else:
-            throw_shape_error = True
-        if throw_shape_error:
-            raise ValueError('Array shape must be 2D with second dimension size %i' % self.inner_length)
+            raise shape_error
+        elif shape_len > 2:
+            raise shape_error
 
         if value_set.dtype != np.dtype(self.inner_encoding):
             raise TypeError('Expected array dtype %s, found %s' % (np.dtype(self.inner_encoding), value_set.dtype))
 
+        return updated_object
+
+    def _validate_inner_length(self, data):
+        data_len = len(data.shape)
+        if data_len > 2:
+            raise ValueError("Arrays with dimensionality > 2 not supported.")
+
+        updated_object = False
+        if self.inner_length is None:
+            if data_len == 2:
+                self.inner_length = data.shape[1]
+                self._set_fill_value()
+            elif data_len == 1:
+                self.inner_length = 1
+                self._set_fill_value()
+            updated_object = True
+        else:
+            if data_len == 2 and data.shape[1] != self.inner_length:
+                raise ValueError("Expected inner array dimension %i.  Found inner dimension %i" % (self.inner_length, data.shape[1]))
+            elif data_len == 1 and self.inner_length != 1:
+                raise ValueError("Expected inner array dimension %i.  Found inner dimension = 1" % self.inner_length)
+        return updated_object
 
 class RaggedArrayType(AbstractComplexParameterType):
     """
@@ -1000,6 +1032,7 @@ class RaggedArrayType(AbstractComplexParameterType):
         return create_numpy_object_array(data)
 
     def validate_value_set(self, value_set):
+        updated_object = False
         if not isinstance(value_set, np.ndarray):
             raise TypeError('Value set must implement type: %s' % np.ndarray.__name__)
         if len(value_set.shape) != 1:
@@ -1007,3 +1040,5 @@ class RaggedArrayType(AbstractComplexParameterType):
 
         if value_set.dtype != np.dtype(self.inner_encoding):
             raise TypeError('Expected array dtype %s, found %s' % (np.dtype(self.inner_encoding), value_set.dtype))
+
+        return updated_object

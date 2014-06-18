@@ -254,7 +254,11 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                 raise TypeError("Value for %s must implement <%s>, found <%s>" % (key, ParameterData.__name__, arr.__class__.__name__))
 
             if not isinstance(arr, ConstantOverTime):
-                self.parameter_metadata[key].parameter_context.param_type.validate_value_set(arr.get_data())
+                if self.parameter_metadata[key].parameter_context.param_type.validate_value_set(arr.get_data()):
+                    self.parameter_metadata[key].read_only = False
+                    self.parameter_metadata[key].flush()
+                    self.parameter_metadata[key].read_only = True
+
                 all_values_constant_over_time = False
             if arr_len == -1 and isinstance(arr, NumpyParameterData):
                 arr_len = arr.get_data().shape[0]

@@ -389,6 +389,103 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         arr[:] = array
         return arr
 
+    def test_learn_array_inner_length(self):
+        param_type = ArrayType(inner_encoding='int32', inner_fill_value='-9999')
+        param_ctx = ParameterContext("array_type", param_type=param_type)
+
+        # test well-formed
+        scov = _make_cov(self.working_dir, ['quantity', param_ctx], nt = 0)
+
+        data_dict = {
+            'time' : np.array([0,1], dtype='<f8'),
+            'array_type' : np.array([[0,0,0], [1,1,1]], dtype=np.dtype('int32'))
+        }
+
+        data_dict = _easy_dict(data_dict)
+        scov.set_parameter_values(data_dict)
+
+        returned_dict = scov.get_parameter_values(param_names=data_dict.keys()).get_data()
+        for k,v in data_dict.iteritems():
+            np.testing.assert_array_equal(v.get_data(), returned_dict[k])
+
+        # test ragged
+        scov = _make_cov(self.working_dir, ['quantity', param_ctx], nt = 0)
+
+        data_dict = {
+            'time' : np.array([0,1], dtype='<f8'),
+            'array_type' : np.array([[0,0,0], [1,1,1,1]])
+        }
+
+        data_dict = _easy_dict(data_dict)
+        with self.assertRaises(TypeError):
+            scov.set_parameter_values(data_dict)
+
+            returned_dict = scov.get_parameter_values(param_names=data_dict.keys()).get_data()
+            for k,v in data_dict.iteritems():
+                np.testing.assert_array_equal(v.get_data(), returned_dict[k])
+
+        # test one element
+        scov = _make_cov(self.working_dir, ['quantity', param_ctx], nt = 0)
+
+        data_dict = {
+            'time' : np.array([0], dtype='<f8'),
+            'array_type' : np.array([[0,0,0]], dtype='i4')
+        }
+
+        data_dict = _easy_dict(data_dict)
+        scov.set_parameter_values(data_dict)
+
+        returned_dict = scov.get_parameter_values(param_names=data_dict.keys()).get_data()
+        for k,v in data_dict.iteritems():
+            np.testing.assert_array_equal(v.get_data(), returned_dict[k])
+
+        if isinstance(scov, SimplexCoverage):
+            il = scov._persistence_layer.parameter_metadata['array_type'].parameter_context.param_type.inner_length
+            self.assertEqual(il, 3)
+
+        d = scov.persistence_dir
+        scov.close()
+        cov = AbstractCoverage.load(d)
+        if isinstance(cov, SimplexCoverage):
+            il = cov._persistence_layer.parameter_metadata['array_type'].parameter_context.param_type.inner_length
+            self.assertEqual(il, 3)
+
+        # test numpy array
+        scov = _make_cov(self.working_dir, ['quantity', param_ctx], nt = 0)
+
+        data_dict = {
+            'time' : np.array([0,1], dtype='<f8'),
+            'array_type' : np.array([[1,1,1], [2,2,2]], dtype='i4')
+        }
+
+        data_dict = _easy_dict(data_dict)
+        scov.set_parameter_values(data_dict)
+
+        returned_dict = scov.get_parameter_values(param_names=data_dict.keys()).get_data()
+        for k,v in data_dict.iteritems():
+            np.testing.assert_array_equal(v.get_data(), returned_dict[k])
+
+        # test numpy array
+        scov = _make_cov(self.working_dir, ['quantity', param_ctx], nt = 0)
+
+        data_dict = {
+            'time' : np.array([0,1], dtype='<f8'),
+            'array_type' : np.array([[1,1,1], [2,2,2]], dtype='i4')
+        }
+
+        data_dict = _easy_dict(data_dict)
+        scov.set_parameter_values(data_dict)
+
+        data_dict = {
+            'time' : np.array([0,1], dtype='<f8'),
+            'array_type' : np.array([[1,1,1], [2,2,2]], dtype='i4')
+        }
+        data_dict = _easy_dict(data_dict)
+
+        returned_dict = scov.get_parameter_values(param_names=data_dict.keys()).get_data()
+        for k,v in data_dict.iteritems():
+            np.testing.assert_array_equal(v.get_data(), returned_dict[k])
+
     def test_array_types(self):
         param_type = ArrayType(inner_length=3, inner_encoding='int32', inner_fill_value='-9999')
         param_ctx = ParameterContext("array_type", param_type=param_type)
@@ -417,7 +514,7 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         }
 
         data_dict = _easy_dict(data_dict)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(ValueError):
             scov.set_parameter_values(data_dict)
 
             returned_dict = scov.get_parameter_values(param_names=data_dict.keys()).get_data()
