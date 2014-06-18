@@ -46,3 +46,30 @@ class CoverageConfig(object):
             self.using_default_config = False
             self.config_time = datetime.datetime.utcnow().time()
         return is_success
+
+    def get_preferred_key(self, options, preferences):
+        for key in preferences:
+            if key in options:
+                return key
+        return None
+
+    def get_lon_key(self, options):
+        return self.get_preferred_key(options, self.ordered_lon_key_preferences)
+
+    def get_lat_key(self, options):
+        return self.get_preferred_key(options, self.ordered_lat_key_preferences)
+
+    def get_time_key(self, options):
+        return self.get_preferred_key(options, self.ordered_time_key_preferences)
+
+    def get_vertical_key(self, options):
+        return self.get_preferred_key(options, self.ordered_vertical_key_preferences)
+
+    def get_coverage_class(self, type, version=None):
+        if type == 'complex':
+            module = __import__('coverage_model.coverages.complex_coverage')
+            return getattr(module, 'ComplexCoverage')
+        if type == 'simplex':
+            module = __import__('coverage_model.coverage')
+            return getattr(module, 'SimplexCoverage')
+        return None

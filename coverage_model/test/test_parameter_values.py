@@ -10,6 +10,7 @@
 from nose.plugins.attrib import attr
 import unittest
 from coverage_model import *
+from coverage_model.parameter_types import RaggedArrayType
 import numpy as np
 import random
 
@@ -55,9 +56,38 @@ class TestParameterValuesUnit(CoverageModelUnitTestCase):
         num_rec = 10
         dom = SimpleDomainSet((num_rec,))
 
-        atype = ArrayType()
+        atype = ArrayType(inner_length=3)
         aval = get_value_class(atype, domain_set=dom)
 
+        for x in xrange(num_rec):
+            aval[x] = np.random.bytes(np.random.randint(1,20)) # One value (which is a byte string) for each member of the domain
+
+        self.assertIsInstance(aval[0], basestring)
+        self.assertTrue(1 <= len(aval[0]) <= 20)
+
+        vals = [[1, 2, 3]] * num_rec
+        val_arr = np.empty(num_rec, dtype=object)
+        val_arr[:] = vals
+
+        aval[:] = vals
+        np.testing.assert_array_equal(aval[:], val_arr)
+        self.assertIsInstance(aval[0], list)
+        self.assertEqual(aval[0], [1, 2, 3])
+
+        aval[:] = val_arr
+        np.testing.assert_array_equal(aval[:], val_arr)
+        self.assertIsInstance(aval[0], list)
+        self.assertEqual(aval[0], [1, 2, 3])
+
+
+    # RaggedArrayType
+    def test_ragged_array_values(self):
+        num_rec = 10
+        dom = SimpleDomainSet((num_rec,))
+
+        from coverage_model.parameter_types import RaggedArrayType
+        atype = RaggedArrayType()
+        aval = get_value_class(atype, domain_set=dom)
         for x in xrange(num_rec):
             aval[x] = np.random.bytes(np.random.randint(1,20)) # One value (which is a byte string) for each member of the domain
 
@@ -111,11 +141,11 @@ class TestParameterValuesUnit(CoverageModelUnitTestCase):
         num_rec = 10
         dom = SimpleDomainSet((num_rec,))
 
-        crtype = ConstantRangeType(QuantityType(value_encoding=np.dtype('int16')))
+        crtype = ConstantRangeType(QuantityType(value_encoding=np.dtype('int16')), fill_value=(0,0))
         crval = get_value_class(crtype, domain_set=dom)
         crval[:] = (-10, 10)
-        self.assertEqual(crval[0], (-10, 10))
-        self.assertEqual(crval[6], (-10, 10))
+        self.assertEqual(tuple(crval[0]), (-10, 10))
+        self.assertEqual(tuple(crval[6]), (-10, 10))
         comp=np.empty(2,dtype='object')
         comp.fill((-10,10))
 
@@ -229,65 +259,67 @@ class TestParameterValuesInt(CoverageModelIntTestCase):
 
         # Insert some timesteps (automatically expands other arrays)
         nt = 2000
-        cov.insert_timesteps(nt)
 
-        vals = np.arange(nt, dtype=cov._range_dictionary.get_context('time').param_type.value_encoding)
-        cov.set_time_values(vals)
+        vals = {cov.temporal_parameter_name: np.arange(nt, dtype=cov._range_dictionary.get_context('time').param_type.value_encoding)}
+        cov.set_parameter_values(make_parameter_data_dict(vals))
 
         # Make sure the _value_cache is an instance of OrderedDict and that it's empty
-        self.assertIsInstance(cov._value_cache, collections.OrderedDict)
+        self.assertIsInstance(cov._value_cache, collections.deque)
         self.assertEqual(len(cov._value_cache), 0)
 
         # Get the time values and make sure they match what we assigned
-        got = cov.get_time_values()
-        np.testing.assert_array_equal(vals, got)
+        got = cov.get_time_values(time_segement=(0,20000))
+        np.testing.assert_array_equal(vals['time'].get_data(), got)
 
         # Now check that there is 1 entry in the _value_cache and that it's a match for vals
         self.assertEqual(len(cov._value_cache), 1)
-        np.testing.assert_array_equal(cov._value_cache[cov._value_cache.keys()[0]], vals)
+        cached_vals = None
+        for t in cov._value_cache:
+            cached_vals = t[2].get_data()
+        np.testing.assert_array_equal(cached_vals['time'], got)
 
         # Now retrieve a slice and make sure it matches the same slice of vals
-        sl = slice(20, 1000, 3)
-        got = cov.get_time_values(sl)
-        np.testing.assert_array_equal(vals[sl], got)
+        sl = np.arange(18,1000, 3)
+        got = cov.get_time_values(time_segement=(18, 1000), stride_length=3)
+        np.testing.assert_array_equal(sl, got)
 
         # Now check that there are 2 entries and that the second is a match for vals
         self.assertEqual(len(cov._value_cache), 2)
-        np.testing.assert_array_equal(cov._value_cache[cov._value_cache.keys()[1]], vals[sl])
+        cached_vals = None
+        for t in cov._value_cache:
+            cached_vals = t[2].get_data()
+        np.testing.assert_array_equal(cached_vals['time'], sl)
+
+        # Call get 40 times with the same request - check that the _value_cache doesn't grow
+        expected_length = len(cov._value_cache) + 1
+        for x in xrange(40):
+            cov.get_time_values(time_segement=(0,10))
+        self.assertEqual(len(cov._value_cache), expected_length)
 
         # Call get 40 times - check that the _value_cache stops growing @ 30
         for x in xrange(40):
-            cov.get_time_values(x)
-        self.assertEqual(len(cov._value_cache), 30)
+            cov.get_time_values(time_segement=(0,x))
+        self.assertEqual(len(cov._value_cache), 5)
 
     def test_value_caching_with_domain_expansion(self):
         cov = self._make_empty_oneparamcov()
 
         # Insert some timesteps (automatically expands other arrays)
         nt = 100
-        cov.insert_timesteps(nt)
 
-        vals = np.arange(nt, dtype=cov._range_dictionary.get_context('time').param_type.value_encoding)
-        cov.set_time_values(vals)
+        vals = {cov.temporal_parameter_name: np.arange(nt, dtype=cov._range_dictionary.get_context('time').param_type.value_encoding)}
+        cov.set_parameter_values(make_parameter_data_dict(vals))
 
         # Prime the value_cache
-        got = cov.get_time_values()
+        got = cov.get_time_values(time_segement=(0,2000))
 
         # Expand the domain
-        cov.insert_timesteps(nt)
+        vals = {cov.temporal_parameter_name: np.arange(2*nt, 3*nt, dtype=cov._range_dictionary.get_context('time').param_type.value_encoding)}
+        cov.set_parameter_values(make_parameter_data_dict(vals))
 
         # Value cache should still hold 1 and the value should be equal to values retrieved prior to expansion ('got')
         self.assertEqual(len(cov._value_cache), 1)
-        np.testing.assert_array_equal(cov._value_cache[cov._value_cache.keys()[0]], got)
-
-        # Perform another get, just to make sure the following removes all entries for the parameter
-        got = cov.get_time_values(slice(0, 10))
-
-        # Set time values
-        cov.set_time_values(range(cov.num_timesteps))
-
-        # Value cache should now be empty because all values cached for 'time' should be removed
-        self.assertEqual(len(cov._value_cache), 0)
+        np.testing.assert_array_equal(cov._value_cache[0][2].get_data()['time'], got)
 
     def _make_empty_oneparamcov(self):
         # Instantiate a ParameterDictionary
@@ -321,33 +353,61 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
     def tearDown(self):
         pass
 
-    def _interop_assertions(self, cov, pname, val_cls, assn_vals=None):
+    def _interop_assertions(self, cov, pname, val_cls, assn_vals=None, ts=None):
+        start = None
+        end = None
+        if ts is not None:
+            start = ts[0]
+            end = ts[1]
+        vals = None
         if assn_vals is not None:
-            val_cls[:] = assn_vals
-            cov.set_parameter_values(pname, assn_vals)
+            vals = cov.parameter_dictionary[pname].param_type.create_filled_array(assn_vals[cov.temporal_parameter_name].size)
+            if isinstance(assn_vals[pname], ConstantOverTime):
+                vals[:] = assn_vals[pname].get_data()
+            else:
+                vals = cov.parameter_dictionary[pname].param_type.create_data_array(assn_vals[pname], assn_vals[cov.temporal_parameter_name].size)
+            start = assn_vals[cov.temporal_parameter_name][0]
+            end = assn_vals[cov.temporal_parameter_name][-1]
+            cov.set_parameter_values(assn_vals)
+        if vals is None:
+            vals = val_cls.__getitem__((start,end))
+            start = 0
+            end = len(vals)-1
 
-        np.testing.assert_array_equal(cov.get_parameter_values(pname), val_cls[:])
-        np.testing.assert_array_equal(cov.get_parameter_values(pname, slice(-1, None)), val_cls[-1:])
-        np.testing.assert_array_equal(cov.get_parameter_values(pname, slice(None, None, 3)), val_cls[::3])
+        np.testing.assert_array_equal(cov.get_parameter_values(pname, time_segment=(start, end), fill_empty_params=True).get_data()[pname], vals[:])
+        np.testing.assert_array_equal(cov.get_parameter_values(pname, time_segment=(end, None)).get_data()[pname], vals[-1:])
+        np.testing.assert_array_equal(cov.get_parameter_values(pname, time_segment=(start, end), stride_length=3).get_data()[pname], vals[0::3])
         if isinstance(val_cls.parameter_type, ArrayType) or \
                 (hasattr(val_cls.parameter_type, 'base_type') and isinstance(val_cls.parameter_type.base_type, ArrayType)):
-            np.testing.assert_array_equal(cov.get_parameter_values(pname, 0), val_cls[0])
-            np.testing.assert_array_equal(cov.get_parameter_values(pname, -1), val_cls[-1])
+            np.testing.assert_array_equal(cov.get_parameter_values(pname, time=start).get_data()[pname][0], vals[0])
+            np.testing.assert_array_equal(cov.get_parameter_values(pname, time=end).get_data()[pname][0], vals[-1])
+            pass
         else:
-            self.assertEqual(cov.get_parameter_values(pname, 0), val_cls[0])
-            self.assertEqual(cov.get_parameter_values(pname, -1), val_cls[-1])
+            self.assertEqual(cov.get_parameter_values(pname, time=start).get_data()[pname], vals[0])
+            self.assertEqual(cov.get_parameter_values(pname, time=end).get_data()[pname], vals[-1:])
 
     ## Must use a specialized set of assertions because np.array_equal doesn't work on arrays of type Sn!!
     def _interop_assertions_str(self, cov, pname, val_cls, assn_vals=None):
+        start = None
+        end = None
+        vals = val_cls
         if assn_vals is not None:
-            val_cls[:] = assn_vals
-            cov.set_parameter_values(pname, assn_vals)
+            vals = cov.parameter_dictionary[pname].param_type.create_filled_array(assn_vals[cov.temporal_parameter_name].size)
+            if isinstance(assn_vals[pname], ConstantOverTime):
+                vals[:] = assn_vals[pname].get_data()
+            else:
+                vals = cov.parameter_dictionary[pname].param_type.create_data_array(assn_vals[pname], assn_vals[cov.temporal_parameter_name].size)
+            start = assn_vals[cov.temporal_parameter_name][0]
+            end = assn_vals[cov.temporal_parameter_name][-1]
+            cov.set_parameter_values(assn_vals)
 
-        self.assertTrue(np.atleast_1d(cov.get_parameter_values(pname) == val_cls[:]).all())
-        self.assertTrue(np.atleast_1d(cov.get_parameter_values(pname, slice(-1, None)) == val_cls[-1:]).all())
-        self.assertTrue(np.atleast_1d(cov.get_parameter_values(pname, slice(None, None, 3)) == val_cls[::3]).all())
-        self.assertEqual(cov.get_parameter_values(pname, 0), val_cls[0])
-        self.assertEqual(cov.get_parameter_values(pname, -1), val_cls[-1])
+        self.assertTrue(np.atleast_1d(cov.get_parameter_values(pname, time_segment=(start,end), as_record_array=False).get_data()[pname] == vals).all())
+        self.assertTrue(np.atleast_1d(cov.get_parameter_values(pname, time_segment=(end,None), as_record_array=False).get_data()[pname] == vals[-1:]).all())
+        self.assertTrue(np.atleast_1d(cov.get_parameter_values(pname, time_segment=(start,end), as_record_array=False, stride_length=3).get_data()[pname] == vals[0::3]).all())
+        np.testing.assert_array_equal(cov.get_parameter_values(pname, time_segment=(start,start), as_record_array=False).get_data()[pname][0], vals[0])
+        np.testing.assert_array_equal(cov.get_parameter_values(pname, time_segment=(end,end), as_record_array=False).get_data()[pname][0], vals[-1])
+        np.testing.assert_array_equal(cov.get_parameter_values(pname, time=start, as_record_array=False).get_data()[pname][0], vals[0])
+        np.testing.assert_array_equal(cov.get_parameter_values(pname, time=end, as_record_array=False).get_data()[pname][0], vals[-1])
 
     def _setup_cov(self, ntimes, names, types):
         pdict = ParameterDictionary()
@@ -357,8 +417,7 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         tdom = GridDomain(GridShape('temporal', [0]), CRS([AxisTypeEnum.TIME]), MutabilityEnum.EXTENSIBLE)
         cov = SimplexCoverage(self.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom)
         if ntimes != 0:
-            cov.insert_timesteps(ntimes)
-            cov.set_time_values(range(ntimes))
+            cov.set_parameter_values(make_parameter_data_dict({cov.temporal_parameter_name: np.arange(ntimes)}))
 
         return cov
 
@@ -373,18 +432,19 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
 
         # Setup the values
         ntimes = 20
-        valsi8 = range(ntimes)
-        valsi8_arr = np.arange(ntimes, dtype='int8')
-        valsi16 = range(ntimes)
-        valsi16_arr = np.arange(ntimes, dtype='int16')
-        valsi32 = range(ntimes)
-        valsi32_arr = np.arange(ntimes, dtype='int32')
-        valsi64 = range(ntimes)
-        valsi64_arr = np.arange(ntimes, dtype='int64')
-        valsf32 = range(ntimes)
-        valsf32_arr = np.arange(ntimes, dtype='float32')
-        valsf64 = range(ntimes)
-        valsf64_arr = np.arange(ntimes, dtype='float64')
+        cur_time = 10000
+        cur_time+=ntimes
+        valsi8_arr = { 'i8': np.arange(cur_time, cur_time+ntimes, dtype='int8'), 'time': np.arange(cur_time, cur_time+ntimes) }
+        cur_time+=ntimes
+        valsi16_arr = {'i16': np.arange(cur_time, cur_time+ntimes, dtype='int16'), 'time': np.arange(cur_time, cur_time+ntimes) }
+        cur_time+=ntimes
+        valsi32_arr = {'i32': np.arange(cur_time, cur_time+ntimes, dtype='int32'), 'time': np.arange(cur_time, cur_time+ntimes) }
+        cur_time+=ntimes
+        valsi64_arr = {'i64': np.arange(cur_time, cur_time+ntimes, dtype='int64'), 'time': np.arange(cur_time, cur_time+ntimes) }
+        cur_time+=ntimes
+        valsf32_arr = {'f32': np.arange(cur_time, cur_time+ntimes, dtype='float32'), 'time': np.arange(cur_time, cur_time+ntimes) }
+        cur_time+=ntimes
+        valsf64_arr = {'f64': np.arange(cur_time, cur_time+ntimes, dtype='float64'), 'time': np.arange(cur_time, cur_time+ntimes) }
 
         # Setup the in-memory value
         dom = SimpleDomainSet((ntimes,))
@@ -399,19 +459,6 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         cov = self._setup_cov(ntimes, ['i8', 'i16', 'i32', 'i64', 'f32', 'f64'], [i8_type, i16_type, i32_type, i64_type, f32_type, f64_type])
 
         # Perform the assertions
-
-        # List Assignment
-        self._interop_assertions(cov, 'i8', i8_val, valsi8)
-
-        self._interop_assertions(cov, 'i16', i16_val, valsi16)
-
-        self._interop_assertions(cov, 'i32', i32_val, valsi32)
-
-        self._interop_assertions(cov, 'i64', i64_val, valsi64)
-
-        self._interop_assertions(cov, 'f32', f32_val, valsf32)
-
-        self._interop_assertions(cov, 'f64', f64_val, valsf64)
 
         # Array Assignment
         self._interop_assertions(cov, 'i8', i8_val, valsi8_arr)
@@ -434,9 +481,11 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         # Setup the values
         ntimes = 20
         val = 20
-        val_arr = np.array([val])
-        sval = 'const str'
-        sval_arr = np.array([sval])
+        cur_time = 100
+        val_arr = {'time': np.arange(cur_time, cur_time+ntimes), 'const_num': ConstantOverTime('const_num', val)}
+        cur_time += ntimes
+        sval = 'const_str'
+        sval_arr = {'time': np.arange(cur_time, cur_time+ntimes), 'const_str': ConstantOverTime('const_str', sval)}
 
         # Setup the in-memory value
         dom = SimpleDomainSet((ntimes,))
@@ -448,12 +497,6 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
 
         # Perform the assertions
 
-        # Single value assignment, numeric
-        self._interop_assertions(cov, 'const_num', cn_val, val)
-
-        # Single value assignment, string
-        self._interop_assertions_str(cov, 'const_str', cs_val, sval)
-
         # Array value assignment, numeric
         self._interop_assertions(cov, 'const_num', cn_val, val_arr)
 
@@ -462,19 +505,17 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
 
     def test_constant_range_value_interop(self):
         # Setup the type
-        cr_n_type = ConstantRangeType(value_encoding='float32')
-        cr_s_type = ConstantRangeType(value_encoding='S5')
+        cr_n_type = ConstantRangeType(value_encoding='float32', fill_value=(0.,0.))
+        cr_s_type = ConstantRangeType(value_encoding='S5', fill_value=("", ""))
 
         # Setup the values
         ntimes = 20
         val = (20, 40)
-        val_arr = np.empty(1, dtype=object)
-        val_arr[0] = val
-        val_arr2 = np.array([val])
+        cur_time = 100
+        val_arr = {'time': np.arange(cur_time, cur_time+ntimes), 'const_rng_num': ConstantOverTime('const_rng_num', val)}
+        cur_time += ntimes
         sval = ('low', 'high')
-        sval_arr = np.empty(1, dtype=object)
-        sval_arr[0] = sval
-        sval_arr2 = np.array([sval])
+        sval_arr = {'time': np.arange(cur_time, cur_time+ntimes), 'const_rng_str': ConstantOverTime('const_rng_str', sval)}
 
         # Setup the in-memory value
         dom = SimpleDomainSet((ntimes,))
@@ -486,23 +527,11 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
 
         # Perform the assertions
 
-        # Single value assignment, numeric
-        self._interop_assertions(cov, 'const_rng_num', crn_val, val)
-
-        # Single value assignment, string
-        self._interop_assertions_str(cov, 'const_rng_str', crs_val, sval)
-
         # Object array assignment, numeric
         self._interop_assertions(cov, 'const_rng_num', crn_val, val_arr)
 
         # Object array assignment, string
         self._interop_assertions_str(cov, 'const_rng_str', crs_val, sval_arr)
-
-        # Nd array assignment, numeric
-        self._interop_assertions(cov, 'const_rng_num', crn_val, val_arr2)
-
-        # Nd array assignment, string
-        self._interop_assertions_str(cov, 'const_rng_str', crs_val, sval_arr2)
 
     def test_boolean_value_interop(self):
         # Setup the type
@@ -513,8 +542,13 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         ntimes = 20
         bvals = [choice([True, False]) for r in range(ntimes)]
         ivals = [choice([-1, 0, 1, 2]) for r in range(ntimes)]
-        bvals_arr = np.array(bvals, dtype='bool')
-        ivals_arr = np.array(ivals, dtype='int8')
+        cur_time = 1000
+        bvals_arr = {'bool': bool_type.create_data_array(bvals), 'time': np.arange(cur_time, cur_time+ntimes) }
+        cur_time+=ntimes
+        ivals_arr = {'bool': bool_type.create_data_array(ivals), 'time': np.arange(cur_time, cur_time+ntimes) }
+        cur_time+=ntimes
+        ivals_arr2 = {'bool': bool_type.create_data_array(size=len(ivals)), 'time': np.arange(cur_time, cur_time+ntimes) }
+        ivals_arr2['bool'][:] = ivals
 
         # Setup the in-memory value
         dom = SimpleDomainSet((ntimes,))
@@ -525,17 +559,14 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
 
         # Perform the assertions
 
-        # List assignment, boolean
-        self._interop_assertions(cov, 'bool', bool_val, bvals)
-
-        # List assignment, integer
-        self._interop_assertions(cov, 'bool', bool_val, ivals)
-
         # Array assignment, boolean
         self._interop_assertions(cov, 'bool', bool_val, bvals_arr)
 
         # Array assignment, integer
         self._interop_assertions(cov, 'bool', bool_val, ivals_arr)
+
+        # Array assignment, integer
+        self._interop_assertions(cov, 'bool', bool_val, ivals_arr2)
 
     def test_record_value_interop(self):
         # Setup the type
@@ -547,6 +578,7 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         rvals = [{letts[x]: letts[x:]} for x in range(ntimes)]
         rvals_arr = np.empty(ntimes, dtype=object)
         rvals_arr[:] = rvals
+        rvals_dict = { 'time': np.arange(10000, 10000+ntimes), 'rec': rvals_arr }
 
         # Setup the in-memory value
         dom = SimpleDomainSet((ntimes,))
@@ -558,10 +590,10 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         # Perform the assertions
 
         # List assignment
-        self._interop_assertions(cov, 'rec', rec_val, rvals)
+        # self._interop_assertions(cov, 'rec', rec_val, rvals)
 
         # Array assignment
-        self._interop_assertions(cov, 'rec', rec_val, rvals_arr)
+        self._interop_assertions(cov, 'rec', rec_val, rvals_dict)
 
     def test_parameter_function_value_interop(self):
         # Setup the type
@@ -572,28 +604,44 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         # Setup the values
         ntimes = 20
 
-        def get_vals(name, slice_):
+        def get_vals(name, time_segment=None, stride_length=None):
             if name == 'time':
-                return np.atleast_1d(range(ntimes))[slice_]
-        numexpr_type._pval_callback = get_vals
-        pyfunc_type._pval_callback = get_vals
+                arr = np.atleast_1d(range(ntimes))
+                if time_segment is not None:
+                    start = time_segment[0]
+                    end = time_segment[1]
+                    if time_segment[0] is None and time_segment[1] is None:
+                        arr =  arr
+                    elif time_segment[0] is None and time_segment[1] is not None:
+                        arr =  arr[:time_segment[1]+1]
+                    elif time_segment[0] is not None and time_segment[1] is None:
+                        arr =  arr[time_segment[1]:]
+                    else:
+                        arr = arr[time_segment[0]:time_segment[1]+1]
+
+                return NumpyDictParameterData({name: arr})
+        numexpr_type.callback = get_vals
+        pyfunc_type.callback = get_vals
 
         # Setup the in-memory value
         dom = SimpleDomainSet((ntimes,))
         numexpr_val = get_value_class(numexpr_type, dom)
         pyfunc_val = get_value_class(pyfunc_type, dom)
 
-        # Setup the coverage
+       # Setup the coverage
         cov = self._setup_cov(ntimes, ['numexpr', 'pyfunc'], [numexpr_type, pyfunc_type])
+
+        # cov2 = AbstractCoverage.load(cov.persistence_dir, cov.persistence_guid)
 
         # Perform the assertions
 
         # Make sure the value_encoding is enforced
-        self.assertEqual(numexpr_val[:].dtype, np.dtype('int32'))
-        self.assertEqual(pyfunc_val[:].dtype, np.dtype('float32'))
-        self.assertEqual(cov.get_parameter_values('numexpr').dtype, np.dtype('int32'))
-        self.assertEqual(cov.get_parameter_values('pyfunc').dtype, np.dtype('float32'))
+        self.assertEqual(numexpr_val.__getitem__().dtype, np.dtype('int32'))
+        self.assertEqual(pyfunc_val.__getitem__().dtype, np.dtype('float32'))
+        # self.assertEqual(cov.get_parameter_values('numexpr').get_data()['numexpr'].dtype, np.dtype('int32'))
+        # self.assertEqual(cov.get_parameter_values('pyfunc').get_data()['pyfunc'].dtype, np.dtype('float32'))
 
+        cov.set_parameter_function('numexpr', get_vals)
         # NumexprFunction
         self._interop_assertions(cov, 'numexpr', numexpr_val)
 
@@ -615,46 +663,47 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
 
     def test_array_value_interop(self):
         # Setup the type
-        arr_type = ArrayType()
-        arr_type_ie = ArrayType(inner_encoding=np.dtype('int32'))
+        arr_type = ArrayType('int32', inner_length=3)
+        arr_type_ie = ArrayType(inner_encoding=np.dtype('float32'), inner_length=3)
+        arr_type_s = ArrayType(inner_encoding='object', inner_length=3)
 
         # Setup the values
         ntimes = 20
-        vals = [[1, 2, 3]] * ntimes
-        vals_ie = [[1.2,2.3,3.4]] * ntimes
-        vals_arr = np.empty(ntimes, dtype=object)
-        vals_arr_ie = np.empty(ntimes, dtype=object)
-        vals_arr[:] = vals
-        vals_arr_ie[:] = vals_ie
+        vals = [(1, 2, 3)] * ntimes
+        vals_ie = [(1.2,2.3,3.4)] * ntimes
+        vals_arr = np.array(vals, dtype=np.dtype('int32'))
+        vals_arr_ie = np.array(vals_ie, dtype=np.float32)
+        # vals_arr_ie[:] = vals_ie
+        cur_time=100
+        vals_arr = {'array_': vals_arr, 'time': np.arange(cur_time, cur_time+ntimes)}
+        cur_time+=ntimes
+        vals_arr_ie = {'array_ie': vals_arr_ie, 'time': np.arange(cur_time, cur_time+ntimes)}
         svals = []
-        for x in xrange(ntimes):
+        for x in xrange(ntimes*3):
             svals.append(np.random.bytes(np.random.randint(1,20))) # One value (which is a byte string) for each member of the domain
-        svals_arr = np.empty(ntimes, dtype=object)
-        svals_arr[:] = svals
+        svals_arr = np.array(svals, dtype=object)
+        svals_arr = svals_arr.reshape((ntimes,3))
+        cur_time+=ntimes
+        expected_svals_arr = svals_arr
+        svals_arr = {'array_s': svals_arr, 'time': np.arange(cur_time, cur_time+ntimes)}
 
         # Setup the in-memory value
         dom = SimpleDomainSet((ntimes,))
         arr_val = get_value_class(arr_type, dom)
         arr_val_ie = get_value_class(arr_type_ie, dom)
+        arr_val_s = get_value_class(arr_type_s, dom)
 
         # Setup the coverage
-        cov = self._setup_cov(ntimes, ['array', 'array_ie'], [arr_type, arr_type_ie])
+        cov = self._setup_cov(ntimes, ['array_', 'array_ie', 'array_s'], [arr_type, arr_type_ie, arr_type_s])
 
         # Perform the assertions
 
-        # Nested List Assignment
-        self._interop_assertions(cov, 'array', arr_val, vals)
-        self._interop_assertions(cov, 'array_ie', arr_val_ie, vals_ie)
-
         # Array Assignment
-        self._interop_assertions(cov, 'array', arr_val, vals_arr)
+        self._interop_assertions(cov, 'array_', arr_val, vals_arr)
         self._interop_assertions(cov, 'array_ie', arr_val_ie, vals_arr_ie)
 
-        # String Assignment via list
-        self._interop_assertions_str(cov, 'array', arr_val, svals)
-
         # String Assignment via array
-        self._interop_assertions_str(cov, 'array', arr_val, svals_arr)
+        self._interop_assertions_str(cov, 'array_s', arr_val_s, svals_arr)
 
     def test_category_value_interop(self):
         # Setup the type
@@ -666,9 +715,12 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         ntimes = 10
         key_vals = [1, 2, 0, 3, 2, 0, 1, 2, 1, 1]
         cat_vals = [cats[k] for k in key_vals]
-        key_vals_arr = np.array(key_vals)
+        cur_time = 100
+        key_vals_arr = {'category':np.array(key_vals), 'time': np.arange(cur_time, cur_time+ntimes)}
         cat_vals_arr = np.empty(ntimes, dtype=object)
         cat_vals_arr[:] = cat_vals
+        cur_time+=ntimes
+        cat_vals_arr = {'category': cat_vals_arr, 'time': np.arange(cur_time, cur_time+ntimes)}
 
         # Setup the in-memory value
         dom = SimpleDomainSet((ntimes,))
@@ -679,18 +731,14 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
 
         # Perform the assertions
 
-        # Assign with a list of keys
-        self._interop_assertions_str(cov, 'category', cat_val, key_vals)
-
-        # Assign with a list of categories
-        self._interop_assertions_str(cov, 'category', cat_val, cat_vals)
-
         # Assign with an array of keys
-        self._interop_assertions_str(cov, 'category', cat_val, key_vals_arr)
+        self._interop_assertions_str(cov, 'category', cat_vals, key_vals_arr)
 
-        # Assign with an array of categories
-        self._interop_assertions_str(cov, 'category', cat_val, cat_vals_arr)
+        val_arr = cov.get_parameter_values('category', time_segment=(100,109)).get_data()['category']
+        return_vals = np.array([cats[k] for k in val_arr])
+        np.testing.assert_array_equal(return_vals, cat_vals_arr['category'])
 
+    @unittest.skip('Sparse values replaced in R3')
     def test_sparse_constant_value_interop(self):
          # Setup the type
         scv_type = SparseConstantType(fill_value=-998, value_encoding='int32')
@@ -721,17 +769,19 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
 
         # Assign with val
         scv_val[:] = val
-        cov.set_parameter_values('scv', val)
-        self._interop_assertions(cov, 'scv', scv_val)
+        cur_time = 10000
+        cov.set_parameter_values({'scv': ConstantOverTime('scv', val), cov.temporal_parameter_name: np.arange(cur_time, cur_time+ntimes)})
+        self._interop_assertions(cov, 'scv', scv_val, ts=(cur_time, cur_time+ntimes-1))
         np.testing.assert_array_equal(scv_val[:], want)
-        np.testing.assert_array_equal(cov.get_parameter_values('scv'), want)
+        np.testing.assert_array_equal(cov.get_parameter_values('scv', time_segment=(cur_time, cur_time+ntimes-1)).get_data()['scv'], want)
 
         # Assign with aval
         scv_arr_val[:] = aval
-        cov.set_parameter_values('scv_arr', aval)
-        self._interop_assertions(cov, 'scv_arr', scv_arr_val)
+        cur_time+=ntimes
+        cov.set_parameter_values({'scv_arr': ConstantOverTime('scv_arr', aval_arr), cov.temporal_parameter_name: np.arange(cur_time, cur_time+ntimes)})
+        self._interop_assertions(cov, 'scv_arr', scv_arr_val, ts=(cur_time, cur_time+ntimes-1))
         np.testing.assert_array_equal(scv_arr_val[:], awant)
-        np.testing.assert_array_equal(cov.get_parameter_values('scv_arr'), awant)
+        np.testing.assert_array_equal(cov.get_parameter_values('scv_arr', time_segment=(cur_time, cur_time+ntimes-1)).get_data()['scv_arr'], awant)
 
         # Backfill assignment
 
@@ -779,7 +829,6 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
 
         # Expand the domain
         dom.shape = (dom.shape[0] + ntimes,)
-        cov.insert_timesteps(ntimes)
 
         # Validate values
         self._interop_assertions(cov, 'scv', scv_val)
@@ -814,15 +863,19 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
         np.testing.assert_allclose(scv_arr_val[:], awant)
         np.testing.assert_allclose(cov.get_parameter_values('scv_arr'), awant)
 
+    @unittest.skip('Sparse arrays replaced in R3')
     def test_sparse_constant_value_ndarray_interop(self):
         ifv = 827.38
         scv_arr_type = SparseConstantType(base_type=ArrayType(inner_encoding='float32', inner_fill_value=ifv))
 
         # Setup the values
         ntimes = 10
-        ndaval = [[[12, 32, 33], [3, 44, 52], [16, 2, 76]]]
-        ndaval_arr = np.array(ndaval, dtype='float32')
-        ndawant = np.array(ndaval * ntimes, dtype='float32')
+        ndaval = [[12, 32, 33], [3, 44, 52], [16, 2, 76, 1]]
+        cur_time = 100
+        from coverage_model.parameter_data import RepeatOverTime
+        ndaval_arr = {'time': np.arange(cur_time, cur_time+ntimes), 'scv_ndarr': RepeatOverTime('scv_ndarr', ndaval)}
+        # ndaval_arr = np.array(ndaval, dtype=np.object)
+        ndawant = np.array(ndaval * ntimes, dtype=np.object)
 
         # Setup the in-memory value
         dom = SimpleDomainSet((ntimes,))
@@ -835,10 +888,10 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
 
         # Assign with ndaval
         scv_ndarr_val[:] = ndaval
-        cov.set_parameter_values('scv_ndarr', ndaval)
-        self._interop_assertions(cov, 'scv_ndarr', scv_ndarr_val)
+        # cov.set_parameter_values( ndaval_arr )
+        self._interop_assertions(cov, 'scv_ndarr', scv_ndarr_val, ndaval_arr)
         np.testing.assert_array_equal(scv_ndarr_val[:], ndawant)
-        np.testing.assert_array_equal(cov.get_parameter_values('scv_ndarr'), ndawant)
+        np.testing.assert_array_equal(cov.get_parameter_values('scv_ndarr').get_data()['scv_ndarr'], ndawant)
 
         # Backfill assignment
 
@@ -862,7 +915,6 @@ class TestParameterValuesInteropInt(CoverageModelIntTestCase):
 
         # Expand the domain
         dom.shape = (dom.shape[0] + ntimes,)
-        cov.insert_timesteps(ntimes)
 
         # Validate the values
         self._interop_assertions(cov, 'scv_ndarr', scv_ndarr_val)

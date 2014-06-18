@@ -141,6 +141,16 @@ class Dictable(object):
         else:
             raise TypeError('cmdict is not properly formed, must be of type dict and contain a \'cm_type\' key: {0}'.format(cmdict))
 
+    def __eq__(self, other):
+        if other is not None and isinstance(other, self.__class__):
+            return self.__dict__ == other.__dict__
+        else:
+            return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+
 class AbstractBase(Dictable):
     """
     Base class for all coverage model objects
@@ -279,7 +289,10 @@ class InMemoryStorage(AbstractStorage):
 
     def expand(self, arrshp, origin, expansion):
         narr = np.empty(arrshp, dtype=self.dtype)
-        narr.fill(self.fill_value)
+        try:
+            narr.fill(self.fill_value)
+        except:
+            narr[:] = self.fill_value
         loc=[origin for x in xrange(expansion)]
         self._storage = np.insert(self._storage[:], loc, narr, axis=0)
 

@@ -151,6 +151,8 @@ class ParameterContext(AbstractIdentifiable):
                 self.uom = param_context.uom
             self.fill_value = fill_value or param_context.fill_value
             self.variability = variability or param_context.variability
+            if self.param_type.fill_value is None:
+                self.param_type.fill_value = self.fill_value
 
             for a in self.ATTRS:
                 setattr(self, a, kwargs[a] if a in my_kwargs else getattr(param_context, a))

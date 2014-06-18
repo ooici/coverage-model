@@ -1,6 +1,7 @@
 from basic_types import AxisTypeEnum, MutabilityEnum, VariabilityEnum, Span
-from coverage import AbstractCoverage, SimplexCoverage, ViewCoverage, ComplexCoverage, ComplexCoverageType, \
+from coverage import AbstractCoverage, SimplexCoverage, ViewCoverage, ComplexCoverageType, \
     SimpleDomainSet, GridDomain, GridShape, CRS
+from coverage_model.coverages.complex_coverage import ComplexCoverage
 from coverage_model.parameter_functions import PythonFunction, NumexprFunction
 from parameter import ParameterContext, ParameterDictionary, ParameterFunctionValidator
 from parameter_types import ArrayType, BooleanType, CategoryRangeType, CategoryType, ConstantType, CountRangeType, \
@@ -11,6 +12,7 @@ from coverage_model import utils
 from utils import create_guid, fix_slice
 from numexpr_utils import make_range_expr
 from coverage_model.base_test_cases import CoverageModelUnitTestCase, CoverageModelIntTestCase
+from coverage_model.parameter_data import NumpyParameterData, NumpyDictParameterData, ConstantOverTime, make_parameter_data_dict
 
 _core = [
     'ParameterContext',
@@ -29,6 +31,10 @@ _core = [
     'MutabilityEnum',
     'VariabilityEnum',
     'Span',
+    'NumpyParameterData',
+    'NumpyDictParameterData',
+    'ConstantOverTime',
+    # 'RepeatOverTime'
     ]
 
 _types = [
@@ -56,6 +62,7 @@ _utils = [
     'create_guid',
     'get_value_class',
     'fix_slice',
+    'make_parameter_data_dict',
     ]
 
 _test_cases = [

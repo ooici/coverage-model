@@ -368,7 +368,6 @@ class CoverageDoctor(object):
                 if not empty_cov: # If None, there are no brick files --> no timesteps, empty coverage!
                     bls = [s.value for s in brick_list_spans]
                     maxes = [sum(b[3]) for b in new_brick_list.values()]
-                    tempcov.insert_timesteps(sum(maxes))
 
                     # Replace metadata is the Master file
                     pl.master_manager.brick_domains = brick_domains_new

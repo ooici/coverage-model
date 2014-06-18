@@ -12,7 +12,7 @@ from ooi.logging import log
 from coverage_model.basic_types import Dictable
 from coverage_model import utils
 from coverage_model.metadata import MetadataManager
-from coverage_model.data_span import ParamSpan, SpanCollection
+from coverage_model.data_span import SpanStats, SpanStatsCollection
 from coverage_model.address import BrickAddress
 
 import os
@@ -47,15 +47,16 @@ class RTreeItem(object):
         self.object = obj
 
 
+# Proxy the properties.dimension property, pia...
+class HoldDim(object):
+    def __init__(self, dim=2):
+        self.dimension = dim
+
+
 class RTreeProxy(object):
 
     def __init__(self):
         self._spans = []
-
-        # Proxy the properties.dimension property, pia...
-        class HoldDim(object):
-            def __init__(self, dim=2):
-                self.dimension = dim
 
         self.properties = HoldDim()
 
@@ -237,7 +238,6 @@ class BaseManager(MetadataManager):
                 # log.trace('key=%s:  cached hash value=%s  current hash value=%s', k, self._hmap[k], chv)
                 if self._hmap[k] != chv:
                     self._dirty.add(k)
-
             return len(self._dirty) != 0
 
     def __setattr__(self, key, value):
@@ -321,7 +321,7 @@ class ParameterManager(BaseManager):
         self.read_only = read_only
 
         # Add attributes that should NEVER be flushed
-        self._ignore.update(['brick_tree', 'file_path', 'root_dir'])
+        self._ignore.update(['brick_tree', 'file_path', 'root_dir', 'read_only'])
 
     def thin_origins(self, origins):
         pass

@@ -14,7 +14,7 @@ import numexpr as ne
 from numbers import Number
 from collections import OrderedDict
 from coverage_model.basic_types import AbstractBase
-
+from coverage_model.parameter_data import NumpyDictParameterData
 
 class ParameterFunctionException(Exception):
     def __init__(self, message, original_type=None):
@@ -165,7 +165,7 @@ class PythonFunction(AbstractFunction):
                 raise
 
 
-    def evaluate(self, pval_callback, slice_, fill_value=-9999):
+    def evaluate(self, pval_callback, time_segment, fill_value=-9999, stride_length=None):
         self._import_func()
 
         arg_map = self._apply_mapping()
@@ -174,16 +174,19 @@ class PythonFunction(AbstractFunction):
         for k in self.arg_list:
             a = arg_map[k]
             if isinstance(a, AbstractFunction):
-                args.append(a.evaluate(pval_callback, slice_, fill_value))
+                args.append(a.evaluate(pval_callback, time_segment, fill_value))
             elif isinstance(a, Number) or hasattr(a, '__iter__') and np.array(
                     [isinstance(ai, Number) for ai in a]).all():
                 args.append(a)
             else:
                 if k == 'pv_callback':
-                    args.append(lambda arg: pval_callback(arg, slice_))
+                    args.append(lambda arg: pval_callback(arg, time_segment))
                 else:
-                    sl = -1 if k.endswith('*') else slice_
-                    v = pval_callback(a, sl)
+                    v = pval_callback(a, time_segment)
+                    if isinstance(v, NumpyDictParameterData):
+                        v = v.get_data()[a]
+                    if k.endswith('*'):
+                        v = v[-1]
                     args.append(v)
 
         if self.kwarg_map is None:
@@ -244,22 +247,28 @@ class NumexprFunction(AbstractFunction):
         AbstractFunction.__init__(self, name, arg_list, param_map)
         self.expression = expression
 
-    def evaluate(self, pval_callback, slice_, fill_value=-9999):
+    def evaluate(self, pval_callback, time_segment, fill_value=-9999, stride_length=None):
         arg_map = self._apply_mapping()
 
         ld = {}
         for k in self.arg_list:
             a = arg_map[k]
             if isinstance(a, AbstractFunction):
-                ld[k] = a.evaluate(pval_callback, slice_, fill_value)
+                ld[k] = a.evaluate(pval_callback, time_segment, fill_value, stride_length=stride_length)
             elif isinstance(a, Number) or hasattr(a, '__iter__') and np.array(
                     [isinstance(ai, Number) for ai in a]).all():
                 ld[k] = a
             else:
                 if k.endswith('*'):
-                    ld[k[:-1]] = pval_callback(a, -1)
+                    vals = pval_callback(a, time_segment, stride_length)
+                    if isinstance(vals, NumpyDictParameterData):
+                        vals = vals.get_data()[a]
+                    ld[k[:-1]] = vals[-1]
                 else:
-                    ld[k] = pval_callback(a, slice_)
+                    vals = pval_callback(a, time_segment, stride_length=stride_length)
+                    if isinstance(vals, NumpyDictParameterData):
+                        vals = vals.get_data()[a]
+                    ld[k] = vals
 
         return ne.evaluate(self.expression, local_dict=ld)
 

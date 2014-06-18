@@ -33,24 +33,36 @@
 #    if isinstance(value, AbstractDomain):
 #        self.__spatial_domain = value
 
+from copy import deepcopy
+import os
+import collections
+import pickle
+from collections import Iterable
+
+import numpy as np
+
 from ooi.logging import log
 from pyon.util.async import spawn
-
-from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, get_valid_doa, Dictable, InMemoryStorage, Span
+from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, Dictable, \
+    Span
 from coverage_model.parameter import Parameter, ParameterDictionary, ParameterContext
 from coverage_model.parameter_values import get_value_class, AbstractParameterValue
-from coverage_model.persistence import PersistenceLayer, InMemoryPersistenceLayer, SimplePersistenceLayer, is_persisted
+from coverage_model.persistence import InMemoryPersistenceLayer, is_persisted
+from coverage_model.storage.parameter_persisted_storage import PostgresPersistenceLayer
 from coverage_model.metadata_factory import MetadataManagerFactory
 from coverage_model.parameter_functions import ParameterFunctionException
 from coverage_model import utils
-from coverage_model.utils import Interval
-from copy import deepcopy
-import numpy as np
-import os, collections, pickle
+from coverage_model.utils import Interval, create_guid
+
 
 #=========================
 # Coverage Objects
 #=========================
+
+def get_dir_and_id_from_path(path):
+    if path.endswith(os.path.sep): # Strip trailing separator if it exists
+        path = path[:-1]
+    return os.path.split(path)
 
 class AbstractCoverage(AbstractIdentifiable):
     """
@@ -60,7 +72,7 @@ class AbstractCoverage(AbstractIdentifiable):
     """
 
     VALUE_CACHE_LIMIT = 30
-    version = '0.0.1'
+    version = '0.0.3'
 
     def __init__(self, mode=None):
         AbstractIdentifiable.__init__(self)
@@ -68,13 +80,13 @@ class AbstractCoverage(AbstractIdentifiable):
         self._range_dictionary = ParameterDictionary()
         self._range_value = RangeValues()
         self.value_caching = True
-        self._value_cache = collections.OrderedDict()
+        self._value_cache = collections.deque(maxlen=5)
+        self.param_cache = self._value_cache
         self._bricking_scheme = {'brick_size': 100000, 'chunk_size': 100000}
 
         self.temporal_domain = GridDomain(GridShape('temporal',[0]), CRS.standard_temporal(), MutabilityEnum.EXTENSIBLE)
         self.spatial_domain = None
-
-        self._persistence_layer = InMemoryPersistenceLayer()
+        self.persistence_name = 'in_memory_storage'
 
         self._head_coverage_path = None
 
@@ -97,9 +109,6 @@ class AbstractCoverage(AbstractIdentifiable):
         '''
         if not isinstance(cov_obj, AbstractCoverage):
             raise StandardError('cov_obj must be an instance or subclass of AbstractCoverage: object is {0}'.format(type(cov_obj)))
-
-        if not isinstance(cov_obj._persistence_layer, InMemoryPersistenceLayer):
-            raise StandardError('cov_obj must be constructed with the \'in_memory_storage\' flag == True')
 
         with open(file_path, 'w') as f:
             pickle.dump(cov_obj, f, 0 if use_ascii else 2)
@@ -141,19 +150,7 @@ class AbstractCoverage(AbstractIdentifiable):
         elif not isinstance(persistence_guid, basestring):
             raise ValueError('\'persistence_guid\' must be a string')
 
-        # Otherwise, determine which coverage type to use to open the file
-#        ctype = get_coverage_type(os.path.join(root_dir, persistence_guid, '{0}_master.hdf5'.format(persistence_guid)))
-        ctype = MetadataManagerFactory.getCoverageType(root_dir, persistence_guid)
-
-        if ctype == 'simplex':
-            ccls = SimplexCoverage
-        elif ctype == 'view':
-            ccls = ViewCoverage
-        elif ctype == 'complex':
-            ccls = ComplexCoverage
-        else:
-            raise TypeError('Unknown Coverage type specified in master file : {0}', ctype)
-
+        ccls = MetadataManagerFactory.get_coverage_class(root_dir, persistence_guid)
         return ccls(root_dir, persistence_guid, mode=mode)
 
     @classmethod
@@ -196,46 +193,14 @@ class AbstractCoverage(AbstractIdentifiable):
 
         return tuple(s)
 
-    def insert_timesteps(self, count, origin=None, oob=False):
-        """
-        Insert count # of timesteps beginning at the origin
+    def has_parameter_data(self):
+        return self._persistence_layer.has_data()
 
-        The specified # of timesteps are inserted into the temporal value array at the indicated origin.  This also
-        expands the temporal dimension of the AbstractParameterValue for each parameters
+    def is_empty(self):
+        return not self.has_parameter_data()
 
-        @param count    The number of timesteps to insert
-        @param origin   The starting location, from which to begin the insertion
-        @param oob      Out of band operations, True will use greenlets, False will be in-band.
-        """
-        if self.closed:
-            raise IOError('I/O operation on closed file')
-
-        #if self.mode == 'r':
-        #    raise IOError('Coverage not open for writing: mode == \'{0}\''.format(self.mode))
-
-        # Get the current shape of the temporal_dimension
-        shp = self.temporal_domain.shape
-
-        # If not provided, set the origin to the end of the array
-        if origin is None or not isinstance(origin, int):
-            origin = shp.extents[0]
-
-        # Expand the shape of the temporal_domain - following works if extents is a list or tuple
-        shp.extents = (shp.extents[0]+count,)+tuple(shp.extents[1:])
-
-        self._persistence_layer.expand_domain(shp.extents)
-
-        # Expand the temporal dimension of each of the parameters - the parameter determines how to apply the change
-        for n in self._range_dictionary:
-            self._range_value[n].expand_content(VariabilityEnum.TEMPORAL, origin, count)
-
-        # Update the temporal_domain in the master_manager, do NOT flush!!
-        self._persistence_layer.update_domain(tdom=self.temporal_domain, do_flush=False)
-        # Flush the master_manager & parameter_managers in a separate greenlet
-        if oob:
-            spawn(self._persistence_layer.flush)
-        else:
-            self._persistence_layer.flush()
+    def num_timesteps(self):
+        return self._persistence_layer.num_timesteps()
 
     def _assign_domain(self, pcontext):
         no_sdom = self.spatial_domain is None
@@ -319,8 +284,17 @@ class AbstractCoverage(AbstractIdentifiable):
             pcontext._pctxt_callback = self.get_parameter_context
 
         self._range_dictionary.add_context(pcontext)
-        s = self._persistence_layer.init_parameter(pcontext, self._bricking_scheme)
-        self._range_value[pname] = get_value_class(param_type=pcontext.param_type, domain_set=pcontext.dom, storage=s)
+
+        # add = False
+        # if hasattr(self._persistence_layer, 'param_dict'):
+        #     if pname not in self._persistence_layer.param_dict:
+        #         add = True
+        #     elif pcontext != self._persistence_layer.param_dict[pname]:
+        #         raise ValueError("Cannot change a parameter context")
+        # if add:
+        self._persistence_layer.init_parameter(pcontext, self._bricking_scheme)
+        storage = self._persistence_layer.value_list[pname]
+        self._range_value[pname] = get_value_class(param_type=pcontext.param_type, domain_set=pcontext.dom, storage=storage)
 
     def get_parameter(self, param_name):
         """
@@ -341,6 +315,24 @@ class AbstractCoverage(AbstractIdentifiable):
         else:
             raise KeyError('Coverage does not contain parameter \'{0}\''.format(param_name))
 
+    def _handle_closed(self):
+        if self.closed:
+            raise IOError('I/O operation on closed file')
+
+    def set_parameter_function(self, param_name, func):
+        self._handle_closed()
+        if param_name in self._range_dictionary:
+            from coverage_model.parameter_types import ParameterFunctionType
+            param_type = self._range_dictionary[param_name].param_type
+            if isinstance(param_type, ParameterFunctionType):
+                param_type.callback = func
+            else:
+                raise TypeError('%s is not type %s' % (param_name, ParameterFunctionType.__name__))
+        else:
+            raise KeyError('Coverage does not contain parameter \'{0}\''.format(param_name))
+
+
+
     def list_parameters(self, coords_only=False, data_only=False):
         """
         List the names of the parameters contained in the coverage
@@ -358,54 +350,82 @@ class AbstractCoverage(AbstractIdentifiable):
         lst.sort()
         return lst
 
-    def get_parameter_values(self, param_name, tdoa=None, sdoa=None, return_value=None):
+    def get_parameter_values(self, param_names=None, time_segment=None, time=None,
+                             sort_parameter=None, stride_length=None, return_value=None, fill_empty_params=False,
+                             function_params=None, as_record_array=False):
         """
         Retrieve the value for a parameter
 
         Returns the value from param_name.  Temporal and spatial DomainOfApplication objects can be used to
         constrain the response.  See DomainOfApplication for details.
 
-        @param param_name   The name of the parameter
-        @param tdoa The temporal DomainOfApplication
-        @param sdoa The spatial DomainOfApplication
-        @param return_value If supplied, filled with response value - currently via OVERWRITE
-        @throws KeyError    The coverage does not contain a parameter with name 'param_name'
+        @param param_names   A collection of names of parameters to retrieve
+        @param time_segment  A tuple of observation start and end time for data to retrieve
+        @param time          Retrieve data points with observation time closest to time
+        @param return_value  Not valid since we can no longer guarantee the size of the returned data
+        @throws KeyError    The coverage does not contain a parameter with name provided in 'param_names'
         """
         if self.closed:
             raise IOError('I/O operation on closed file')
 
-        if not param_name in self._range_value:
-            raise KeyError('Parameter \'{0}\' not found in coverage'.format(param_name))
+        # Get all parameters if none are specified
+        if param_names is None:
+            param_names = self._range_dictionary.keys()
 
-        if return_value is not None:
-            log.warn('Provided \'return_value\' will be OVERWRITTEN')
-
-        slice_ = []
-
-        total_shape = self.temporal_domain.shape.extents
-        tdoa = get_valid_doa(tdoa, total_shape)
-        log.debug('Temporal doa: %s', tdoa.slices)
-        slice_.extend(tdoa.slices)
-
-        if self.spatial_domain is not None:
-            total_shape += self.spatial_domain.shape.extents
-            sdoa = get_valid_doa(sdoa, total_shape[1:])
-            log.debug('Spatial doa: %s', sdoa.slices)
-            slice_.extend(sdoa.slices)
-
-        # If this coverage is empty - return an empty array
-        if np.atleast_1d(np.atleast_1d(total_shape) == 0).all():
-            return np.empty(0, dtype=self._range_value[param_name].value_encoding)
-
-        slice_ = utils.fix_slice(slice_, total_shape)
-        log.debug('Getting slice: %s', slice_)
+        if not isinstance(param_names, Iterable) or isinstance(param_names, basestring):
+            param_names = [param_names]
+        for param_name in param_names:
+            if not param_name in self._range_value:
+                raise KeyError('Parameter %s not found in coverage' % (param_name))
 
         if self.value_caching:
-            return_value = self._get_cached_values(param_name, slice_, total_shape)
-        else:
-            return_value = self._range_value[param_name][slice_]
+            vals = self.get_cached_values(param_names, time_segment, time, sort_parameter, stride_length, fill_empty_params)
+            if vals is not None:
+                return vals
 
-        return return_value
+        vals = self._persistence_layer.read_parameters(param_names, time_segment, time, sort_parameter,
+                                                       stride_length=stride_length, fill_empty_params=fill_empty_params,
+                                                       function_params=function_params, as_record_array=as_record_array)
+        if self.value_caching:
+            self.cache_it(vals, param_names, time_segment, time, sort_parameter, stride_length, fill_empty_params)
+        return vals
+
+    def cache_it(self, vals, param_names, time_segement, time, sort_parameter, stride_length, fill_empty_params):
+        if time_segement is None or time_segement[0] is None or time_segement[1] is None:
+            return
+        tup = time_segement, time, sort_parameter, stride_length, fill_empty_params
+        cache = False
+        if len(self._value_cache) !=0:
+            for val in self._value_cache:
+                if cmp(val[0], tup) == 0:
+                    for param_name in param_names:
+                        if param_name not in val[1]:
+                            cache = True
+                            break
+                else:
+                    cache = True
+                    break
+        else:
+            cache = True
+        if cache:
+            self._value_cache.append((tup, param_names, vals))
+
+    def get_cached_values(self, params, time_segement, time, sort_parameter, stride_length, fill_empty_params):
+        tup = time_segement, time, sort_parameter, stride_length, fill_empty_params
+        rv = None
+        for val in self._value_cache:
+            if val[0] == tup:
+                cached = True
+                for param in params:
+                    if param not in val[1]:
+                        cached = False
+                if cached:
+                    rv = val[2]
+                    break
+        return rv
+
+    def get_spans(self, spans):
+        return self._persistence_layer.get_spans_by_id(spans)
 
     def get_value_dictionary(self, param_list=None, temporal_slice=None, domain_slice=None):
         '''
@@ -415,26 +435,21 @@ class AbstractCoverage(AbstractIdentifiable):
         if self.closed:
             raise IOError('I/O operation on closed file')
         
-
-        param_list = param_list or []
-        
-        for p in param_list:
-            if p not in self._range_value:
-                raise KeyError('Parameter \'{0}\' not found in coverage'.format(p))
-        if self.num_timesteps == 0:
+        if param_list is None:
+            param_list = self.list_parameters()
+        else:
+            for p in param_list:
+                if p not in self._range_value:
+                    raise KeyError('Parameter \'{0}\' not found in coverage'.format(p))
+        if self.is_empty():
             retval = {}
-            for p in param_list or self.list_parameters():
+            for p in param_list:
                 retval[p] = np.array([], dtype=self.get_parameter_context(p).param_type.value_encoding)
             return retval
 
 
-        slice_ = self._get_me_a_slice(temporal_slice, domain_slice) 
-
-
-        value_dict = {}
-        self._aggregate_value_dict(value_dict, slice_, param_list)
-
-        return value_dict
+        param_list = param_list or []
+        return self.get_parameter_values(param_list, time_segment=temporal_slice, as_record_array=False, fill_empty_params=True).get_data()
 
     def _get_me_a_slice(self, temporal_slice, domain_slice):
         if temporal_slice is None and domain_slice is None:
@@ -530,16 +545,18 @@ class AbstractCoverage(AbstractIdentifiable):
         self._value_cache[key] = return_value
         return return_value
 
-    def set_time_values(self, value, tdoa=None):
+    def set_time_values(self, values):
         """
         Convenience method for setting time values
 
         @param value    The value to set
         @param tdoa The temporal DomainOfApplication; default to full Domain
         """
-        return self.set_parameter_values(self.temporal_parameter_name, value, tdoa, None)
+        if isinstance(values, list):
+            values = np.array(values)
+        return self._persistence_layer.write_parameters(self.get_write_id(), {self.temporal_parameter_name: values})
 
-    def get_time_values(self, tdoa=None, return_value=None):
+    def get_time_values(self, time_segement=None, stride_length=None, return_value=None):
         """
         Convenience method for retrieving time values
 
@@ -547,61 +564,21 @@ class AbstractCoverage(AbstractIdentifiable):
         @param tdoa The temporal DomainOfApplication; default to full Domain
         @param return_value If supplied, filled with response value
         """
-        return self.get_parameter_values(self.temporal_parameter_name, tdoa, None, return_value)
-
-    @property
-    def num_timesteps(self):
-        """
-        The current number of timesteps
-        """
-        return self.temporal_domain.shape.extents[0]
+        return self.get_parameter_values(self.temporal_parameter_name, time_segment=time_segement,
+                                         stride_length=stride_length, return_value=return_value).get_data()[self.temporal_parameter_name]
 
     def _clear_value_cache_for_parameter(self, param_name):
         for k in self._value_cache.keys():
             if k[0] == param_name:
                 self._value_cache.pop(k)
 
-    def set_parameter_values(self, param_name, value, tdoa=None, sdoa=None):
-        """
-        Assign value to the specified parameter
+    def set_parameter_values(self, values):
+        if self.mode == 'r' or self._closed:
+            raise IOError("Coverage not open for write")
+        self._persistence_layer.write_parameters(self.get_write_id(), values)
 
-        Assigns the value to param_name within the coverage.  Temporal and spatial DomainOfApplication objects can be
-        applied to constrain the assignment.  See DomainOfApplication for details
-
-        @param param_name   The name of the parameter
-        @param value    The value to set
-        @param tdoa The temporal DomainOfApplication
-        @param sdoa The spatial DomainOfApplication
-        @throws KeyError    The coverage does not contain a parameter with name 'param_name'
-        """
-        if self.closed:
-            raise IOError('I/O operation on closed file')
-
-        if self.mode == 'r':
-            raise IOError('Coverage not open for writing: mode == \'{0}\''.format(self.mode))
-
-        if not param_name in self._range_value:
-            raise KeyError('Parameter \'{0}\' not found in coverage_model'.format(param_name))
-
-        slice_ = []
-
-        tdoa = get_valid_doa(tdoa, self.temporal_domain.shape.extents)
-        log.debug('Temporal doa: %s', tdoa.slices)
-        slice_.extend(tdoa.slices)
-
-        if self.spatial_domain is not None:
-            sdoa = get_valid_doa(sdoa, self.spatial_domain.shape.extents)
-            log.debug('Spatial doa: %s', sdoa.slices)
-            slice_.extend(sdoa.slices)
-
-        log.debug('Setting slice: %s', slice_)
-
-        self._range_value[param_name][slice_] = value
-        # Update parameter bounds in the persistence layer
-        self._persistence_layer.update_parameter_bounds(param_name, self._range_value[param_name].bounds)
-
-        # Clear any cached values for this parameter
-        self._clear_value_cache_for_parameter(param_name)
+    def get_write_id(self):
+        return create_guid()
 
     def clear_value_cache(self):
         if self.value_caching:
@@ -700,12 +677,13 @@ class AbstractCoverage(AbstractIdentifiable):
         @param parameter_name   A string parameter name; may be an iterable of such members
         """
 
-        if self.num_timesteps == 0:
+        if not self.has_parameter_data():
             raise ValueError('The coverage has no data!')
 
         ret = {}
         for pn in self._parameter_name_arg_to_params(parameter_name):
-            ret[pn] = self._range_value[pn].bounds
+            if pn in self._persistence_layer.parameter_bounds:
+                ret[pn] = self._persistence_layer.parameter_bounds[pn]
 
         if len(ret) == 1:
             ret = ret.values()[0]
@@ -738,7 +716,7 @@ class AbstractCoverage(AbstractIdentifiable):
         ret = {}
         for pn in self._parameter_name_arg_to_params(parameter_name):
             p = self._range_dictionary.get_context(pn)
-            ret[pn] = p.dom.total_extents
+            ret[pn] = (self.num_timesteps(),) #TODO - get total extents from value type
 
         if len(ret) == 1:
             ret = ret.values()[0]
@@ -789,7 +767,7 @@ class AbstractCoverage(AbstractIdentifiable):
 
         for pn in self._parameter_name_arg_to_params(parameter_name):
             p = self._range_dictionary.get_context(pn)
-            te=p.dom.total_extents
+            te=(self.num_timesteps(),) #TODO - get extents from ParameterType
             dt = np.dtype(p.param_type.value_encoding)
 
             if slice_ is not None:
@@ -826,47 +804,47 @@ class AbstractCoverage(AbstractIdentifiable):
             log.debug('Coverage contains %s duplicate timesteps', num_dups)
 
         # Overwrite all the values, padding num_dups at the end with fill_value
-        for p in self.list_parameters():
-            vc = self._range_dictionary[p].param_type._value_class
-            if vc in ('ParameterFunctionValue', 'FunctionValue', 'ConstantValue', 'ConstantRangeValue'):
-                continue
-
-            elif vc == 'SparseConstantValue':
-                s = Span(None, max(inds))
-                try:
-                    spns = self._range_value[p].content
-                    if not hasattr(spns, '__iter__'):
-                        # spns is the fill_value for the parameter, no span assignment has happened yet, so just move on
-                        continue
-                except ValueError, ve:
-                    # Raised when there are no bricks (no timesteps) - this should never happen...
-                    continue
-                nspns = []
-                for spn in spns:
-                    if spn in s:
-                        nspns.append(spn)
-                    elif spn.lower_bound in s:
-                        nspns.append(Span(spn.lower_bound, None, offset=spn.offset, value=spn.value))
-                    elif spn.upper_bound is not None and spn.upper_bound in s:
-                        nspns.append(Span(s.lower_bound, spn.upper_bound, offset=spn.offset, value=spn.value))
-
-                self._range_value[p]._storage[0] = nspns
-
-            else:
-                if p == self.temporal_parameter_name:
-                    nv = nt
-                else:
-                    nv = self.get_parameter_values(p)[sl]
-
-                self.set_parameter_values(p, np.append(nv, self._range_value[p].get_fill_array(num_dups)))
-                del nv
-
-        self.temporal_domain.shape.extents = (len(nt),) + self.temporal_domain.shape.extents[1:]
-        self._persistence_layer.shrink_domain(self.temporal_domain.shape.extents)
-
-        self.flush()
-
-        self.clear_value_cache()
+        # for p in self.list_parameters():
+        #     vc = self._range_dictionary[p].param_type._value_class
+        #     if vc in ('ParameterFunctionValue', 'FunctionValue', 'ConstantValue', 'ConstantRangeValue'):
+        #         continue
+        #
+        #     elif vc == 'SparseConstantValue':
+        #         s = Span(None, max(inds))
+        #         try:
+        #             spns = self._range_value[p].content
+        #             if not hasattr(spns, '__iter__'):
+        #                 # spns is the fill_value for the parameter, no span assignment has happened yet, so just move on
+        #                 continue
+        #         except ValueError, ve:
+        #             # Raised when there are no bricks (no timesteps) - this should never happen...
+        #             continue
+        #         nspns = []
+        #         for spn in spns:
+        #             if spn in s:
+        #                 nspns.append(spn)
+        #             elif spn.lower_bound in s:
+        #                 nspns.append(Span(spn.lower_bound, None, offset=spn.offset, value=spn.value))
+        #             elif spn.upper_bound is not None and spn.upper_bound in s:
+        #                 nspns.append(Span(s.lower_bound, spn.upper_bound, offset=spn.offset, value=spn.value))
+        #
+        #         self._range_value[p]._storage[0] = nspns
+        #
+        #     else:
+        #         if p == self.temporal_parameter_name:
+        #             nv = nt
+        #         else:
+        #             nv = self.get_parameter_values(p)[sl]
+        #
+        #         self.set_parameter_values({p: np.append(nv, self._range_value[p].get_fill_array(num_dups))})
+        #         del nv
+        #
+        # self.temporal_domain.shape.extents = (len(nt),) + self.temporal_domain.shape.extents[1:]
+        # self._persistence_layer.shrink_domain(self.temporal_domain.shape.extents)
+        #
+        # self.flush()
+        #
+        # self.clear_value_cache()
 
     @property
     def persistence_guid(self):
@@ -1010,7 +988,7 @@ class ViewCoverage(AbstractCoverage):
                 if not is_persisted(root_dir, persistence_guid):
                     raise SystemError('Cannot find specified coverage: {0}'.format(pth))
 
-                self._persistence_layer = SimplePersistenceLayer(root_dir, persistence_guid, mode=self.mode)
+                self._persistence_layer = PostgresPersistenceLayer(root_dir, persistence_guid, mode=self.mode)
                 if self._persistence_layer.version != self.version:
                     raise IOError('Coverage Model Version Mismatch: %s != %s' %(self.version, self._persistence_layer.version))
 
@@ -1070,7 +1048,7 @@ class ViewCoverage(AbstractCoverage):
 
                 parameter_dictionary = self.__normalize_param_dict(parameter_dictionary)
 
-                self._persistence_layer = SimplePersistenceLayer(root_dir,
+                self._persistence_layer = PostgresPersistenceLayer(root_dir,
                                                                  persistence_guid,
                                                                  name=self.name,
                                                                  param_dict=parameter_dictionary,
@@ -1152,18 +1130,40 @@ class ViewCoverage(AbstractCoverage):
 
         return parameter_dictionary
 
-    def insert_timesteps(self, count, origin=None):
-        raise TypeError('Cannot insert timesteps into a ViewCoverage')
-
     def set_time_values(self, value, tdoa=None):
         raise TypeError('Cannot set time values against a ViewCoverage')
 
     def set_parameter_values(self, param_name, value, tdoa=None, sdoa=None):
         raise TypeError('Cannot set parameter values against a ViewCoverage')
 
+    def get_parameter_values(self, param_names, time_segment=None, time=None, sort_parameter=None, stride_length=None,
+                             fill_empty_params=False, return_value=None):
+        return self.reference_coverage.get_parameter_values(param_names, time_segment, time, sort_parameter, stride_length, fill_empty_params, return_value)
+
     def get_value_dictionary(self, *args, **kwargs):
 
         return self.reference_coverage.get_value_dictionary(*args, **kwargs)
+
+    def is_empty(self):
+        return self.reference_coverage.is_empty()
+
+    def has_parameter_data(self):
+        return self.reference_coverage.has_parameter_data()
+
+    def num_timesteps(self):
+        return self.reference_coverage.num_timesteps()
+
+    def get_data_bounds(self, parameter_name=None):
+        return self.reference_coverage.get_data_bounds(parameter_name)
+
+    def get_data_extents(self, parameter_name=None):
+        return self.reference_coverage.get_data_extents(parameter_name)
+
+    def get_data_extents_by_axis(self, axis=None):
+        return self.reference_coverage.get_data_extents_by_axis(axis)
+
+    def get_data_size(self, parameter_name=None, slice_=None, in_bytes=False):
+        return self.reference_coverage.get_data_size(parameter_name, in_bytes=in_bytes)
 
 
 from coverage_model.basic_types import BaseEnum
@@ -1190,7 +1190,7 @@ class ComplexCoverageType(BaseEnum):
     TIMESERIES = 'TIMESERIES'
 
 
-class ComplexCoverage(AbstractCoverage):
+class ComplexCoverageR2(AbstractCoverage):
     """
     References 1-n coverages
     """
@@ -1213,9 +1213,7 @@ class ComplexCoverage(AbstractCoverage):
             root_dir = root_dir if not root_dir.endswith(persistence_guid) else os.path.split(root_dir)[0]
 
 
-            pth = os.path.join(root_dir, persistence_guid)
             if is_persisted(root_dir, persistence_guid):
-#cjb            if os.path.exists(pth):
                 self._existing_coverage(root_dir, persistence_guid)
             else:
                 self._new_coverage(root_dir, persistence_guid, name, reference_coverage_locs, parameter_dictionary, complex_type)
@@ -1230,9 +1228,8 @@ class ComplexCoverage(AbstractCoverage):
         # If the path does exist, initialize the simple persistence layer
         pth = os.path.join(root_dir, persistence_guid)
         if not is_persisted(root_dir, persistence_guid):
-#cjb        if not os.path.exists(pth):
             raise SystemError('Cannot find specified coverage: {0}'.format(pth))
-        self._persistence_layer = SimplePersistenceLayer(root_dir, persistence_guid, mode=self.mode)
+        self._persistence_layer = PostgresPersistenceLayer(root_dir, persistence_guid, mode=self.mode)
         if self._persistence_layer.version != self.version:
             raise IOError('Coverage Model Version Mismatch: %s != %s' %(self.version, self._persistence_layer.version))
         self.name = self._persistence_layer.name
@@ -1263,7 +1260,7 @@ class ComplexCoverage(AbstractCoverage):
         if not hasattr(reference_coverage_locs, '__iter__'):
             reference_coverage_locs = [reference_coverage_locs]
 
-        self._persistence_layer = SimplePersistenceLayer(root_dir,
+        self._persistence_layer = PostgresPersistenceLayer(root_dir,
                                                          persistence_guid,
                                                          name=self.name,
                                                          mode=self.mode,
@@ -1390,8 +1387,8 @@ class ComplexCoverage(AbstractCoverage):
             pivot = cls._interval_pivot(arr, left, right, pivot)
             cls._interval_qsort(arr, left, pivot-1)
             cls._interval_qsort(arr, pivot+1, right)
-    
-    def get_parameter_values(self, param_name, tdoa=None, sdoa=None, return_value=None):
+
+    def get_parameter_values(self, param_names, time_segment=None, time=None, sort_parameter=None, stride_length=None, return_value=None):
         '''
         Obtain the value set for a given parameter over a specified domain
         '''
@@ -1400,78 +1397,76 @@ class ComplexCoverage(AbstractCoverage):
             raise TypeError("A Timeseries ComplexCoverage doesn't support "
                             "get_parameter_values, please use "
                             "get_value_dictionary")
-        return AbstractCoverage.get_parameter_values(self, param_name, tdoa=tdoa, 
-                            sdoa=sdoa, return_value=return_value)
+        return AbstractCoverage.get_parameter_values(self, param_names, time_segment, time, sort_parameter, stride_length=stride_length, return_value=return_value)
 
+    # def get_value_dictionary(self, param_list=None, temporal_slice=None, domain_slice=None):
+    #     if temporal_slice and domain_slice:
+    #         raise ValueError("Can not specify both a temporal_slice and domain_slice")
+    #     if temporal_slice:
+    #         return self._get_value_dictionary_temporal(param_list, temporal_slice)
+    #
+    #     else:
+    #         return self._get_value_dictionary_domain(param_list, domain_slice)
+    #
 
-    def get_value_dictionary(self, param_list=None, temporal_slice=None, domain_slice=None):
-        if temporal_slice and domain_slice:
-            raise ValueError("Can not specify both a temporal_slice and domain_slice")
-        if temporal_slice:
-            return self._get_value_dictionary_temporal(param_list, temporal_slice)
-
-        else:
-            return self._get_value_dictionary_domain(param_list, domain_slice)
-
-
-    def _get_value_dictionary_domain(self, param_list=None, domain_slice=None, unsorted=False, raw=False):
-
-        if domain_slice is None:
-            slice_ = slice(None, None)
-
-        elif isinstance(domain_slice, slice):
-            slice_ = domain_slice
-
-        elif isinstance(domain_slice, (tuple,list)):
-            slice_ = slice(*domain_slice)
-        else:
-            raise ValueError("Unspported domain slice: %s" % domain_slice)
-
-        # Make sure the axis is in the value dictionary
-        # But remember to remove it on the way out
-        no_time = param_list and self.temporal_parameter_name not in param_list
-        if no_time:
-            param_list.append(self.temporal_parameter_name)
-
-        value_interval = Interval(slice_.start, slice_.stop)
-        interval_map = self.interval_map()
-
-        value_dict = {}
-        total_timesteps = 0
-        overlaps = False
-        for i in xrange(len(interval_map)):
-            
-            interval, cov = interval_map[i]
-            if i > 0 and interval_map[i-1][0].intersects(interval):
-                overlaps = True
-            
-            d = Interval(total_timesteps, total_timesteps+cov.num_timesteps-1)
-            if d.intersects(value_interval):
-                if slice_.start is None:
-                    start = 0
-                else:
-                    start = max(0, slice_.start - total_timesteps)
-                if slice_.stop is None:
-                    stop = None
-                else:
-                    stop = slice_.stop - total_timesteps
-                s = slice(start, stop, slice_.step)
-                if start == stop:
-                    continue
-
-                self._aggregate_value_dict(value_dict, cov, param_list, s)
-            total_timesteps += cov.num_timesteps
-        
-        if not value_dict:
-            return value_dict
-        if overlaps and not unsorted:
-            self._value_dict_qsort(value_dict, self.temporal_parameter_name)
-        if not raw:
-            value_dict = self._value_dict_unique(value_dict, self.temporal_parameter_name)
-        # Remove the axis from the value_dict if it wasn't asked for
-        if no_time:
-            del value_dict[self.temporal_parameter_name]
-        return value_dict
+    # def _get_value_dictionary_domain(self, param_list=None, domain_slice=None, unsorted=False, raw=False):
+    #
+    #     if domain_slice is None:
+    #         slice_ = slice(None, None)
+    #
+    #     elif isinstance(domain_slice, slice):
+    #         slice_ = domain_slice
+    #
+    #     elif isinstance(domain_slice, (tuple,list)):
+    #         slice_ = slice(*domain_slice)
+    #     else:
+    #         raise ValueError("Unspported domain slice: %s" % domain_slice)
+    #
+    #     # Make sure the axis is in the value dictionary
+    #     # But remember to remove it on the way out
+    #     no_time = param_list and self.temporal_parameter_name not in param_list
+    #     if no_time:
+    #         param_list.append(self.temporal_parameter_name)
+    #
+    #     value_interval = Interval(slice_.start, slice_.stop)
+    #     interval_map = self.interval_map()
+    #
+    #     value_dict = {}
+    #     total_timesteps = 0
+    #     overlaps = False
+    #     for i in xrange(len(interval_map)):
+    #
+    #         interval, cov = interval_map[i]
+    #         if i > 0 and interval_map[i-1][0].intersects(interval):
+    #             overlaps = True
+    #
+    #         d = Interval(total_timesteps, total_timesteps+cov.num_timesteps-1)
+    #         if d.intersects(value_interval):
+    #             if slice_.start is None:
+    #                 start = 0
+    #             else:
+    #                 start = max(0, slice_.start - total_timesteps)
+    #             if slice_.stop is None:
+    #                 stop = None
+    #             else:
+    #                 stop = slice_.stop - total_timesteps
+    #             s = slice(start, stop, slice_.step)
+    #             if start == stop:
+    #                 continue
+    #
+    #             self._aggregate_value_dict(value_dict, cov, param_list, s)
+    #         total_timesteps += cov.num_timesteps
+    #
+    #     if not value_dict:
+    #         return value_dict
+    #     if overlaps and not unsorted:
+    #         self._value_dict_qsort(value_dict, self.temporal_parameter_name)
+    #     if not raw:
+    #         value_dict = self._value_dict_unique(value_dict, self.temporal_parameter_name)
+    #     # Remove the axis from the value_dict if it wasn't asked for
+    #     if no_time:
+    #         del value_dict[self.temporal_parameter_name]
+    #     return value_dict
 
 
 
@@ -1546,7 +1541,7 @@ class ComplexCoverage(AbstractCoverage):
         '''
         param_list = param_list or self.list_parameters()
         tname = self.temporal_parameter_name
-        # Potential issue here if the s-cov doesn't use the same temporal 
+        # Potential issue here if the s-cov doesn't use the same temporal
         # parameter name
         if slice_.start == slice_.stop and slice_.start is not None:
             dtype = self._range_dictionary[tname].param_type.value_encoding
@@ -1587,7 +1582,7 @@ class ComplexCoverage(AbstractCoverage):
         s = slice(None,None,stride)
         for k,v in value_dict.iteritems():
             value_dict[k] = v[s]
-        
+
 
     def insert_value_set(self, value_dictionary):
         '''
@@ -1662,7 +1657,7 @@ class ComplexCoverage(AbstractCoverage):
 
         # In an ideal case and simple input the value sets arrive in a
         # monotonically increasing order, the solution is to append the value
-        # set to the last coverage in the interval_map. 
+        # set to the last coverage in the interval_map.
         if value_interval.x0 > full_interval.x1:
             interval, cov = interval_map[-1]
             self._append_to_coverage(cov, value_dictionary)
@@ -1683,18 +1678,8 @@ class ComplexCoverage(AbstractCoverage):
 
 
     def _append_to_coverage(self, cov, value_dictionary):
-        time_array = value_dictionary[self.temporal_parameter_name]
-        t0, t1 = time_array[0], time_array[-1]
-        
         cov = AbstractCoverage.load(cov.persistence_dir, mode='r+')
-        param_list = cov.list_parameters()
-        
-        shape = len(time_array)
-        cov.insert_timesteps(shape)
-
-        for parameter, value_set in value_dictionary.iteritems():
-            if parameter in param_list:
-                cov.set_parameter_values(parameter, value_set, slice(cov.num_timesteps - shape, cov.num_timesteps))
+        cov.set_parameter_values(value_dictionary)
         cov.close()
         self.refresh()
 
@@ -1711,17 +1696,17 @@ class ComplexCoverage(AbstractCoverage):
         # Construct temporal and spatial Domain objects
         tdom = GridDomain(GridShape('temporal', [0]), tcrs, MutabilityEnum.EXTENSIBLE) # 1d (timeline)
         sdom = GridDomain(GridShape('spatial', [0]), scrs, MutabilityEnum.IMMUTABLE) # 0d spatial topology (station/trajectory)
-        scov = SimplexCoverage(root_dir, 
+        scov = SimplexCoverage(root_dir,
                                utils.create_guid(),
                                name,
-                               parameter_dictionary=pdict, 
+                               parameter_dictionary=pdict,
                                temporal_domain=tdom,
                                spatial_domain=sdom,
                                mode='r+')
         path = scov.persistence_dir
         self.append_reference_coverage(path)
         return scov
-        
+
 
 
     @classmethod
@@ -1753,7 +1738,7 @@ class ComplexCoverage(AbstractCoverage):
             if axis_arr[i] == val and idx_arr[i] < idx_arr[right]:
                 cls._value_dict_swap(value_dict, i, store_index)
                 store_index += 1
-                
+
         cls._value_dict_swap(value_dict, store_index, right)
         return store_index
 
@@ -1826,13 +1811,12 @@ class ComplexCoverage(AbstractCoverage):
         for cpth, cov in self._verify_rcovs(rcovs):
 
             if ntimes is None:
-                ntimes = cov.num_timesteps
                 times = cov.get_time_values()
                 self.temporal_domain = cov.temporal_domain
                 self.spatial_domain = cov.spatial_domain
                 self._reference_covs[cpth] = cov
             else:
-                if ntimes == cov.num_timesteps and np.allclose(times, cov.get_time_values()):
+                if np.allclose(times, cov.get_time_values()):
                     self._reference_covs[cpth] = cov
                 else:
                     log.warn('Coverage timestamps do not match; cannot include: %s', cpth)
@@ -2021,7 +2005,6 @@ class ComplexCoverage(AbstractCoverage):
                     self._range_value[p][s] = cov._range_value[p]
                 else:
                     self._range_value[p][s] = self._range_dictionary.get_context(p).fill_value
-            self.insert_timesteps(len(s))
 
         self._head_coverage_path = None
 
@@ -2074,7 +2057,7 @@ class ComplexCoverage(AbstractCoverage):
         start = 0
         for i, tb in enumerate(time_bounds):
             cov = self._reference_covs[tb.value]
-            end = start + cov.num_timesteps
+            end = start + cov.num_timesteps()
             rcov_domain_spans.append(Span(start, end, value=tb.value))
             start = end
 
@@ -2090,12 +2073,11 @@ class ComplexCoverage(AbstractCoverage):
                     self._range_value[p][:] = cov._range_value[p]
                 else:
                     self._range_value[p][:] = self._range_dictionary.get_context(p).fill_value
-            self.insert_timesteps(len(s))
 
         self._head_coverage_path = self._reference_covs[self.rcov_domain_spans[-1].value].head_coverage_path
 
     def _build_timeseries(self, rcovs, parameter_dictionary):
-        
+
         for p, pc in parameter_dictionary.iteritems():
             if p not in self._range_dictionary:
                 pc = pc[1]
@@ -2123,7 +2105,10 @@ class SimplexCoverage(AbstractCoverage):
 
     """
 
-    def __init__(self, root_dir, persistence_guid, name=None, parameter_dictionary=None, temporal_domain=None, spatial_domain=None, mode=None, in_memory_storage=False, bricking_scheme=None, inline_data_writes=True, auto_flush_values=True, value_caching=True):
+    def __init__(self, root_dir, persistence_guid, name=None, parameter_dictionary=None,
+                 temporal_domain=None, spatial_domain=None, mode=None, in_memory_storage=False,
+                 bricking_scheme=None, inline_data_writes=True, auto_flush_values=True, value_caching=True,
+                 persistence_name=None):
         """
         Constructor for SimplexCoverage
 
@@ -2157,16 +2142,11 @@ class SimplexCoverage(AbstractCoverage):
                     raise SystemError('Cannot find specified coverage: {0}'.format(pth))
 
                 # All appears well - load it up!
-                self._persistence_layer = PersistenceLayer(root_dir, persistence_guid, mode=self.mode)
+                self._persistence_layer = PostgresPersistenceLayer(root_dir, persistence_guid, mode=self.mode)
                 if self._persistence_layer.version != self.version:
                     raise IOError('Coverage Model Version Mismatch: %s != %s' %(self.version, self._persistence_layer.version))
 
                 self.name = self._persistence_layer.name
-                self.spatial_domain = self._persistence_layer.sdom
-                self.temporal_domain = self._persistence_layer.tdom
-
-                self._bricking_scheme = self._persistence_layer.global_bricking_scheme
-
                 self._in_memory_storage = False
 
                 auto_flush_values = self._persistence_layer.auto_flush_values
@@ -2174,6 +2154,7 @@ class SimplexCoverage(AbstractCoverage):
                 self.value_caching = self._persistence_layer.value_caching
 
                 from coverage_model.persistence import PersistedStorage, SparsePersistedStorage
+                from coverage_model.storage.parameter_persisted_storage import PostgresPersistedStorage
                 for parameter_name in self._persistence_layer.parameter_metadata:
                     md = self._persistence_layer.parameter_metadata[parameter_name]
                     mm = self._persistence_layer.master_manager
@@ -2187,10 +2168,11 @@ class SimplexCoverage(AbstractCoverage):
                         pc._pval_callback = self.get_parameter_values
                         pc._pctxt_callback = self.get_parameter_context
                     self._range_dictionary.add_context(pc)
-                    if pc.param_type._value_class == 'SparseConstantValue':
-                        s = SparsePersistedStorage(md, mm, self._persistence_layer.brick_dispatcher, dtype=pc.param_type.storage_encoding, fill_value=pc.param_type.fill_value, mode=self.mode, inline_data_writes=inline_data_writes, auto_flush=auto_flush_values)
-                    else:
-                        s = PersistedStorage(md, mm, self._persistence_layer.brick_dispatcher, dtype=pc.param_type.storage_encoding, fill_value=pc.param_type.fill_value, mode=self.mode, inline_data_writes=inline_data_writes, auto_flush=auto_flush_values)
+                    # if pc.param_type._value_class == 'SparseConstantValue':
+                    #     s = SparsePersistedStorage(md, mm, self._persistence_layer.brick_dispatcher, dtype=pc.param_type.storage_encoding, fill_value=pc.param_type.fill_value, mode=self.mode, inline_data_writes=inline_data_writes, auto_flush=auto_flush_values)
+                    # else:
+                    s = PostgresPersistedStorage(md, metadata_manager=mm, parameter_context=pc, dtype=pc.param_type.storage_encoding, fill_value=pc.param_type.fill_value, mode=self._persistence_layer.mode)
+                    self._persistence_layer.value_list[parameter_name] = s
                     self._range_value[parameter_name] = get_value_class(param_type=pc.param_type, domain_set=pc.dom, storage=s)
                     if parameter_name in self._persistence_layer.parameter_bounds:
                         bmin, bmax = self._persistence_layer.parameter_bounds[parameter_name]
@@ -2226,8 +2208,6 @@ class SimplexCoverage(AbstractCoverage):
                 # Must be in 'a' for a new coverage
                 self.mode = 'a'
 
-                insert_ts = 0
-
                 if not isinstance(name, basestring):
                     raise TypeError('\'name\' must be of type basestring')
                 self.name = name
@@ -2235,7 +2215,6 @@ class SimplexCoverage(AbstractCoverage):
                     self.temporal_domain = GridDomain(GridShape('temporal',[0]), CRS.standard_temporal(), MutabilityEnum.EXTENSIBLE)
                 elif isinstance(temporal_domain, AbstractDomain):
                     self.temporal_domain = deepcopy(temporal_domain)
-                    insert_ts = self.temporal_domain.shape.extents[0]
                     self.temporal_domain.shape.extents = (0,) + tuple(self.temporal_domain.shape.extents[1:])
                 else:
                     raise TypeError('\'temporal_domain\' must be an instance of AbstractDomain')
@@ -2258,31 +2237,60 @@ class SimplexCoverage(AbstractCoverage):
 
                 self._in_memory_storage = in_memory_storage
                 if self._in_memory_storage:
-                    self._persistence_layer = InMemoryPersistenceLayer()
-                else:
-                    self._persistence_layer = PersistenceLayer(root_dir,
-                                                               persistence_guid,
-                                                               name=name,
-                                                               tdom=self.temporal_domain,
-                                                               sdom=self.spatial_domain,
-                                                               mode=self.mode,
-                                                               bricking_scheme=self._bricking_scheme,
-                                                               inline_data_writes=inline_data_writes,
-                                                               auto_flush_values=auto_flush_values,
-                                                               value_caching=value_caching,
-                                                               coverage_type='simplex',
-                                                               version=self.version)
+                    persistence_name = 'in_memory_storage'
+                self._persistence_layer = PostgresPersistenceLayer(root_dir,
+                                                           persistence_guid,
+                                                           name=name,
+                                                           tdom=self.temporal_domain,
+                                                           sdom=self.spatial_domain,
+                                                           mode=self.mode,
+                                                           bricking_scheme=self._bricking_scheme,
+                                                           inline_data_writes=inline_data_writes,
+                                                           auto_flush_values=auto_flush_values,
+                                                           value_caching=value_caching,
+                                                           coverage_type='simplex',
+                                                           version=self.version,
+                                                           storage_name=persistence_name)
 
                 for o, pc in parameter_dictionary.itervalues():
                     self.append_parameter(pc)
-
-                if insert_ts != 0:
-                    self.insert_timesteps(insert_ts)
 
             self._head_coverage_path = self.persistence_dir
         except:
             self._closed = True
             raise
+
+    def get_fill_value(self, param_name):
+        return self.get_parameter_context(param_name).fill_value
+
+    def calculate_statistics(self, params=None, time_range=None):
+        """time_range is currently not implemented"""
+        from coverage_model.parameter_values import NumericValue
+        if isinstance(params, basestring):
+            tmp = set()
+            tmp.add(params)
+            params = tmp
+        stats = {}
+        params_to_calculate = []
+        for key in self._range_dictionary.keys():
+            if isinstance(self._range_value[key], NumericValue):
+                if params is not None:
+                    if key in params:
+                        params_to_calculate.append(key)
+                else:
+                    params_to_calculate.append(key)
+        pv = self.get_value_dictionary(params_to_calculate)
+        for key, values in pv.iteritems():
+            ma = np.ma.masked_array(values, np.isnan(values))
+            stats[key] = (np.min(ma), np.max(ma), np.mean(ma), np.median(ma))
+        not_evaluated = []
+        if params is not None:
+            not_evaluated = [i for i in params if i not in params_to_calculate]
+
+        return stats, not_evaluated
+
+    def validate_span_data(self):
+        return self._persistence_layer.validate_span_data()
 
     @classmethod
     def _fromdict(cls, cmdict, arg_masks=None):
@@ -2602,28 +2610,3 @@ class ParameterFilter(AbstractFilter):
     """
     def __init__(self):
         AbstractFilter.__init__(self)
-
-
-
-#=========================
-# Possibly OBE ?
-#=========================
-
-#class Topology():
-#    """
-#    Sets of topological entities
-#    Mappings between topological entities
-#    """
-#    pass
-#
-#class TopologicalEntity():
-#    """
-#
-#    """
-#    pass
-#
-#class ConstructionType():
-#    """
-#    Lattice or not (i.e. 'unstructured')
-#    """
-#    pass

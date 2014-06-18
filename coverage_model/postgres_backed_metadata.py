@@ -1,12 +1,13 @@
 from ooi.logging import log
 import os
+import psycopg2
+import psycopg2.extras
 from coverage_model.metadata import MetadataManager
 from coverage_model import utils
 from coverage_model.persistence_helpers import RTreeProxy, pack, unpack
 from coverage_model.basic_types import Dictable
-import psycopg2
-import psycopg2.extras
-
+from coverage_model.util.jsonable import Jsonable
+from coverage_model.coverages.coverage_extents import ReferenceCoverageExtents
 
 class PostgresMetadataManager(MetadataManager):
     tableName = "Entity"
@@ -90,6 +91,10 @@ class PostgresMetadataManager(MetadataManager):
                     if isinstance(v, Dictable):
                         prefix='DICTABLE|{0}:{1}|'.format(v.__module__, v.__class__.__name__)
                         value = prefix + pack(v.dump())
+                    # elif isinstance(v, basestring):
+                    #     value = v
+                    elif isinstance(v, Jsonable):
+                        value = v.to_json()
                     else:
                         value = pack(v)
 
@@ -185,6 +190,8 @@ class PostgresMetadataManager(MetadataManager):
                                 if group != '':
                                     self.param_groups.add(group)
                             continue
+                        elif key == 'rcov_exents':
+                            setattr(self, key, ReferenceCoverageExtents.from_json(val))
                         else:
                             value = unpack(val)
 

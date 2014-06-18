@@ -18,6 +18,8 @@ from coverage_model.search.search_constants import *
 from coverage_model.search.search_parameter import *
 from coverage_model.coverage import AbstractCoverage
 from coverage_model.data_span import *
+from coverage_model.storage.span_storage import SpanStorage
+from coverage_model.storage.span_storage_factory import SpanStorageFactory
 
 
 class CoverageSearch(object):
@@ -34,39 +36,40 @@ class CoverageSearch(object):
         self.viewable_parameters = viewable_parameters
 
     def select(self, db_name=None, limit=-1):
-        db = DBFactory.get_db(db_name)
+        db = SpanStorageFactory.get_span_storage_obj(db_name)
+        # db = DBFactory.get_db(db_name)
         span_dict = db.search(self.search_criteria, limit)
         return CoverageSearchResults(span_dict, self.search_criteria, viewable_parameters=self.viewable_parameters,
                                      order_by=self.order_by)
 
     @staticmethod
-    def find(uid, persistence_dir, db_name=None, limit=-1):
+    def find(coverage_id, persistence_dir, db_name=None, limit=-1):
         db = DBFactory.get_db(db_name)
-        rows = db.get(uid)
+        rows = db.get(coverage_id)
         if len(rows) > 1:
             return AbstractCoverage.load(persistence_dir, persistence_guid=coverage_id, mode='r')
         return None
 
 
-class ResultsCursor(object):
-    def __init__(self, cursor):
-        self.cursor = cursor
-
-    def get_results(self, number=None):
-        found_rows = {}
-        if number is None:
-            found_rows = self.cursor.fetchall()
-        elif number == 1:
-            found_rows = self.cursor.fetchone()
-        else:
-            found_rows = self.cursor.fetchmany(number)
-
-        for row in found_rows:
-            coverage_id, span_address = row
-            if coverage_id not in results.keys():
-                results[coverage_id] = []
-            results[coverage_id].append(span_address)
-        return results
+# class ResultsCursor(object):
+#     def __init__(self, cursor):
+#         self.cursor = cursor
+#
+#     def get_results(self, number=None):
+#         found_rows = {}
+#         if number is None:
+#             found_rows = self.cursor.fetchall()
+#         elif number == 1:
+#             found_rows = self.cursor.fetchone()
+#         else:
+#             found_rows = self.cursor.fetchmany(number)
+#
+#         for row in found_rows:
+#             coverage_id, span_address = row
+#             if coverage_id not in results.keys():
+#                 results[coverage_id] = []
+#             results[coverage_id].append(span_address)
+#         return results
 
 
 class CoverageSearchResults(object):
@@ -132,18 +135,14 @@ class SearchCoverage(object):
         self._extract_parameter_data()
 
     def _extract_parameter_data(self):
-        observation_list = []
-        for span_address in self.spans:
-            span_address = AddressFactory.from_db_str(span_address)
-            span = self._cov._persistence_layer.master_manager.span_collection.get_span(span_address)
+        for span in self._cov.get_spans(self.spans):
             intersection = None
             span_np_dict = {}
-            for param_name in span.params.keys():
-                val = self._cov._range_value[param_name]._storage
-                span_np_dict[param_name] = val.get_brick_slice(span_address.brick_id)
+            for param_name in span.param_dict.keys():
+                span_np_dict[param_name] = span.param_dict[param_name].get_data()
 
                 for param in self.view_criteria.criteria.values():
-                    if param.param_name in span.params and param.param_name == param_name:
+                    if param.param_name in span.param_dict and param.param_name == param_name:
                         indexes = np.argwhere( (span_np_dict[param_name]>=param.value[0]) &
                                                (span_np_dict[param_name]<=param.value[1]) )
                         if len(indexes.shape) > 1:
@@ -158,8 +157,6 @@ class SearchCoverage(object):
                 else:
                     self.np_array_dict[param_name] = np_array[intersection]
 
-        dtype = []
-        npas = []
         self.data_size = None
         for key, val in self.np_array_dict.iteritems():
             if self.data_size is None:
