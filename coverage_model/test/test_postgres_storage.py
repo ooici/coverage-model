@@ -818,6 +818,21 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         retval = cov.get_parameter_values(['sum']).get_data()['sum']
         np.testing.assert_allclose(retval, np.arange(10) + 2)
 
+    def test_text_type(self):
+        text_ctx = ParameterContext('raw', param_type=TextType())
+        cov = _make_cov(self.working_dir, [text_ctx], nt=0)
+        data_dict = {
+            'time' : NumpyParameterData('time', np.array([1,2])),
+            'raw' : NumpyParameterData('raw', np.array(['first', 'second']))
+        }
+
+        cov.set_parameter_values(data_dict)
+
+        retval = cov.get_parameter_values().get_data()
+        np.testing.assert_allclose(retval['raw'],np.array(['first', 'second']) )
+
+
+
     @unittest.skip('Skip for now.  Needs to be fixed.')
     def test_calibrations(self):
         FILLIN = None
