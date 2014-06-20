@@ -8,6 +8,7 @@
 """
 
 import numpy as np
+from coverage_model.util.numpy_utils import sort_flat_arrays
 
 
 def make_parameter_data_dict(data_dict):
@@ -66,18 +67,21 @@ class NumpyDictParameterData(ParameterData):
         if not isinstance(alignment_array, np.ndarray):
             raise TypeError("alignment_array must implement type %s, found %s" % (np.ndarray.__name__, type(alignment_array)))
         self.size = alignment_array.size
-        from coverage_model.util.numpy_utils import sort_flat_arrays
         data = param_dict
-        if alignment_key is not None:
-            data = sort_flat_arrays(param_dict, alignment_key)
-
         super(NumpyDictParameterData, self).__init__('none', data)
+
+        self.sort_data_by_parameter(alignment_key)
+
         self.is_record_array = False
         if as_rec_array:
             self.convert_to_record_array()
 
         self.alignment_key = alignment_key
         self.param_context_dict = param_context_dict
+
+    def sort_data_by_parameter(self, sort_parameter):
+        if sort_parameter is not None:
+            self._data = sort_flat_arrays(self._data, sort_parameter)
 
     def convert_to_record_array(self):
         if not self.is_record_array:
