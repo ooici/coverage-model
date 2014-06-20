@@ -308,7 +308,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         if len(np_dict) == 0:
             dt = np.dtype(self.parameter_metadata[self.alignment_parameter].parameter_context.param_type.value_encoding)
             np_dict = {self.alignment_parameter: np.empty(0, dtype=dt)}
-        rec_arr = self._convert_to_numpy_dict_parameter(np_dict, as_rec_array=create_record_array)
+        rec_arr = self._convert_to_numpy_dict_parameter(np_dict, sort_parameter=sort_parameter, as_rec_array=create_record_array)
         return np_dict, function_params, rec_arr
 
     def _create_param_dict_from_spans_dict(self, params, span_dict):
@@ -361,7 +361,10 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             if key in param_context_dict:
                 param_context_dict[key] = self.value_list[key]
 
-        ndpd = NumpyDictParameterData(np_dict, alignment_key=self.alignment_parameter, param_context_dict=param_context_dict, as_rec_array=as_rec_array)
+        if sort_parameter is None:
+            sort_parameter = self.alignment_parameter
+
+        ndpd = NumpyDictParameterData(np_dict, alignment_key=sort_parameter, param_context_dict=param_context_dict, as_rec_array=as_rec_array)
 
         return ndpd
 

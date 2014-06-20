@@ -699,7 +699,7 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         cov = _make_cov(self.working_dir, ['quantity', lon, lat], nt=0)
         import time
         ntp_now = time.time() + 2208988800
-        
+
         data_dict = {
 
             #'quality_flag' : NumpyParameterData('quality_flag', np.array([None]), np.array([ntp_now])),
@@ -845,9 +845,9 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
             ParameterContext('condwat_l1b_pd',
                              param_type=ParameterFunctionType(PythonFunction(name='polyval_calibration',
                                      param_map={
-                                         'coefficients':'condwat_l1b_pd_cals', 
+                                         'coefficients':'condwat_l1b_pd_cals',
                                          'x' : 'conductivity'
-                                     }, 
+                                     },
                                      **functions['polyval_calibration'])),
                              uom='Sm-1'),
             ParameterContext('condwat_l1b_start',
@@ -859,9 +859,9 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
             ParameterContext('condwat_l1b_pr',
                              param_type=ParameterFunctionType(PythonFunction(name='polyval_calibration',
                                      param_map={
-                                         'coefficients':'condwat_l1b_pr_cals', 
+                                         'coefficients':'condwat_l1b_pr_cals',
                                          'x' : 'conductivity'
-                                     }, 
+                                     },
                                      **functions['polyval_calibration'])),
                              uom='Sm-1'),
             ParameterContext('condwat_l1b_end',
@@ -875,7 +875,7 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
                                          'range1' : 'condwat_l1b_pr',
                                          'starts' : 'condwat_l1b_start',
                                          'ends' : 'condwat_l1b_end'
-                                     }, 
+                                     },
                                      **functions['secondary_interpolation'])),
                              uom='Sm-1')
         ]
@@ -926,8 +926,91 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         calibrated = data['condwat_l1b_pr']
         np.testing.assert_allclose(calibrated, cond * 1.2 + 2.0)
 
-        
+
         data = cov.get_parameter_values(['conductivity', 'condwat_l1b_interp'], fill_empty_params=True, as_record_array=False).get_data()
+
+    def test_order_by_ingest(self):
+        data_ctx = ParameterContext('data', param_type=RecordType())
+        cov = _make_cov(self.working_dir, ['ingestion_timestamp',data_ctx], nt=0)
+        data = [
+            [3612185233.2, 1403196433.83, '\r\x00\n'],
+            [3612185233.21, 1403196433.89, '\r\nS>'],
+            [3612185234.14, 1403196434.84, 'd\x00s\x00\r\x00\n'],
+            [3612185234.15, 1403196434.9, 'SBE37-SMP V 2.6 SERIAL NO. 2165   19 Jun 2014  16:47:14\r\nnot logging: received stop command\r\nsample interval = 489 seconds\r\nsamplenumber = 0, free = 200000\r\ntransmit real-time data\r\ndo not output salinity with each sample\r\ndo not output sound velocity with each sample\r\ndo not store time with each sample\r\nnumber of samples to average = 0\r\nreference pressure = 0.0 db\r\nserial sync mode disabled\r\nwait time after serial sync sampling = 0 seconds\r\ninternal pump is installed\r\ntemperature = 7.54 deg C\r\nWARNING: LOW BATTERY VOLTAGE!!\r\n\r\nS>'],
+            [3612185234.23, 1403196435.14, '\r\x00\n'],
+            [3612185234.24, 1403196435.18, '\r\nS>'],
+            [3612185235.23, 1403196435.89, 'I\x00N\x00T\x00E\x00R\x00V\x00A\x00L\x00=\x001\x00\r\x00\n'],
+            [3612185235.24, 1403196435.95, '\r\nS>'],
+            [3612185235.36, 1403196436.43, '\r\x00\n'],
+            [3612185235.37, 1403196436.47, '\r\nS>'],
+            [3612185236.36, 1403196436.97, 'd\x00s\x00\r\x00\n'],
+            [3612185236.37, 1403196437.01, 'SBE37-SMP V 2.6 SERIAL NO. 2165   19 Jun 2014  16:47:16\r\nnot logging: received stop command\r\nsample interval = 1 seconds\r\nsamplenumber = 0, free = 200000\r\ntransmit real-time data\r\ndo not output salinity with each sample\r\ndo not output sound velocity with each sample\r\ndo not store time with each sample\r\nnumber of samples to average = 0\r\nreference pressure = 0.0 db\r\nserial sync mode disabled\r\nwait time after serial sync sampling = 0 seconds\r\ninternal pump is installed\r\ntemperature = 7.54 deg C\r\nWARNING: LOW BATTERY VOLTAGE!!\r\n\r\nS>'],
+            [3612185237.69, 1403196437.5, '\r\x00\n'],
+            [3612185237.73, 1403196437.54, '\r\nS>'],
+            [3612185238.67, 1403196438.53, 'd\x00c\x00\r\x00\n'],
+            [3612185238.71, 1403196438.6, 'SBE37-SM V 2.6b  3464\r\ntemperature:  08-nov-05\r\n    TA0 = -2.572242e-04\r\n    TA1 = 3.138936e-04\r\n    TA2 = -9.717158e-06\r\n    TA3 = 2.138735e-07\r\nconductivity:  08-nov-05\r\n    G = -9.870930e-01\r\n    H = 1.417895e-01\r\n    I = 1.334915e-04\r\n    J = 3.339261e-05\r\n    CPCOR = 9.570000e-08\r\n    CTCOR = 3.250000e-06\r\n    WBOTC = 1.202400e-05\r\npressure S/N 4955, range = 10778.3700826 psia:  12-aug-05\r\n    PA0 = 5.916199e+00\r\n    PA1 = 4.851819e-01\r\n    PA2 = 4.596432e-07\r\n    PTCA0 = 2.762492e+02\r\n    PTCA1 = 6.603433e-01\r\n    PTCA2 = 5.756490e-03\r\n    PTCSB0 = 2.461450e+01\r\n    PTCSB1 = -9.000000e-04\r\n    PTCSB2 = 0.000000e+00\r\n    POFFSET = 0.000000e+00\r\nrtc:  08-nov-05\r\n    RTCA0 = 9.999862e-01\r\n    RTCA1 = 1.686132e-06\r\n    RTCA2 = -3.022745e-08\r\n\r\nS>'],
+            [3612185239.34, 1403196440.1, '\r\x00\n'],
+            [3612185239.34, 1403196440.14, '\r\nS>'],
+            [3612185240.33, 1403196441.13, 't\x00s\x00\r\x00\n'],
+            [3612185240.34, 1403196441.25, '\r\n13.5705,9.96891, 563.855,   16.7048, 1506.486, %s\r\n\r\nS>'],
+            [3612185241.17, 1403196441.68, '\r\x00\n'],
+            [3612185241.17, 1403196441.72, '\r\nS>'],
+            [3612185242.17, 1403196442.71, 't\x00s\x00\r\x00\n'],
+            [3612185242.17, 1403196442.8, '\r\n78.4297,94.67386, 705.741,   7.7154, 1506.692, %s\r\n\r\nS>'],
+            [3612185242.38, 1403196443.26, '\r\x00\n'],
+            [3612185242.39, 1403196443.31, '\r\nS>'],
+            [3612185243.39, 1403196444.29, 't\x00s\x00\r\x00\n'],
+            [3612185243.39, 1403196444.38, '\r\n-0.7999,99.38759, 174.620,   1.9935, 1506.788, %s\r\n\r\nS>'],
+            [3612185244.22, 1403196444.84, '\r\x00\n'],
+            [3612185244.22, 1403196444.88, '\r\nS>'],
+            [3612185245.21, 1403196445.87, 't\x00s\x00\r\x00\n'],
+            [3612185245.22, 1403196445.97, '\r\n79.0312,49.82681, 937.259,   14.3514, 1506.451, %s\r\n\r\nS>'],
+            [3612185246.49, 1403196446.42, '\r\x00\n'],
+            [3612185246.54, 1403196446.46, '\r\nS>'],
+            [3612185247.48, 1403196447.45, 't\x00s\x00\r\x00\n'], # For some reason THIS ONE winds up out of order
+            [3612185247.54, 1403196447.55, '\r\n19.0626,36.04380, 561.725,   1.8966, 1506.278, %s\r\n\r\nS>'], # This one too!
+            [3612185247.31, 1403196447.99, '\r\x00\n'],
+            [3612185247.31, 1403196448.04, '\r\nS>'],
+            [3612185248.31, 1403196449.02, 't\x00s\x00\r\x00\n'],
+            [3612185248.31, 1403196449.12, '\r\n93.5314,38.22850, 244.773,   4.6265, 1506.445, %s\r\n\r\nS>'],
+            [3612185249.97, 1403196449.57, '\r\x00\n'],
+            [3612185249.1, 1403196449.62, '\r\nS>'],
+            [3612185250.98, 1403196450.61, 't\x00s\x00\r\x00\n'],
+            [3612185250.1, 1403196450.7, '\r\n54.6971,0.73575, 615.201,   15.2357, 1506.851, %s\r\n\r\nS>'],
+            [3612185250.35, 1403196451.16, '\r\x00\n'],
+            [3612185250.36, 1403196451.2, '\r\nS>'],
+            [3612185251.36, 1403196452.19, 't\x00s\x00\r\x00\n'],
+            [3612185251.36, 1403196452.28, '\r\n77.1542,83.33314, 514.924,   2.5421, 1506.993, %s\r\n\r\nS>'],
+            [3612185252.19, 1403196452.74, '\r\x00\n'],
+            [3612185252.19, 1403196452.78, '\r\nS>'],
+            [3612185253.19, 1403196453.77, 't\x00s\x00\r\x00\n'],
+            [3612185253.19, 1403196453.86, '\r\n-0.8058,0.90317, 422.635,   3.5081, 1505.670, %s\r\n\r\nS>'],
+            [3612185253.41, 1403196454.31, '\r\x00\n'],
+            [3612185253.41, 1403196454.36, '\r\nS>'],
+            [3612185254.4, 1403196455.34, 't\x00s\x00\r\x00\n'],
+            [3612185254.41, 1403196455.43, '\r\n13.6863,36.22584, 470.093,   15.1094, 1506.268, %s\r\n\r\nS>']
+        ]
+
+        for granule in data:
+            timestamp, ingestion_timestamp, raw_data = granule
+            cov.set_parameter_values({
+                'time' : NumpyParameterData('time', np.atleast_1d(timestamp)),
+                'ingestion_timestamp' : NumpyParameterData('ingestion_timestamp', np.atleast_1d(ingestion_timestamp)),
+                'data' : NumpyParameterData('data', np.atleast_1d(raw_data))
+            })
+
+        return_values = cov.get_parameter_values(sort_parameter='ingestion_timestamp').get_data()
+        sorted_values = np.sort(return_values['ingestion_timestamp'])
+
+        for x in range(len(return_values['ingestion_timestamp'])):
+            if sorted_values[x] != return_values['ingestion_timestamp'][x]:
+                print ''
+                print "Differ at index %i" % x
+                print return_values['ingestion_timestamp'][x-1], sorted_values[x-1]
+                print return_values['ingestion_timestamp'][x], sorted_values[x]
+                print return_values['ingestion_timestamp'][x+1], sorted_values[x+1]
+        np.testing.assert_array_equal(sorted_values, return_values['ingestion_timestamp'])
+
 
 def identity(x):
     return np.copy(x)*3
