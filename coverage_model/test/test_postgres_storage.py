@@ -785,6 +785,32 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         return_dict = cov.get_parameter_values(as_record_array=False).get_data()
         np.testing.assert_array_equal(data, return_dict['array_type'])
 
+    def test_array_multiset(self):
+        array_type = ParameterContext('array_type', param_type=ArrayType(inner_encoding='float32'))
+        cov = _make_cov(self.working_dir, [array_type], nt=0)
+
+
+        cov.set_parameter_values({
+            'time' : NumpyParameterData('time', np.array([0])),
+            'array_type' : NumpyParameterData('array_type', np.array([[1,2,3,4,5]], dtype=np.float32))
+        })
+
+        data = cov.get_parameter_values(as_record_array=False, fill_empty_params=True).get_data()
+
+
+        cov.set_parameter_values({
+            'time' : NumpyParameterData('time', np.array([1,2,3])),
+            'array_type' : NumpyParameterData('array_type', np.array([[2, 2, 2, 2, 2], [3,3,3,3,3], [4,4,4,4,4]], dtype=np.float32))
+        })
+
+        data = cov.get_parameter_values(as_record_array=False, fill_empty_params=True).get_data()
+        np.testing.assert_allclose(data['array_type'],
+                np.array([[1,2,3,4,5],
+                          [2,2,2,2,2],
+                          [3,3,3,3,3],
+                          [4,4,4,4,4]], dtype=np.float32))
+
+
     def test_pfs(self):
         pf_example = PythonFunction(name='identity',
                                     owner='coverage_model.test.test_postgres_storage',
