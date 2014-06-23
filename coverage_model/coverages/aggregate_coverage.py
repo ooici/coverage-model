@@ -207,6 +207,7 @@ class AggregateCoverage(AbstractCoverage):
     def _merge_value_dicts(self, value_dicts, override_temporal_key=None, stride_length=None):
         total_size = 0
         dtype_map = {}
+        dict_by_param_name = {}
         for param_dict, coverage in value_dicts:
             skip_coverage = False
             temporal_key = coverage.temporal_parameter_name
@@ -214,7 +215,7 @@ class AggregateCoverage(AbstractCoverage):
                 temporal_key = override_temporal_key
             cov_dict_size = param_dict[temporal_key].size
             for key, np_arr in param_dict.iteritems():
-                if np_arr.size != cov_dict_size:
+                if np_arr.shape[0] != cov_dict_size:
                     log.error("Internal coverage parameter dictionaries don't align! Skipping coverage")
                     skip_coverage = True
                     break
@@ -225,26 +226,41 @@ class AggregateCoverage(AbstractCoverage):
                         dtype_map[key] = np.dtype('object')
             if not skip_coverage:
                 total_size += cov_dict_size
+                for param_name, np_arr in param_dict.iteritems():
+                    if param_name not in dict_by_param_name:
+                        dict_by_param_name[param_name] = []
+                    dict_by_param_name[param_name].append(np_arr)
 
         return_dict = {}
-        for key, dt in dtype_map.iteritems():
-            arr = np.empty(total_size, dtype=dt)
-            arr[:] = None
-            return_dict[key] = arr
-
-        current_index = 0
-        for param_dict, coverage in value_dicts:
-            if isinstance(coverage, SimplexCoverage):
-                temporal_key = coverage.temporal_parameter_name
-                if override_temporal_key is not None:
-                    temporal_key = override_temporal_key
-                size = param_dict[temporal_key].size
-                for key in dtype_map.keys():
-                    if key in param_dict:
-                        return_dict[key][current_index:current_index+size] = param_dict[key]
-                    elif key in coverage.list_parameters():
-                        return_dict[key][current_index:current_index+size] = coverage.get_parameter_context(key).param_type.fill_value
-                current_index += size
+        for param_name, arr_list in dict_by_param_name.iteritems():
+            if param_name not in self.list_parameters():
+                arr = np.empty(total_size, dtype=dtype_map[param_name])
+                current_pos = 0
+                for a in arr_list:
+                    size = a.size
+                    arr[current_pos:current_pos+size] = a[:]
+                    current_pos += size
+                return_dict[param_name] = arr
+            else:
+                return_dict[param_name] = self.get_parameter_context(param_name).param_type.create_merged_value_array(arr_list)
+        # for key, dt in dtype_map.iteritems():
+        #     arr = np.empty(total_size, dtype=dt)
+        #     arr[:] = None
+        #     return_dict[key] = arr
+        #
+        # current_index = 0
+        # for param_dict, coverage in value_dicts:
+        #     if isinstance(coverage, SimplexCoverage):
+        #         temporal_key = coverage.temporal_parameter_name
+        #         if override_temporal_key is not None:
+        #             temporal_key = override_temporal_key
+        #         size = param_dict[temporal_key].size
+        #         for key in dtype_map.keys():
+        #             if key in param_dict:
+        #                 return_dict[key][current_index:current_index+size] = param_dict[key]
+        #             elif key in coverage.list_parameters():
+        #                 return_dict[key][current_index:current_index+size] = coverage.get_parameter_context(key).param_type.fill_value
+        #         current_index += size
 
         if stride_length is not None:
             for k,v in return_dict.iteritems():

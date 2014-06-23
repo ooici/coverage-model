@@ -441,17 +441,26 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             #     np_data = span_data[span_name].get_data()
             #     param_outer_dimmension = np_data.shape[0]
 
+            npa_list = []
             for span_name in span_order:
                 if span_name not in span_data:
-                    insert_index += span_size_dict[span_name]
+                    npa = self.parameter_metadata[id].parameter_context.param_type.create_filled_array(span_size_dict[span_name])
+                    npa_list.append(npa)
                     continue
-                np_data = span_data[span_name].get_data()
-                if npa is None:
-                    npa = self.parameter_metadata[id].parameter_context.param_type.create_filled_array(shape_outer_dimmension)
-                end_idx = insert_index + np_data.size
-                npa[insert_index:end_idx] = np_data
-                insert_index += np_data.size
-            return_dict[id] = npa
+                else:
+                    npa_list.append(span_data[span_name].get_data())
+            return_dict[id] = self.parameter_metadata[id].parameter_context.param_type.create_merged_value_array(npa_list)
+            # for span_name in span_order:
+            #     if span_name not in span_data:
+            #         insert_index += span_size_dict[span_name]
+            #         continue
+            #     np_data = span_data[span_name].get_data()
+            #     if npa is None:
+            #         npa = self.parameter_metadata[id].parameter_context.param_type.create_filled_array(shape_outer_dimmension)
+            #     end_idx = insert_index + np_data.size
+            #     npa[insert_index:end_idx] = np_data
+            #     insert_index += np_data.size
+            # return_dict[id] = npa
                 # span_order.append((id, np_data.size))
                 # arr[insert_index:np_data.size+insert_index] = np_data
 

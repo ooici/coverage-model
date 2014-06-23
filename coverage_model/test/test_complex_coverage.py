@@ -1003,6 +1003,69 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         np.testing.assert_allclose(data['data_all'], np.arange(102,109))
         np.testing.assert_allclose(data['data_a'], np.arange(52,59))
 
+    def test_array_coverages(self):
+        # Complex coverages are read only
+        array_stuff = ParameterContext('array_stuff', param_type=ArrayType(inner_encoding='int32', inner_fill_value=-9999))
+        ccov = ComplexCoverage(self.working_dir, create_guid(), 'sample temporal aggregation coverage',
+                                   parameter_dictionary=_make_param_dict([array_stuff]),
+                                   reference_coverage_locs=[],
+                                   reference_coverage_extents=self.get_extents([]),
+                                   complex_type=ComplexCoverageType.TEMPORAL_AGGREGATION)
+
+        data_dict = {
+            'time': NumpyParameterData('time', np.arange(10))
+        }
+
+        self.assertRaises(NotImplementedError, ccov.set_parameter_values, data_dict)
+
+        # A Complex Coverage has it's own parameter dictionary
+        for param_name in ['array_stuff']:
+            pc = ccov.get_parameter_context(param_name)
+            self.assertIsInstance(pc, ParameterContext)
+
+        # A Complex Coverage comprises windows of other datasets
+        arr2 = ParameterContext('array_stuff', param_type=ArrayType(inner_encoding='int32', inner_length=2))
+        cov2_pth = _make_cov(self.working_dir, [arr2], nt=0)
+        cov2 = AbstractCoverage.load(cov2_pth)
+        cov2_id = cov2.persistence_guid
+        self.assertEqual(cov2.num_timesteps(), 0)
+        cov2.close()
+
+        arr4 = ParameterContext('array_stuff', param_type=ArrayType(inner_encoding='int32', inner_length=4))
+        cov4_pth = _make_cov(self.working_dir, [arr4], nt=0)
+        cov4 = AbstractCoverage.load(cov4_pth)
+        cov4_id = cov4.persistence_guid
+        self.assertEqual(cov4.num_timesteps(), 0)
+        cov4.close()
+        # Should raise without a window
+        self.assertRaises(ValueError, ccov.append_reference_coverage, cov2_pth)
+
+        # Append the first window of a dataset, that window doesn't encompass the entire first dataset
+        ccov.append_reference_coverage(cov2_pth, ReferenceCoverageExtents('first-deployment', cov2_id, time_extents=(0,4)))
+        ccov.append_reference_coverage(cov4_pth, ReferenceCoverageExtents('second-deployment', cov4_id, time_extents=(6,8)))
+
+        # Make sure we can get the data (should be empty)
+        data = ccov.get_parameter_values(fill_empty_params=True, as_record_array=False).get_data()
+        np.testing.assert_allclose(data['time'], np.array([]))
+        np.testing.assert_allclose(data['array_stuff'], np.array([]))
+
+        ccov.refresh()
+
+        array = np.arange(20, dtype='int32')
+        array2 = array.reshape((10,2))
+        array4 = array.reshape((5,4))
+        cov2 = AbstractCoverage.load(cov2_pth, mode='a')
+        cov2.set_parameter_values({'time': np.arange(10), 'array_stuff': array2})
+        cov4 = AbstractCoverage.load(cov4_pth, mode='a')
+        cov4.set_parameter_values({'time': np.arange(5,10), 'array_stuff': array4})
+
+        ccov.refresh()
+        # Get the data and make sure we can see values 2-8
+        data = ccov.get_parameter_values(fill_empty_params=True, as_record_array=False).get_data()
+        np.testing.assert_allclose(data['time'], np.array([0,1,2,3,4,6,7,8], dtype='int32'))
+        expected_array_stuff = np.array( [ [0,1,-9999,-9999], [2,3,-9999,-9999], [4,5,-9999,-9999], [6,7,-9999,-9999], [8,9,-9999,-9999], [4,5,6,7], [8,9,10,11], [12,13,14,15]], dtype='int32')
+        np.testing.assert_allclose(data['array_stuff'], expected_array_stuff)
+
 
 def create_all_params():
     '''
