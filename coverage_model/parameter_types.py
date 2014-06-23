@@ -256,6 +256,18 @@ class AbstractParameterType(AbstractIdentifiable):
         else:
             raise RuntimeError('Not enough information to create array')
 
+    def create_merged_value_array(self, data):
+        total_outer_size = 0
+        for arr in data:
+            total_outer_size += arr.shape[0]
+        merged_array = self.create_filled_array(total_outer_size)
+        current_pos = 0
+        for arr in data:
+            sz = arr.shape[0]
+            merged_array[current_pos:current_pos+sz] = arr
+            current_pos += sz
+        return merged_array
+
     def validate_value_set(self, value_set):
         return False
 
@@ -916,15 +928,20 @@ class ArrayType(AbstractComplexParameterType):
         if self.inner_length is not None:
             self._fill_value = list([self.inner_fill_value for x in range(self.inner_length)])
 
-    def create_filled_array(self, size):
-        if self.inner_length is None:
+    def create_filled_array(self, size, inner_length=None):
+        fill_value = self.fill_value
+        if self.inner_length is None and inner_length is None:
             raise RuntimeError("Cannot create array until inner length has been set")
-        if self.inner_length == 1:
+        if inner_length is not None:
+            fill_value = list([self.inner_fill_value for x in range(inner_length)])
+        if inner_length is None and self.inner_length is not None:
+            inner_length = self.inner_length
+        if inner_length == 1:
             arr = np.empty(size, dtype=np.dtype(self.value_encoding))
-            arr[:] = self.fill_value[0]
+            arr[:] = fill_value[0]
         else:
-            arr = np.empty((size,self.inner_length), dtype=np.dtype(self.value_encoding))
-            arr[:] = self.fill_value
+            arr = np.empty((size, inner_length), dtype=np.dtype(self.value_encoding))
+            arr[:] = fill_value
         return arr
 
     def create_data_array(self, data=None, size=None):
@@ -950,6 +967,29 @@ class ArrayType(AbstractComplexParameterType):
 
     def create_value_array(self, data=None, size=None):
         return self.create_data_array(data, size)
+
+    def create_merged_value_array(self, data):
+        total_outer_size = 0
+        max_inner_size = 1
+        for arr in data:
+            total_outer_size += arr.shape[0]
+            if len(arr.shape) > 1 and arr.shape[1] > max_inner_size:
+                max_inner_size = arr.shape[1]
+        merged_array = self.create_filled_array(total_outer_size, inner_length=max_inner_size)
+        current_pos = 0
+        for arr in data:
+            outer_len = arr.shape[0]
+            inner_len = 1
+            if len(arr.shape) > 1:
+                inner_len = arr.shape[1]
+            if inner_len == max_inner_size:
+                merged_array[current_pos:current_pos+outer_len] = arr[:]
+            elif inner_len < max_inner_size:
+                merged_array[current_pos:current_pos+outer_len, 0:inner_len] = arr[:]
+            else:
+                raise IndexError('Inner array is larger than expected.  Found size %i.  Expected %i' % (inner_len, max_inner_size))
+            current_pos += outer_len
+        return merged_array
 
     def validate_value_set(self, value_set):
         if not isinstance(value_set, np.ndarray):
