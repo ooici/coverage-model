@@ -23,6 +23,7 @@ from coverage_model.data_span import Span
 from coverage_model.storage.span_storage_factory import SpanStorageFactory
 from coverage_model.persistence import SimplePersistenceLayer
 from coverage_model.parameter_types import QuantityType
+from coverage_model.util.numpy_utils import NumpyUtils
 
 
 class PostgresPersistenceLayer(SimplePersistenceLayer):
@@ -244,9 +245,17 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         all_values_constant_over_time = True
         import time
         write_time = time.time()
+        bad_keys = []
         for key, arr in values.iteritems():
             if key not in self.value_list:
                 raise KeyError("Parameter, %s, has not been initialized" % (key))
+
+            param_type = self.parameter_metadata[key].parameter_context.param_type
+            from coverage_model.parameter_types import ParameterFunctionType
+            if isinstance(param_type, ParameterFunctionType):
+                bad_keys.append(key)
+                continue #TODO: throw error instead
+
             if isinstance(arr, np.ndarray):
                 arr = NumpyParameterData(key, arr)
                 values[key] = arr
@@ -266,6 +275,9 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                 raise ValueError("Array size for %s is inconsistent.  Expected %s elements, found %s." % (key, str(arr_len), str(arr.get_data().size)))
             min_val, max_val = self.value_list[key].get_statistics(arr)
             self.update_parameter_bounds(key, (min_val, max_val))
+
+        for key in bad_keys:
+            values.pop(key)
 
         if not all_values_constant_over_time and self.alignment_parameter not in values:
             raise LookupError("Array must be supplied for parameter, %s, to ensure alignment" % self.alignment_parameter)
@@ -287,15 +299,15 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             function_params.update(functions)
         return rec_arr
 
-    def get_data_products(self, params, time_range=None, time=None, sort_parameter=None, create_record_array=True, stride_length=None, fill_empty_params=False):
+    def get_data_products(self, params, time_range=None, time=None, sort_parameter=None, create_record_array=True, stride_length=None, fill_empty_params=False, fill_indexes=False):
         if self.alignment_parameter not in params:
             params.append(self.alignment_parameter)
 
         associated_spans = self._get_span_dict(params, time_range, time)
         numpy_params, function_params = self._create_param_dict_from_spans_dict(params, associated_spans)
         dict_params = None
-        np_dict = self._create_parameter_dictionary_of_numpy_arrays(numpy_params, function_params, params=dict_params)
-        np_dict = self._append_parameter_fuction_data(params, np_dict)
+        np_dict, fill_dict = self._create_parameter_dictionary_of_numpy_arrays(numpy_params, function_params, params=dict_params, fill_indexes=fill_indexes)
+        np_dict, fill_dict = self._append_parameter_fuction_data(params, np_dict, fill_dict)
         if fill_empty_params is True:
             np_dict = self._fill_empty_params(params, np_dict)
         rec_arr = None
@@ -394,7 +406,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                 return_dict[key] = np.array([val[idx]], dtype=val.dtype)
         return return_dict
 
-    def _append_parameter_fuction_data(self, params, param_dict, time_segment=None, time=None):
+    def _append_parameter_fuction_data(self, params, param_dict, fill_dict, time_segment=None, time=None):
         if time is not None and time_segment is None:
             time_segment = (time,time)
         for param in list(set(params)-set(param_dict.keys())):
@@ -402,13 +414,17 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                 param_type = self.parameter_metadata[param].parameter_context.param_type
                 from coverage_model.parameter_types import ParameterFunctionType
                 if isinstance(param_type, ParameterFunctionType):
-                    data = param_type.function.evaluate(param_type.callback, time_segment, time)
+                    from coverage_model.parameter_functions import ExternalFunction
+                    if isinstance(param_type.function, ExternalFunction):
+                        data = param_type.function.evaluate(param_type.callback, self.master_manager.root_dir, time_segment, time)
+                    else:
+                        data = param_type.function.evaluate(param_type.callback, time_segment, time)
                     param_dict[param] = data
-        return param_dict
+        return param_dict, fill_dict
 
-    def _create_parameter_dictionary_of_numpy_arrays(self, numpy_params, function_params=None, params=None):
+    def _create_parameter_dictionary_of_numpy_arrays(self, numpy_params, function_params=None, params=None, fill_indexes=False):
         return_dict = {}
-        arr_size = -1
+        mask_dict = {}
         shape_outer_dimmension = 0
         span_order = []
         span_size_dict = {}
@@ -422,6 +438,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             t_dict = numpy_params[self.alignment_parameter]
         dt = np.dtype(self.parameter_metadata[self.alignment_parameter].parameter_context.param_type.value_encoding)
         arr = np.empty(shape_outer_dimmension, dtype=dt)
+
         insert_index = 0
         for span_id in span_order:
             np_data = t_dict[span_id].get_data()
@@ -429,48 +446,34 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             arr[insert_index:end_idx] = np_data
             insert_index += np_data.size
         return_dict[self.alignment_parameter] = arr
+        mask_dict[self.alignment_parameter] = NumpyUtils.create_filled_array(arr.shape[0], True, dtype=np.bool)
 
         for id, span_data in numpy_params.iteritems():
             if id == self.alignment_parameter:
                 continue
-            npa = None
-            insert_index = 0
-            # param_outer_dimmension = 0;
-            # param_inner_dimmension = 0;
-            # for span_name in span_order:
-            #     np_data = span_data[span_name].get_data()
-            #     param_outer_dimmension = np_data.shape[0]
-
             npa_list = []
+            mask_list = []
             for span_name in span_order:
                 if span_name not in span_data:
                     npa = self.parameter_metadata[id].parameter_context.param_type.create_filled_array(span_size_dict[span_name])
                     npa_list.append(npa)
+                    mask_list.append(NumpyUtils.create_filled_array(npa.shape[0], False, dtype=np.bool))
                     continue
                 else:
-                    npa_list.append(span_data[span_name].get_data())
+                    this_data = span_data[span_name].get_data()
+                    npa_list.append(this_data)
+                    mask_list.append(NumpyUtils.create_filled_array(this_data.shape[0], True, dtype=np.bool))
             return_dict[id] = self.parameter_metadata[id].parameter_context.param_type.create_merged_value_array(npa_list)
-            # for span_name in span_order:
-            #     if span_name not in span_data:
-            #         insert_index += span_size_dict[span_name]
-            #         continue
-            #     np_data = span_data[span_name].get_data()
-            #     if npa is None:
-            #         npa = self.parameter_metadata[id].parameter_context.param_type.create_filled_array(shape_outer_dimmension)
-            #     end_idx = insert_index + np_data.size
-            #     npa[insert_index:end_idx] = np_data
-            #     insert_index += np_data.size
-            # return_dict[id] = npa
-                # span_order.append((id, np_data.size))
-                # arr[insert_index:np_data.size+insert_index] = np_data
+            mask_dict[id] = self.parameter_metadata[id].parameter_context.param_type.create_merged_value_array(mask_list)
 
         for param_name, param_dict in function_params.iteritems():
             arr = ConstantOverTime.merge_data_as_numpy_array(return_dict[self.alignment_parameter],
                                                              param_dict,
                                                              param_type=self.parameter_metadata[param_name].parameter_context.param_type)
             return_dict[param_name] = arr
+            mask_dict[param_name] = NumpyUtils.create_filled_array(arr.shape[0], False, dtype=np.bool)
 
-        return return_dict
+        return return_dict, mask_dict
 
     def _fill_empty_params(self, params, np_dict):
         filled_params = {}

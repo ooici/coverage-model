@@ -132,6 +132,14 @@ class AbstractCoverage(AbstractIdentifiable):
         return obj
 
     @classmethod
+    def resurrect(cls, persistence_guid, mode):
+        if not isinstance(persistence_guid, basestring):
+            raise ValueError('persistence_guid must be a string')
+
+        ccls = MetadataManagerFactory.get_coverage_class(None, persistence_guid)
+        return ccls(None, persistence_guid, mode=mode)
+
+    @classmethod
     def load(cls, root_dir, persistence_guid=None, mode=None):
         '''
         Loads a standard persisted instance of a Coverage Model
@@ -2128,8 +2136,10 @@ class SimplexCoverage(AbstractCoverage):
         AbstractCoverage.__init__(self, mode=mode)
         try:
             # Make sure root_dir and persistence_guid are both not None and are strings
-            if not isinstance(root_dir, basestring) or not isinstance(persistence_guid, basestring):
-                raise TypeError('\'root_dir\' and \'persistence_guid\' must be instances of basestring')
+            if root_dir is not None and not isinstance(root_dir, basestring):
+                raise TypeError('root_dir must be instance of basestring')
+            if not isinstance(persistence_guid, basestring):
+                raise TypeError('persistence_guid must be instance of basestring')
 
             root_dir = root_dir if not root_dir.endswith(persistence_guid) else os.path.split(root_dir)[0]
 

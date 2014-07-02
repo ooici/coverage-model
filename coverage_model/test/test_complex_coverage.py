@@ -19,6 +19,7 @@ import unittest
 from coverage_model import *
 from coverage_model.coverages.complex_coverage import ComplexCoverage
 from coverage_model.coverages.coverage_extents import ReferenceCoverageExtents, ExtentsDict
+from coverage_model.parameter_functions import ExternalFunction
 from coverage_model.hdf_utils import HDFLockingFile
 from coverage_test_base import CoverageIntTestBase, get_props
 
@@ -1065,6 +1066,27 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         np.testing.assert_allclose(data['time'], np.array([0,1,2,3,4,6,7,8], dtype='int32'))
         expected_array_stuff = np.array( [ [0,1,-9999,-9999], [2,3,-9999,-9999], [4,5,-9999,-9999], [6,7,-9999,-9999], [8,9,-9999,-9999], [4,5,6,7], [8,9,10,11], [12,13,14,15]], dtype='int32')
         np.testing.assert_allclose(data['array_stuff'], expected_array_stuff)
+
+
+    @attr('INT', group='cov')
+    def test_external_refs(self):
+
+        # Create a three param coverage
+        offset = NumexprFunction('offset', arg_list=['x'], expression='x + 1')
+        offset.param_map = {'x':'value_set'}
+        ctx = ParameterContext('offset', param_type=ParameterFunctionType(offset, value_encoding='<f4'))
+
+        cova_pth = _make_cov(self.working_dir, ['value_set', ctx], data_dict={'time':np.arange(10), 'value_set':np.arange(20,30)})
+        cova = SimplexCoverage.load(cova_pth, mode='r')
+
+
+        # Create another coverage that references the above
+        pfunc = ExternalFunction('example', cova.persistence_guid, 'value_set')
+        ctx = ParameterContext('example', param_type=ParameterFunctionType(pfunc, value_encoding='<f4'))
+        covb_pth = _make_cov(self.working_dir, [ctx], data_dict={'time':np.arange(0.5, 10.5, 1)})
+        cov = SimplexCoverage.load(covb_pth, mode='r')
+        # Assert that the values are correctly interpolated
+        np.testing.assert_array_equal(cov.get_parameter_values('example').get_data()['example'], np.arange(20.5, 30.5, 1))
 
 
 def create_all_params():

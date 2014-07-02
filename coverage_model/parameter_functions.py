@@ -11,10 +11,12 @@ from ooi.logging import log
 
 import numpy as np
 import numexpr as ne
+import os
 from numbers import Number
 from collections import OrderedDict
 from coverage_model.basic_types import AbstractBase
 from coverage_model.parameter_data import NumpyDictParameterData
+
 
 class ParameterFunctionException(Exception):
     def __init__(self, message, original_type=None):
@@ -143,7 +145,7 @@ class AbstractFunction(AbstractBase):
 
 
 class PythonFunction(AbstractFunction):
-    def __init__(self, name, owner, func_name, arg_list, kwarg_map=None, param_map=None, egg_uri=''):
+    def __init__(self, name, owner, func_name, arg_list, kwarg_map=None, param_map=None, egg_uri='', remove_fills=True):
         AbstractFunction.__init__(self, name, arg_list, param_map)
         self.owner = owner
         self.func_name = func_name
@@ -163,7 +165,6 @@ class PythonFunction(AbstractFunction):
                 self._callable = getattr(module, self.func_name)
             else:
                 raise
-
 
     def evaluate(self, pval_callback, time_segment, fill_value=-9999, stride_length=None):
         self._import_func()
@@ -241,7 +242,6 @@ class PythonFunction(AbstractFunction):
         raise IOError("Couldn't download the file at %s" % url)
 
 
-
 class NumexprFunction(AbstractFunction):
     def __init__(self, name, expression, arg_list, param_map=None):
         AbstractFunction.__init__(self, name, arg_list, param_map)
@@ -278,3 +278,43 @@ class NumexprFunction(AbstractFunction):
             ret = self.expression == other.expression
 
         return ret
+
+
+class ExternalFunction(AbstractFunction):
+    def __init__(self, name, external_guid, external_name):
+        self.external_name = external_name
+        param_map = {external_name : external_guid}
+        AbstractFunction.__init__(self, name, [], param_map)
+
+    def load_coverage(self, pdir):
+        from coverage_model.coverage import AbstractCoverage
+        root_path, guid = os.path.split(pdir)
+        external_guid = self.param_map[self.external_name]
+        path = os.path.join(root_path, external_guid)
+        # cov = AbstractCoverage.resurrect(external_guid, mode='r')
+        cov = AbstractCoverage.load(path, mode='r')
+        return cov
+
+    def evaluate(self, pval_callback, pdir, time_segment, fill_value=-9999):
+        return self.linear_map(pval_callback, pdir, time_segment)
+
+    def linear_map(self, pval_callback, pdir, time_segment):
+        cov = self.load_coverage(pdir)
+        # TODO: Might not want to hard-code time
+        x = pval_callback('time', time_segment).get_data()['time']
+        x_i = cov.get_parameter_values('time', time_segment=time_segment).get_data()['time']
+        y_i = cov.get_parameter_values(self.external_name, time_segment=time_segment).get_data()[self.external_name]
+
+
+        # Where in x_i does x fit in?
+        upper = np.searchsorted(x_i, x)
+        # Clip values not in [1, N-1]
+        upper = upper.clip(1, len(x_i)-1).astype(int)
+        lower = upper - 1
+
+        # Linear interpolation
+        w = (x - x_i[lower]) / (x_i[upper] - x_i[lower])
+        y = y_i[lower] * (1-w) + y_i[upper] * w
+        return y
+
+

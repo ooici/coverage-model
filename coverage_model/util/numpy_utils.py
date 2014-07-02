@@ -20,3 +20,10 @@ def create_numpy_object_array(array):
     arr[:] = array
     return arr
 
+
+class NumpyUtils(object):
+    @classmethod
+    def create_filled_array(cls, shape, value, dtype):
+        arr = np.empty(shape, dtype=dtype)
+        arr[:] = value
+        return arr
