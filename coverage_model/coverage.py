@@ -992,7 +992,6 @@ class ViewCoverage(AbstractCoverage):
 
             def _doload(self):
                 # Make sure the coverage directory exists
-#cjb              if not os.path.exists(pth):
                 if not is_persisted(root_dir, persistence_guid):
                     raise SystemError('Cannot find specified coverage: {0}'.format(pth))
 
@@ -1013,7 +1012,6 @@ class ViewCoverage(AbstractCoverage):
 
                 self.__setup(self._persistence_layer.param_dict)
 
-#cjb            if os.path.exists(pth):
             if is_persisted(root_dir, persistence_guid):
             # if reference_coverage_location is None or name is None or parameter_dictionary is None:
                 # This appears to be a load
@@ -1026,7 +1024,6 @@ class ViewCoverage(AbstractCoverage):
 
                 # If the coverage directory exists, load it instead!!
                 if is_persisted(root_dir, persistence_guid):
-#cjb                if os.path.exists(pth):
                     log.warn('The specified coverage already exists - performing load of \'{0}\''.format(pth))
                     _doload(self)
                     return
@@ -2148,7 +2145,6 @@ class SimplexCoverage(AbstractCoverage):
             def _doload(self):
                 # Make sure the coverage directory exists
                 if not is_persisted(root_dir, persistence_guid):
-#cjb                if not os.path.exists(pth):
                     raise SystemError('Cannot find specified coverage: {0}'.format(pth))
 
                 # All appears well - load it up!
@@ -2178,9 +2174,6 @@ class SimplexCoverage(AbstractCoverage):
                         pc._pval_callback = self.get_parameter_values
                         pc._pctxt_callback = self.get_parameter_context
                     self._range_dictionary.add_context(pc)
-                    # if pc.param_type._value_class == 'SparseConstantValue':
-                    #     s = SparsePersistedStorage(md, mm, self._persistence_layer.brick_dispatcher, dtype=pc.param_type.storage_encoding, fill_value=pc.param_type.fill_value, mode=self.mode, inline_data_writes=inline_data_writes, auto_flush=auto_flush_values)
-                    # else:
                     s = PostgresPersistedStorage(md, metadata_manager=mm, parameter_context=pc, dtype=pc.param_type.storage_encoding, fill_value=pc.param_type.fill_value, mode=self._persistence_layer.mode)
                     self._persistence_layer.value_list[parameter_name] = s
                     self._range_value[parameter_name] = get_value_class(param_type=pc.param_type, domain_set=pc.dom, storage=s)
@@ -2192,8 +2185,6 @@ class SimplexCoverage(AbstractCoverage):
             # TODO: Why do this, just see if the directory is there no?
             # if name is None or parameter_dictionary is None:
             if is_persisted(root_dir, persistence_guid):
-#cjb            if os.path.exists(pth):
-                # This appears to be a load
                 _doload(self)
 
             else:
@@ -2208,7 +2199,6 @@ class SimplexCoverage(AbstractCoverage):
 
                 # If the coverage directory exists, load it instead!!
                 if is_persisted(root_dir, persistence_guid):
-#cjb                if os.path.exists(pth):
                     log.warn('The specified coverage already exists - performing load of \'{0}\''.format(pth))
                     _doload(self)
                     return

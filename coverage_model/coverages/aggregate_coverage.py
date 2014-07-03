@@ -6,7 +6,8 @@ from coverage_model.parameter import ParameterDictionary
 from coverage_model.parameter_data import NumpyDictParameterData
 from coverage_model.parameter_values import get_value_class
 from coverage_model.persistence import is_persisted
-from coverage_model.storage.parameter_persisted_storage import PostgresPersistenceLayer
+from coverage_model.storage.parameter_persisted_storage import PostgresPersistenceLayer, PostgresPersistedStorage
+from coverage_model.util.numpy_utils import sort_flat_arrays
 from coverage_model.utils import Interval
 
 
@@ -117,7 +118,6 @@ class AggregateCoverage(AbstractCoverage):
         self._range_value = RangeValues()
         self._reference_covs = self._build_ordered_coverage_dict()
 
-        from coverage_model.storage.parameter_persisted_storage import PostgresPersistedStorage
         for parameter_name in self._persistence_layer.parameter_metadata:
             md = self._persistence_layer.parameter_metadata[parameter_name]
             mm = self._persistence_layer.master_manager
@@ -283,7 +283,6 @@ class AggregateCoverage(AbstractCoverage):
                 cov_value_list.append((cov_dict, coverage))
 
         combined_data = self._merge_value_dicts(cov_value_list, override_temporal_key=dummy_key, stride_length=stride_length)
-        from coverage_model.util.numpy_utils import sort_flat_arrays
         if dummy_key in combined_data:
             combined_data = sort_flat_arrays(combined_data, dummy_key)
             return combined_data[dummy_key] #TODO: Handle case where 'time' may not be temporal parameter name of all sub-coverages
@@ -398,11 +397,11 @@ class AggregateCoverage(AbstractCoverage):
 
     def _verify_rcovs(self, rcovs):
         for cpth in rcovs:
-            if not os.path.exists(cpth):
+            pth, uuid = get_dir_and_id_from_path(cpth)
+            if not MetadataManagerFactory.is_persisted(uuid):
                 log.warn('Cannot find coverage \'%s\'; ignoring', cpth)
                 continue
 
-            pth, uuid = get_dir_and_id_from_path(cpth)
             if uuid in self._reference_covs:
                 yield uuid, self._reference_covs[uuid]
                 continue
