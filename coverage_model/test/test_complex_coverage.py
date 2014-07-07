@@ -1079,6 +1079,12 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         cova_pth = _make_cov(self.working_dir, ['value_set', ctx], data_dict={'time':np.arange(0,10,0.7), 'value_set':np.arange(20,30, 0.7)})
         cova = SimplexCoverage.load(cova_pth, mode='r')
 
+        with self.assertRaises(AttributeError): # method doesn't exist
+            pfunc = ExternalFunction('example', cova.persistence_guid, 'value_set', 'coverage_model.parameter_functions', 'linear_map', [])
+            ctx = ParameterContext('example', param_type=ParameterFunctionType(pfunc, value_encoding='<f4'))
+            covb_pth = _make_cov(self.working_dir, [ctx], data_dict={'time':np.arange(0.5, 10.5, 1)})
+            cov = SimplexCoverage.load(covb_pth, mode='r')
+            data = cov.get_parameter_values().get_data()
 
         # Create another coverage that references the above
         pfunc = ExternalFunction('example', cova.persistence_guid, 'value_set')
@@ -1087,6 +1093,17 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         cov = SimplexCoverage.load(covb_pth, mode='r')
         # Assert that the values are correctly interpolated
         data = cov.get_parameter_values().get_data()
+        np.testing.assert_allclose(data['example'], np.arange(20.5, 30.5, 1))
+        np.testing.assert_array_equal(data['time'], np.arange(0.5, 10.5, 1))
+
+        cov.close()
+
+        pfunc_explicit = ExternalFunction('example', cova.persistence_guid, 'value_set', 'coverage_model.util.external_parameter_methods', 'linear_map', [])
+        ctx_explicit = ParameterContext('example', param_type=ParameterFunctionType(pfunc_explicit, value_encoding='<f4'))
+        covc_pth = _make_cov(self.working_dir, [ctx_explicit], data_dict={'time':np.arange(0.5, 10.5, 1)})
+        covc = SimplexCoverage.load(covc_pth, mode='r')
+        # Assert that the values are correctly interpolated
+        data = covc.get_parameter_values().get_data()
         np.testing.assert_allclose(data['example'], np.arange(20.5, 30.5, 1))
         np.testing.assert_array_equal(data['time'], np.arange(0.5, 10.5, 1))
 

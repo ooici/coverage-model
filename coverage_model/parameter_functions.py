@@ -280,38 +280,19 @@ class NumexprFunction(AbstractFunction):
         return ret
 
 
-class ExternalFunction(AbstractFunction):
-    def __init__(self, name, external_guid, external_name):
+class ExternalFunction(PythonFunction):
+    def __init__(self, name, external_guid, external_name, owner=None, func_name=None, arg_list=[], kwarg_map=None, param_map={}, egg_uri='', remove_fills=True):
         self.external_name = external_name
-        param_map = {external_name : external_guid}
-        AbstractFunction.__init__(self, name, [], param_map)
+        if func_name is None and owner is None:
+            owner = 'coverage_model.util.external_parameter_methods'
+            func_name = 'linear_map'
+        param_map[external_name] = external_guid
+        super(ExternalFunction, self).__init__(name, owner, func_name, arg_list=arg_list, kwarg_map=kwarg_map, egg_uri=egg_uri, param_map=param_map, remove_fills=remove_fills)
 
-    def load_coverage(self, pdir):
+    def evaluate(self, pval_callback, time_segment, fill_value=-9999, stride_length=None):
+        self._import_func()
         from coverage_model.coverage import AbstractCoverage
-        external_guid = self.param_map[self.external_name]
-        cov = AbstractCoverage.resurrect(external_guid, mode='r')
-        return cov
-
-    def evaluate(self, pval_callback, pdir, time_segment, fill_value=-9999):
-        return self.linear_map(pval_callback, pdir, time_segment)
-
-    def linear_map(self, pval_callback, pdir, time_segment):
-        cov = self.load_coverage(pdir)
-        # TODO: Might not want to hard-code time
-        x = pval_callback('time', time_segment).get_data()['time']
-        x_i = cov.get_parameter_values('time', time_segment=time_segment).get_data()['time']
-        y_i = cov.get_parameter_values(self.external_name, time_segment=time_segment).get_data()[self.external_name]
-
-
-        # Where in x_i does x fit in?
-        upper = np.searchsorted(x_i, x)
-        # Clip values not in [1, N-1]
-        upper = upper.clip(1, len(x_i)-1).astype(int)
-        lower = upper - 1
-
-        # Linear interpolation
-        w = (x - x_i[lower]) / (x_i[upper] - x_i[lower])
-        y = y_i[lower] * (1-w) + y_i[upper] * w
-        return y
+        cov = AbstractCoverage.resurrect(self.param_map[self.external_name], mode='r')
+        return self._callable(pval_callback, cov, self.external_name, time_segment)
 
 

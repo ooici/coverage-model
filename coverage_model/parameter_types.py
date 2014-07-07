@@ -645,7 +645,7 @@ class ParameterFunctionType(AbstractSimplexParameterType):
 
     def _todict(self, exclude=None):
         # Must exclude _cov_range_value from persistence
-        return super(ParameterFunctionType, self)._todict(exclude=['_pdir', '_pval_callback', '_pctxt_callback', '_fmap', '_iparams', '_dparams', '_callback'])
+        return super(ParameterFunctionType, self)._todict(exclude=['_pval_callback', '_pctxt_callback', '_fmap', '_iparams', '_dparams', '_callback'])
 
     @property
     def callback(self):
@@ -660,7 +660,6 @@ class ParameterFunctionType(AbstractSimplexParameterType):
         ret = super(ParameterFunctionType, cls)._fromdict(cmdict, arg_masks=arg_masks)
         # Add the _pval_callback attribute, initialized to None
         ret._pval_callback = None
-        ret._pdir = None
         ret.callback = None
         return ret
 

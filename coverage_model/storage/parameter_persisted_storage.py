@@ -410,10 +410,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             if param in self.master_manager.parameter_metadata:
                 param_type = self.master_manager.parameter_metadata[param].parameter_context.param_type
                 if isinstance(param_type, ParameterFunctionType):
-                    if isinstance(param_type.function, ExternalFunction):
-                        data = param_type.function.evaluate(param_type.callback, self.master_manager.root_dir, time_segment, time)
-                    else:
-                        data = param_type.function.evaluate(param_type.callback, time_segment, time)
+                    data = param_type.function.evaluate(param_type.callback, time_segment, time)
                     param_dict[param] = data
         return param_dict, fill_dict
 

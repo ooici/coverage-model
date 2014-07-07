@@ -293,10 +293,7 @@ class ParameterFunctionValue(AbstractSimplexParameterValue):
             # slice_ = utils.fix_slice(slice_, self.shape)
 
             try:
-                if isinstance(self.parameter_type.function, ExternalFunction):
-                    r = self.content.evaluate(self._pval_callback, self._pdir, time_segment, self.parameter_type.fill_value)
-                else:
-                    r = self.content.evaluate(self._pval_callback, time_segment, self.parameter_type.fill_value)
+                r = self.content.evaluate(self._pval_callback, time_segment, self.parameter_type.fill_value)
                 ve = self.parameter_type.value_encoding
                 if hasattr(self.parameter_type, 'inner_encoding'):
                     ve = self.parameter_type.inner_encoding
