@@ -282,6 +282,7 @@ class CoverageIntTestBase(object):
         except:
             raise
 
+    @unittest.skip('root_dir moved to configuration file.')
     def test_create_dir_not_exists(self):
         # Tests creation of SimplexCoverage fails using an incorrect path
         pdict = get_parameter_dict()

@@ -19,6 +19,7 @@ import unittest
 from coverage_model import *
 from coverage_model.coverages.complex_coverage import ComplexCoverage
 from coverage_model.coverages.coverage_extents import ReferenceCoverageExtents, ExtentsDict
+from coverage_model.parameter_functions import ExternalFunction
 from coverage_model.hdf_utils import HDFLockingFile
 from coverage_test_base import CoverageIntTestBase, get_props
 
@@ -454,7 +455,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         np.testing.assert_array_equal(comp_cov.get_parameter_values('data_c').get_data()['data_c'], third)
 
         # Check that the head_coverage_path is correct
-        self.assertEqual(comp_cov.head_coverage_path, covc_pth)
+        self.assertEqual(os.path.relpath(comp_cov.head_coverage_path), os.path.relpath(covc_pth))
 
         # Add some data to the last coverage (covc) and make sure it comes in
         cov_c = AbstractCoverage.load(covc_pth, mode='a')
@@ -477,7 +478,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         np.testing.assert_array_equal(comp_cov.get_parameter_values('data_c').get_data()['data_c'], third)
 
         # Check that the head_coverage_path is still correct
-        self.assertEqual(comp_cov.head_coverage_path, covc_pth)
+        self.assertEqual(os.path.abspath(comp_cov.head_coverage_path), os.path.abspath(covc_pth))
 
     def _setup_allparams(self, size=10, num_covs=2, sequential_covs=True):
         # Setup types
@@ -708,14 +709,14 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
                                          complex_type=ComplexCoverageType.TEMPORAL_BROADCAST)
 
             # Ensure the correct path is returned from NewComplexCoverage.head_coverage_path in CC --> [SC & SC] scenario
-            self.assertEqual(comp_cov.head_coverage_path, covb_pth)
+            self.assertEqual(os.path.abspath(comp_cov.head_coverage_path), os.path.abspath(covb_pth))
 
             # Ensure the correct path is returned from NewComplexCoverage.head_coverage_path in CC --> [SC & VC] scenario
-            self.assertEqual(comp_cov2.head_coverage_path, cova_pth)
-            self.assertEqual(comp_cov3.head_coverage_path, covb_pth)
+            self.assertEqual(os.path.abspath(comp_cov2.head_coverage_path), os.path.abspath(cova_pth))
+            self.assertEqual(os.path.abspath(comp_cov3.head_coverage_path), os.path.abspath(covb_pth))
 
             # Ensure the correct path is returned from NewComplexCoverage.head_coverage_path in CC --> [SC & CC --> [VC & SC]] scenario
-            self.assertEqual(comp_cov3.head_coverage_path, covb_pth)
+            self.assertEqual(os.path.abspath(comp_cov3.head_coverage_path), os.path.abspath(covb_pth))
 
     def make_timeseries_cov(self):
         cova_pth = _make_cov(self.working_dir, ['value_set'], data_dict={'time': np.arange(10,20),'value_set':np.ones(10)})
@@ -1065,6 +1066,46 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         np.testing.assert_allclose(data['time'], np.array([0,1,2,3,4,6,7,8], dtype='int32'))
         expected_array_stuff = np.array( [ [0,1,-9999,-9999], [2,3,-9999,-9999], [4,5,-9999,-9999], [6,7,-9999,-9999], [8,9,-9999,-9999], [4,5,6,7], [8,9,10,11], [12,13,14,15]], dtype='int32')
         np.testing.assert_allclose(data['array_stuff'], expected_array_stuff)
+
+
+    @attr('INT', group='cov')
+    def test_external_refs(self):
+
+        # Create a three param coverage
+        offset = NumexprFunction('offset', arg_list=['x'], expression='x + 1')
+        offset.param_map = {'x':'value_set'}
+        ctx = ParameterContext('offset', param_type=ParameterFunctionType(offset, value_encoding='<f4'))
+
+        cova_pth = _make_cov(self.working_dir, ['value_set', ctx], data_dict={'time':np.arange(0,10,0.7), 'value_set':np.arange(20,30, 0.7)})
+        cova = SimplexCoverage.load(cova_pth, mode='r')
+
+        with self.assertRaises(AttributeError): # method doesn't exist
+            pfunc = ExternalFunction('example', cova.persistence_guid, 'value_set', 'coverage_model.parameter_functions', 'linear_map', [])
+            ctx = ParameterContext('example', param_type=ParameterFunctionType(pfunc, value_encoding='<f4'))
+            covb_pth = _make_cov(self.working_dir, [ctx], data_dict={'time':np.arange(0.5, 10.5, 1)})
+            cov = SimplexCoverage.load(covb_pth, mode='r')
+            data = cov.get_parameter_values().get_data()
+
+        # Create another coverage that references the above
+        pfunc = ExternalFunction('example', cova.persistence_guid, 'value_set')
+        ctx = ParameterContext('example', param_type=ParameterFunctionType(pfunc, value_encoding='<f4'))
+        covb_pth = _make_cov(self.working_dir, [ctx], data_dict={'time':np.arange(0.5, 10.5, 1)})
+        cov = SimplexCoverage.load(covb_pth, mode='r')
+        # Assert that the values are correctly interpolated
+        data = cov.get_parameter_values().get_data()
+        np.testing.assert_allclose(data['example'], np.arange(20.5, 30.5, 1))
+        np.testing.assert_array_equal(data['time'], np.arange(0.5, 10.5, 1))
+
+        cov.close()
+
+        pfunc_explicit = ExternalFunction('example', cova.persistence_guid, 'value_set', 'coverage_model.util.external_parameter_methods', 'linear_map', [])
+        ctx_explicit = ParameterContext('example', param_type=ParameterFunctionType(pfunc_explicit, value_encoding='<f4'))
+        covc_pth = _make_cov(self.working_dir, [ctx_explicit], data_dict={'time':np.arange(0.5, 10.5, 1)})
+        covc = SimplexCoverage.load(covc_pth, mode='r')
+        # Assert that the values are correctly interpolated
+        data = covc.get_parameter_values().get_data()
+        np.testing.assert_allclose(data['example'], np.arange(20.5, 30.5, 1))
+        np.testing.assert_array_equal(data['time'], np.arange(0.5, 10.5, 1))
 
 
 def create_all_params():

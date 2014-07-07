@@ -628,6 +628,7 @@ class ParameterFunctionType(AbstractSimplexParameterType):
 
         self._template_attrs['_pval_callback'] = None
         self._template_attrs['_pctxt_callback'] = None
+        self._template_attrs['_pdir'] = None
 
         self._gen_template_attrs()
 

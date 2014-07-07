@@ -1,6 +1,7 @@
 __author__ = 'casey'
 
 from ooi.logging import log
+from pyon.util.config import Config
 import datetime
 
 
@@ -25,8 +26,10 @@ class CoverageConfig(object):
     _default_vertical_db_key = 'vertical_range'
     _default_span_id_db_key = 'span_address'
     _default_span_coverage_id_db_key = 'coverage_id'
+    _default_storage_location = None
 
     def __init__(self):
+        print 'setting defaults'
         self.ordered_time_key_preferences = self._default_ordered_time_key_preferences
         self.ordered_lat_key_preferences = self._default_ordered_lat_key_preferences
         self.ordered_lon_key_preferences = self._default_ordered_lon_key_preferences
@@ -36,16 +39,34 @@ class CoverageConfig(object):
         self.vertical_db_key = self._default_vertical_db_key
         self.span_id_db_key = self._default_span_id_db_key
         self.span_coverage_id_db_key = self._default_span_coverage_id_db_key
+        self.top_level_storage_location = self._default_storage_location
         self.using_default_config = True
         self.config_time = 0
         self.read_and_set_config()
 
     def read_and_set_config(self):
-        is_success = False
-        if is_success is True:
+        one_from_config = False
+        try:
+            data = Config(["res/config/coverage.yml"]).data['CoverageConfig']
+            for k, v in data.iteritems():
+                self.__setattr__(k, v)
+                one_from_config = True
             self.using_default_config = False
             self.config_time = datetime.datetime.utcnow().time()
-        return is_success
+        except Exception as ex:
+            if one_from_config:
+                log.info("Load from config failed with '%s'.  Using hybrid default/config file configuration" % ex.message)
+                return False
+            else:
+                log.info("load from config failed with '%s'.  Using default config" % ex.message)
+        return True
+
+    def __setattr__(self, key, value):
+        if key.endswith('_'):
+            for k, v in value.iteritems():
+                self.__setattr__(k, v)
+        else:
+            super(CoverageConfig, self).__setattr__(key,value)
 
     def get_preferred_key(self, options, preferences):
         for key in preferences:

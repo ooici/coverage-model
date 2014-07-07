@@ -510,3 +510,34 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
     @unittest.skip('Does not apply to empty coverage.')
     def test_get_all_data_metrics(self):
         pass
+
+    def test_load_without_dir(self):
+        ptypes_cov, cov_name = self.get_cov(nt=2000)
+        self.assertIsInstance(ptypes_cov, AbstractCoverage)
+
+        cov_id = ptypes_cov.persistence_guid
+        ptypes_cov.close()
+
+        cov = AbstractCoverage.resurrect(cov_id, mode='r')
+        # QuantityType
+        function_params = {}
+        res = cov.get_parameter_values(['time', 'const_int', 'const_rng_int'], function_params=function_params)
+        np.testing.assert_array_equal( res.get_data()['time'], np.arange(2000))
+        # ConstantType
+        self.assertTrue('const_int' in function_params)
+        self.assertTrue('const_rng_int' in function_params)
+        self.assertEqual(len(function_params['const_int']), 1)
+        self.assertEqual(len(function_params['const_rng_int']), 1)
+        for val in function_params['const_int'].values():
+            self.assertEqual(ConstantOverTime('const_int', 45.32), val)
+        for val in function_params['const_rng_int'].values():
+            self.assertEqual(ConstantOverTime('const_rng_int', (-10,10)), val)
+
+        expected_const_int_arr = np.empty(2000)
+        expected_const_int_arr.fill(45)
+        np.testing.assert_array_equal(res.get_data()['const_int'], expected_const_int_arr)
+        # ConstantRangeType
+        expected_const_rng_int_arr = np.empty(2000, dtype=np.object)
+        expected_const_rng_int_arr.fill((-10,10))
+        np.testing.assert_array_equal(res.get_data()['const_rng_int'], expected_const_rng_int_arr)
+        ptypes_cov.close()

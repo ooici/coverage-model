@@ -11,10 +11,12 @@ from ooi.logging import log
 
 import numpy as np
 import numexpr as ne
+import os
 from numbers import Number
 from collections import OrderedDict
 from coverage_model.basic_types import AbstractBase
 from coverage_model.parameter_data import NumpyDictParameterData
+
 
 class ParameterFunctionException(Exception):
     def __init__(self, message, original_type=None):
@@ -143,7 +145,7 @@ class AbstractFunction(AbstractBase):
 
 
 class PythonFunction(AbstractFunction):
-    def __init__(self, name, owner, func_name, arg_list, kwarg_map=None, param_map=None, egg_uri=''):
+    def __init__(self, name, owner, func_name, arg_list, kwarg_map=None, param_map=None, egg_uri='', remove_fills=True):
         AbstractFunction.__init__(self, name, arg_list, param_map)
         self.owner = owner
         self.func_name = func_name
@@ -163,7 +165,6 @@ class PythonFunction(AbstractFunction):
                 self._callable = getattr(module, self.func_name)
             else:
                 raise
-
 
     def evaluate(self, pval_callback, time_segment, fill_value=-9999, stride_length=None):
         self._import_func()
@@ -241,7 +242,6 @@ class PythonFunction(AbstractFunction):
         raise IOError("Couldn't download the file at %s" % url)
 
 
-
 class NumexprFunction(AbstractFunction):
     def __init__(self, name, expression, arg_list, param_map=None):
         AbstractFunction.__init__(self, name, arg_list, param_map)
@@ -278,3 +278,21 @@ class NumexprFunction(AbstractFunction):
             ret = self.expression == other.expression
 
         return ret
+
+
+class ExternalFunction(PythonFunction):
+    def __init__(self, name, external_guid, external_name, owner=None, func_name=None, arg_list=[], kwarg_map=None, param_map={}, egg_uri='', remove_fills=True):
+        self.external_name = external_name
+        if func_name is None and owner is None:
+            owner = 'coverage_model.util.external_parameter_methods'
+            func_name = 'linear_map'
+        param_map[external_name] = external_guid
+        super(ExternalFunction, self).__init__(name, owner, func_name, arg_list=arg_list, kwarg_map=kwarg_map, egg_uri=egg_uri, param_map=param_map, remove_fills=remove_fills)
+
+    def evaluate(self, pval_callback, time_segment, fill_value=-9999, stride_length=None):
+        self._import_func()
+        from coverage_model.coverage import AbstractCoverage
+        cov = AbstractCoverage.resurrect(self.param_map[self.external_name], mode='r')
+        return self._callable(pval_callback, cov, self.external_name, time_segment)
+
+

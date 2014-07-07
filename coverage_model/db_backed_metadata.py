@@ -9,13 +9,13 @@
 
 from ooi.logging import log
 import os
+import msgpack
 from coverage_model.basic_types import Dictable
-from coverage_model.coverages.coverage_extents import ReferenceCoverageExtents
-from coverage_model.data_span import SpanStatsCollection, SpanCollectionByFile, SpanStats
+from coverage_model.data_span import SpanCollectionByFile
 from coverage_model.db_connectors import DBFactory
 from coverage_model.metadata import MetadataManager
+from coverage_model.config import CoverageConfig
 from coverage_model.persistence_helpers import RTreeProxy, pack, unpack, MasterManager, BaseManager
-from coverage_model.util.jsonable import Jsonable
 from coverage_model.utils import hash_any
 
 
@@ -28,7 +28,10 @@ class DbBackedMetadataManager(MetadataManager):
     @staticmethod
     def isPersisted(directory, guid):
         if DbBackedMetadataManager.is_persisted_in_db(guid) is False:
-            return MasterManager.isPersisted(directory, guid)
+            if directory is not None:
+                return MasterManager.isPersisted(directory, guid)
+            else:
+                return False
         return True
 
     @staticmethod
@@ -37,7 +40,6 @@ class DbBackedMetadataManager(MetadataManager):
 
     @staticmethod
     def get_coverage_class(directory, guid):
-        from coverage_model.config import CoverageConfig
         config = CoverageConfig()
         return config.get_coverage_class(DbBackedMetadataManager.getCoverageType(directory, guid))
 
@@ -107,6 +109,8 @@ class DbBackedMetadataManager(MetadataManager):
                             if val != '':
                                 insert_dict['brick_tree'] = val
                             continue
+                    elif k == 'parameter_metadata':
+                        value = pack_parameter_manager_dict(v)
                     else:
                         value = pack(v)
 
@@ -159,6 +163,8 @@ class DbBackedMetadataManager(MetadataManager):
                     unpacked = unpack(val)
                     value = SpanCollectionByFile.from_str(unpacked)
                     log.trace("Reconstructed SpanCollection for %s: %s", self.guid, str(value))
+                elif key == 'parameter_metadata':
+                    value = unpack_parameter_manager_dict(val)
                 else:
                     value = unpack(val)
 
@@ -225,3 +231,85 @@ class DbBackedMetadataManager(MetadataManager):
     #
     #def __ne__(self, other):
     #    return not self.__eq__(other)
+
+
+def pack_parameter_manager_dict(pm_dict):
+    pack_dict = {}
+    for k, v in pm_dict.iteritems():
+        if not isinstance(v, ParameterContextWrapper):
+            raise RuntimeError('Dictionary values must be type %s' % ParameterContextWrapper.__name__)
+        pack_dict[k] = v.pack()
+
+    return msgpack.packb(pack_dict)
+
+
+def unpack_parameter_manager_dict(text):
+    pm_dict = {}
+    pack_dict = msgpack.unpackb(text)
+    for k, v in pack_dict.iteritems():
+        pm_dict[k] = ParameterContextWrapper.from_pack(v)
+
+    return pm_dict
+
+
+class ParameterContextWrapper(MetadataManager):
+    ''' This class is meant to override the persistence behavior of ParameterManager.
+        Instead, it provides packing and unpacking methods to allow other objects to persist it.
+        It exists to minimize interface change ripple effects.  Consider changing the interface in the future
+        if there is time.
+    '''
+
+    def __init__(self, guid, parameter_name, read_only=True, **kwargs):
+        super(ParameterContextWrapper, self).__init__(**kwargs)
+        for k, v in kwargs.iteritems():
+            # Don't overwrite with None
+            if hasattr(self, k) and v is None:
+                continue
+
+            setattr(self, k, v)
+
+        self.guid = guid
+        self.parameter_name = parameter_name
+        self.read_only = read_only
+
+        # Add attributes that should NEVER be flushed
+        self._ignore.update(['read_only'])
+
+    def pack(self):
+        pack_dict = {}
+        for k, v in self.__dict__.iteritems():
+            if k in self._ignore or k.startswith('_'):
+                continue
+            if isinstance(v, Dictable):
+                prefix='DICTABLE|{0}:{1}|'.format(v.__module__, v.__class__.__name__)
+                v = prefix + pack(v.dump())
+            pack_dict[k] = v
+
+        return msgpack.packb(pack_dict)
+
+    @staticmethod
+    def from_pack(text):
+        pack_dict = msgpack.unpackb(text)
+        guid = pack_dict.pop('guid')
+        parameter_name = pack_dict.pop('parameter_name')
+        pm = ParameterContextWrapper(guid, parameter_name, read_only=True)
+        for k, val in pack_dict.iteritems():
+            if isinstance(val, basestring) and val.startswith('DICTABLE'):
+                i = val.index('|', 9)
+                smod, sclass = val[9:i].split(':')
+                val = unpack(val[i+1:])
+                module = __import__(smod, fromlist=[sclass])
+                classobj = getattr(module, sclass)
+                val = classobj._fromdict(val)
+            pm.__setattr__(k,val)
+        return pm
+
+    def thin_origins(self, origins):
+        pass
+
+    def flush(self):
+        if not self.read_only and self.is_dirty(True):
+            self._dirty.clear()
+
+    def _load(self):
+        raise NotImplementedError('This object does not load itself')

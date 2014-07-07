@@ -4,6 +4,7 @@ from ooi.logging import log
 
 from coverage_model.data_span import SpanCollectionByFile, SpanStats
 from coverage_model.address import BrickFileAddress
+from coverage_model import utils
 import numpy
 
 
@@ -94,7 +95,33 @@ class MetadataManager(object):
                 continue  # This is an HDF artifact.  Ignored flush values are different between versions
             if key in ['sdom', 'tdom', 'brick_domains', 'brick_list', '_dirty', '_is_dirty']:
                 continue # Tuple/List conversion by Postgres prevents comparison
+            elif key in ['parameter_metadata']:
+                continue # parameter context compare not available
             elif self.__dict__[key] != other.__dict__[key]:
                 key_diffs.add(key)
 
         return key_diffs
+
+    def is_dirty(self, force_deep=False):
+        """
+        Tells if the object has attributes that have changed since the last flush
+
+        @return: True if the BaseMananager object is dirty and should be flushed
+        """
+        if not force_deep and len(self._dirty) > 0: # Something new was set, easy-peasy
+            return True
+        else: # Nothing new has been set, need to check hashes
+            self._dirty.difference_update(self._ignore) # Ensure any ignored attrs are gone...
+            for k, v in [(k,v) for k, v in self.__dict__.iteritems() if not k in self._ignore and not k.startswith('_')]:
+                chv = utils.hash_any(v)
+                # log.trace('key=%s:  cached hash value=%s  current hash value=%s', k, self._hmap[k], chv)
+                if self._hmap[k] != chv:
+                    self._dirty.add(k)
+            return len(self._dirty) != 0
+
+    def __setattr__(self, key, value):
+        super(MetadataManager, self).__setattr__(key, value)
+        if not key in self._ignore and not key.startswith('_'):
+            self._hmap[key] = utils.hash_any(value)
+            self._dirty.add(key)
+            super(MetadataManager, self).__setattr__('_is_dirty',True)

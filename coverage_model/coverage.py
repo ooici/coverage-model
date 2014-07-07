@@ -45,6 +45,7 @@ from ooi.logging import log
 from pyon.util.async import spawn
 from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, Dictable, \
     Span
+from coverage_model.config import CoverageConfig
 from coverage_model.parameter import Parameter, ParameterDictionary, ParameterContext
 from coverage_model.parameter_values import get_value_class, AbstractParameterValue
 from coverage_model.persistence import InMemoryPersistenceLayer, is_persisted
@@ -132,6 +133,14 @@ class AbstractCoverage(AbstractIdentifiable):
         return obj
 
     @classmethod
+    def resurrect(cls, persistence_guid, mode):
+        if not isinstance(persistence_guid, basestring):
+            raise ValueError('persistence_guid must be a string')
+
+        ccls = MetadataManagerFactory.get_coverage_class(None, persistence_guid)
+        return ccls(None, persistence_guid, mode=mode)
+
+    @classmethod
     def load(cls, root_dir, persistence_guid=None, mode=None):
         '''
         Loads a standard persisted instance of a Coverage Model
@@ -140,6 +149,9 @@ class AbstractCoverage(AbstractIdentifiable):
         mode             - I/O mode
         returns an instantiated coverage model instance
         '''
+        if root_dir != None:
+            log.info("\'root_dir\' specification is OBE.  Use coverage configuration file to specify root_dir")
+
         if not isinstance(root_dir, basestring):
             raise ValueError('\'root_dir\' must be a string')
 
@@ -984,9 +996,8 @@ class ViewCoverage(AbstractCoverage):
 
             def _doload(self):
                 # Make sure the coverage directory exists
-#cjb              if not os.path.exists(pth):
                 if not is_persisted(root_dir, persistence_guid):
-                    raise SystemError('Cannot find specified coverage: {0}'.format(pth))
+                    raise SystemError('Cannot find specified coverage: {0}'.format(persistence_guid))
 
                 self._persistence_layer = PostgresPersistenceLayer(root_dir, persistence_guid, mode=self.mode)
                 if self._persistence_layer.version != self.version:
@@ -1005,7 +1016,6 @@ class ViewCoverage(AbstractCoverage):
 
                 self.__setup(self._persistence_layer.param_dict)
 
-#cjb            if os.path.exists(pth):
             if is_persisted(root_dir, persistence_guid):
             # if reference_coverage_location is None or name is None or parameter_dictionary is None:
                 # This appears to be a load
@@ -1018,8 +1028,7 @@ class ViewCoverage(AbstractCoverage):
 
                 # If the coverage directory exists, load it instead!!
                 if is_persisted(root_dir, persistence_guid):
-#cjb                if os.path.exists(pth):
-                    log.warn('The specified coverage already exists - performing load of \'{0}\''.format(pth))
+                    log.warn('The specified coverage already exists - performing load of \'{0}\''.format(persistence_guid))
                     _doload(self)
                     return
 
@@ -1228,7 +1237,7 @@ class ComplexCoverageR2(AbstractCoverage):
         # If the path does exist, initialize the simple persistence layer
         pth = os.path.join(root_dir, persistence_guid)
         if not is_persisted(root_dir, persistence_guid):
-            raise SystemError('Cannot find specified coverage: {0}'.format(pth))
+            raise SystemError('Cannot find specified coverage: {0}'.format(persistence_guid))
         self._persistence_layer = PostgresPersistenceLayer(root_dir, persistence_guid, mode=self.mode)
         if self._persistence_layer.version != self.version:
             raise IOError('Coverage Model Version Mismatch: %s != %s' %(self.version, self._persistence_layer.version))
@@ -2127,19 +2136,17 @@ class SimplexCoverage(AbstractCoverage):
         """
         AbstractCoverage.__init__(self, mode=mode)
         try:
-            # Make sure root_dir and persistence_guid are both not None and are strings
-            if not isinstance(root_dir, basestring) or not isinstance(persistence_guid, basestring):
-                raise TypeError('\'root_dir\' and \'persistence_guid\' must be instances of basestring')
+            if not isinstance(persistence_guid, basestring):
+                raise TypeError('persistence_guid must be instance of basestring')
 
-            root_dir = root_dir if not root_dir.endswith(persistence_guid) else os.path.split(root_dir)[0]
-
-            pth = os.path.join(root_dir, persistence_guid)
+            if root_dir != None:
+                log.info("\'root_dir\' specification is OBE.  Use coverage configuration file to specify root_dir")
+            root_dir = CoverageConfig().top_level_storage_location
 
             def _doload(self):
                 # Make sure the coverage directory exists
                 if not is_persisted(root_dir, persistence_guid):
-#cjb                if not os.path.exists(pth):
-                    raise SystemError('Cannot find specified coverage: {0}'.format(pth))
+                    raise SystemError('Cannot find specified coverage: {0}'.format(persistence_guid))
 
                 # All appears well - load it up!
                 self._persistence_layer = PostgresPersistenceLayer(root_dir, persistence_guid, mode=self.mode)
@@ -2168,9 +2175,6 @@ class SimplexCoverage(AbstractCoverage):
                         pc._pval_callback = self.get_parameter_values
                         pc._pctxt_callback = self.get_parameter_context
                     self._range_dictionary.add_context(pc)
-                    # if pc.param_type._value_class == 'SparseConstantValue':
-                    #     s = SparsePersistedStorage(md, mm, self._persistence_layer.brick_dispatcher, dtype=pc.param_type.storage_encoding, fill_value=pc.param_type.fill_value, mode=self.mode, inline_data_writes=inline_data_writes, auto_flush=auto_flush_values)
-                    # else:
                     s = PostgresPersistedStorage(md, metadata_manager=mm, parameter_context=pc, dtype=pc.param_type.storage_encoding, fill_value=pc.param_type.fill_value, mode=self._persistence_layer.mode)
                     self._persistence_layer.value_list[parameter_name] = s
                     self._range_value[parameter_name] = get_value_class(param_type=pc.param_type, domain_set=pc.dom, storage=s)
@@ -2182,8 +2186,6 @@ class SimplexCoverage(AbstractCoverage):
             # TODO: Why do this, just see if the directory is there no?
             # if name is None or parameter_dictionary is None:
             if is_persisted(root_dir, persistence_guid):
-#cjb            if os.path.exists(pth):
-                # This appears to be a load
                 _doload(self)
 
             else:
@@ -2192,14 +2194,13 @@ class SimplexCoverage(AbstractCoverage):
                 if name is None or parameter_dictionary is None:
                     raise SystemError('\'name\' and \'parameter_dictionary\' cannot be None')
 
-                # Make sure the specified root_dir exists
-                if not in_memory_storage and not os.path.exists(root_dir):
-                    raise SystemError('Cannot find specified \'root_dir\': {0}'.format(root_dir))
+                # # Make sure the specified root_dir exists
+                # if not in_memory_storage and not os.path.exists(root_dir):
+                #     raise SystemError('Cannot find specified \'root_dir\': {0}'.format(root_dir))
 
                 # If the coverage directory exists, load it instead!!
                 if is_persisted(root_dir, persistence_guid):
-#cjb                if os.path.exists(pth):
-                    log.warn('The specified coverage already exists - performing load of \'{0}\''.format(pth))
+                    log.warn('The specified coverage already exists - performing load of \'{0}\''.format(persistence_guid))
                     _doload(self)
                     return
 

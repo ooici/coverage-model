@@ -15,14 +15,16 @@ import numbers
 import numpy as np
 
 from ooi.logging import log
-from coverage_model.metadata_factory import MetadataManagerFactory
 from coverage_model.basic_types import AbstractStorage, AxisTypeEnum
-from coverage_model.persistence_helpers import ParameterManager, pack, unpack
-from coverage_model.parameter_data import ParameterData, NumpyParameterData, ConstantOverTime, NumpyDictParameterData
 from coverage_model.data_span import Span
-from coverage_model.storage.span_storage_factory import SpanStorageFactory
+from coverage_model.metadata_factory import MetadataManagerFactory
+from coverage_model.parameter_data import ParameterData, NumpyParameterData, ConstantOverTime, NumpyDictParameterData, RepeatOverTime
+from coverage_model.parameter_functions import ExternalFunction
+from coverage_model.parameter_types import QuantityType, ParameterFunctionType
 from coverage_model.persistence import SimplePersistenceLayer
-from coverage_model.parameter_types import QuantityType
+from coverage_model.persistence_helpers import unpack
+from coverage_model.storage.span_storage_factory import SpanStorageFactory
+from coverage_model.util.numpy_utils import NumpyUtils
 
 
 class PostgresPersistenceLayer(SimplePersistenceLayer):
@@ -61,17 +63,19 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             self.master_manager.value_caching = value_caching
         if not hasattr(self.master_manager, 'coverage_type'):
             self.master_manager.coverage_type = coverage_type
+        if not hasattr(self.master_manager, 'parameter_metadata'):
+            self.master_manager.parameter_metadata = {}
 
         self.value_list = {}
 
-        self.parameter_metadata = {} # {parameter_name: [brick_list, parameter_domains, rtree]}
         self.spans = {}
         self.span_list = []
         self.storage_name = storage_name
 
         for pname in self.param_groups:
             log.debug('parameter group: %s', pname)
-            self.parameter_metadata[pname] = ParameterManager(os.path.join(self.root_dir, self.guid, pname), pname)
+            if pname not in self.master_manager.parameter_metadata:
+                self.master_manager.parameter_metadata[pname] = MetadataManagerFactory.buildParameterManager(os.path.join(self.root_dir, self.guid, pname), pname)
 
         if self.mode != 'r':
             if self.master_manager.is_dirty():
@@ -99,7 +103,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
 
     def update_parameter_bounds(self, parameter_name, bounds):
         dmin, dmax = bounds
-        if isinstance(self.parameter_metadata[parameter_name].parameter_context.param_type, QuantityType): # TODO should we store bounds for non quantity types?
+        if isinstance(self.master_manager.parameter_metadata[parameter_name].parameter_context.param_type, QuantityType): # TODO should we store bounds for non quantity types?
             if parameter_name in self.parameter_bounds:
                 pmin, pmax = self.parameter_bounds[parameter_name]
                 dmin = min(dmin, pmin)
@@ -130,8 +134,8 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
 
         parameter_name = parameter_context.name
 
-        pm = ParameterManager(os.path.join(self.root_dir, self.guid, parameter_name), parameter_name, read_only=False)
-        self.parameter_metadata[parameter_name] = pm
+        pm = MetadataManagerFactory.buildParameterManager(self.guid, parameter_name, read_only=False)
+        self.master_manager.parameter_metadata[parameter_name] = pm
 
         pm.parameter_context = parameter_context
 
@@ -139,13 +143,6 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
 
         self.master_manager.create_group(parameter_name)
 
-        # if parameter_context.param_type._value_class == 'SparseConstantValue':
-        #     v = SparsePersistedStorage(pm, self.master_manager, self.brick_dispatcher,
-        #                                dtype=parameter_context.param_type.storage_encoding,
-        #                                fill_value=parameter_context.param_type.fill_value,
-        #                                mode=self.mode, inline_data_writes=self.inline_data_writes,
-        #                                auto_flush=self.auto_flush_values)
-        # else:
         v = PostgresPersistedStorage(pm, metadata_manager=self.master_manager,
                                          parameter_context=parameter_context,
                                          dtype=parameter_context.param_type.storage_encoding,
@@ -212,6 +209,8 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
 
         @return True if master file metadata has been modified
         """
+        if self.master_manager.is_dirty():
+            return True
         for v in self.value_list.itervalues():
             if v.has_dirty_values():
                 return True
@@ -244,9 +243,16 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         all_values_constant_over_time = True
         import time
         write_time = time.time()
+        bad_keys = []
         for key, arr in values.iteritems():
             if key not in self.value_list:
                 raise KeyError("Parameter, %s, has not been initialized" % (key))
+
+            param_type = self.master_manager.parameter_metadata[key].parameter_context.param_type
+            if isinstance(param_type, ParameterFunctionType):
+                bad_keys.append(key)
+                continue #TODO: throw error instead
+
             if isinstance(arr, np.ndarray):
                 arr = NumpyParameterData(key, arr)
                 values[key] = arr
@@ -254,10 +260,10 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                 raise TypeError("Value for %s must implement <%s>, found <%s>" % (key, ParameterData.__name__, arr.__class__.__name__))
 
             if not isinstance(arr, ConstantOverTime):
-                if self.parameter_metadata[key].parameter_context.param_type.validate_value_set(arr.get_data()):
-                    self.parameter_metadata[key].read_only = False
-                    self.parameter_metadata[key].flush()
-                    self.parameter_metadata[key].read_only = True
+                if self.master_manager.parameter_metadata[key].parameter_context.param_type.validate_value_set(arr.get_data()):
+                    self.master_manager.parameter_metadata[key].read_only = False
+                    self.master_manager.parameter_metadata[key].flush()
+                    self.master_manager.parameter_metadata[key].read_only = True
 
                 all_values_constant_over_time = False
             if arr_len == -1 and isinstance(arr, NumpyParameterData):
@@ -266,6 +272,9 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                 raise ValueError("Array size for %s is inconsistent.  Expected %s elements, found %s." % (key, str(arr_len), str(arr.get_data().size)))
             min_val, max_val = self.value_list[key].get_statistics(arr)
             self.update_parameter_bounds(key, (min_val, max_val))
+
+        for key in bad_keys:
+            values.pop(key)
 
         if not all_values_constant_over_time and self.alignment_parameter not in values:
             raise LookupError("Array must be supplied for parameter, %s, to ensure alignment" % self.alignment_parameter)
@@ -287,15 +296,15 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             function_params.update(functions)
         return rec_arr
 
-    def get_data_products(self, params, time_range=None, time=None, sort_parameter=None, create_record_array=True, stride_length=None, fill_empty_params=False):
+    def get_data_products(self, params, time_range=None, time=None, sort_parameter=None, create_record_array=True, stride_length=None, fill_empty_params=False, fill_indexes=False):
         if self.alignment_parameter not in params:
             params.append(self.alignment_parameter)
 
         associated_spans = self._get_span_dict(params, time_range, time)
         numpy_params, function_params = self._create_param_dict_from_spans_dict(params, associated_spans)
         dict_params = None
-        np_dict = self._create_parameter_dictionary_of_numpy_arrays(numpy_params, function_params, params=dict_params)
-        np_dict = self._append_parameter_fuction_data(params, np_dict)
+        np_dict, fill_dict = self._create_parameter_dictionary_of_numpy_arrays(numpy_params, function_params, params=dict_params, fill_indexes=fill_indexes)
+        np_dict, fill_dict = self._append_parameter_fuction_data(params, np_dict, fill_dict)
         if fill_empty_params is True:
             np_dict = self._fill_empty_params(params, np_dict)
         rec_arr = None
@@ -306,7 +315,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             np_dict = {key:value[0::stride_length] for key, value in np_dict.items()}
 
         if len(np_dict) == 0:
-            dt = np.dtype(self.parameter_metadata[self.alignment_parameter].parameter_context.param_type.value_encoding)
+            dt = np.dtype(self.master_manager.parameter_metadata[self.alignment_parameter].parameter_context.param_type.value_encoding)
             np_dict = {self.alignment_parameter: np.empty(0, dtype=dt)}
         rec_arr = self._convert_to_numpy_dict_parameter(np_dict, sort_parameter=sort_parameter, as_rec_array=create_record_array)
         return np_dict, function_params, rec_arr
@@ -394,21 +403,20 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                 return_dict[key] = np.array([val[idx]], dtype=val.dtype)
         return return_dict
 
-    def _append_parameter_fuction_data(self, params, param_dict, time_segment=None, time=None):
+    def _append_parameter_fuction_data(self, params, param_dict, fill_dict, time_segment=None, time=None):
         if time is not None and time_segment is None:
             time_segment = (time,time)
         for param in list(set(params)-set(param_dict.keys())):
-            if param in self.parameter_metadata:
-                param_type = self.parameter_metadata[param].parameter_context.param_type
-                from coverage_model.parameter_types import ParameterFunctionType
+            if param in self.master_manager.parameter_metadata:
+                param_type = self.master_manager.parameter_metadata[param].parameter_context.param_type
                 if isinstance(param_type, ParameterFunctionType):
                     data = param_type.function.evaluate(param_type.callback, time_segment, time)
                     param_dict[param] = data
-        return param_dict
+        return param_dict, fill_dict
 
-    def _create_parameter_dictionary_of_numpy_arrays(self, numpy_params, function_params=None, params=None):
+    def _create_parameter_dictionary_of_numpy_arrays(self, numpy_params, function_params=None, params=None, fill_indexes=False):
         return_dict = {}
-        arr_size = -1
+        mask_dict = {}
         shape_outer_dimmension = 0
         span_order = []
         span_size_dict = {}
@@ -420,8 +428,9 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                 span_order.append(id)
             span_order.sort()
             t_dict = numpy_params[self.alignment_parameter]
-        dt = np.dtype(self.parameter_metadata[self.alignment_parameter].parameter_context.param_type.value_encoding)
+        dt = np.dtype(self.master_manager.parameter_metadata[self.alignment_parameter].parameter_context.param_type.value_encoding)
         arr = np.empty(shape_outer_dimmension, dtype=dt)
+
         insert_index = 0
         for span_id in span_order:
             np_data = t_dict[span_id].get_data()
@@ -429,48 +438,34 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             arr[insert_index:end_idx] = np_data
             insert_index += np_data.size
         return_dict[self.alignment_parameter] = arr
+        mask_dict[self.alignment_parameter] = NumpyUtils.create_filled_array(arr.shape[0], True, dtype=np.bool)
 
         for id, span_data in numpy_params.iteritems():
             if id == self.alignment_parameter:
                 continue
-            npa = None
-            insert_index = 0
-            # param_outer_dimmension = 0;
-            # param_inner_dimmension = 0;
-            # for span_name in span_order:
-            #     np_data = span_data[span_name].get_data()
-            #     param_outer_dimmension = np_data.shape[0]
-
             npa_list = []
+            mask_list = []
             for span_name in span_order:
                 if span_name not in span_data:
-                    npa = self.parameter_metadata[id].parameter_context.param_type.create_filled_array(span_size_dict[span_name])
+                    npa = self.master_manager.parameter_metadata[id].parameter_context.param_type.create_filled_array(span_size_dict[span_name])
                     npa_list.append(npa)
+                    mask_list.append(NumpyUtils.create_filled_array(npa.shape[0], False, dtype=np.bool))
                     continue
                 else:
-                    npa_list.append(span_data[span_name].get_data())
-            return_dict[id] = self.parameter_metadata[id].parameter_context.param_type.create_merged_value_array(npa_list)
-            # for span_name in span_order:
-            #     if span_name not in span_data:
-            #         insert_index += span_size_dict[span_name]
-            #         continue
-            #     np_data = span_data[span_name].get_data()
-            #     if npa is None:
-            #         npa = self.parameter_metadata[id].parameter_context.param_type.create_filled_array(shape_outer_dimmension)
-            #     end_idx = insert_index + np_data.size
-            #     npa[insert_index:end_idx] = np_data
-            #     insert_index += np_data.size
-            # return_dict[id] = npa
-                # span_order.append((id, np_data.size))
-                # arr[insert_index:np_data.size+insert_index] = np_data
+                    this_data = span_data[span_name].get_data()
+                    npa_list.append(this_data)
+                    mask_list.append(NumpyUtils.create_filled_array(this_data.shape[0], True, dtype=np.bool))
+            return_dict[id] = self.master_manager.parameter_metadata[id].parameter_context.param_type.create_merged_value_array(npa_list)
+            mask_dict[id] = self.master_manager.parameter_metadata[id].parameter_context.param_type.create_merged_value_array(mask_list)
 
         for param_name, param_dict in function_params.iteritems():
             arr = ConstantOverTime.merge_data_as_numpy_array(return_dict[self.alignment_parameter],
                                                              param_dict,
-                                                             param_type=self.parameter_metadata[param_name].parameter_context.param_type)
+                                                             param_type=self.master_manager.parameter_metadata[param_name].parameter_context.param_type)
             return_dict[param_name] = arr
+            mask_dict[param_name] = NumpyUtils.create_filled_array(arr.shape[0], False, dtype=np.bool)
 
-        return return_dict
+        return return_dict, mask_dict
 
     def _fill_empty_params(self, params, np_dict):
         filled_params = {}
@@ -478,7 +473,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             unset_params = set(params) - set(np_dict.keys())
             if len(unset_params) > 0:
                 for param in unset_params:
-                    filled_params[param] = self.parameter_metadata[param].parameter_context.param_type.create_filled_array(len(np_dict[self.alignment_parameter]))
+                    filled_params[param] = self.master_manager.parameter_metadata[param].parameter_context.param_type.create_filled_array(len(np_dict[self.alignment_parameter]))
 
         np_dict.update(filled_params)
         return np_dict
@@ -492,18 +487,6 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         for span in span_dict:
             ts += span.param_dict[self.alignment_parameter].get_data().size
         return ts
-
-    def has_dirty_values(self):
-        """
-        Checks if the master file values have been modified
-
-        @return True if master file metadata has been modified
-        """
-        for v in self.value_list.values():
-            if v.has_dirty_values():
-                return True
-
-        return False
 
     def read_parameters_as_dense_array(self, params, time_range=None, time=None, sort_parameter=None):
         return_dict = {}
@@ -525,12 +508,6 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             return None
 
         for key, d in self.spans.iteritems():
-        #     if self.alignment_parameter not in d.keys():
-        #         for param, vals in d.iteritems():
-        #             if param not in params:
-        #                 continue
-        #             if
-
             if self.alignment_parameter not in d:
                 continue
             alignment_array = self.value_list[self.alignment_parameter].decompress(d[self.alignment_parameter][0]).get_data()
@@ -589,12 +566,6 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
             sort_parameter = self.alignment_parameter
         data.get_data().sort(order=sort_parameter)
         return data
-        # if sort_parameter is not None:
-        #     # sort_parameter = self.alignment_parameter
-        #     idx_arr = np.argsort(return_dict[sort_parameter])
-        #     for param, arr in return_dict.iteritems():
-        #         return_dict[param] = arr[idx_arr]
-        # return return_dict
 
     def flush_values(self):
         if self.mode == 'r':
@@ -614,7 +585,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         self.flush_values()
         log.debug('Flushing MasterManager...')
         self.master_manager.flush()
-        for pk, pm in self.parameter_metadata.iteritems():
+        for pk, pm in self.master_manager.parameter_metadata.iteritems():
             log.debug('Flushing ParameterManager for \'%s\'...', pk)
             pm.flush()
 
@@ -770,7 +741,6 @@ class PostgresPersistedStorage(AbstractStorage):
             return NumpyParameterData(self.parameter_manager.parameter_name, vals)
 
         elif isinstance(vals, tuple):
-            from coverage_model.parameter_data import RepeatOverTime
             if vals[4] == ConstantOverTime.__name__:
                 return ConstantOverTime(self.parameter_manager.parameter_name, vals[1], time_start=vals[2], time_end=vals[3])
             elif vals[4] == RepeatOverTime.__name__:
