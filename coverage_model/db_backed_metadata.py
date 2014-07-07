@@ -28,7 +28,10 @@ class DbBackedMetadataManager(MetadataManager):
     @staticmethod
     def isPersisted(directory, guid):
         if DbBackedMetadataManager.is_persisted_in_db(guid) is False:
-            return MasterManager.isPersisted(directory, guid)
+            if directory is not None:
+                return MasterManager.isPersisted(directory, guid)
+            else:
+                return False
         return True
 
     @staticmethod

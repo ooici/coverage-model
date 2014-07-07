@@ -288,11 +288,8 @@ class ExternalFunction(AbstractFunction):
 
     def load_coverage(self, pdir):
         from coverage_model.coverage import AbstractCoverage
-        root_path, guid = os.path.split(pdir)
         external_guid = self.param_map[self.external_name]
-        path = os.path.join(root_path, external_guid)
-        # cov = AbstractCoverage.resurrect(external_guid, mode='r')
-        cov = AbstractCoverage.load(path, mode='r')
+        cov = AbstractCoverage.resurrect(external_guid, mode='r')
         return cov
 
     def evaluate(self, pval_callback, pdir, time_segment, fill_value=-9999):

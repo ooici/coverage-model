@@ -20,14 +20,15 @@ class AggregateCoverage(AbstractCoverage):
 
         # Initializes base class with proper mode.
         super(AggregateCoverage, self).__init__(mode)
+        if root_dir != None:
+            log.info("\'root_dir\' specification is OBE.  Use coverage configuration file to specify root_dir")
 
         try:
-            # Make sure root_dir and persistence_guid are both not None and are strings
-            if not isinstance(root_dir, basestring) or not isinstance(persistence_guid, basestring):
-                raise TypeError('\'root_dir\' and \'persistence_guid\' must be instances of basestring')
+            # Make sure persistence_guid is string
+            if not isinstance(persistence_guid, basestring):
+                raise TypeError('\'persistence_guid\' must be instance of basestring')
 
-            root_dir = root_dir if not root_dir.endswith(persistence_guid) else os.path.split(root_dir)[0]
-
+            root_dir = CoverageConfig().top_level_storage_location
             if is_persisted(root_dir, persistence_guid):
                 self._existing_coverage(root_dir, persistence_guid)
             else:
