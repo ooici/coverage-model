@@ -52,15 +52,33 @@ class PostgresSpanStorage(SpanStorage):
 
     def write_span(self, span):
         stats_sql, bin_sql = self.get_span_stats_and_bin_insert_sql(span)
-        sql_str = "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE;  %s %s %s COMMIT;" % (self.get_span_insert_sql(span), stats_sql, bin_sql)
+        span_sql, data_times = self.get_span_insert_sql(span)
+        sql_str = "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE;  %s %s %s COMMIT;" % (span_sql, stats_sql, bin_sql)
         with self.span_store.pool.cursor(**self.span_store.cursor_args) as cur:
-            cur.execute(sql_str, [SpanJsonDumper(span)])
+            cur.execute(sql_str, [SpanJsonDumper(span) for i in range(data_times)])
 
     def get_span_insert_sql(self, span):
-        sql_str = """INSERT INTO  %s (id, coverage_id, ingest_time, data) VALUES ('%s', '%s', %f, %s);""" % \
-                  (PostgresSpanStorage.span_table_name, span.id, span.coverage_id, span.ingest_time, '%s')
+        data_times = 1
+        if True:
+            tbl = PostgresSpanStorage.span_table_name
+            id = span.id
+            cid = span.coverage_id
+            it = span.ingest_time
+            d = '%s'
+            sql_str = """UPDATE %s SET coverage_id='%s', ingest_time=%f, data=%s WHERE id='%s';
+                         INSERT INTO %s (id, coverage_id, ingest_time, data)
+                          SELECT '%s', '%s', %f, %s
+                          WHERE NOT EXISTS (SELECT 1 FROM %s WHERE id='%s');""" % \
+                      (tbl, cid, it, d, id, \
+                       tbl, \
+                       id, cid, it, d, \
+                       tbl, id)
+            data_times = 2
+        else:
+            sql_str = """INSERT INTO  %s (id, coverage_id, ingest_time, data) VALUES ('%s', '%s', %f, %s);""" % \
+                      (PostgresSpanStorage.span_table_name, span.id, span.coverage_id, span.ingest_time, '%s')
 
-        return sql_str
+        return sql_str, data_times
 
     def get_span_stats_and_bin_insert_sql(self, span):
         time_db_key = self.config.get_time_key(span.param_dict.keys())
@@ -69,8 +87,20 @@ class PostgresSpanStorage(SpanStorage):
         vertical_db_key = self.config.get_vertical_key(span.param_dict.keys())
         span_stats = span.get_span_stats(params=[time_db_key, lat_db_key, lon_db_key, vertical_db_key]).params
 
-        stats_sql = """INSERT INTO %s (span_address, coverage_id, hash) VALUES ('%s', '%s', '%s'); """ % \
-                    (self.span_stats_table_name, span.id, span.coverage_id, span.get_hash())
+        tbl = self.span_stats_table_name
+        addr = span.id
+        cid = span.coverage_id
+        h = span.get_hash()
+        stats_sql = """UPDATE %s SET coverage_id='%s', hash='%s' WHERE span_address='%s';
+                     INSERT INTO %s (span_address, coverage_id, hash)
+                      SELECT '%s', '%s', '%s'
+                      WHERE NOT EXISTS (SELECT 1 FROM %s WHERE span_address='%s');""" % \
+                  (tbl, cid, h, addr, \
+                   tbl, \
+                   addr, cid, h, \
+                   tbl, addr)
+        # stats_sql = """INSERT INTO %s (span_address, coverage_id, hash) VALUES ('%s', '%s', '%s'); """ % \
+        #             (self.span_stats_table_name, span.id, span.coverage_id, span.get_hash())
 
         if time_db_key in span_stats:
             time_min = PostgresDB._get_time_string(span_stats[time_db_key][0])
@@ -94,6 +124,11 @@ class PostgresSpanStorage(SpanStorage):
 
     def get_spans(self, span_ids=None, coverage_ids=None, params=None, start_time=None, stop_time=None, decompressors=None):
         statement = """SELECT data::text from %s where coverage_id = '%s'""" % (self.span_table_name, coverage_ids)
+        if span_ids is not None:
+            from collections import Iterable
+            if isinstance(span_ids, Iterable) and not isinstance(span_ids, basestring):
+                span_ids = ','.join(span_ids)
+            statement = ''.join([statement, """ AND id = ANY('{%s}')""" % (span_ids)])
         with self.span_store.pool.cursor(**self.span_store.cursor_args) as cur:
             cur.execute(statement)
             results = cur.fetchall()

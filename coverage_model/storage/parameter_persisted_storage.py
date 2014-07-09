@@ -244,6 +244,7 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
         import time
         write_time = time.time()
         bad_keys = []
+        mutable_params = {}
         for key, arr in values.iteritems():
             if key not in self.value_list:
                 raise KeyError("Parameter, %s, has not been initialized" % (key))
@@ -272,16 +273,89 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
                 raise ValueError("Array size for %s is inconsistent.  Expected %s elements, found %s." % (key, str(arr_len), str(arr.get_data().size)))
             min_val, max_val = self.value_list[key].get_statistics(arr)
             self.update_parameter_bounds(key, (min_val, max_val))
+            if param_type.is_mutable:
+                mutable_params[key] = values[key]
 
         for key in bad_keys:
             values.pop(key)
 
+        for key in mutable_params:
+            values.pop(key)
+        if len(mutable_params) > 0 and self.alignment_parameter in values:
+            mutable_params[self.alignment_parameter] = values[self.alignment_parameter]
+
         if not all_values_constant_over_time and self.alignment_parameter not in values:
             raise LookupError("Array must be supplied for parameter, %s, to ensure alignment" % self.alignment_parameter)
 
-        span = Span(write_id, self.master_manager.guid, values, compressors=self.value_list)
+        if len(values) < 2 and self.alignment_parameter in values and len(mutable_params) > 0:
+            pass
+        else:
+            span = Span(write_id, self.master_manager.guid, values, compressors=self.value_list)
+            span_table = SpanStorageFactory.get_span_storage_obj(self.storage_name)
+            span_table.write_span(span)
+        self._write_mutable_params(mutable_params, write_id + '_mutable', self.master_manager.guid)
+
+    def _write_mutable_params(self, param_dict, write_id, guid):
+        if len(param_dict) < 1:
+            return
+
+        for param in param_dict:
+            ptype = self.master_manager.parameter_metadata[param].parameter_context.param_type
+
+            if not ptype.is_mutable and param != self.alignment_parameter:
+                raise TypeError("Parameter, %s, is not mutable" % param)
+
+        time_arr = param_dict[self.alignment_parameter].get_data()
+        time_segment = [time_arr.min(), time_arr.max()]
+        associated_spans = self._get_span_dict(param_dict.keys().remove(self.alignment_parameter), time_segment)
+        new_alignment_arr = param_dict[self.alignment_parameter].get_data()
+        spans_needing_rewrite = set()
+        remove = {}
+        for span in associated_spans:
+            if not span.mutable:
+                continue
+            span_alignment_arr = span.param_dict[self.alignment_parameter].get_data()
+            intersection = np.intersect1d(span_alignment_arr, new_alignment_arr)
+            if intersection.shape[0] < 1:
+                continue
+            intersect_indicies = np.nonzero(intersection)[0]
+            for idx in intersect_indicies:
+                new_idx = np.nonzero(new_alignment_arr == span_alignment_arr[idx])
+                for param_name, values in param_dict.iteritems():
+                    if param_name == self.alignment_parameter:
+                        continue
+                    if param_name in span.param_dict:
+                        span.param_dict[param_name].get_data().setflags(write=True)
+                        spans_needing_rewrite.add(span)
+                        span.param_dict[param_name].get_data()[idx] = param_dict[param_name].get_data()[new_idx]
+                        if param_name not in remove:
+                            remove[param_name] = []
+                        remove[param_name].append(new_idx[0][0])
+
+        if len(remove) > 0:
+            for param , indicies in remove.iteritems():
+                from copy import deepcopy
+                align_data = deepcopy(param_dict[self.alignment_parameter])
+                get_data_indicies = range(len(align_data.get_data()))
+                from collections import deque
+                deque((list.pop(get_data_indicies, i) for i in sorted(indicies, reverse=True)), maxlen=0)
+                if len(get_data_indicies) > 0:
+                    span_dict = {}
+                    align_data._data = align_data.get_data()[get_data_indicies]
+                    span_dict[self.alignment_parameter] = align_data
+                    param_dict[param]._data = param_dict[param].get_data()[get_data_indicies]
+                    span_dict[param] = param_dict[param]
+                    span = Span(write_id+'_'+param, guid, span_dict, compressors=self.value_list, mutable=True)
+                    spans_needing_rewrite.add(span)
+                param_dict.pop(param)
+
         span_table = SpanStorageFactory.get_span_storage_obj(self.storage_name)
-        span_table.write_span(span)
+        if len(param_dict) > 1:
+            span = Span(write_id, guid, param_dict, compressors=self.value_list, mutable=True)
+            span_table.write_span(span)
+        for span in spans_needing_rewrite:
+            span.compressors = self.value_list
+            span_table.write_span(span)
 
     def get_spans_by_id(self, spans):
         return SpanStorageFactory.get_span_storage_obj(self.storage_name).get_spans(coverage_ids=self.master_manager.guid, span_ids=spans, decompressors=self.value_list)

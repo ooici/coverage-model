@@ -16,7 +16,7 @@ from coverage_model.parameter_data import ConstantOverTime, NumpyParameterData
 
 class Span():
 
-    def __init__(self, span_uuid, coverage_id, param_dict, ingest_time=None, compressors=None):
+    def __init__(self, span_uuid, coverage_id, param_dict, ingest_time=None, compressors=None, mutable=False):
         self.param_dict = param_dict
         self.ingest_time = ingest_time
         if ingest_time is None:
@@ -24,6 +24,7 @@ class Span():
         self.id = span_uuid
         self.coverage_id = coverage_id
         self.compressors = compressors
+        self.mutable = mutable
 
     def get_span_stats(self, params=None):
         param_stat_dict = {}
@@ -40,7 +41,7 @@ class Span():
 
     def as_json(self, compressors=None, indent=None):
         data_dict = {}
-        json_dict = {'id': self.id, 'ingest_time': self.ingest_time, 'coverage_id': self.coverage_id}
+        json_dict = {'id': self.id, 'ingest_time': self.ingest_time, 'coverage_id': self.coverage_id, 'mutable': self.mutable}
         if compressors is None:
             compressors = self.compressors
         if compressors is not None:
@@ -54,15 +55,18 @@ class Span():
     def from_json(cls, js_str, decompressors=None):
         json_dict = json.loads(js_str)
         uncompressed_params = {}
-        for param, data in json_dict['params'].iteritems():
-
-            uncompressed_params[str(param)] = decompressors[param].decompress(data)
-        return Span(str(json_dict['id']), str(json_dict['coverage_id']), uncompressed_params, ingest_time=json_dict['ingest_time'])
+        if 'params' in json_dict:
+            for param, data in json_dict['params'].iteritems():
+                uncompressed_params[str(param)] = decompressors[param].decompress(data)
+        return Span(str(json_dict['id']), str(json_dict['coverage_id']), uncompressed_params, ingest_time=json_dict['ingest_time'], mutable=json_dict['mutable'])
 
     def get_hash(self):
         data = [ self.id, self.ingest_time, self.coverage_id, sorted(self.param_dict) ]
         m = hashlib.md5(str(data))
         return m.hexdigest()
+
+    def __hash__(self):
+        return int(self.get_hash(),16)
 
     def __eq__(self, other):
         if self.__dict__ == other.__dict__:

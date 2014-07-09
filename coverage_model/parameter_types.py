@@ -91,7 +91,7 @@ class AbstractParameterType(AbstractIdentifiable):
 
     Provides
     """
-    def __init__(self, value_module=None, value_class=None, **kwargs):
+    def __init__(self, value_module=None, value_class=None, mutable=False, **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractIdentifiable; see documentation for that class for details
@@ -102,6 +102,7 @@ class AbstractParameterType(AbstractIdentifiable):
         self._value_module = value_module or 'coverage_model.parameter_values'
         self._value_class = value_class or 'NumericValue'
         self.name = None
+        self.mutable = mutable
 
     def is_valid_value(self, value):
         raise NotImplementedError('Function not implemented by abstract class')
@@ -128,6 +129,10 @@ class AbstractParameterType(AbstractIdentifiable):
     @property
     def storage_encoding(self):
         return self._value_encoding
+
+    @property
+    def is_mutable(self):
+        return self.mutable
 
     def _add_graph_node(self, graph, name):
         if name.startswith('<') and name.endswith('>'):

@@ -414,6 +414,8 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
         scov = SimplexCoverage(cls.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory, bricking_scheme=bricking_scheme, auto_flush_values=auto_flush_values)
+        ctx = ParameterContext('mutable', param_type=QuantityType(value_encoding='<f4', mutable=True), fill_value=-9999.0)
+        scov.append_parameter(ctx)
 
         # Insert some timesteps (automatically expands other arrays)
         if (nt is None) or (nt == 0) or (make_empty is True):
@@ -541,3 +543,55 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         expected_const_rng_int_arr.fill((-10,10))
         np.testing.assert_array_equal(res.get_data()['const_rng_int'], expected_const_rng_int_arr)
         ptypes_cov.close()
+
+    def test_mutable_param_type(self):
+        nt = 20
+        ptypes_cov, cov_name = self.get_cov(nt=nt)
+        self.assertIsInstance(ptypes_cov, AbstractCoverage)
+
+        cov_id = ptypes_cov.persistence_guid
+        ptypes_cov.close()
+        cov = AbstractCoverage.resurrect(cov_id, mode='a')
+
+        expected_time = np.arange(nt,nt+10)
+        expected_mutable = np.arange(10)
+        cov.set_parameter_values({'time': expected_time, 'mutable': expected_mutable})
+        retrieved_vals = cov.get_parameter_values(['time', 'mutable'], time_segment=(20,30)).get_data()
+        np.testing.assert_array_equal(retrieved_vals['time'], expected_time)
+        np.testing.assert_array_equal(retrieved_vals['mutable'], expected_mutable)
+
+        expected_time = np.array([20,21,22,23,24,25,26,27,28,29,30,34])
+        expected_mutable = np.array([100,200,2,3,4,5,6,7,8,9,30,34])
+        cov.set_parameter_values({'time': np.array([20, 21, 30, 34]), 'mutable': np.array([100,200, 30, 34])})
+        cov.refresh()
+        retrieved_vals = cov.get_parameter_values(['time', 'mutable'], time_segment=(20,34)).get_data()
+        np.testing.assert_array_equal(retrieved_vals['time'], expected_time)
+        np.testing.assert_array_equal(retrieved_vals['mutable'], expected_mutable)
+
+        expected_time = np.array([20,21,22,23,24,25,26,27,28,29,30,34])
+        expected_mutable = np.array([99,98,2,3,4,5,6,7,8,9,97,96])
+        cov.set_parameter_values({'time': np.array([20, 21, 30, 34]), 'mutable': np.array([99, 98, 97, 96])})
+        cov.refresh()
+        retrieved_vals = cov.get_parameter_values(['time', 'mutable'], time_segment=(20,34)).get_data()
+        np.testing.assert_array_equal(retrieved_vals['time'], expected_time)
+        np.testing.assert_array_equal(retrieved_vals['mutable'], expected_mutable)
+
+        expected_time = np.array(np.arange(5))
+        expected_mutable = np.arange(5,10)
+        cov.set_parameter_values({'time': expected_time, 'mutable': expected_mutable})
+        cov.refresh()
+        retrieved_vals = cov.get_parameter_values(['time', 'mutable'], time_segment=(0,5)).get_data()
+        expected_time = np.array([0,0,1,1,2,2,3,3,4,4,5])
+        fill = cov.get_parameter_context('mutable').fill_value
+        expected_mutable = np.array([fill,5,fill,6,fill,7,fill,8,9,fill,fill])
+        np.testing.assert_array_equal(retrieved_vals['time'], expected_time)
+        np.testing.assert_array_equal(retrieved_vals['mutable'], expected_mutable)
+
+        ctx = ParameterContext('mutable2', param_type=QuantityType(value_encoding='<f4', mutable=True), fill_value=-9999.0)
+        cov.append_parameter(ctx)
+        expected_time = np.arange(nt,nt+10)
+        expected_mutable = np.arange(100,110)
+        cov.set_parameter_values({'time': expected_time, 'mutable2': expected_mutable})
+        retrieved_vals = cov.get_parameter_values(['time', 'mutable2'], time_segment=(20,30)).get_data()
+        # np.testing.assert_array_equal(retrieved_vals['time'], expected_time)
+        # np.testing.assert_array_equal(retrieved_vals['mutable'], expected_mutable)
