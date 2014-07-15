@@ -1,5 +1,13 @@
-OOICI Coverage Model
-==============
+===========================================================
+Ocean Observatories Initiative Cyberinfrastructure (OOI CI)
+Integrated Observatory Network (ION) - OOINet
+
+OOINet Coverage Model
+
+(C) The Regents of the University of California, 2010-2014
+Open source under BSD license. See LICENSE.txt for details.
+===========================================================
+
 
 Initial coverage model implementation
 

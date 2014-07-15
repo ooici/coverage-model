@@ -62,3 +62,7 @@ class ExtentsDict(Dictable):
         if isinstance(extents, ReferenceCoverageExtents):
             extents = [extents]
         self.data[cov_id] = extents
+
+    def __getitem__(self, k):
+        return self.data[k]
+
