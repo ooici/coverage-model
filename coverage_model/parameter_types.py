@@ -24,7 +24,7 @@ from coverage_model.parameter_values import ConstantValue
 from coverage_model.parameter_functions import AbstractFunction
 from coverage_model.numexpr_utils import digit_match, is_well_formed_where, single_where_match
 from coverage_model.persistence import system_type
-from coverage_model.util.numpy_utils import create_numpy_object_array
+from coverage_model.util.numpy_utils import NumpyUtils
 import numpy as np
 import networkx as nx
 import re
@@ -1075,7 +1075,7 @@ class RaggedArrayType(AbstractComplexParameterType):
 
     @classmethod
     def create_ragged_array(cls, data):
-        return create_numpy_object_array(data)
+        return NumpyUtils.create_numpy_object_array(data)
 
     def validate_value_set(self, value_set):
         updated_object = False

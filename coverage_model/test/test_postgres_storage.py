@@ -602,7 +602,7 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         # test one element
         scov = _make_cov(self.working_dir, ['quantity', param_ctx], nt = 0)
 
-        from coverage_model.util.numpy_utils import  create_numpy_object_array
+        from coverage_model.util.numpy_utils import  NumpyUtils
         data_dict = {
             'time' : np.array([0], dtype='<f8'),
             'array_type' : RaggedArrayType.create_ragged_array(np.array([[0,0,0]]))
@@ -620,7 +620,7 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
 
         data_dict = {
             'time' : np.array([0,1], dtype='<f8'),
-            'array_type' : create_numpy_object_array(np.array([[1,1,1], [2,2,2]], dtype='i4'))
+            'array_type' : NumpyUtils.create_numpy_object_array(np.array([[1,1,1], [2,2,2]], dtype='i4'))
         }
 
         data_dict = _easy_dict(data_dict)
@@ -635,7 +635,7 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
 
         data_dict = {
             'time' : np.array([0,1], dtype='<f8'),
-            'array_type' : create_numpy_object_array(np.array([[1,1,1], [2,2,2,2]]))
+            'array_type' : NumpyUtils.create_numpy_object_array(np.array([[1,1,1], [2,2,2,2]]))
         }
 
         data_dict = _easy_dict(data_dict)
@@ -656,7 +656,7 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
 
         data_dict = {
             'time' : np.array([0,1,2,3], dtype='<f8'),
-            'array_type' : create_numpy_object_array(np.array([[1,1,1], [2,2,2,2], [1,1,1], [2,2,2]]))
+            'array_type' : NumpyUtils.create_numpy_object_array(np.array([[1,1,1], [2,2,2,2], [1,1,1], [2,2,2]]))
         }
         data_dict = _easy_dict(data_dict)
         returned_dict = scov.get_parameter_values(param_names=data_dict.keys()).get_data()

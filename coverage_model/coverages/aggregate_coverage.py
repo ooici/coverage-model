@@ -7,7 +7,7 @@ from coverage_model.parameter_data import NumpyDictParameterData
 from coverage_model.parameter_values import get_value_class
 from coverage_model.persistence import is_persisted
 from coverage_model.storage.parameter_persisted_storage import PostgresPersistenceLayer, PostgresPersistedStorage
-from coverage_model.util.numpy_utils import sort_flat_arrays
+from coverage_model.util.numpy_utils import NumpyUtils
 from coverage_model.utils import Interval
 
 
@@ -285,7 +285,7 @@ class AggregateCoverage(AbstractCoverage):
 
         combined_data = self._merge_value_dicts(cov_value_list, override_temporal_key=dummy_key, stride_length=stride_length)
         if dummy_key in combined_data:
-            combined_data = sort_flat_arrays(combined_data, dummy_key)
+            combined_data = NumpyUtils.sort_flat_arrays(combined_data, dummy_key)
             return combined_data[dummy_key] #TODO: Handle case where 'time' may not be temporal parameter name of all sub-coverages
         else:
             return np.array([])

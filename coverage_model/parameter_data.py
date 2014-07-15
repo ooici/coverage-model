@@ -8,7 +8,7 @@
 """
 
 import numpy as np
-from coverage_model.util.numpy_utils import sort_flat_arrays
+from coverage_model.util.numpy_utils import NumpyUtils
 
 
 def make_parameter_data_dict(data_dict):
@@ -81,7 +81,7 @@ class NumpyDictParameterData(ParameterData):
 
     def sort_data_by_parameter(self, sort_parameter):
         if sort_parameter is not None:
-            self._data = sort_flat_arrays(self._data, sort_parameter)
+            self._data = NumpyUtils.sort_flat_arrays(self._data, sort_parameter)
 
     def convert_to_record_array(self):
         if not self.is_record_array:
