@@ -2,7 +2,7 @@ __author__ = 'casey'
 
 from ooi.logging import log
 from pyon.util.config import Config
-import datetime
+from coverage_model.util.time_utils import get_current_ntp_time
 
 
 class Singleton(type):
@@ -21,6 +21,7 @@ class CoverageConfig(object):
     _default_ordered_lat_key_preferences = ['m_lat', 'm_gps_lat', 'c_wpt_lat', 'lat']
     _default_ordered_lon_key_preferences = ['m_lon', 'm_gps_lon', 'c_wpt_lon', 'lon']
     _default_ordered_vertical_key_preferences = ['m_depth', 'depth']
+    _default_ingest_time_key = 'ingest_time'
     _default_time_db_key = 'time_range'
     _default_geo_db_key = 'spatial_geometry'
     _default_vertical_db_key = 'vertical_range'
@@ -29,7 +30,6 @@ class CoverageConfig(object):
     _default_storage_location = None
 
     def __init__(self):
-        print 'setting defaults'
         self.ordered_time_key_preferences = self._default_ordered_time_key_preferences
         self.ordered_lat_key_preferences = self._default_ordered_lat_key_preferences
         self.ordered_lon_key_preferences = self._default_ordered_lon_key_preferences
@@ -43,6 +43,7 @@ class CoverageConfig(object):
         self.using_default_config = True
         self.config_time = 0
         self.read_and_set_config()
+        self.ingest_time_key = self._default_ingest_time_key
 
     def read_and_set_config(self):
         one_from_config = False
@@ -52,7 +53,7 @@ class CoverageConfig(object):
                 self.__setattr__(k, v)
                 one_from_config = True
             self.using_default_config = False
-            self.config_time = datetime.datetime.utcnow().time()
+            self.config_time = get_current_ntp_time()
         except Exception as ex:
             if one_from_config:
                 log.info("Load from config failed with '%s'.  Using hybrid default/config file configuration" % ex.message)

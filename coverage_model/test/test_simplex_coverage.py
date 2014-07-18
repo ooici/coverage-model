@@ -8,14 +8,13 @@
 @brief Tests for the SimplexCoverage class.
 """
 
-from coverage_model import *
 from nose.plugins.attrib import attr
-import unittest
-import numpy as np
-from pyon.public import log
-import random
 from copy import deepcopy
+import numpy as np
 import os
+import random
+import unittest
+from coverage_model import *
 
 from coverage_test_base import CoverageIntTestBase, get_props, get_parameter_dict, EXEMPLAR_CATEGORIES
 
@@ -128,7 +127,65 @@ class TestSampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         coords_params = cov.list_parameters(coords_only=True)
         self.assertEqual(coords_params, ['lat', 'lon', 'time'])
         data_params = cov.list_parameters(data_only=True)
-        self.assertEqual(data_params, ['conductivity', 'temp'])
+
+        self.assertEqual(data_params, ['conductivity', cov.ingest_time_parameter_name, 'temp'])
+
+    def test_duplicate_removal(self):
+        nt = 20
+        ptypes_cov, cov_name = self.get_cov(nt=nt)
+        self.assertIsInstance(ptypes_cov, AbstractCoverage)
+
+        cov_id = ptypes_cov.persistence_guid
+        ptypes_cov.close()
+        cov = AbstractCoverage.resurrect(cov_id, mode='a')
+
+        cov.set_parameter_values({'time': np.array([15,16,17,18,19]), 'lat': np.array([0.1,0.1,0.1,0.1,0.1])})
+        cov.refresh()
+        vals = cov.get_parameter_values(remove_duplicate_records=True)
+        vals_dict = vals.get_data()
+        expected_lat_arr = np.empty(nt, dtype=np.float32)
+        expected_lat_arr[:] = 45
+        expected_lat_arr[15:20] = 0.1
+        np.testing.assert_array_equal(vals_dict['lat'], expected_lat_arr)
+        expected_time_arr = np.arange(20)
+        np.testing.assert_array_equal(vals_dict['time'], expected_time_arr)
+
+
+        cov.refresh()
+        vals = cov.get_parameter_values()
+        vals_dict = vals.get_data()
+        expected_time_arr = np.arange(25)
+        expected_time_arr[15:] = [15,15,16,16,17,17,18,18,19,19]
+        np.testing.assert_array_equal(vals_dict['time'], expected_time_arr)
+        expected_lat_arr = np.empty(25, dtype=np.float32)
+        expected_lat_arr[:] = 45
+        expected_lat_arr[15:] = [45,0.1,45,0.1,45,0.1,45,0.1,45,0.1]
+        np.testing.assert_array_equal(vals_dict['lat'], expected_lat_arr)
+
+    def test_ingest_times(self):
+        nt = 20
+        ptypes_cov, cov_name = self.get_cov(nt=nt)
+        self.assertIsInstance(ptypes_cov, AbstractCoverage)
+
+        cov_id = ptypes_cov.persistence_guid
+        ptypes_cov.close()
+        cov = AbstractCoverage.resurrect(cov_id, mode='a')
+
+        cov.set_parameter_values({'time': np.array([15,16,17,18,19]), 'lat': np.array([0.1,0.1,0.1,0.1,0.1])})
+        cov.refresh()
+        vals = cov.get_parameter_values()
+        vals_dict = vals.get_data()
+        ingest_time_vals = vals_dict[cov.ingest_time_parameter_name]
+        ingest_times = np.unique(ingest_time_vals)
+        self.assertEqual(ingest_times.size, 2)
+        ingest_times.sort()
+        t1 = ingest_times[0]
+        t2 = ingest_times[1]
+        self.assertNotEqual(t1,t2)
+        expected_lat_arr = np.empty(25, dtype=np.float64)
+        expected_lat_arr[:15] = ingest_times[0]
+        expected_lat_arr[15:] = [t1,t2,t1,t2,t1,t2,t1,t2,t1,t2]
+        np.testing.assert_array_equal(ingest_time_vals, expected_lat_arr)
 
 @attr('INT', group='cov')
 class TestOneParamCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
@@ -342,7 +399,7 @@ class TestEmptySampleCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
             cov.get_data_bounds()
 
         self.assertEqual(cov.get_data_extents(),
-                         {'conductivity': (0,), 'lat': (0,), 'lon': (0,), 'temp': (0,), 'time': (0,)})
+                         {'conductivity': (0,), 'ingest_time': (0,),'lat': (0,), 'lon': (0,), 'temp': (0,), 'time': (0,)})
 
     @unittest.skip('Does not apply to empty coverage.')
     def test_get_data_after_load(self):
@@ -556,7 +613,9 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         expected_time = np.arange(nt,nt+10)
         expected_mutable = np.arange(10)
         cov.set_parameter_values({'time': expected_time, 'mutable': expected_mutable})
+        cov.refresh()
         retrieved_vals = cov.get_parameter_values(['time', 'mutable'], time_segment=(20,30)).get_data()
+        print retrieved_vals
         np.testing.assert_array_equal(retrieved_vals['time'], expected_time)
         np.testing.assert_array_equal(retrieved_vals['mutable'], expected_mutable)
 
@@ -595,3 +654,4 @@ class TestPtypesCovInt(CoverageModelIntTestCase, CoverageIntTestBase):
         retrieved_vals = cov.get_parameter_values(['time', 'mutable2'], time_segment=(20,30)).get_data()
         # np.testing.assert_array_equal(retrieved_vals['time'], expected_time)
         # np.testing.assert_array_equal(retrieved_vals['mutable'], expected_mutable)
+

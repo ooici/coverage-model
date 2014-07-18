@@ -398,7 +398,29 @@ class TestNumpyUtils(CoverageModelIntTestCase):
         alpha_vv_dict.fill(False)
         alpha_vv_dict[[2,3,11,-3,-4]] = True
         vv_dict = {'align': align_vv_dict, 'pref': pref_vv_dict, 'alpha': alpha_vv_dict}
-        most_recent_valid_np_dict = MostRecentValidValueNumpyDict(np_dict, 'align', 'pref', vv_dict)
+        ingest_times_dict = {'align': test_pref, 'pref': test_pref, 'alpha': test_pref}
+        most_recent_valid_np_dict = MostRecentValidValueNumpyDict(np_dict, 'align', ingest_times_dict, vv_dict)
+        mrvnd = most_recent_valid_np_dict.np_dict
+        np.testing.assert_array_equal(mrvnd['align'], np.array([0,1,2,3,4,5,6,7,8,9]))
+        np.testing.assert_array_equal(mrvnd['pref'], np.array([13,12,11,10,9,4,3,2,1,0]))
+        np.testing.assert_array_equal(mrvnd['alpha'], np.array(['n','m','l','p','q','r','s','c','u','a']))
+
+        align = np.array([9,8,7,6,5,6,7,6,5,4,3,2,1,0,2,3,4,5,6,7,8])
+        test_pref = np.arange(align.size)
+        alpha = 'abcdefghijklmnopqrstuvwkyz'[:align.size]
+        alpha = np.array(list(alpha))
+        np_dict = {'align': align, 'pref': test_pref, 'alpha': alpha}
+        align_vv_dict = np.empty(align.size, dtype=np.bool)
+        align_vv_dict.fill(True)
+        pref_vv_dict = np.empty(align.size, dtype=np.bool)
+        pref_vv_dict.fill(False)
+        pref_vv_dict[[0,1,2,3,4,9,10,11,12,13]] = True
+        alpha_vv_dict = np.empty(align.size,dtype=np.bool)
+        alpha_vv_dict.fill(False)
+        alpha_vv_dict[[2,3,11,-3,-4]] = True
+        ingest_times_dict = {'align': test_pref, 'pref': test_pref, 'alpha': test_pref}
+        vv_dict = {'align': align_vv_dict, 'pref': pref_vv_dict, 'alpha': alpha_vv_dict}
+        most_recent_valid_np_dict = MostRecentValidValueNumpyDict(np_dict, 'align', ingest_times_dict, vv_dict, add_aggregate=True)
         mrvnd = most_recent_valid_np_dict.np_dict
         np.testing.assert_array_equal(mrvnd['align'], np.array([0,1,2,3,4,5,6,7,8,9]))
         np.testing.assert_array_equal(mrvnd['pref'], np.array([13,12,11,10,9,4,3,2,1,0]))
@@ -418,27 +440,8 @@ class TestNumpyUtils(CoverageModelIntTestCase):
         alpha_vv_dict.fill(False)
         alpha_vv_dict[[2,3,11,-3,-4]] = True
         vv_dict = {'align': align_vv_dict, 'pref': pref_vv_dict, 'alpha': alpha_vv_dict}
-        most_recent_valid_np_dict = MostRecentValidValueNumpyDict(np_dict, 'align', 'pref', vv_dict, add_aggregate=True)
-        mrvnd = most_recent_valid_np_dict.np_dict
-        np.testing.assert_array_equal(mrvnd['align'], np.array([0,1,2,3,4,5,6,7,8,9]))
-        np.testing.assert_array_equal(mrvnd['pref'], np.array([13,12,11,10,9,4,3,2,1,0]))
-        np.testing.assert_array_equal(mrvnd['alpha'], np.array(['n','m','l','p','q','r','s','c','u','a']))
-
-        align = np.array([9,8,7,6,5,6,7,6,5,4,3,2,1,0,2,3,4,5,6,7,8])
-        test_pref = np.arange(align.size)
-        alpha = 'abcdefghijklmnopqrstuvwkyz'[:align.size]
-        alpha = np.array(list(alpha))
-        np_dict = {'align': align, 'pref': test_pref, 'alpha': alpha}
-        align_vv_dict = np.empty(align.size, dtype=np.bool)
-        align_vv_dict.fill(True)
-        pref_vv_dict = np.empty(align.size, dtype=np.bool)
-        pref_vv_dict.fill(False)
-        pref_vv_dict[[0,1,2,3,4,9,10,11,12,13]] = True
-        alpha_vv_dict = np.empty(align.size,dtype=np.bool)
-        alpha_vv_dict.fill(False)
-        alpha_vv_dict[[2,3,11,-3,-4]] = True
-        vv_dict = {'align': align_vv_dict, 'pref': pref_vv_dict, 'alpha': alpha_vv_dict}
-        most_recent_valid_np_dict = AggregatedDuplicatesNumpyDict(np_dict, 'align', 'pref', vv_dict)
+        ingest_times_dict = {'align': test_pref, 'pref': test_pref, 'alpha': test_pref}
+        most_recent_valid_np_dict = AggregatedDuplicatesNumpyDict(np_dict, 'align', ingest_times_dict, vv_dict)
         mrvnd = most_recent_valid_np_dict.np_dict
         np.testing.assert_array_equal(mrvnd['align'], np.array([0,1,2,2,2,3,3,3,4,4,4,5,5,5,5,6,6,6,6,6,7,7,7,7,8,8,8,9]))
 

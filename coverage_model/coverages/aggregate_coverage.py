@@ -292,7 +292,7 @@ class AggregateCoverage(AbstractCoverage):
 
     def get_parameter_values(self, param_names=None, time_segment=None, time=None,
                              sort_parameter=None, stride_length=None, return_value=None, fill_empty_params=False,
-                             function_params=None, as_record_array=False):
+                             function_params=None, as_record_array=False, remove_duplicate_records=False):
         '''
         Obtain the value set for a given parameter over a specified domain
         '''
@@ -306,7 +306,8 @@ class AggregateCoverage(AbstractCoverage):
                     this_param_names = this_param_names.intersection(set(coverage.list_parameters()))
                     this_param_names = list(this_param_names)
                 params = coverage.get_parameter_values(this_param_names, time_segment, time, sort_parameter, stride_length,
-                                                       return_value, fill_empty_params, function_params, as_record_array=False)
+                                                       return_value, fill_empty_params, function_params, as_record_array=False,
+                                                       remove_duplicate_records=remove_duplicate_records)
                 if len(params.get_data()) == 1 and coverage.temporal_parameter_name in params.get_data() and not get_times_too:
                     continue
                 cov_dict = params.get_data()
@@ -453,7 +454,8 @@ class AggregateCoverage(AbstractCoverage):
                     if param in coverage.list_parameters():
                         bounds = coverage.get_data_bounds(param)
                         if param in rt:
-                            rt[param] = (min(bounds[0], rt[param][0]), max(bounds[1], rt[param][1]))
+                            if len(bounds) > 0:
+                                rt[param] = (min(bounds[0], rt[param][0]), max(bounds[1], rt[param][1]))
                         else:
                             rt[param] = bounds
             return rt

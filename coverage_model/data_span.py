@@ -6,25 +6,68 @@
 """
 
 from ooi.logging import log
-import time
-import json
 from ast import literal_eval
-from coverage_model.address import Address, AddressFactory
 import hashlib
+import itertools
+import json
+import numpy as np
+from coverage_model.address import Address, AddressFactory
+from coverage_model.config import CoverageConfig
 from coverage_model.parameter_data import ConstantOverTime, NumpyParameterData
+from coverage_model.util.time_utils import get_current_ntp_time
 
 
-class Span():
+class Span(object):
+    ingest_time_str = CoverageConfig().ingest_time_key
 
     def __init__(self, span_uuid, coverage_id, param_dict, ingest_time=None, compressors=None, mutable=False):
         self.param_dict = param_dict
         self.ingest_time = ingest_time
+        self.ingest_times = []
         if ingest_time is None:
-            self.ingest_time = time.time()
+            self.ingest_time = get_current_ntp_time()
+        self._set_ingest_times()
+        self.ingest_time_array
         self.id = span_uuid
         self.coverage_id = coverage_id
         self.compressors = compressors
         self.mutable = mutable
+
+    def _set_ingest_times(self, ingest_times=None):
+        if self.ingest_time_str in self.param_dict:
+            arr = self.param_dict[self.ingest_time_str]
+            if isinstance(arr, NumpyParameterData):
+                arr = arr.get_data()
+            self.ingest_times = [(c,len(list(cgen))) for c,cgen in itertools.groupby(arr.tolist())]
+        elif ingest_times is not None:
+            self.ingest_times = ingest_times
+        else:
+            self.ingest_times = []
+        if len(self.ingest_times) > 0:
+            for val, sz in self.ingest_times:
+                self.ingest_time = min(self.ingest_time, val)
+
+    def get_param_data_length(self):
+        size = 0
+        for k, param_data in self.param_dict.iteritems():
+            if not isinstance(param_data, NumpyParameterData):
+                continue
+            if size == 0:
+                size = param_data.get_data().shape[0]
+            if size != param_data.get_data().shape[0]:
+                raise IndexError("Parameter arrays are different sizes in the 0th dimmension.")
+        return size
+
+    @property
+    def ingest_time_array(self, dtype=np.float64):
+        arr = np.empty(self.get_param_data_length(), dtype=dtype)
+        arr[:] = self.ingest_time
+        start = 0
+        for val, sz in self.ingest_times:
+            arr[start:start+sz] = val
+            start += sz
+        self.param_dict[self.ingest_time_str] = NumpyParameterData(self.ingest_time_str, arr)
+        return self.param_dict[self.ingest_time_str].get_data()
 
     def get_span_stats(self, params=None):
         param_stat_dict = {}
@@ -39,15 +82,62 @@ class Span():
         stats = SpanStats(Address(self.id), param_stat_dict)
         return stats
 
-    def as_json(self, compressors=None, indent=None):
-        data_dict = {}
-        json_dict = {'id': self.id, 'ingest_time': self.ingest_time, 'coverage_id': self.coverage_id, 'mutable': self.mutable}
+    def serialize(self, compressors=None):
+        return self.msgpack(compressors)
+
+    @classmethod
+    def deserialize(cls, str, decompressors=None):
+        return cls.from_msgpack(str, decompressors)
+
+    def msgpack(self, compressors=None):
+        _dict = {'id': self.id, 'ingest_time': self.ingest_time, 'ingest_time_dict': self.ingest_times,
+                     'coverage_id': self.coverage_id, 'mutable': self.mutable}
         if compressors is None:
             compressors = self.compressors
-        if compressors is not None:
-            for param, data in self.param_dict.iteritems():
+        data_dict = {}
+        for param, data in self.param_dict.iteritems():
+            if param == self.ingest_time_str:
+                continue
+            if compressors is not None:
                 data_dict[param] = compressors[param].compress(data)
-            json_dict['params'] = data_dict
+            else:
+                data_dict[param] = [data.tolist(), str(data.dtype), data.shape]
+        _dict['params'] = data_dict
+        from coverage_model.persistence_helpers import pack
+        js = pack(_dict)
+        return js
+
+    @classmethod
+    def from_msgpack(cls, str, decompressors=None):
+        from coverage_model.persistence_helpers import unpack
+        _dict = unpack(str)
+        uncompressed_params = {}
+        if 'params' in _dict:
+            for param, data in _dict['params'].iteritems():
+                if decompressors is not None:
+                    uncompressed_params[param] = decompressors[param].decompress(data)
+                else:
+                    uncompressed_params[param] = np.array(data[0], dtype=data[1])
+                    uncompressed_params[param].shape = data[2]
+        span = Span(_dict['id'], _dict['coverage_id'], uncompressed_params, ingest_time=_dict['ingest_time'], mutable=_dict['mutable'])
+        span.ingest_times = _dict['ingest_time_dict']
+        span.param_dict[cls.ingest_time_str] = NumpyParameterData(cls.ingest_time_str, span.ingest_time_array)
+        return span
+
+    def as_json(self, compressors=None, indent=None):
+        json_dict = {'id': self.id, 'ingest_time': self.ingest_time, 'ingest_time_dict': self.ingest_times,
+                     'coverage_id': self.coverage_id, 'mutable': self.mutable}
+        if compressors is None:
+            compressors = self.compressors
+        data_dict = {}
+        for param, data in self.param_dict.iteritems():
+            if param == self.ingest_time_str:
+                continue
+            if compressors is not None:
+                data_dict[param] = compressors[param].compress(data)
+            else:
+                data_dict[param] = [data.tolist(), str(data.dtype), data.shape]
+        json_dict['params'] = data_dict
         js = json.dumps(json_dict, default=lambda o: o.__dict__, sort_keys=True, indent=indent)
         return js
 
@@ -57,8 +147,15 @@ class Span():
         uncompressed_params = {}
         if 'params' in json_dict:
             for param, data in json_dict['params'].iteritems():
-                uncompressed_params[str(param)] = decompressors[param].decompress(data)
-        return Span(str(json_dict['id']), str(json_dict['coverage_id']), uncompressed_params, ingest_time=json_dict['ingest_time'], mutable=json_dict['mutable'])
+                if decompressors is not None:
+                    uncompressed_params[str(param)] = decompressors[param].decompress(data)
+                else:
+                    uncompressed_params[str(param)] = np.array(data[0], dtype=data[1])
+                    uncompressed_params[str(param)].shape = data[2]
+        span = Span(str(json_dict['id']), str(json_dict['coverage_id']), uncompressed_params, ingest_time=json_dict['ingest_time'], mutable=json_dict['mutable'])
+        span.ingest_times = json_dict['ingest_time_dict']
+        span.param_dict[cls.ingest_time_str] = NumpyParameterData(cls.ingest_time_str, span.ingest_time_array)
+        return span
 
     def get_hash(self):
         data = [ self.id, self.ingest_time, self.coverage_id, sorted(self.param_dict) ]
@@ -69,7 +166,34 @@ class Span():
         return int(self.get_hash(),16)
 
     def __eq__(self, other):
-        if self.__dict__ == other.__dict__:
+        if self.__dict__.keys() == other.__dict__.keys():
+            for key, value in self.__dict__.iteritems():
+                if key not in ['param_dict', 'ingest_times']:
+                    if self.__dict__[key] != other.__dict__[key]:
+                        return False
+                elif key == 'ingest_times':
+                    if len(self.ingest_times) == len(other.ingest_times):
+                        for i in range(len(self.ingest_times)):
+                            if self.ingest_times[i][0] != other.ingest_times[i][0] or \
+                               self.ingest_times[i][1] != other.ingest_times[i][1]:
+                                return False
+                else:
+                    if other.__dict__[key].keys() != self.__dict__[key].keys():
+                        return False
+                    else:
+                        for key in self.param_dict.keys():
+                            arr = self.param_dict[key]
+                            other_arr = self.param_dict[key]
+                            if not isinstance(arr, other_arr.__class__):
+                                return False
+                            if isinstance(other_arr, NumpyParameterData):
+                                other_arr = other_arr.get_data()
+                                arr = arr.get_data()
+                            if isinstance(arr, np.ndarray) and isinstance(other_arr, np.ndarray):
+                                if arr.all() != other_arr.all():
+                                    return False
+                            elif arr != other_arr:
+                                return False
             return True
         return False
 

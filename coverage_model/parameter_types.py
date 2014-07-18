@@ -19,18 +19,18 @@
 #        self.__is_coordinate = value
 
 from ooi.logging import log
+import networkx as nx
+import numpy as np
+import platform
+import re
 from coverage_model.basic_types import AbstractIdentifiable
+from coverage_model.numexpr_utils import digit_match, is_well_formed_where, single_where_match
 from coverage_model.parameter_values import ConstantValue
 from coverage_model.parameter_functions import AbstractFunction
-from coverage_model.numexpr_utils import digit_match, is_well_formed_where, single_where_match
 from coverage_model.persistence import system_type
 from coverage_model.util.numpy_utils import NumpyUtils
-import numpy as np
-import networkx as nx
-import re
 
 UNSUPPORTED_DTYPES = {np.dtype('float16'), np.dtype('complex'), np.dtype('complex64'), np.dtype('complex128')}
-import platform
 if platform.uname()[-2] != 'armv7l' and system_type() > 1:
     UNSUPPORTED_DTYPES.add(np.dtype('complex256'))
 
@@ -240,9 +240,12 @@ class AbstractParameterType(AbstractIdentifiable):
 
         return dparams
 
-    def create_filled_array(self, size):
+    def create_filled_array(self, size, fill_value=None):
         arr = np.empty(size, dtype=np.dtype(self.value_encoding))
-        arr[:] = self.fill_value
+        if fill_value is None:
+            arr[:] = self.fill_value
+        else:
+            arr[:] = fill_value
         return arr
 
     def create_data_array(self, data=None, size=None):

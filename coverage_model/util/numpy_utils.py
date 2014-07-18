@@ -1,6 +1,15 @@
 __author__ = 'casey'
 
+"""
+@package coverage_model.util.numpy_utils
+@file coverage_model/util/numpy_utils.py
+@author Casey Bryant
+@brief Common numpy array manipulation routines.
+"""
+
 import numpy as np
+import random
+import string
 
 
 class NumpyUtils(object):
@@ -84,7 +93,7 @@ class DedupedNumpyArrayDict(object):
                 append_arr = np.array(append_list,dtype=self.deduped_dict[k].dtype)
                 self.deduped_dict[k] = np.hstack((self.deduped_dict[k], append_arr))
 
-        if len(append_set) > 0 and self.add_aggregate:
+        if len(to_append) > 0 and self.add_aggregate:
             self.deduped_dict = NumpyUtils.sort_flat_arrays(self.deduped_dict, self.dedupe_key)
 
     @property
@@ -120,55 +129,70 @@ class MostRecentValidValueNumpyDict(DedupedNumpyArrayDict):
     duplicate values are removed.
     """
 
-    def __init__(self, np_dict, dedupe_key, most_recent_key, valid_values_dict, dict_arrays_are_presorted=False, add_aggregate=False):
-        self.most_recent_key = most_recent_key
+    def __init__(self, np_dict, dedupe_key, ingest_times_dict, valid_values_dict, dict_arrays_are_presorted=False, add_aggregate=False):
+        self._ingest_times_dict = ingest_times_dict
         self._valid_values_dict = valid_values_dict
-        import random
-        import string
-        self.key_mutation = ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(12))
+        self.valid_mask_key_mutation = ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(12))
+        self.ingest_time_key_mutation = ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(12))
         for k, v in self.valid_values_dict.iteritems():
-            np_dict[k+self.key_mutation] = v
+            np_dict[k+self.valid_mask_key_mutation] = v
+        for k, v in self.ingest_times_dict.iteritems():
+            np_dict[k+self.ingest_time_key_mutation] = v
         super(MostRecentValidValueNumpyDict, self).__init__(np_dict, dedupe_key, dict_arrays_are_presorted, add_aggregate)
         for k in self.np_dict.keys():
             v = self.deduped_dict[k]
-            if k.endswith(self.key_mutation):
-                nk = k[:-len(self.key_mutation)]
+            if k.endswith(self.valid_mask_key_mutation):
+                nk = k[:-len(self.valid_mask_key_mutation)]
                 self._valid_values_dict[nk] = v
+                self.deduped_dict.pop(k)
+            if k.endswith(self.ingest_time_key_mutation):
+                nk = k[:-len(self.ingest_time_key_mutation)]
+                self._ingest_times_dict[nk] = v
                 self.deduped_dict.pop(k)
 
     def resolve_duplicate_value(self, np_dict, indices):
-        preference_array = np_dict[self.most_recent_key]
-        pref_vals = preference_array[indices]
-        sorted_dict = NumpyUtils.sort_flat_arrays({'i':indices, 'v':pref_vals}, 'v')
+        # preference_array = np_dict[self.most_recent_key]
+        # pref_vals = preference_array[indices]
+        # sorted_dict = NumpyUtils.sort_flat_arrays({'i':indices, 'v':pref_vals}, 'v')
         deduped_dict_values = {}
         use_index = None
         if not self.add_aggregate:
-            use_index = sorted_dict['i'][-1]
+            use_index = indices[-1]
         for k, v in np_dict.iteritems():
-            if k.endswith(self.key_mutation):
+            if k.endswith(self.valid_mask_key_mutation) or k.endswith(self.ingest_time_key_mutation):
                 continue
             new_val = None
             is_valid = False
+            ingest_time = 0
+            pref_vals = np_dict[k+self.ingest_time_key_mutation][indices]
+            sorted_dict = NumpyUtils.sort_flat_arrays({'i':indices, 'v':pref_vals}, 'v')
             for index in sorted_dict['i'][::-1]:
-                is_valid = np_dict[k+self.key_mutation][index]
+                is_valid = np_dict[k+self.valid_mask_key_mutation][index]
                 if is_valid:
                     new_val = np_dict[k][index]
                     is_valid = True
+                    ingest_time = np_dict[k+self.ingest_time_key_mutation][index]
                     break
                 elif new_val is None:
                     new_val = np_dict[k][index]
             if not self.add_aggregate:
                 np_dict[k][use_index] = new_val
-                np_dict[k+self.key_mutation][use_index] = is_valid
+                np_dict[k+self.valid_mask_key_mutation][use_index] = is_valid
+                np_dict[k+self.ingest_time_key_mutation][use_index] = ingest_time
             else:
                 deduped_dict_values[k] = new_val
-                deduped_dict_values[k+self.key_mutation] = is_valid
+                deduped_dict_values[k+self.valid_mask_key_mutation] = is_valid
+                deduped_dict_values[k+self.ingest_time_key_mutation] = ingest_time
 
         return (use_index, deduped_dict_values)
 
     @property
     def valid_values_dict(self):
         return self._valid_values_dict
+
+    @property
+    def ingest_times_dict(self):
+        return self._ingest_times_dict
 
 
 class AggregatedDuplicatesNumpyDict(MostRecentValidValueNumpyDict):

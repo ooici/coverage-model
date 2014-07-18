@@ -150,7 +150,10 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
             bricking_scheme = None
 
         # Instantiate the SimplexCoverage providing the ParameterDictionary, spatial Domain and temporal Domain
-        scov = SimplexCoverage(cls.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict, temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes, in_memory_storage=in_memory, bricking_scheme=bricking_scheme, auto_flush_values=auto_flush_values)
+        scov = SimplexCoverage(cls.working_dir, create_guid(), 'sample coverage_model', parameter_dictionary=pdict,
+                               temporal_domain=tdom, spatial_domain=sdom, inline_data_writes=inline_data_writes,
+                               in_memory_storage=in_memory, bricking_scheme=bricking_scheme,
+                               auto_flush_values=auto_flush_values, value_caching=False)
 
 
         # Insert some timesteps (automatically expands other arrays)
@@ -178,7 +181,7 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         return scov, 'TestSpanInt'
 
     def test_store_data(self):
-        #Coverage construction will write data to bricks, create spans, and write spans to the db.
+        #Coverage construction will write data, create spans, and write spans to the db.
         #Retrieve the parameter values from a brick, get the spans from the master manager.
         #Make sure the min/max from the brick values match the min/max from master manager spans.
         ts = 10
@@ -200,9 +203,14 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
 
         np_dict[scov.temporal_parameter_name] = NumpyParameterData(scov.temporal_parameter_name, time_array, time_array)
         np_dict['depth'] = NumpyParameterData('depth', depth_array, time_array)
+        param_data = scov.get_parameter_values(scov.temporal_parameter_name, sort_parameter=scov.temporal_parameter_name)
         scov.set_parameter_values(np_dict)
 
 
+        cov_id = scov.persistence_guid
+        scov.close()
+        scov = AbstractCoverage.resurrect(cov_id,mode='r')
+        param_data = scov.get_parameter_values(scov.temporal_parameter_name, sort_parameter=scov.temporal_parameter_name)
         param_data = scov.get_parameter_values(scov.temporal_parameter_name, sort_parameter=scov.temporal_parameter_name, as_record_array=True)
         param_data.convert_to_record_array()
         rec_arr = param_data.get_data()
@@ -216,7 +224,7 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         param_data.convert_to_record_array()
         rec_arr = param_data.get_data()
 
-        self.assertEqual(len(params_to_get), len(rec_arr.dtype.names))
+        self.assertEqual(len(params_to_get), len(rec_arr.dtype.names)-1) #-1 for ingest time
 
         for param_name in params_to_get:
             self.assertTrue(param_name in rec_arr.dtype.names)
@@ -246,19 +254,20 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         np_dict[scov.temporal_parameter_name] = NumpyParameterData(scov.temporal_parameter_name, time_array, time_array)
         scov.set_parameter_values(np_dict)
 
-        rv = scov.get_parameter_values(scov.temporal_parameter_name)
-        expected_array = np.empty(len(rv.get_data()[scov.temporal_parameter_name]))
-        expected_array.fill(2048)
         scov.append_parameter(ParameterContext('sparseness', fill_value=9999))
 
         scov.set_parameter_values({'sparseness': ConstantOverTime('sparseness', 2048)})
+        rv = scov.get_parameter_values(scov.temporal_parameter_name)
+        expected_array = np.empty(len(rv.get_data()[scov.temporal_parameter_name]))
+        expected_array.fill(2048)
         returned_array = scov.get_parameter_values([scov.temporal_parameter_name, 'sparseness'], as_record_array=True).get_data()['sparseness']
         np.testing.assert_array_equal(expected_array, returned_array)
 
         expected_array[1:4] = 4096
         scov.set_parameter_values({'sparseness': ConstantOverTime('sparseness', 4096, time_start=10000, time_end=10002)})
-        returned_array = scov.get_parameter_values([scov.temporal_parameter_name, 'sparseness'], as_record_array=True).get_data()['sparseness']
-        np.testing.assert_array_equal(expected_array, returned_array)
+        returned_array = scov.get_parameter_values([scov.temporal_parameter_name, 'sparseness'], as_record_array=True).get_data()
+        print returned_array
+        np.testing.assert_array_equal(expected_array, returned_array['sparseness'])
 
         expected_array[-3:] = 17
         scov.set_parameter_values({'sparseness': ConstantOverTime('sparseness', 17, time_start=10012)})
@@ -649,7 +658,6 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         scov.set_parameter_values(data_dict)
 
         returned_dict = scov.get_parameter_values(time_segment=(2,3), param_names=data_dict.keys()).get_data()
-        print returned_dict
         for k,v in data_dict.iteritems():
             np.testing.assert_array_equal(v.get_data(), returned_dict[k])
             self.assertEqual(2, returned_dict[k].size)
