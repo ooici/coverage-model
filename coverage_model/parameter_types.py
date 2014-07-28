@@ -19,18 +19,18 @@
 #        self.__is_coordinate = value
 
 from ooi.logging import log
+import networkx as nx
+import numpy as np
+import platform
+import re
 from coverage_model.basic_types import AbstractIdentifiable
+from coverage_model.numexpr_utils import digit_match, is_well_formed_where, single_where_match
 from coverage_model.parameter_values import ConstantValue
 from coverage_model.parameter_functions import AbstractFunction
-from coverage_model.numexpr_utils import digit_match, is_well_formed_where, single_where_match
 from coverage_model.persistence import system_type
-from coverage_model.util.numpy_utils import create_numpy_object_array
-import numpy as np
-import networkx as nx
-import re
+from coverage_model.util.numpy_utils import NumpyUtils
 
 UNSUPPORTED_DTYPES = {np.dtype('float16'), np.dtype('complex'), np.dtype('complex64'), np.dtype('complex128')}
-import platform
 if platform.uname()[-2] != 'armv7l' and system_type() > 1:
     UNSUPPORTED_DTYPES.add(np.dtype('complex256'))
 
@@ -91,7 +91,7 @@ class AbstractParameterType(AbstractIdentifiable):
 
     Provides
     """
-    def __init__(self, value_module=None, value_class=None, **kwargs):
+    def __init__(self, value_module=None, value_class=None, mutable=False, **kwargs):
         """
 
         @param **kwargs Additional keyword arguments are copied and the copy is passed up to AbstractIdentifiable; see documentation for that class for details
@@ -102,6 +102,7 @@ class AbstractParameterType(AbstractIdentifiable):
         self._value_module = value_module or 'coverage_model.parameter_values'
         self._value_class = value_class or 'NumericValue'
         self.name = None
+        self.mutable = mutable
 
     def is_valid_value(self, value):
         raise NotImplementedError('Function not implemented by abstract class')
@@ -128,6 +129,10 @@ class AbstractParameterType(AbstractIdentifiable):
     @property
     def storage_encoding(self):
         return self._value_encoding
+
+    @property
+    def is_mutable(self):
+        return self.mutable
 
     def _add_graph_node(self, graph, name):
         if name.startswith('<') and name.endswith('>'):
@@ -235,9 +240,12 @@ class AbstractParameterType(AbstractIdentifiable):
 
         return dparams
 
-    def create_filled_array(self, size):
+    def create_filled_array(self, size, fill_value=None):
         arr = np.empty(size, dtype=np.dtype(self.value_encoding))
-        arr[:] = self.fill_value
+        if fill_value is None:
+            arr[:] = self.fill_value
+        else:
+            arr[:] = fill_value
         return arr
 
     def create_data_array(self, data=None, size=None):
@@ -1070,7 +1078,7 @@ class RaggedArrayType(AbstractComplexParameterType):
 
     @classmethod
     def create_ragged_array(cls, data):
-        return create_numpy_object_array(data)
+        return NumpyUtils.create_numpy_object_array(data)
 
     def validate_value_set(self, value_set):
         updated_object = False

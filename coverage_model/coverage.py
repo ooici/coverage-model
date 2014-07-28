@@ -34,25 +34,26 @@
 #        self.__spatial_domain = value
 
 from copy import deepcopy
-import os
 import collections
-import pickle
 from collections import Iterable
-
 import numpy as np
+import os
+import pickle
+
 
 from ooi.logging import log
 from pyon.util.async import spawn
+from coverage_model import utils
 from coverage_model.basic_types import AbstractIdentifiable, AxisTypeEnum, MutabilityEnum, VariabilityEnum, Dictable, \
     Span
 from coverage_model.config import CoverageConfig
 from coverage_model.parameter import Parameter, ParameterDictionary, ParameterContext
-from coverage_model.parameter_values import get_value_class, AbstractParameterValue
-from coverage_model.persistence import InMemoryPersistenceLayer, is_persisted
-from coverage_model.storage.parameter_persisted_storage import PostgresPersistenceLayer
+from coverage_model.parameter_types import SparseConstantType, ParameterFunctionType, QuantityType
+from coverage_model.parameter_values import get_value_class, AbstractParameterValue, NumericValue
+from coverage_model.persistence import InMemoryPersistenceLayer, is_persisted, PersistedStorage, SparsePersistedStorage
+from coverage_model.storage.parameter_persisted_storage import PostgresPersistenceLayer, PostgresPersistedStorage
 from coverage_model.metadata_factory import MetadataManagerFactory
 from coverage_model.parameter_functions import ParameterFunctionException
-from coverage_model import utils
 from coverage_model.utils import Interval, create_guid
 
 
@@ -74,6 +75,7 @@ class AbstractCoverage(AbstractIdentifiable):
 
     VALUE_CACHE_LIMIT = 30
     version = '0.0.3'
+    ingest_time_parameter_name = CoverageConfig().ingest_time_key
 
     def __init__(self, mode=None):
         AbstractIdentifiable.__init__(self)
@@ -308,6 +310,13 @@ class AbstractCoverage(AbstractIdentifiable):
         storage = self._persistence_layer.value_list[pname]
         self._range_value[pname] = get_value_class(param_type=pcontext.param_type, domain_set=pcontext.dom, storage=storage)
 
+        from coverage_model.data_span import Span
+        if self.temporal_parameter_name is not None and Span.ingest_time_str not in self._persistence_layer.value_list:
+            ctxt = ParameterContext(self.ingest_time_parameter_name, QuantityType(value_encoding='float64'), fill_value=-99.0)
+            ctxt.description = ''
+            ctxt.uom = 'seconds since 01-01-1900'
+            self.append_parameter(ctxt)
+
     def get_parameter(self, param_name):
         """
         Get a Parameter object by name
@@ -334,7 +343,6 @@ class AbstractCoverage(AbstractIdentifiable):
     def set_parameter_function(self, param_name, func):
         self._handle_closed()
         if param_name in self._range_dictionary:
-            from coverage_model.parameter_types import ParameterFunctionType
             param_type = self._range_dictionary[param_name].param_type
             if isinstance(param_type, ParameterFunctionType):
                 param_type.callback = func
@@ -364,7 +372,7 @@ class AbstractCoverage(AbstractIdentifiable):
 
     def get_parameter_values(self, param_names=None, time_segment=None, time=None,
                              sort_parameter=None, stride_length=None, return_value=None, fill_empty_params=False,
-                             function_params=None, as_record_array=False):
+                             function_params=None, as_record_array=False, remove_duplicate_records=False):
         """
         Retrieve the value for a parameter
 
@@ -397,7 +405,8 @@ class AbstractCoverage(AbstractIdentifiable):
 
         vals = self._persistence_layer.read_parameters(param_names, time_segment, time, sort_parameter,
                                                        stride_length=stride_length, fill_empty_params=fill_empty_params,
-                                                       function_params=function_params, as_record_array=as_record_array)
+                                                       function_params=function_params, as_record_array=as_record_array,
+                                                       remove_duplicate_records=remove_duplicate_records)
         if self.value_caching:
             self.cache_it(vals, param_names, time_segment, time, sort_parameter, stride_length, fill_empty_params)
         return vals
@@ -568,7 +577,7 @@ class AbstractCoverage(AbstractIdentifiable):
             values = np.array(values)
         return self._persistence_layer.write_parameters(self.get_write_id(), {self.temporal_parameter_name: values})
 
-    def get_time_values(self, time_segement=None, stride_length=None, return_value=None):
+    def get_time_values(self, time_segement=None, stride_length=None, return_value=None, remove_duplicates=False):
         """
         Convenience method for retrieving time values
 
@@ -577,7 +586,8 @@ class AbstractCoverage(AbstractIdentifiable):
         @param return_value If supplied, filled with response value
         """
         return self.get_parameter_values(self.temporal_parameter_name, time_segment=time_segement,
-                                         stride_length=stride_length, return_value=return_value).get_data()[self.temporal_parameter_name]
+                                         stride_length=stride_length, return_value=return_value,
+                                         remove_duplicate_records=remove_duplicates).get_data()[self.temporal_parameter_name]
 
     def _clear_value_cache_for_parameter(self, param_name):
         for k in self._value_cache.keys():
@@ -1145,9 +1155,13 @@ class ViewCoverage(AbstractCoverage):
     def set_parameter_values(self, param_name, value, tdoa=None, sdoa=None):
         raise TypeError('Cannot set parameter values against a ViewCoverage')
 
-    def get_parameter_values(self, param_names, time_segment=None, time=None, sort_parameter=None, stride_length=None,
-                             fill_empty_params=False, return_value=None):
-        return self.reference_coverage.get_parameter_values(param_names, time_segment, time, sort_parameter, stride_length, fill_empty_params, return_value)
+    def get_parameter_values(self, param_names=None, time_segment=None, time=None,
+                             sort_parameter=None, stride_length=None, return_value=None, fill_empty_params=False,
+                             function_params=None, as_record_array=False, remove_duplicate_records=False):
+        return self.reference_coverage.get_parameter_values(param_names, time_segment, time, sort_parameter, stride_length,
+                                                            fill_empty_params=fill_empty_params, return_value=return_value,
+                                                            function_params=function_params, as_record_array=as_record_array,
+                                                            remove_duplicate_records=remove_duplicate_records)
 
     def get_value_dictionary(self, *args, **kwargs):
 
@@ -1255,7 +1269,6 @@ class ComplexCoverageR2(AbstractCoverage):
         if parameter_dictionary is None:
             parameter_dictionary = ParameterDictionary()
         elif complex_type != ComplexCoverageType.TIMESERIES:
-            from coverage_model import ParameterFunctionType
             for pn, pc in parameter_dictionary.iteritems():
                 if not isinstance(pc[1].param_type, ParameterFunctionType):
                     log.warn('Parameters stored in a ComplexCoverage must be ParameterFunctionType parameters: discarding \'%s\'', pn)
@@ -1321,7 +1334,6 @@ class ComplexCoverageR2(AbstractCoverage):
     def append_parameter(self, parameter_context):
         if not isinstance(parameter_context, ParameterContext):
             raise TypeError('\'parameter_context\' must be an instance of ParameterContext, not {0}'.format(type(parameter_context)))
-        from coverage_model import ParameterFunctionType
         if not isinstance(parameter_context.param_type, ParameterFunctionType):
             raise ValueError('Parameters stored in a ComplexCoverage must be ParameterFunctionType parameters: cannot append parameter \'{0}\''.format(parameter_context.name))
 
@@ -1397,7 +1409,8 @@ class ComplexCoverageR2(AbstractCoverage):
             cls._interval_qsort(arr, left, pivot-1)
             cls._interval_qsort(arr, pivot+1, right)
 
-    def get_parameter_values(self, param_names, time_segment=None, time=None, sort_parameter=None, stride_length=None, return_value=None):
+    def get_parameter_values(self, param_names, time_segment=None, time=None, sort_parameter=None,
+                             stride_length=None, return_value=None, remove_duplicate_records=False):
         '''
         Obtain the value set for a given parameter over a specified domain
         '''
@@ -1406,7 +1419,8 @@ class ComplexCoverageR2(AbstractCoverage):
             raise TypeError("A Timeseries ComplexCoverage doesn't support "
                             "get_parameter_values, please use "
                             "get_value_dictionary")
-        return AbstractCoverage.get_parameter_values(self, param_names, time_segment, time, sort_parameter, stride_length=stride_length, return_value=return_value)
+        return AbstractCoverage.get_parameter_values(self, param_names, time_segment, time, sort_parameter, stride_length=stride_length,
+                                                     return_value=return_value, remove_duplicate_records=remove_duplicate_records)
 
     # def get_value_dictionary(self, param_list=None, temporal_slice=None, domain_slice=None):
     #     if temporal_slice and domain_slice:
@@ -1881,7 +1895,6 @@ class ComplexCoverageR2(AbstractCoverage):
                         self._assign_domain(pc)
                         self._range_dictionary.add_context(pc)
                         # Add the sparse value class
-                        from coverage_model.parameter_types import SparseConstantType
                         ppt = self._range_dictionary.get_context(p).param_type
                         self._range_value[p] = get_value_class(
                             SparseConstantType(value_encoding=ppt.value_encoding,
@@ -1965,7 +1978,6 @@ class ComplexCoverageR2(AbstractCoverage):
                         self._assign_domain(pc)
                         self._range_dictionary.add_context(pc)
                         # Add the sparse value class
-                        from coverage_model.parameter_types import SparseConstantType
                         ppt=self._range_dictionary.get_context(p).param_type
                         self._range_value[p] = get_value_class(
                             SparseConstantType(value_encoding=ppt.value_encoding,
@@ -2050,7 +2062,6 @@ class ComplexCoverageR2(AbstractCoverage):
                         self._assign_domain(pc)
                         self._range_dictionary.add_context(pc)
                         # Add the sparse value class
-                        from coverage_model.parameter_types import SparseConstantType
                         ppt=self._range_dictionary.get_context(p).param_type
                         self._range_value[p] = get_value_class(
                             SparseConstantType(value_encoding=ppt.value_encoding,
@@ -2160,8 +2171,6 @@ class SimplexCoverage(AbstractCoverage):
                 inline_data_writes = self._persistence_layer.inline_data_writes
                 self.value_caching = self._persistence_layer.value_caching
 
-                from coverage_model.persistence import PersistedStorage, SparsePersistedStorage
-                from coverage_model.storage.parameter_persisted_storage import PostgresPersistedStorage
                 for parameter_name in self._persistence_layer.parameter_metadata:
                     md = self._persistence_layer.parameter_metadata[parameter_name]
                     mm = self._persistence_layer.master_manager
@@ -2266,7 +2275,6 @@ class SimplexCoverage(AbstractCoverage):
 
     def calculate_statistics(self, params=None, time_range=None):
         """time_range is currently not implemented"""
-        from coverage_model.parameter_values import NumericValue
         if isinstance(params, basestring):
             tmp = set()
             tmp.add(params)

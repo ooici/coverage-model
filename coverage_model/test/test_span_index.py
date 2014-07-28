@@ -89,6 +89,23 @@ class TestSpanUnit(CoverageModelUnitTestCase):
 
         self.assertNotEqual(spans_collection, bad_col)
 
+    def test_span_serialization(self):
+        import random
+        import string
+
+        span_uuid = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(10))
+        cov_id = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(10))
+        param_dict = {'one': np.array([1234567.115,1,1,1,1,1], dtype=np.float32), 'two': np.array([2,2,2,2,2,2], dtype=np.float64), 'ingest_time': np.array([1,2,2,3,3,1], dtype=np.float32)}
+        span = Span(span_uuid, cov_id, param_dict, ingest_time=None, compressors=None, mutable=False)
+
+        txt = span.serialize()
+        json = span.as_json()
+        msgpack_span = Span.deserialize(txt)
+        json_span = Span.from_json(json)
+
+        self.assertEqual(msgpack_span, span)
+        self.assertEqual(json_span, msgpack_span)
+
 
 @attr('INT',group='cov')
 class TestSpanInt(CoverageModelUnitTestCase):

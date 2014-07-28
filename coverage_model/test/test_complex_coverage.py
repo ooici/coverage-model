@@ -67,6 +67,8 @@ def _make_cov(root_dir, params, nt=10, data_dict=None, make_temporal=True):
     else:
         p_dict = {}
         for p in scov.list_parameters():
+            if p == scov.ingest_time_parameter_name:
+                continue
             if data_dict is not None and p in data_dict:
                 if data_dict[p] is None:
                     continue
@@ -475,6 +477,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
         # np.testing.assert_array_equal(comp_cov.get_parameter_values('data_all').get_data()['data_all'], all_data)
 
         third = np.append(third, addnl_c_data)
+        comp_cov.refresh()
         np.testing.assert_array_equal(comp_cov.get_parameter_values('data_c').get_data()['data_c'], third)
 
         # Check that the head_coverage_path is still correct
@@ -598,7 +601,7 @@ class TestComplexCoverageInt(CoverageModelIntTestCase, CoverageIntTestBase):
                                reference_coverage_extents=self.get_no_extents([cova_pth, covb_pth]),
                                complex_type=ComplexCoverageType.TEMPORAL_INTERLEAVED)
 
-        self.assertEqual(ccov.list_parameters(), ['first_param', 'full_param', 'second_param', 'time'])
+        self.assertEqual(ccov.list_parameters(), ['first_param', 'full_param', ccov.ingest_time_parameter_name, 'second_param', 'time'])
 
         self.assertEqual(ccov.temporal_parameter_name, 'time')
 

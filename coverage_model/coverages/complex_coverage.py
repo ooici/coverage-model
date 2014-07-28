@@ -1,15 +1,7 @@
 __author__ = 'casey'
 
-from copy import deepcopy
-import os
-import collections
-import pickle
 from collections import Iterable
-
 import numpy as np
-
-from ooi.logging import log
-from pyon.util.async import spawn
 from coverage_model.coverage import AbstractCoverage, ComplexCoverageType, SimplexCoverage
 from coverage_model.coverages.aggregate_coverage import AggregateCoverage
 from coverage_model.coverages.coverage_extents import ReferenceCoverageExtents, ExtentsDict
@@ -38,7 +30,7 @@ class ComplexCoverage(AggregateCoverage):
 
     def get_parameter_values(self, param_names=None, time_segment=None, time=None,
                              sort_parameter=None, stride_length=None, return_value=None, fill_empty_params=False,
-                             function_params=None, as_record_array=False):
+                             function_params=None, as_record_array=False, remove_duplicate_records=False):
         '''
         Obtain the value set for a given parameter over a specified domain
         '''
@@ -79,7 +71,8 @@ class ComplexCoverage(AggregateCoverage):
                             continue
 
                         params = coverage.get_parameter_values(this_param_names, current_time_segment, time, sort_parameter,
-                                                               return_value, fill_empty_params, function_params, as_record_array=False)
+                                                               return_value, fill_empty_params, function_params, as_record_array=False,
+                                                               remove_duplicate_records=remove_duplicate_records)
                         # if len(params.get_data()) == 1 and coverage.temporal_parameter_name in params.get_data():
                         #     continue
                         cov_dict = params.get_data()
