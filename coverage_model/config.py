@@ -28,6 +28,7 @@ class CoverageConfig(object):
     _default_span_id_db_key = 'span_address'
     _default_span_coverage_id_db_key = 'coverage_id'
     _default_storage_location = None
+    _default_ideal_span_size = 100
 
     def __init__(self):
         self.ordered_time_key_preferences = self._default_ordered_time_key_preferences
@@ -44,6 +45,7 @@ class CoverageConfig(object):
         self.config_time = 0
         self.read_and_set_config()
         self.ingest_time_key = self._default_ingest_time_key
+        self.ideal_span_size = self._default_ideal_span_size
 
     def read_and_set_config(self):
         one_from_config = False

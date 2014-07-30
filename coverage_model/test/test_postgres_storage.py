@@ -17,6 +17,7 @@ from coverage_model.address import *
 from coverage_model.parameter_data import *
 from coverage_test_base import get_parameter_dict
 from coverage_model.parameter_types import *
+from coverage_model.storage.storage_respan_task import StorageRespanTask
 
 
 @attr('UNIT',group='cov')
@@ -266,7 +267,6 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
         expected_array[1:4] = 4096
         scov.set_parameter_values({'sparseness': ConstantOverTime('sparseness', 4096, time_start=10000, time_end=10002)})
         returned_array = scov.get_parameter_values([scov.temporal_parameter_name, 'sparseness'], as_record_array=True).get_data()
-        print returned_array
         np.testing.assert_array_equal(expected_array, returned_array['sparseness'])
 
         expected_array[-3:] = 17
@@ -1044,6 +1044,67 @@ class TestPostgresStorageInt(CoverageModelUnitTestCase):
                 print return_values['ingestion_timestamp'][x], sorted_values[x]
                 print return_values['ingestion_timestamp'][x+1], sorted_values[x+1]
         np.testing.assert_array_equal(sorted_values, return_values['ingestion_timestamp'])
+
+    def test_respan(self):
+        data_ctx = ParameterContext('data', param_type=RecordType(), fill_value=-999.0)
+        cov = _make_cov(self.working_dir, ['conductivity',data_ctx], nt=10)
+
+        cov.set_parameter_values({'time': np.arange(50,55), 'data': np.arange(150,155)})
+        cov.set_parameter_values({'time': np.arange(250,253), 'data': np.arange(200,203)})
+        cov.set_parameter_values({'time': np.arange(1500,1610), 'data': np.arange(13000,13110), 'conductivity': np.arange(100,210)})
+        cov.set_parameter_values({'time': np.arange(100,110), 'data': np.arange(2000,2010), 'conductivity': np.arange(0,10)})
+        cov.refresh()
+
+        orig_cov_data = cov.get_parameter_values().get_data()
+        from coverage_model.storage.storage_respan_task import StorageRespanTask
+        respan_task = StorageRespanTask(coverage_ids=cov.persistence_guid, sort_parameter='time')
+        respan_task.do_respan()
+
+        respan_cov = AbstractCoverage.resurrect(cov.persistence_guid, 'r')
+        respan_cov_data = respan_cov.get_parameter_values().get_data()
+        self.assertEqual(respan_cov_data.keys(), orig_cov_data.keys())
+        for key in orig_cov_data.keys():
+            np.testing.assert_array_equal(orig_cov_data[key], respan_cov_data[key])
+
+    @unittest.skip("Test has the potential to take considerable time only run if you're testing respan of all coverages")
+    def test_respan_all_coverages(self):
+        data_ctx = ParameterContext('data', param_type=RecordType(), fill_value=-999.0)
+        cov = _make_cov(self.working_dir, ['conductivity',data_ctx], nt=10)
+
+        cov.set_parameter_values({'time': np.arange(50,55), 'data': np.arange(150,155)})
+        import time
+        time.sleep(1)
+        cov.set_parameter_values({'time': np.arange(250,253), 'data': np.arange(200,203)})
+        time.sleep(1)
+        cov.set_parameter_values({'time': np.arange(100,110), 'data': np.arange(2000,2010), 'conductivity': np.arange(0,10)})
+        cov.refresh()
+
+        cov2 = _make_cov(self.working_dir, ['conductivity',data_ctx], nt=10)
+
+        cov2.set_parameter_values({'time': np.arange(1050,1055), 'data': np.arange(1150,1155)})
+        cov2.set_parameter_values({'time': np.arange(1250,1253), 'data': np.arange(1200,1203)})
+        cov2.set_parameter_values({'time': np.arange(1500,1610), 'data': np.arange(13000,13110), 'conductivity': np.arange(100,210)})
+        cov2.set_parameter_values({'time': np.arange(1100,1110), 'data': np.arange(12000,12010), 'conductivity': np.arange(0,10)})
+        cov2.refresh()
+
+        orig_cov_data = cov.get_parameter_values().get_data()
+        orig_cov2_data = cov2.get_parameter_values().get_data()
+
+        from coverage_model.storage.storage_respan_task import StorageRespanTask
+        respan_task = StorageRespanTask(sort_parameter='time')
+        respan_task.do_respan()
+
+        respan_cov = AbstractCoverage.resurrect(cov.persistence_guid, 'r')
+        respan_cov_data = respan_cov.get_parameter_values().get_data()
+        self.assertEqual(respan_cov_data.keys(), orig_cov_data.keys())
+        for key in orig_cov_data.keys():
+            np.testing.assert_array_equal(orig_cov_data[key], respan_cov_data[key])
+
+        respan_cov2 = AbstractCoverage.resurrect(cov2.persistence_guid, 'r')
+        respan_cov2_data = respan_cov2.get_parameter_values().get_data()
+        self.assertEqual(respan_cov2_data.keys(), orig_cov2_data.keys())
+        for key in orig_cov2_data.keys():
+            np.testing.assert_array_equal(orig_cov2_data[key], respan_cov2_data[key])
 
 
 def identity(x):

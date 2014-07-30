@@ -20,7 +20,8 @@ from coverage_model.util.time_utils import get_current_ntp_time
 class Span(object):
     ingest_time_str = CoverageConfig().ingest_time_key
 
-    def __init__(self, span_uuid, coverage_id, param_dict, ingest_time=None, compressors=None, mutable=False):
+    def __init__(self, span_uuid, coverage_id, param_dict, ingest_time=None, compressors=None, mutable=False,
+                 fill_mask=None, sort_parameter=None):
         self.param_dict = param_dict
         self.ingest_time = ingest_time
         self.ingest_times = []
@@ -32,6 +33,7 @@ class Span(object):
         self.coverage_id = coverage_id
         self.compressors = compressors
         self.mutable = mutable
+        self.sort_parameter = sort_parameter
 
     def _set_ingest_times(self, ingest_times=None):
         if self.ingest_time_str in self.param_dict:
@@ -58,6 +60,15 @@ class Span(object):
                 raise IndexError("Parameter arrays are different sizes in the 0th dimmension.")
         return size
 
+    def get_numpy_bytes(self):
+        size = 0
+        for k, param_data in self.param_dict.iteritems():
+            if not isinstance(param_data, NumpyParameterData):
+                continue
+            if size == 0:
+                size += param_data.get_data().nbytes
+        return size
+
     @property
     def ingest_time_array(self, dtype=np.float64):
         arr = np.empty(self.get_param_data_length(), dtype=dtype)
@@ -73,6 +84,8 @@ class Span(object):
         param_stat_dict = {}
         if params is None:
             params = self.param_dict.keys()
+        elif isinstance(params, basestring):
+            params = [params]
         for param in params:
             if param in self.param_dict:
                 if isinstance(self.param_dict[param], ConstantOverTime):
@@ -155,6 +168,7 @@ class Span(object):
         span = Span(str(json_dict['id']), str(json_dict['coverage_id']), uncompressed_params, ingest_time=json_dict['ingest_time'], mutable=json_dict['mutable'])
         span.ingest_times = json_dict['ingest_time_dict']
         span.param_dict[cls.ingest_time_str] = NumpyParameterData(cls.ingest_time_str, span.ingest_time_array)
+        span.compressors = decompressors
         return span
 
     def get_hash(self):
@@ -198,10 +212,65 @@ class Span(object):
         return False
 
     def __gt__(self, other):
-        return self.ingest_time > other.ingest_time
+        if self.sort_parameter != other.sort_parameter:
+            raise RuntimeError('Sort parameters for objects do not match [%s vs. %s]' % (self.sort_parameter, other.sort_parameter))
+        if self.sort_parameter is None:
+            return self.ingest_time > other.ingest_time
+        else:
+            my_stats = self.get_span_stats(self.sort_parameter)
+            other_stats = other.get_span_stats(self.sort_parameter)
+            return my_stats.params[self.sort_parameter][0] > other_stats.params[self.sort_parameter][0]
 
     def __lt__(self, other):
         return not self.__gt__(other)
+
+    @classmethod
+    def merge_spans(cls, spans, sort_param=None, fill_value_dict=None):
+        num_observations = 0
+        cov_id = None
+        param_key_set = set()
+        compressors = {}
+        for span in spans:
+            param_key_set.update(span.param_dict.keys())
+            num_observations += span.get_param_data_length()
+            if cov_id is None:
+                cov_id = span.coverage_id
+            elif cov_id != span.coverage_id:
+                raise RuntimeError('coverages ids do not match across spans')
+            if span.compressors is not None:
+                for k, v in span.compressors.iteritems():
+                    compressors[k] = v
+
+        new_pdict = {}
+        current_pos = 0
+        for span in spans:
+            span_size = span.get_param_data_length()
+            for key in param_key_set:
+                if key not in span.param_dict.keys():
+                    continue
+                data = span.param_dict[key].get_data()
+                if key not in new_pdict and key in span.param_dict.keys():
+                    new_pdict[key] = np.empty(num_observations, dtype=data.dtype)
+                    if fill_value_dict is not None and key in fill_value_dict:
+                        new_pdict[key][:] = fill_value_dict[key]
+                    else:
+                        new_pdict[key][:] = 0
+                new_pdict[key][current_pos:current_pos+span_size] = data
+            current_pos += span_size
+
+        from coverage_model.util.numpy_utils import NumpyUtils
+        if sort_param is not None:
+            new_pdict = NumpyUtils.sort_flat_arrays(new_pdict, sort_param)
+
+        replace_dict = new_pdict
+        for k, v in new_pdict.iteritems():
+            replace_dict[k] = NumpyParameterData(k, v)
+
+        from coverage_model.utils import create_guid
+        new_span_id = create_guid()
+        merged_span = Span(new_span_id, coverage_id=cov_id, param_dict=replace_dict, compressors=compressors)
+        return merged_span
+
 
 
 class SpanStats(object):
