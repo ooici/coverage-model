@@ -459,7 +459,6 @@ class PostgresPersistenceLayer(SimplePersistenceLayer):
     def _sort_flat_arrays(cls, np_dict, sort_parameter=None):
         sorted_array_dict = {}
         if sort_parameter is None or sort_parameter not in np_dict.keys():
-            # sort_parameter = self.alignment_parameter
             sort_parameter = 'time'
         sort_array = np_dict[sort_parameter]
         sorted_indexes = np.argsort(sort_array)

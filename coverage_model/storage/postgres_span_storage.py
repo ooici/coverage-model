@@ -57,6 +57,14 @@ class PostgresSpanStorage(SpanStorage):
         with self.span_store.pool.cursor(**self.span_store.cursor_args) as cur:
             cur.execute(sql_str, [SpanJsonDumper(span) for i in range(data_times)])
 
+    def replace_spans(self, new_span, old_spans):
+        stats_sql, bin_sql = self.get_span_stats_and_bin_insert_sql(new_span)
+        span_sql, data_times = self.get_span_insert_sql(new_span)
+        delete_sql = self.get_span_delete_sql(old_spans)
+        sql_str = "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE;  %s %s %s %s COMMIT;" % (span_sql, stats_sql, bin_sql, delete_sql)
+        with self.span_store.pool.cursor(**self.span_store.cursor_args) as cur:
+            cur.execute(sql_str, [SpanJsonDumper(new_span) for i in range(data_times)])
+
     def get_span_insert_sql(self, span):
         data_times = 1
         if True:
@@ -122,6 +130,22 @@ class PostgresSpanStorage(SpanStorage):
         bin_sql = ""
         return stats_sql, bin_sql
 
+    def get_span_delete_sql(self, spans):
+        cov_id = None
+        span_ids = set()
+        for span in spans:
+            if cov_id is None:
+                cov_id = span.coverage_id
+            elif cov_id != span.coverage_id:
+                raise RuntimeError('Cannot delete spans from multiple coverages in one call')
+            span_ids.add("'" + span.id + "'")
+        span_ids = ", ".join(span_ids)
+        statement = """DELETE FROM %s where coverage_id = '%s' AND id IN (%s); \
+                       DELETE FROM %s WHERE coverage_id = '%s' AND span_address IN (%s);""" \
+                    % (self.span_table_name, cov_id, span_ids, self.span_stats_table_name, cov_id, span_ids)
+        return statement
+
+
     def get_spans(self, span_ids=None, coverage_ids=None, params=None, start_time=None, stop_time=None, decompressors=None):
         statement = """SELECT data::text from %s where coverage_id = '%s'""" % (self.span_table_name, coverage_ids)
         if span_ids is not None:
@@ -139,6 +163,19 @@ class PostgresSpanStorage(SpanStorage):
             spans.append(Span.from_json(data, decompressors))
 
         return spans
+
+    def get_stored_coverage_ids(self):
+        statement = """SELECT coverage_id from %s""" % (self.span_stats_table_name)
+        with self.span_store.pool.cursor(**self.span_store.cursor_args) as cur:
+            cur.execute(statement)
+            results = cur.fetchall()
+
+        cov_ids = set()
+        for row in results:
+            cov_id, = row
+            cov_ids.add(cov_id)
+
+        return cov_ids
 
     def has_data(self, coverage_id):
         statement = """SELECT coverage_id FROM %s WHERE coverage_id = '%s'""" % (self.span_stats_table_name, coverage_id)

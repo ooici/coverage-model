@@ -16,3 +16,9 @@ class SpanStorage(object):
 
     def has_data(self, coverage_id):
         raise NotImplementedError('Not implemented in base class')
+
+    def get_stored_coverage_ids(self):
+        raise NotImplementedError('Not implemented in base class')
+
+    def replace_spans(self, new_spans, old_spans):
+        raise NotImplementedError('Not implemented in base class')
